@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material';
 import { listDeals } from '../api/deals.js';
 import { DealsTable } from '../components/DealsTable.jsx';
+import { SkeletonTable } from '../components/SkeletonTable.jsx';
 
 const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
 
@@ -26,7 +27,9 @@ export function FirmDealsPage() {
 
       {q.isError && <Alert severity="error">Failed to load deals.</Alert>}
 
-      <DealsTable deals={q.data ?? []} emptyMessage="No deals from your firm yet." />
+      {q.isLoading
+        ? <SkeletonTable rows={6} columns={9} />
+        : <DealsTable deals={q.data ?? []} emptyMessage="No deals from your firm yet." />}
     </Stack>
   );
 }

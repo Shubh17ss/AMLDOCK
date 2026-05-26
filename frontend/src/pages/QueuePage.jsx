@@ -11,6 +11,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { assignDeal, listDeals } from '../api/deals.js';
 import { listFirms } from '../api/firms.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
+import { SkeletonTable } from '../components/SkeletonTable.jsx';
+import { useToast } from '../components/ToastProvider.jsx';
 
 const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
 const DEFAULT_STATUS = 'SUBMITTED';
@@ -19,6 +21,7 @@ const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD',
 export function QueuePage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [firmId, setFirmId] = useState('ALL');
   const [actionError, setActionError] = useState(null);
@@ -34,9 +37,14 @@ export function QueuePage() {
     mutationFn: (id) => assignDeal(id),
     onSuccess: (deal) => {
       qc.invalidateQueries({ queryKey: ['deals'] });
+      showToast({ severity: 'success', message: `Claimed ${deal.reference ?? `#${deal.id}`}` });
       navigate(`/deals/${deal.id}/review`);
     },
-    onError: (e) => setActionError(e.response?.data?.message || 'Failed to claim'),
+    onError: (e) => {
+      const msg = e.response?.data?.message || 'Failed to claim';
+      setActionError(msg);
+      showToast({ severity: 'error', message: msg });
+    },
   });
 
   return (
@@ -64,7 +72,9 @@ export function QueuePage() {
       {dealsQ.isError && <Alert severity="error">Failed to load deals.</Alert>}
       {actionError && <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>}
 
-      <TableContainer component={Paper}>
+      {dealsQ.isLoading && <SkeletonTable rows={6} columns={10} />}
+
+      {!dealsQ.isLoading && <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -122,7 +132,7 @@ export function QueuePage() {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+      </TableContainer>}
     </Stack>
   );
 }

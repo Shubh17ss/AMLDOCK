@@ -7,6 +7,8 @@ import nz.amldock.client.dto.ClientInput;
 import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.DealListItemDto;
+import nz.amldock.deal.dto.DecideRequest;
+import nz.amldock.deal.dto.OverrideRequest;
 import nz.amldock.deal.dto.UpdateDealRequest;
 import nz.amldock.property.dto.PropertyInput;
 import org.springframework.http.ResponseEntity;
@@ -100,5 +102,33 @@ public class DealController {
         audit.record(AuditAction.DEAL_ASSIGNED, "Deal", d.getId(),
                 "Deal " + d.getReference() + " claimed for review");
         return deals.toDtoAfterMutation(d);
+    }
+
+    @PostMapping("/{id}/approve")
+    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    public DealDto approve(@PathVariable Long id, @Valid @RequestBody DecideRequest req) {
+        Deal d = deals.approve(id, req.notes());
+        audit.record(AuditAction.DEAL_APPROVED, "Deal", d.getId(),
+                "Deal " + d.getReference() + " approved");
+        return deals.toDtoAfterMutation(d);
+    }
+
+    @PostMapping("/{id}/reject")
+    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    public DealDto reject(@PathVariable Long id, @Valid @RequestBody DecideRequest req) {
+        Deal d = deals.reject(id, req.notes());
+        audit.record(AuditAction.DEAL_REJECTED, "Deal", d.getId(),
+                "Deal " + d.getReference() + " rejected");
+        return deals.toDtoAfterMutation(d);
+    }
+
+    @PostMapping("/{id}/override")
+    @PreAuthorize("hasRole('MANAGER')")
+    public DealDto override(@PathVariable Long id, @Valid @RequestBody OverrideRequest req) {
+        DealService.OverrideResult result = deals.override(id, req.targetStatus(), req.reason());
+        audit.record(AuditAction.DEAL_OVERRIDDEN, "Deal", result.deal().getId(),
+                "Deal " + result.deal().getReference()
+                        + " overridden: " + result.previousStatus() + " → " + req.targetStatus());
+        return deals.toDtoAfterMutation(result.deal());
     }
 }

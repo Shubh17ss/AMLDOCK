@@ -232,6 +232,30 @@ public class DealService {
         return d;
     }
 
+    @Transactional
+    public Deal approve(Long id, String notes) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        lifecycle.approve(d, currentPrincipal(), notes);
+        return d;
+    }
+
+    @Transactional
+    public Deal reject(Long id, String notes) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        lifecycle.reject(d, currentPrincipal(), notes);
+        return d;
+    }
+
+    /** Returns a pair of (deal, previousStatus) so the controller can audit the transition. */
+    @Transactional
+    public OverrideResult override(Long id, DealStatus target, String reason) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        DealStatus previous = lifecycle.override(d, currentPrincipal(), target, reason);
+        return new OverrideResult(d, previous);
+    }
+
+    public record OverrideResult(Deal deal, DealStatus previousStatus) {}
+
     /* ---------- helpers ---------- */
 
     private Deal mustFindEditable(Long id) {

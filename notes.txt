@@ -5,3 +5,6 @@
 6. **M6 — Ownership Tree Backend.** Tables `ownership_structure`, `ownership_node`, `ownership_edge`. Full ownership endpoint surface. Cycle/percentage validation.
 7. **M7 — Ownership Tree UI + Compliance Queue.** `/queue` (filters incl. firm/branch), `/deals/:id/review` skeleton, recursive `<OwnershipNode>`, node editor pane. Person-node creation in compliance pulls in OCR-extracted fields from any DL/passport attached to that node. Lifecycle: `assign` (SUBMITTED → UNDER_REVIEW).
 8. **M8 — PDF Side-by-Side + Document Linking to Nodes.** `react-pdf` viewer, document selector, node editor's Documents tab (uploads here also fire OCR for DL/passport types).
+M9 SKIPPED
+10. **M10 — Lifecycle Completion.** `/approve`, `/reject`, `/override` endpoints. Approve/Reject footer with required notes. Manager override modal. Broker + Firm User see decision + notes on read-only deal detail.
+11. **M11 — Audit Log + Polish.** `@Auditable` + `AuditAspect`, annotations across mutating services (incl. firm/branch/OCR events), `/admin/audit` with filters + per-deal panel. MUI polish, loading skeletons, empty states, error toasts.

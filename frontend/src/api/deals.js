@@ -43,3 +43,18 @@ export async function assignDeal(id) {
   const { data } = await apiClient.post(`/deals/${id}/assign`);
   return data;
 }
+
+export async function approveDeal(id, notes) {
+  const { data } = await apiClient.post(`/deals/${id}/approve`, { notes });
+  return data;
+}
+
+export async function rejectDeal(id, notes) {
+  const { data } = await apiClient.post(`/deals/${id}/reject`, { notes });
+  return data;
+}
+
+export async function overrideDeal(id, targetStatus, reason) {
+  const { data } = await apiClient.post(`/deals/${id}/override`, { targetStatus, reason });
+  return data;
+}

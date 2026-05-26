@@ -6,6 +6,7 @@ import nz.amldock.user.Role;
 import nz.amldock.user.UserPrincipal;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.Set;
 
 /**
@@ -70,6 +71,82 @@ public class DealLifecycleService {
         }
         deal.setAssignedComplianceUserId(actor.id());
         deal.setStatus(DealStatus.UNDER_REVIEW);
+    }
+
+    /** UNDER_REVIEW → APPROVED. Compliance / Manager. Notes required. */
+    public void approve(Deal deal, UserPrincipal actor, String notes) {
+        assertDecider(actor);
+        if (deal.getStatus() != DealStatus.UNDER_REVIEW) {
+            throw new BadRequestException("Only UNDER_REVIEW deals can be approved");
+        }
+        requireNotes(notes, "Decision notes are required to approve");
+        applyDecision(deal, actor, DealStatus.APPROVED, notes);
+    }
+
+    /** UNDER_REVIEW → REJECTED. Compliance / Manager. Notes required. */
+    public void reject(Deal deal, UserPrincipal actor, String notes) {
+        assertDecider(actor);
+        if (deal.getStatus() != DealStatus.UNDER_REVIEW) {
+            throw new BadRequestException("Only UNDER_REVIEW deals can be rejected");
+        }
+        requireNotes(notes, "Decision notes are required to reject");
+        applyDecision(deal, actor, DealStatus.REJECTED, notes);
+    }
+
+    /**
+     * MANAGER-only force transition to an arbitrary target. Reason required and prefixed
+     * into the decision notes so the override is visible in any subsequent UI.
+     * Returns the previous status so the caller can include it in the audit record.
+     */
+    public DealStatus override(Deal deal, UserPrincipal actor, DealStatus target, String reason) {
+        if (actor.role() != Role.MANAGER) {
+            throw new ForbiddenException("Only managers may override a deal's status");
+        }
+        if (target == null) {
+            throw new BadRequestException("Target status is required");
+        }
+        requireNotes(reason, "An override reason is required");
+        DealStatus previous = deal.getStatus();
+        if (previous == target) {
+            throw new BadRequestException("Deal is already in status " + target);
+        }
+        deal.setStatus(target);
+        // Capture override reason in decision_notes for audit/visibility.
+        String prefixed = String.format("[OVERRIDE %s → %s] %s", previous, target, reason);
+        deal.setDecisionNotes(prefixed);
+        // Only stamp decided_by/at when transitioning to a terminal state, so non-terminal
+        // overrides (e.g. APPROVED → UNDER_REVIEW for re-review) don't fake a fresh decision.
+        if (target == DealStatus.APPROVED || target == DealStatus.REJECTED) {
+            deal.setDecidedByUserId(actor.id());
+            deal.setDecidedAt(Instant.now());
+        } else {
+            deal.setDecidedByUserId(null);
+            deal.setDecidedAt(null);
+        }
+        // Clear assignment if going back to a pre-claim state.
+        if (target == DealStatus.DRAFT || target == DealStatus.SUBMITTED) {
+            deal.setAssignedComplianceUserId(null);
+        }
+        return previous;
+    }
+
+    private void assertDecider(UserPrincipal actor) {
+        if (actor.role() != Role.COMPLIANCE && actor.role() != Role.MANAGER) {
+            throw new ForbiddenException("Only compliance officers or managers may decide a deal");
+        }
+    }
+
+    private void requireNotes(String notes, String message) {
+        if (notes == null || notes.trim().length() < 3) {
+            throw new BadRequestException(message + " (min 3 characters)");
+        }
+    }
+
+    private void applyDecision(Deal deal, UserPrincipal actor, DealStatus target, String notes) {
+        deal.setStatus(target);
+        deal.setDecisionNotes(notes.trim());
+        deal.setDecidedByUserId(actor.id());
+        deal.setDecidedAt(Instant.now());
     }
 
     private void ensureSubmittable(Deal deal) {

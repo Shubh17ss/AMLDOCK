@@ -8,9 +8,11 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SendIcon from '@mui/icons-material/Send';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { deleteDeal, getDeal, submitDeal } from '../api/deals.js';
+import { deleteDeal, getDeal, overrideDeal, submitDeal } from '../api/deals.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
+import { OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
+import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 
 const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
 
@@ -21,9 +23,15 @@ export function DealDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const [actionError, setActionError] = useState(null);
 
   const q = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
+
+  const overrideMut = useMutation({
+    mutationFn: ({ targetStatus, reason }) => overrideDeal(dealId, targetStatus, reason),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deals', dealId] }); setOverrideOpen(false); },
+  });
 
   const submitMut = useMutation({
     mutationFn: () => submitDeal(dealId),
@@ -72,9 +80,18 @@ export function DealDetailPage() {
             Open review
           </Button>
         )}
+        {user?.role === 'MANAGER' && deal.status !== 'DRAFT' && (
+          <Button variant="outlined" color="warning" onClick={() => setOverrideOpen(true)}>
+            Override
+          </Button>
+        )}
       </Stack>
 
       {actionError && <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>}
+
+      {(deal.status === 'APPROVED' || deal.status === 'REJECTED') && (
+        <DecisionCard deal={deal} />
+      )}
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>
@@ -155,6 +172,10 @@ export function DealDetailPage() {
         </CardContent>
       </Card>
 
+      {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && (
+        <DealAuditPanel dealId={deal.id} />
+      )}
+
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>Delete this draft?</DialogTitle>
         <DialogContent>
@@ -170,7 +191,40 @@ export function DealDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <OverrideDialog
+        open={overrideOpen}
+        deal={deal}
+        onClose={() => setOverrideOpen(false)}
+        submitting={overrideMut.isPending}
+        onSubmit={(targetStatus, reason) => overrideMut.mutateAsync({ targetStatus, reason })}
+      />
     </Stack>
+  );
+}
+
+function DecisionCard({ deal }) {
+  const isApproved = deal.status === 'APPROVED';
+  const isOverride = (deal.decisionNotes ?? '').startsWith('[OVERRIDE');
+  const severity = isApproved ? 'success' : 'error';
+  return (
+    <Alert severity={severity} sx={{ alignItems: 'flex-start' }}>
+      <Stack spacing={0.5}>
+        <Typography variant="subtitle1">
+          {isApproved ? 'Approved' : 'Rejected'}{isOverride ? ' (via override)' : ''}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {deal.decidedAt && new Date(deal.decidedAt).toLocaleString()}
+          {deal.createdByEmail && ' · '}
+          {deal.decidedByUserId && `by user #${deal.decidedByUserId}`}
+        </Typography>
+        {deal.decisionNotes && (
+          <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
+            {deal.decisionNotes}
+          </Typography>
+        )}
+      </Stack>
+    </Alert>
   );
 }
 

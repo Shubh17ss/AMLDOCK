@@ -1,13 +1,20 @@
 package nz.amldock.audit;
 
 import jakarta.servlet.http.HttpServletRequest;
+import nz.amldock.audit.dto.AuditLogDto;
+import nz.amldock.common.web.PageResponse;
 import nz.amldock.user.UserPrincipal;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+
+import java.time.Instant;
+import java.util.List;
 
 @Service
 public class AuditService {
@@ -63,6 +70,22 @@ public class AuditService {
             log.setIpAddress(resolveIp(attrs.getRequest()));
         }
         repo.save(log);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<AuditLogDto> search(Long actorUserId, AuditAction action, String entityType,
+                                            Long entityId, Instant from, Instant to,
+                                            int page, int size) {
+        int safeSize = Math.min(Math.max(size, 1), 200);
+        Page<AuditLog> result = repo.search(actorUserId, action, entityType, entityId, from, to,
+                PageRequest.of(Math.max(page, 0), safeSize));
+        return PageResponse.of(result, AuditLogDto::from);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AuditLogDto> listForDeal(Long dealId) {
+        return repo.findAllByEntityTypeAndEntityIdOrderByCreatedAtDesc("Deal", dealId)
+                .stream().map(AuditLogDto::from).toList();
     }
 
     private String resolveIp(HttpServletRequest req) {

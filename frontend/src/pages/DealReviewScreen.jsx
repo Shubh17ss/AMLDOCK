@@ -6,13 +6,17 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
-import { assignDeal, getDeal } from '../api/deals.js';
+import { approveDeal, assignDeal, getDeal, overrideDeal, rejectDeal } from '../api/deals.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
 import { NodeEditorPane } from '../features/ownership/NodeEditorPane.jsx';
 import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
 import { PdfViewerPane } from '../features/ownership/PdfViewerPane.jsx';
 import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
+import { DecideDialog, OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
+import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
+import { useToast } from '../components/ToastProvider.jsx';
 
 const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
 
@@ -21,18 +25,56 @@ export function DealReviewScreen() {
   const dealId = Number(id);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showToast } = useToast();
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
   const [addDialog, setAddDialog] = useState(null);
+  const [decideMode, setDecideMode] = useState(null); // 'approve' | 'reject' | null
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const [actionError, setActionError] = useState(null);
 
   const dealQ = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
   const tree = useOwnershipTree(dealId);
 
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['deals', dealId] });
+    qc.invalidateQueries({ queryKey: ['deals', 'queue'] });
+    qc.invalidateQueries({ queryKey: ['deals', 'mine'] });
+    qc.invalidateQueries({ queryKey: ['deals', 'firm'] });
+  };
+
   const claimMut = useMutation({
     mutationFn: () => assignDeal(dealId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['deals', dealId] }),
-    onError: (e) => setActionError(e.response?.data?.message || 'Failed to claim'),
+    onSuccess: () => { invalidate(); showToast({ severity: 'success', message: 'Claimed for review' }); },
+    onError: (e) => {
+      const msg = e.response?.data?.message || 'Failed to claim';
+      setActionError(msg);
+      showToast({ severity: 'error', message: msg });
+    },
+  });
+
+  const decideMut = useMutation({
+    mutationFn: ({ mode, notes }) =>
+      (mode === 'approve' ? approveDeal(dealId, notes) : rejectDeal(dealId, notes)),
+    onSuccess: (_, vars) => {
+      invalidate();
+      setDecideMode(null);
+      showToast({
+        severity: vars.mode === 'approve' ? 'success' : 'warning',
+        message: `Deal ${vars.mode === 'approve' ? 'approved' : 'rejected'}`,
+      });
+      navigate('/queue');
+    },
+  });
+
+  const overrideMut = useMutation({
+    mutationFn: ({ targetStatus, reason }) => overrideDeal(dealId, targetStatus, reason),
+    onSuccess: (_, vars) => {
+      invalidate();
+      setOverrideOpen(false);
+      showToast({ severity: 'warning', message: `Status overridden to ${vars.targetStatus}` });
+    },
   });
 
   if (dealQ.isLoading) {
@@ -46,6 +88,9 @@ export function DealReviewScreen() {
   const isFirstNode = !tree.tree || tree.tree.nodes.length === 0;
   const canClaim = deal.status === 'SUBMITTED';
   const isUnderReview = deal.status === 'UNDER_REVIEW';
+  const isManager = user?.role === 'MANAGER';
+  const canDecide = isUnderReview;
+  const canOverride = isManager && deal.status !== 'DRAFT';
 
   return (
     <Stack spacing={2} sx={{ height: 'calc(100vh - 110px)' }}>
@@ -63,6 +108,15 @@ export function DealReviewScreen() {
             {claimMut.isPending ? 'Claiming…' : 'Claim for review'}
           </Button>
         )}
+        {canDecide && (
+          <>
+            <Button variant="outlined" color="error" onClick={() => setDecideMode('reject')}>Reject</Button>
+            <Button variant="contained" color="success" onClick={() => setDecideMode('approve')}>Approve</Button>
+          </>
+        )}
+        {canOverride && (
+          <Button variant="outlined" color="warning" onClick={() => setOverrideOpen(true)}>Override</Button>
+        )}
       </Stack>
 
       {actionError && <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>}
@@ -74,6 +128,8 @@ export function DealReviewScreen() {
       )}
 
       <DealSummaryStrip deal={deal} />
+
+      <DealAuditPanel dealId={dealId} />
 
       <Box sx={{ flexGrow: 1, minHeight: 0, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
         <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
@@ -136,6 +192,23 @@ export function DealReviewScreen() {
           : null}
         isFirstNode={isFirstNode}
         useTree={tree}
+      />
+
+      <DecideDialog
+        open={Boolean(decideMode)}
+        mode={decideMode}
+        dealReference={deal.reference ?? `#${deal.id}`}
+        onClose={() => setDecideMode(null)}
+        submitting={decideMut.isPending}
+        onSubmit={(notes) => decideMut.mutateAsync({ mode: decideMode, notes })}
+      />
+
+      <OverrideDialog
+        open={overrideOpen}
+        deal={deal}
+        onClose={() => setOverrideOpen(false)}
+        submitting={overrideMut.isPending}
+        onSubmit={(targetStatus, reason) => overrideMut.mutateAsync({ targetStatus, reason })}
       />
     </Stack>
   );

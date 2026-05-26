@@ -40,6 +40,7 @@ export function AppShell() {
               <>
                 <Button color="inherit" component={RouterLink} to="/admin/firms">Firms</Button>
                 <Button color="inherit" component={RouterLink} to="/admin/users">Users</Button>
+                <Button color="inherit" component={RouterLink} to="/admin/audit">Audit</Button>
               </>
             )}
             <Button color="inherit" component={RouterLink} to="/profile">Profile</Button>

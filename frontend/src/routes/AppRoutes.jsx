@@ -6,6 +6,7 @@ import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
+import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
 import { MyDealsPage } from '../pages/MyDealsPage.jsx';
 import { QueuePage } from '../pages/QueuePage.jsx';
 import { FirmDealsPage } from '../pages/FirmDealsPage.jsx';
@@ -64,6 +65,11 @@ export function AppRoutes() {
         <Route path="/admin/firms" element={
           <ProtectedRoute roles={['MANAGER']}>
             <FirmsAdminPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/audit" element={
+          <ProtectedRoute roles={['MANAGER']}>
+            <AuditAdminPage />
           </ProtectedRoute>
         } />
       </Route>

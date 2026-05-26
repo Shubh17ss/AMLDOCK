@@ -6,6 +6,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import App from './App.jsx';
 import { theme } from './theme/theme.js';
 import { AuthProvider } from './auth/AuthContext.jsx';
+import { ToastProvider } from './components/ToastProvider.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -17,9 +18,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <CssBaseline />
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </ToastProvider>
         </BrowserRouter>
       </QueryClientProvider>
     </ThemeProvider>
