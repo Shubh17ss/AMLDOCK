@@ -16,6 +16,7 @@ public record DocumentDto(
         DocumentType documentType,
         DocumentStatus status,
         Long dealId,
+        Long ownershipNodeId,
         Long uploadedByUserId,
         String uploadedByEmail,
         OcrStatus ocrStatus,
@@ -28,7 +29,7 @@ public record DocumentDto(
 ) {
     public static DocumentDto from(Document d, String uploaderEmail) {
         return new DocumentDto(d.getId(), d.getOriginalFilename(), d.getContentType(), d.getSizeBytes(),
-                d.getDocumentType(), d.getStatus(), d.getDealId(),
+                d.getDocumentType(), d.getStatus(), d.getDealId(), d.getOwnershipNodeId(),
                 d.getUploadedByUserId(), uploaderEmail,
                 d.getOcrStatus(), d.getOcrProvider(), d.getOcrFields(), d.getOcrConfidence(),
                 d.getOcrCompletedAt(), d.getCreatedAt(), d.getUpdatedAt());

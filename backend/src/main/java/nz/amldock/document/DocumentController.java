@@ -39,8 +39,11 @@ public class DocumentController {
     }
 
     @GetMapping
-    public List<DocumentDto> list(@RequestParam Long dealId) {
-        return documents.listForDeal(dealId);
+    public List<DocumentDto> list(@RequestParam(required = false) Long dealId,
+                                  @RequestParam(required = false) Long nodeId) {
+        if (nodeId != null) return documents.listForNode(nodeId);
+        if (dealId != null) return documents.listForDeal(dealId);
+        return List.of();
     }
 
     @GetMapping("/{id}")

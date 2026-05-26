@@ -7,5 +7,6 @@ import java.util.Optional;
 
 public interface DocumentRepository extends JpaRepository<Document, Long> {
     List<Document> findAllByDealIdAndStatusOrderByCreatedAtDesc(Long dealId, DocumentStatus status);
+    List<Document> findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(Long nodeId, DocumentStatus status);
     Optional<Document> findByS3Key(String s3Key);
 }

@@ -11,9 +11,9 @@ export const DOCUMENT_TYPES = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-export async function requestUploadUrl({ filename, contentType, sizeBytes, documentType, dealId }) {
+export async function requestUploadUrl({ filename, contentType, sizeBytes, documentType, dealId, ownershipNodeId }) {
   const { data } = await apiClient.post('/documents/upload-url', {
-    filename, contentType, sizeBytes, documentType, dealId,
+    filename, contentType, sizeBytes, documentType, dealId, ownershipNodeId,
   });
   return data;
 }
@@ -25,6 +25,11 @@ export async function confirmUpload(documentId) {
 
 export async function listDealDocuments(dealId) {
   const { data } = await apiClient.get('/documents', { params: { dealId } });
+  return data;
+}
+
+export async function listNodeDocuments(nodeId) {
+  const { data } = await apiClient.get('/documents', { params: { nodeId } });
   return data;
 }
 
@@ -49,7 +54,7 @@ export async function deleteDocument(id) {
  *   3) confirm                  (backend HEADs S3, marks ACTIVE)
  * Calls onProgress({ phase, percent }) when supplied.
  */
-export async function uploadToS3({ file, documentType, dealId, onProgress }) {
+export async function uploadToS3({ file, documentType, dealId, ownershipNodeId, onProgress }) {
   onProgress?.({ phase: 'presign', percent: 0 });
   const presigned = await requestUploadUrl({
     filename: file.name,
@@ -57,6 +62,7 @@ export async function uploadToS3({ file, documentType, dealId, onProgress }) {
     sizeBytes: file.size,
     documentType,
     dealId,
+    ownershipNodeId,
   });
 
   // Use a bare axios instance for S3 — our apiClient appends cookies / refresh interceptors

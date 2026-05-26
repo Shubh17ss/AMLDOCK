@@ -191,7 +191,7 @@ public class DealService {
         Deal d = mustFindEditable(dealId);
         Property p = properties.findById(d.getPropertyId())
                 .orElseThrow(() -> new NotFoundException("Property not found"));
-        applyPropertyInput(p, input);
+        applyPropertyInput(p, input); // idempotent to allow partial updates
         return p;
     }
 

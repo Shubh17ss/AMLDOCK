@@ -46,6 +46,9 @@ public class Document extends BaseEntity {
     @Column(name = "deal_id")
     private Long dealId;
 
+    @Column(name = "ownership_node_id")
+    private Long ownershipNodeId;
+
     @Column(name = "uploaded_by_user_id", nullable = false)
     private Long uploadedByUserId;
 
@@ -84,6 +87,8 @@ public class Document extends BaseEntity {
     public void setStatus(DocumentStatus v) { this.status = v; }
     public Long getDealId() { return dealId; }
     public void setDealId(Long v) { this.dealId = v; }
+    public Long getOwnershipNodeId() { return ownershipNodeId; }
+    public void setOwnershipNodeId(Long v) { this.ownershipNodeId = v; }
     public Long getUploadedByUserId() { return uploadedByUserId; }
     public void setUploadedByUserId(Long v) { this.uploadedByUserId = v; }
     public OcrStatus getOcrStatus() { return ocrStatus; }

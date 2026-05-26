@@ -8,8 +8,10 @@ import {
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
-  DOCUMENT_TYPES, deleteDocument, fetchDownloadUrl, listDealDocuments, uploadToS3,
+  DOCUMENT_TYPES, deleteDocument, fetchDownloadUrl, listDealDocuments,
+  listNodeDocuments, uploadToS3,
 } from '../api/documents.js';
 
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -20,31 +22,45 @@ const formatBytes = (n) => {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 };
 
-export function DocumentUploader({ dealId, canUpload = true, title = 'Documents' }) {
+export function DocumentUploader({
+  dealId,
+  ownershipNodeId = null,
+  canUpload = true,
+  title = 'Documents',
+  onViewDocument = null,
+}) {
   const qc = useQueryClient();
   const inputRef = useRef(null);
   const [documentType, setDocumentType] = useState('OTHER');
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(null); // { name, phase, percent }
 
+  const isNodeScoped = ownershipNodeId != null;
+  const listKey = isNodeScoped ? ['documents', 'node', ownershipNodeId] : ['documents', dealId];
   const listQ = useQuery({
-    queryKey: ['documents', dealId],
-    queryFn: () => listDealDocuments(dealId),
-    enabled: Boolean(dealId),
+    queryKey: listKey,
+    queryFn: () => (isNodeScoped ? listNodeDocuments(ownershipNodeId) : listDealDocuments(dealId)),
+    enabled: Boolean(isNodeScoped ? ownershipNodeId : dealId),
   });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: listKey });
+    // Always invalidate the deal-level list so the PDF viewer dropdown updates.
+    if (dealId) qc.invalidateQueries({ queryKey: ['documents', dealId] });
+  };
 
   const uploadMut = useMutation({
     mutationFn: async (file) => {
       setProgress({ name: file.name, phase: 'presign', percent: 0 });
       return uploadToS3({
-        file, documentType, dealId,
+        file, documentType, dealId, ownershipNodeId,
         onProgress: ({ phase, percent }) => setProgress({ name: file.name, phase, percent }),
       });
     },
     onSuccess: () => {
       setError(null);
       setProgress(null);
-      qc.invalidateQueries({ queryKey: ['documents', dealId] });
+      invalidate();
       if (inputRef.current) inputRef.current.value = '';
     },
     onError: (e) => {
@@ -55,7 +71,7 @@ export function DocumentUploader({ dealId, canUpload = true, title = 'Documents'
 
   const deleteMut = useMutation({
     mutationFn: (id) => deleteDocument(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['documents', dealId] }),
+    onSuccess: invalidate,
     onError: (e) => setError(e.response?.data?.message || 'Delete failed'),
   });
 
@@ -149,6 +165,13 @@ export function DocumentUploader({ dealId, canUpload = true, title = 'Documents'
                 <TableCell>{d.uploadedByEmail ?? '—'}</TableCell>
                 <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
                 <TableCell align="right">
+                  {onViewDocument && (
+                    <Tooltip title="View in PDF pane">
+                      <IconButton size="small" onClick={() => onViewDocument(d.id)}>
+                        <VisibilityIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                   <Tooltip title="Download">
                     <IconButton size="small" onClick={() => handleDownload(d.id)}>
                       <DownloadIcon fontSize="small" />

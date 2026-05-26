@@ -7,6 +7,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import { EDGE_ROLES } from '../../api/ownership.js';
 import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
+import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 
 /**
  * Editor for a selected ownership node. Lets the user:
@@ -15,7 +16,7 @@ import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
  *   - delete the node (with cascade confirm if it has edges)
  * Documents and Verifications tabs are placeholders for M8 / M9.
  */
-export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared }) {
+export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealId, onViewDocument }) {
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState(null);
   const [edgeForm, setEdgeForm] = useState({ percentage: '', role: '' });
@@ -200,7 +201,14 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared }) {
       )}
 
       {tab === 1 && (
-        <Alert severity="info">Per-node document attachments arrive in M8 (PDF viewer + side-by-side).</Alert>
+        <Box sx={{ overflowY: 'auto' }}>
+          <DocumentUploader
+            dealId={dealId}
+            ownershipNodeId={selected.id}
+            title={`Documents on ${selected.displayName}`}
+            onViewDocument={onViewDocument}
+          />
+        </Box>
       )}
 
       {tab === 2 && (

@@ -10,5 +10,7 @@ public record UploadUrlRequest(
         @NotBlank String contentType,
         @Positive long sizeBytes,
         @NotNull DocumentType documentType,
-        @NotNull Long dealId
+        @NotNull Long dealId,
+        /** Optional: attach this document to a specific ownership node within the deal. */
+        Long ownershipNodeId
 ) {}

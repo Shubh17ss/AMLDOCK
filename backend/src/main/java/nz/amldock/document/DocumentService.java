@@ -15,6 +15,10 @@ import nz.amldock.document.dto.UploadUrlResponse;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.ownership.OwnershipNode;
+import nz.amldock.ownership.OwnershipNodeRepository;
+import nz.amldock.ownership.OwnershipStructure;
+import nz.amldock.ownership.OwnershipStructureRepository;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
@@ -34,6 +38,8 @@ public class DocumentService {
     private final DocumentRepository documents;
     private final DealRepository deals;
     private final FirmBranchRepository branches;
+    private final OwnershipNodeRepository ownershipNodes;
+    private final OwnershipStructureRepository ownershipStructures;
     private final UserRepository users;
     private final FileStorageService storage;
     private final DealLifecycleService lifecycle;
@@ -45,6 +51,8 @@ public class DocumentService {
     public DocumentService(DocumentRepository documents,
                            DealRepository deals,
                            FirmBranchRepository branches,
+                           OwnershipNodeRepository ownershipNodes,
+                           OwnershipStructureRepository ownershipStructures,
                            UserRepository users,
                            FileStorageService storage,
                            DealLifecycleService lifecycle,
@@ -55,6 +63,8 @@ public class DocumentService {
         this.documents = documents;
         this.deals = deals;
         this.branches = branches;
+        this.ownershipNodes = ownershipNodes;
+        this.ownershipStructures = ownershipStructures;
         this.users = users;
         this.storage = storage;
         this.lifecycle = lifecycle;
@@ -72,7 +82,19 @@ public class DocumentService {
         Deal deal = mustLoadDealForWrite(req.dealId());
         UserPrincipal actor = currentPrincipal();
 
-        String key = buildKey(deal.getId(), req.filename());
+        Long nodeId = null;
+        if (req.ownershipNodeId() != null) {
+            OwnershipNode node = ownershipNodes.findById(req.ownershipNodeId())
+                    .orElseThrow(() -> new BadRequestException("Ownership node " + req.ownershipNodeId() + " not found"));
+            OwnershipStructure structure = ownershipStructures.findById(node.getOwnershipStructureId())
+                    .orElseThrow(() -> new BadRequestException("Ownership structure not found"));
+            if (!deal.getId().equals(structure.getDealId())) {
+                throw new BadRequestException("Ownership node does not belong to this deal");
+            }
+            nodeId = node.getId();
+        }
+
+        String key = buildKey(deal.getId(), nodeId, req.filename());
 
         Document d = new Document();
         d.setS3Key(key);
@@ -82,6 +104,7 @@ public class DocumentService {
         d.setDocumentType(req.documentType());
         d.setStatus(DocumentStatus.PENDING);
         d.setDealId(deal.getId());
+        d.setOwnershipNodeId(nodeId);
         d.setUploadedByUserId(actor.id());
         d.setOcrStatus(OcrStatus.NOT_APPLICABLE); // M5 sets PENDING for DL/PASSPORT
         Document saved = documents.save(d);
@@ -127,6 +150,18 @@ public class DocumentService {
     public List<DocumentDto> listForDeal(Long dealId) {
         Deal deal = mustLoadDealForRead(dealId);
         return documents.findAllByDealIdAndStatusOrderByCreatedAtDesc(deal.getId(), DocumentStatus.ACTIVE)
+                .stream().map(this::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocumentDto> listForNode(Long nodeId) {
+        OwnershipNode node = ownershipNodes.findById(nodeId)
+                .orElseThrow(() -> new NotFoundException("Ownership node " + nodeId + " not found"));
+        OwnershipStructure structure = ownershipStructures.findById(node.getOwnershipStructureId())
+                .orElseThrow(() -> new NotFoundException("Ownership structure not found"));
+        // Reuse the deal-level read permission check so firm-user / broker scoping is honoured.
+        mustLoadDealForRead(structure.getDealId());
+        return documents.findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(node.getId(), DocumentStatus.ACTIVE)
                 .stream().map(this::toDto).toList();
     }
 
@@ -206,9 +241,12 @@ public class DocumentService {
         return DocumentDto.from(d, email);
     }
 
-    private String buildKey(Long dealId, String filename) {
+    private String buildKey(Long dealId, Long nodeId, String filename) {
         String sanitised = filename.replaceAll("[^A-Za-z0-9._-]", "_");
-        return "deals/" + dealId + "/" + UUID.randomUUID() + "-" + sanitised;
+        String prefix = nodeId == null
+                ? "deals/" + dealId
+                : "deals/" + dealId + "/nodes/" + nodeId;
+        return prefix + "/" + UUID.randomUUID() + "-" + sanitised;
     }
 
     private UserPrincipal currentPrincipal() {
