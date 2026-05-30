@@ -22,7 +22,7 @@ export function AppShell() {
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <AppBar position="static" color="primary" elevation={0}>
         <Toolbar>
-          <Typography variant="h6" component={RouterLink} to="/"
+          <Typography variant="h6" component={RouterLink} to={user ? '/app' : '/'}
                       sx={{ color: 'inherit', textDecoration: 'none', flexGrow: 1 }}>
             AML_DOCK
           </Typography>

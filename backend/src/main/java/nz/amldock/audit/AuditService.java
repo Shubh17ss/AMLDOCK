@@ -1,11 +1,14 @@
 package nz.amldock.audit;
 
+import jakarta.persistence.criteria.Predicate;
 import jakarta.servlet.http.HttpServletRequest;
 import nz.amldock.audit.dto.AuditLogDto;
 import nz.amldock.common.web.PageResponse;
 import nz.amldock.user.UserPrincipal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -14,6 +17,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -77,9 +81,24 @@ public class AuditService {
                                             Long entityId, Instant from, Instant to,
                                             int page, int size) {
         int safeSize = Math.min(Math.max(size, 1), 200);
-        Page<AuditLog> result = repo.search(actorUserId, action, entityType, entityId, from, to,
-                PageRequest.of(Math.max(page, 0), safeSize));
+        Specification<AuditLog> spec = buildSpec(actorUserId, action, entityType, entityId, from, to);
+        Page<AuditLog> result = repo.findAll(spec,
+                PageRequest.of(Math.max(page, 0), safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
         return PageResponse.of(result, AuditLogDto::from);
+    }
+
+    private static Specification<AuditLog> buildSpec(Long actorUserId, AuditAction action, String entityType,
+                                                     Long entityId, Instant from, Instant to) {
+        return (root, query, cb) -> {
+            List<Predicate> preds = new ArrayList<>();
+            if (actorUserId != null) preds.add(cb.equal(root.get("actorUserId"), actorUserId));
+            if (action != null) preds.add(cb.equal(root.get("action"), action));
+            if (entityType != null && !entityType.isBlank()) preds.add(cb.equal(root.get("entityType"), entityType));
+            if (entityId != null) preds.add(cb.equal(root.get("entityId"), entityId));
+            if (from != null) preds.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+            if (to != null) preds.add(cb.lessThanOrEqualTo(root.get("createdAt"), to));
+            return preds.isEmpty() ? cb.conjunction() : cb.and(preds.toArray(new Predicate[0]));
+        };
     }
 
     @Transactional(readOnly = true)

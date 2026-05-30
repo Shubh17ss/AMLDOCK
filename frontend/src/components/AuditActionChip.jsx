@@ -8,6 +8,8 @@ const COLOR = {
   USER_UPDATED: 'info',
   USER_PASSWORD_RESET: 'warning',
   USER_PASSWORD_CHANGED: 'default',
+  USER_WELCOME_EMAIL_SENT: 'success',
+  USER_WELCOME_EMAIL_FAILED: 'error',
   ROLE_CHANGED: 'warning',
   DEAL_CREATED: 'info',
   DEAL_SUBMITTED: 'primary',

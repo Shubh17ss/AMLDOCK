@@ -171,7 +171,8 @@ public class DocumentService {
         return toDto(d);
     }
 
-    @Transactional(readOnly = true)
+    // Not readOnly — writes a DOCUMENT_DOWNLOADED audit row.
+    @Transactional
     public DownloadUrlResponse presignDownload(Long id) {
         Document d = mustLoadActiveForRead(id);
         String url = storage.presignDownload(d.getS3Key(), d.getOriginalFilename(), downloadTtl);

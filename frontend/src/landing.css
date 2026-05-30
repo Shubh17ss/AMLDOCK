@@ -1,0 +1,6 @@
+/* Tailwind layers used only by the landing page.
+   Preflight is disabled in tailwind.config.js to coexist with MUI's CssBaseline,
+   so only the utilities/components/base scoped to elements that opt in apply. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

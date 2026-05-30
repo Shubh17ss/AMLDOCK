@@ -17,7 +17,7 @@ export function ProtectedRoute({ children, roles }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   if (roles && roles.length > 0 && !roles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
   return children;
 }

@@ -35,6 +35,26 @@ export AWS_REGION=ap-southeast-2
 export S3_BUCKET=aml-dock-dev-documents
 ```
 
+#### Optional: SMTP for onboarding emails
+
+When an admin creates a user, a welcome email goes out with their temporary password and a deep-link to `/profile`. By default the email service runs in **logging-only** mode — the rendered email is written to the backend log so you can copy the link/password during local dev.
+
+To actually send via SMTP:
+
+```
+MAIL_ENABLED=true
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_USERNAME=apikey
+MAIL_PASSWORD=...
+MAIL_FROM=noreply@yourdomain.example
+MAIL_FROM_NAME=AML_DOCK
+MAIL_REPLY_TO=support@yourdomain.example   # optional
+APP_BASE_URL=http://localhost:5173         # used in email links
+```
+
+Defaults: `MAIL_ENABLED=false`, `MAIL_PORT=587`, `MAIL_SMTP_AUTH=true`, `MAIL_SMTP_STARTTLS=true`.
+
 Then:
 ```
 cd backend

@@ -13,7 +13,7 @@ export function LoginPage() {
   const [error, setError] = useState(null);
 
   if (status === 'authed' && user) {
-    const from = location.state?.from?.pathname || '/';
+    const from = location.state?.from?.pathname || '/app';
     return <Navigate to={from} replace />;
   }
 
@@ -23,7 +23,7 @@ export function LoginPage() {
     setError(null);
     try {
       await login(email, password);
-      const from = location.state?.from?.pathname || '/';
+      const from = location.state?.from?.pathname || '/app';
       navigate(from, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
