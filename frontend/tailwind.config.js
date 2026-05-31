@@ -20,6 +20,12 @@ export default {
           800: '#0a1f37',
           900: '#06152a',
         },
+        // Warm accent for soft gradient blobs — used sparingly to give pages a "calm" feel.
+        warm: {
+          50: '#fff7ed',
+          100: '#ffedd5',
+          200: '#fed7aa',
+        },
       },
       fontFamily: {
         // Libre Baskerville is the closest free clone of Baskerville and ships via Google Fonts.

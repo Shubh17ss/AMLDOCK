@@ -1,0 +1,22 @@
+.add-user-button{
+    background-color: #1F4B7A;
+    color: #ffffff;
+    width:200px;
+    height:46px;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 16px;
+}
+.add-user-button:hover{
+    background-color: #163A5B;
+}
+
+button{
+    font-family: 'inter', serif;
+    transition: 0.2s ease-in-out;
+}
+button:active{
+    transform:scale(95%);
+}

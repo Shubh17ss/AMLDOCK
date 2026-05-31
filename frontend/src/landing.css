@@ -4,3 +4,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Smooth anchor scrolling on the landing page (and inherited by the rest of the app —
+   harmless on dashboards because they don't use anchor links). */
+html {
+  scroll-behavior: smooth;
+}
