@@ -6,5 +6,6 @@ public record UpdateUserRequest(
         String fullName,
         Role role,
         Long realEstateFirmId,
+        Long firmBranchId,
         Boolean active
 ) {}

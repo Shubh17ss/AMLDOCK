@@ -7,5 +7,6 @@ public record AuthResponse(
         String email,
         String fullName,
         Role role,
-        Long realEstateFirmId
+        Long realEstateFirmId,
+        Long firmBranchId
 ) {}

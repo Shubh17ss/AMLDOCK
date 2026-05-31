@@ -3,7 +3,7 @@ import './Navbar.css'; // Import the CSS file for styling
 
 export function Navbar({ isAuthed, dashboardHref }) {
   return (
-    <header className="sticky top-0 z-50 border-b border-trust-100 bg-white/85 backdrop-blur-md">
+    <header className="sticky top-0 z-50 [border-bottom:1px_solid_rgba(0,0,0,0.1)] bg-white/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <RouterLink
           to="/"

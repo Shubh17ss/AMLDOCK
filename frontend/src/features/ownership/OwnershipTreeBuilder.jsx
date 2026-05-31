@@ -13,6 +13,7 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import GroupIcon from '@mui/icons-material/Group';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import AddLinkIcon from '@mui/icons-material/AddLink';
 
 const NODE_ICON = {
   NATURAL_PERSON: <PersonIcon fontSize="small" />,
@@ -36,6 +37,7 @@ export function OwnershipTreeBuilder({
   onAddRoot,
   onAddChild,
   onSetRoot,
+  onAttachDetached,
 }) {
   const { nodesById, childrenByParent, parentIdByChild } = useMemo(() => indexTree(tree), [tree]);
   const root = tree?.rootNodeId ? nodesById.get(tree.rootNodeId) : null;
@@ -78,6 +80,7 @@ export function OwnershipTreeBuilder({
             onSelectNode={onSelectNode}
             onAddChild={onAddChild}
             onSetRoot={onSetRoot}
+            onAttachDetached={onAttachDetached}
           />
         )}
         {detached.length > 0 && (
@@ -99,6 +102,7 @@ export function OwnershipTreeBuilder({
                 onSelectNode={onSelectNode}
                 onAddChild={onAddChild}
                 onSetRoot={onSetRoot}
+                onAttachDetached={onAttachDetached}
               />
             ))}
           </Box>
@@ -110,13 +114,16 @@ export function OwnershipTreeBuilder({
 
 function NodeBranch({
   node, parentEdge, depth, isRoot = false,
-  nodesById, childrenByParent, selectedNodeId, onSelectNode, onAddChild, onSetRoot,
+  nodesById, childrenByParent, selectedNodeId, onSelectNode, onAddChild, onSetRoot, onAttachDetached,
 }) {
   const children = childrenByParent.get(node.id) ?? [];
   const [expanded, setExpanded] = useState(true);
   const [menuAnchor, setMenuAnchor] = useState(null);
 
   const isSelected = selectedNodeId === node.id;
+  // "Detached" = renders at the top level but isn't the root. Its descendants render
+  // normally (with parentEdge set) and should NOT show the attach action.
+  const isDetached = !isRoot && !parentEdge;
 
   return (
     <Box>
@@ -174,6 +181,11 @@ function NodeBranch({
           </IconButton>
         </Tooltip>
         <Menu open={Boolean(menuAnchor)} anchorEl={menuAnchor} onClose={() => setMenuAnchor(null)}>
+          {isDetached && onAttachDetached && (
+            <MenuItem onClick={() => { onAttachDetached(node.id); setMenuAnchor(null); }}>
+              <AddLinkIcon fontSize="small" sx={{ mr: 1 }} /> Attach to parent…
+            </MenuItem>
+          )}
           {!isRoot && (
             <MenuItem onClick={() => { onSetRoot(node.id); setMenuAnchor(null); }}>
               <StarBorderIcon fontSize="small" sx={{ mr: 1 }} /> Make root
@@ -201,6 +213,7 @@ function NodeBranch({
             onSelectNode={onSelectNode}
             onAddChild={onAddChild}
             onSetRoot={onSetRoot}
+            onAttachDetached={onAttachDetached}
           />
         );
       })}

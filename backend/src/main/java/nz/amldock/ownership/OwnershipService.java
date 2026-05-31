@@ -106,6 +106,9 @@ public class OwnershipService {
         if (req.trustDeedDocumentId() != null) n.setTrustDeedDocumentId(req.trustDeedDocumentId());
         if (req.settlorName() != null) n.setSettlorName(req.settlorName());
         if (req.extraJson() != null) n.setExtraJson(req.extraJson());
+        if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
+        if (req.notes() != null) n.setNotes(req.notes());
+        if (req.verificationNotes() != null) n.setVerificationNotes(req.verificationNotes());
         return NodeDto.from(n);
     }
 

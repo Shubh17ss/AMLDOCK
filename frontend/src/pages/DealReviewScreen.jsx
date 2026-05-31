@@ -12,6 +12,7 @@ import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
 import { NodeEditorPane } from '../features/ownership/NodeEditorPane.jsx';
 import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
+import { AttachToParentDialog } from '../features/ownership/AttachToParentDialog.jsx';
 import { PdfViewerPane } from '../features/ownership/PdfViewerPane.jsx';
 import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
 import { DecideDialog, OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
@@ -30,6 +31,7 @@ export function DealReviewScreen() {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
   const [addDialog, setAddDialog] = useState(null);
+  const [attachNodeId, setAttachNodeId] = useState(null);
   const [decideMode, setDecideMode] = useState(null); // 'approve' | 'reject' | null
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [actionError, setActionError] = useState(null);
@@ -160,6 +162,7 @@ export function DealReviewScreen() {
                     onAddRoot={() => setAddDialog({ parentNodeId: null })}
                     onAddChild={(parentNodeId) => setAddDialog({ parentNodeId })}
                     onSetRoot={(nodeId) => tree.setRoot.mutate(nodeId)}
+                    onAttachDetached={setAttachNodeId}
                   />
                 )}
               </Paper>
@@ -209,6 +212,14 @@ export function DealReviewScreen() {
         onClose={() => setOverrideOpen(false)}
         submitting={overrideMut.isPending}
         onSubmit={(targetStatus, reason) => overrideMut.mutateAsync({ targetStatus, reason })}
+      />
+
+      <AttachToParentDialog
+        open={attachNodeId != null}
+        node={tree.tree?.nodes.find((n) => n.id === attachNodeId) ?? null}
+        tree={tree.tree}
+        useTree={tree}
+        onClose={() => setAttachNodeId(null)}
       />
     </Stack>
   );

@@ -40,9 +40,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String roleName = claims.get("role", String.class);
                 Number firmIdNum = claims.get("firmId", Number.class);
                 Long firmId = firmIdNum == null ? null : firmIdNum.longValue();
+                Number branchIdNum = claims.get("branchId", Number.class);
+                Long branchId = branchIdNum == null ? null : branchIdNum.longValue();
                 Role role = Role.valueOf(roleName);
 
-                UserPrincipal principal = new UserPrincipal(userId, email, null, role, firmId, true);
+                UserPrincipal principal =
+                        new UserPrincipal(userId, email, null, role, firmId, branchId, true);
                 UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

@@ -76,6 +76,15 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
       )}
 
       {/* PARTNERSHIP / OTHER use only display name — no extra fields in MVP-1 */}
+
+      <TextField
+        label="Notes"
+        value={value.notes ?? ''}
+        onChange={(e) => set({ notes: e.target.value })}
+        multiline
+        minRows={3}
+        placeholder="Anything worth knowing about this node — context, exceptions, follow-ups."
+      />
     </Stack>
   );
 }
@@ -97,5 +106,6 @@ export function buildNodePayload(form) {
     trustName: norm(form.trustName),
     trustDeedDocumentId: norm(form.trustDeedDocumentId),
     settlorName: norm(form.settlorName),
+    notes: norm(form.notes),
   };
 }

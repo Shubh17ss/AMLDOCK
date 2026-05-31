@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Divider, FormControl, IconButton, InputLabel, MenuItem,
-  Paper, Select, Stack, Tab, Tabs, TextField, Tooltip, Typography,
+  Alert, Box, Button, Chip, Divider, FormControl, FormControlLabel, FormLabel,
+  IconButton, InputLabel, MenuItem, Paper, Radio, RadioGroup, Select, Stack, Tab,
+  Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import { EDGE_ROLES } from '../../api/ownership.js';
 import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
+
+// Three user-facing manual states mapped onto the existing backend enum.
+const VERIFICATION_OPTIONS = [
+  { value: 'VERIFIED',    label: 'Verified',          tone: 'success' },
+  { value: 'IN_PROGRESS', label: 'Under verification', tone: 'info' },
+  { value: 'FAILED',      label: 'Not verified',       tone: 'error' },
+];
 
 /**
  * Editor for a selected ownership node. Lets the user:
@@ -20,8 +28,10 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState(null);
   const [edgeForm, setEdgeForm] = useState({ percentage: '', role: '' });
+  const [verification, setVerification] = useState({ status: 'IN_PROGRESS', notes: '' });
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [verificationSaved, setVerificationSaved] = useState(false);
 
   const selected = useMemo(
     () => tree?.nodes?.find((n) => n.id === selectedNodeId) ?? null,
@@ -50,8 +60,14 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
         trustName: selected.trustName ?? '',
         trustDeedDocumentId: selected.trustDeedDocumentId ?? '',
         settlorName: selected.settlorName ?? '',
+        notes: selected.notes ?? '',
+      });
+      setVerification({
+        status: selected.verificationStatus ?? 'IN_PROGRESS',
+        notes: selected.verificationNotes ?? '',
       });
       setError(null);
+      setVerificationSaved(false);
     } else {
       setForm(null);
     }
@@ -84,6 +100,25 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
       await useTree.updateNode.mutateAsync({ nodeId: selected.id, payload: buildNodePayload(form) });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save');
+    }
+  };
+
+  const saveVerification = async () => {
+    setError(null);
+    setVerificationSaved(false);
+    try {
+      await useTree.updateNode.mutateAsync({
+        nodeId: selected.id,
+        payload: {
+          verificationStatus: verification.status,
+          // Empty string normalises to null on the backend's `if not null` patch — but the
+          // backend treats null as "leave alone". Send "" so admins can clear notes if needed.
+          verificationNotes: verification.notes ?? '',
+        },
+      });
+      setVerificationSaved(true);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update verification');
     }
   };
 
@@ -212,7 +247,66 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
       )}
 
       {tab === 2 && (
-        <Alert severity="info">Verification checks (LINZ / NZBN / IDV mocks) arrive in M9.</Alert>
+        <Stack spacing={3} sx={{ overflowY: 'auto' }}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Manual verification</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Mark this node's status while automated checks (LINZ / NZBN / IDV) are wired up.
+              The status badge in the tree updates as soon as you save.
+            </Typography>
+          </Box>
+
+          <FormControl>
+            <FormLabel id="verification-status-label">Status</FormLabel>
+            <RadioGroup
+              aria-labelledby="verification-status-label"
+              value={verification.status}
+              onChange={(e) => { setVerification((v) => ({ ...v, status: e.target.value })); setVerificationSaved(false); }}
+            >
+              {VERIFICATION_OPTIONS.map((opt) => (
+                <FormControlLabel
+                  key={opt.value}
+                  value={opt.value}
+                  control={<Radio color={opt.tone} />}
+                  label={
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <span>{opt.label}</span>
+                      {verification.status === opt.value && (
+                        <Chip size="small" color={opt.tone} label="current" variant="outlined" />
+                      )}
+                    </Stack>
+                  }
+                />
+              ))}
+            </RadioGroup>
+          </FormControl>
+
+          <TextField
+            label="Verification notes"
+            value={verification.notes ?? ''}
+            onChange={(e) => { setVerification((v) => ({ ...v, notes: e.target.value })); setVerificationSaved(false); }}
+            multiline
+            minRows={4}
+            placeholder="What did you check? Which document or call confirmed it? Anything that should be defensible later."
+          />
+
+          {verificationSaved && (
+            <Alert severity="success" onClose={() => setVerificationSaved(false)}>
+              Verification updated.
+            </Alert>
+          )}
+
+          <Box>
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={saveVerification}
+              disabled={useTree.updateNode.isPending}
+            >
+              {useTree.updateNode.isPending ? 'Saving…' : 'Save verification'}
+            </Button>
+          </Box>
+        </Stack>
       )}
     </Paper>
   );

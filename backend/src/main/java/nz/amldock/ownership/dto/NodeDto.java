@@ -29,6 +29,8 @@ public record NodeDto(
 
         String extraJson,
         NodeVerificationStatus verificationStatus,
+        String notes,
+        String verificationNotes,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -39,6 +41,7 @@ public record NodeDto(
                 n.getNzbn(), n.getCompanyNumber(), n.getIncorporationDate(), n.getRegisteredOffice(),
                 n.getTrustName(), n.getTrustDeedDocumentId(), n.getSettlorName(),
                 n.getExtraJson(), n.getVerificationStatus(),
+                n.getNotes(), n.getVerificationNotes(),
                 n.getCreatedAt(), n.getUpdatedAt());
     }
 }

@@ -134,6 +134,13 @@ public class DealService {
         if (!branch.isActive()) {
             throw new BadRequestException("Branch is inactive");
         }
+        // Brokers can only create deals for the branch they're assigned to.
+        if (actor.firmBranchId() == null) {
+            throw new ForbiddenException("Broker is not assigned to a branch — ask an administrator");
+        }
+        if (!actor.firmBranchId().equals(branch.getId())) {
+            throw new ForbiddenException("Brokers can only create deals on their assigned branch");
+        }
 
         Property property = new Property();
         applyPropertyInput(property, req.property());

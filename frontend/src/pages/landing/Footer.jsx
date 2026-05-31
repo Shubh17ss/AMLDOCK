@@ -63,7 +63,7 @@ export function Footer() {
                 <h4 className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-trust-500">
                   {col.title}
                 </h4>
-                <ul className="mt-3 space-y-2 text-sm text-trust-700">
+                <ul className="mt-3 space-y-2 text-sm text-trust-700" style={{ listStyleType: 'none', paddingLeft: 0 }}>
                   {col.links.map((l) => (
                     <li key={l.label}>
                       <a href={l.href} className="hover:text-trust-900">

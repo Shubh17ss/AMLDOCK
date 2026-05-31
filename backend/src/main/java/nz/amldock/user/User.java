@@ -34,6 +34,9 @@ public class User extends BaseEntity {
     @Column(name = "real_estate_firm_id")
     private Long realEstateFirmId;
 
+    @Column(name = "firm_branch_id")
+    private Long firmBranchId;
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
@@ -48,6 +51,8 @@ public class User extends BaseEntity {
     public void setRole(Role role) { this.role = role; }
     public Long getRealEstateFirmId() { return realEstateFirmId; }
     public void setRealEstateFirmId(Long realEstateFirmId) { this.realEstateFirmId = realEstateFirmId; }
+    public Long getFirmBranchId() { return firmBranchId; }
+    public void setFirmBranchId(Long firmBranchId) { this.firmBranchId = firmBranchId; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
 }

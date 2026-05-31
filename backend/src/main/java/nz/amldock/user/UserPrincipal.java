@@ -13,12 +13,13 @@ public record UserPrincipal(
         String passwordHash,
         Role role,
         Long realEstateFirmId,
+        Long firmBranchId,
         boolean active
 ) implements UserDetails {
 
     public static UserPrincipal from(User u) {
         return new UserPrincipal(u.getId(), u.getEmail(), u.getPasswordHash(), u.getRole(),
-                u.getRealEstateFirmId(), u.isActive());
+                u.getRealEstateFirmId(), u.getFirmBranchId(), u.isActive());
     }
 
     @Override

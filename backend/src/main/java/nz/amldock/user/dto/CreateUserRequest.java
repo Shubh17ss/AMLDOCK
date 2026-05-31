@@ -11,5 +11,8 @@ public record CreateUserRequest(
         @NotBlank @Size(min = 8, max = 128) String password,
         @NotBlank String fullName,
         @NotNull Role role,
-        Long realEstateFirmId
+        /** Required for BROKER and FIRM_USER; must be null for COMPLIANCE / MANAGER. */
+        Long realEstateFirmId,
+        /** Required for BROKER (must belong to realEstateFirmId); must be null for other roles. */
+        Long firmBranchId
 ) {}

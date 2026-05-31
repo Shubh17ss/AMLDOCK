@@ -117,7 +117,8 @@ public class AuthService {
     }
 
     private void issueCookies(User u, HttpServletResponse response) {
-        String access = jwt.generateAccessToken(u.getId(), u.getEmail(), u.getRole(), u.getRealEstateFirmId());
+        String access = jwt.generateAccessToken(u.getId(), u.getEmail(), u.getRole(),
+                u.getRealEstateFirmId(), u.getFirmBranchId());
         String rawRefresh = newRandomToken();
         RefreshToken rt = new RefreshToken();
         rt.setUserId(u.getId());
@@ -162,6 +163,7 @@ public class AuthService {
     }
 
     private AuthResponse toAuthResponse(User u) {
-        return new AuthResponse(u.getId(), u.getEmail(), u.getFullName(), u.getRole(), u.getRealEstateFirmId());
+        return new AuthResponse(u.getId(), u.getEmail(), u.getFullName(), u.getRole(),
+                u.getRealEstateFirmId(), u.getFirmBranchId());
     }
 }

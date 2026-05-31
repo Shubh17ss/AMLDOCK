@@ -75,7 +75,13 @@ public class OwnershipNode extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "verification_status", nullable = false, length = 32)
-    private NodeVerificationStatus verificationStatus = NodeVerificationStatus.NOT_STARTED;
+    private NodeVerificationStatus verificationStatus = NodeVerificationStatus.IN_PROGRESS;
+
+    @Column(name = "notes", columnDefinition = "text")
+    private String notes;
+
+    @Column(name = "verification_notes", columnDefinition = "text")
+    private String verificationNotes;
 
     public Long getId() { return id; }
     public Long getOwnershipStructureId() { return ownershipStructureId; }
@@ -110,4 +116,8 @@ public class OwnershipNode extends BaseEntity {
     public void setExtraJson(String v) { this.extraJson = v; }
     public NodeVerificationStatus getVerificationStatus() { return verificationStatus; }
     public void setVerificationStatus(NodeVerificationStatus v) { this.verificationStatus = v; }
+    public String getNotes() { return notes; }
+    public void setNotes(String v) { this.notes = v; }
+    public String getVerificationNotes() { return verificationNotes; }
+    public void setVerificationNotes(String v) { this.verificationNotes = v; }
 }

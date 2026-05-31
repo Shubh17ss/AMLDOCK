@@ -9,6 +9,7 @@ import { listFirms, listBranches } from '../api/firms.js';
 import { createDeal, submitDeal } from '../api/deals.js';
 import { AddressCascadingFields } from '../components/AddressCascadingFields.jsx';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 const STEPS = ['Firm + branch + POC', 'Property', 'Client', 'Documents', 'Review & submit'];
 
@@ -32,11 +33,15 @@ const EMPTY_FORM = {
 
 export function NewDealWizardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [savedDeal, setSavedDeal] = useState(null); // populated after first save
+
+  // Brokers are scoped to a single firm + branch — pre-fill from their profile and lock the pickers.
+  const brokerLocked = user?.role === 'BROKER' && Boolean(user.firmBranchId);
 
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const activeFirms = useMemo(() => (firmsQ.data ?? []).filter((f) => f.active), [firmsQ.data]);
@@ -47,6 +52,19 @@ export function NewDealWizardPage() {
     enabled: Boolean(form.firmId),
   });
   const activeBranches = useMemo(() => (branchesQ.data ?? []).filter((b) => b.active), [branchesQ.data]);
+
+  // Auto-fill firm + branch from the broker's profile on first render. We do this once
+  // when the form is still empty so subsequent edits within the wizard aren't clobbered.
+  useEffect(() => {
+    if (!brokerLocked) return;
+    if (form.firmId || form.firmBranchId) return;
+    setForm((f) => ({
+      ...f,
+      firmId: user.realEstateFirmId,
+      firmBranchId: user.firmBranchId,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brokerLocked]);
 
   // When the user picks a branch, default the POC fields from that branch (if blank).
   useEffect(() => {
@@ -151,7 +169,13 @@ export function NewDealWizardPage() {
             <Stack spacing={2}>
               <Typography variant="h6">Firm, branch, point of contact</Typography>
               <Divider />
-              <FormControl required>
+              {brokerLocked && (
+                <Alert severity="info" sx={{ py: 0.5 }}>
+                  You're scoped to a single firm and branch — they're pre-filled and locked.
+                  Ask an administrator if you need to be moved.
+                </Alert>
+              )}
+              <FormControl required disabled={brokerLocked}>
                 <InputLabel id="firm-label">Real-estate firm</InputLabel>
                 <Select labelId="firm-label" label="Real-estate firm"
                         value={form.firmId}
@@ -159,7 +183,7 @@ export function NewDealWizardPage() {
                   {activeFirms.map((f) => <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>)}
                 </Select>
               </FormControl>
-              <FormControl required disabled={!form.firmId}>
+              <FormControl required disabled={brokerLocked || !form.firmId}>
                 <InputLabel id="branch-label">Branch</InputLabel>
                 <Select labelId="branch-label" label="Branch"
                         value={form.firmBranchId}

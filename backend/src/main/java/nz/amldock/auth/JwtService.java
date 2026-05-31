@@ -29,7 +29,7 @@ public class JwtService {
         this.accessTtl = Duration.ofMinutes(accessTtlMinutes);
     }
 
-    public String generateAccessToken(Long userId, String email, Role role, Long firmId) {
+    public String generateAccessToken(Long userId, String email, Role role, Long firmId, Long branchId) {
         Instant now = Instant.now();
         var builder = Jwts.builder()
                 .subject(String.valueOf(userId))
@@ -40,6 +40,9 @@ public class JwtService {
                 .signWith(key, Jwts.SIG.HS256);
         if (firmId != null) {
             builder.claim("firmId", firmId);
+        }
+        if (branchId != null) {
+            builder.claim("branchId", branchId);
         }
         return builder.compact();
     }
