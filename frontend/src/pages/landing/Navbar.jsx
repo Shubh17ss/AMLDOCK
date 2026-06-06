@@ -21,10 +21,10 @@ export function Navbar({ isAuthed, dashboardHref }) {
 
           {/* Desktop nav */}
           <nav className="hidden items-center gap-1 md:flex">
-            <NavLink href="#product">Product</NavLink>
-            <NavLink href="#how">How it works</NavLink>
-            <NavLink href="#security">Security</NavLink>
-            <NavLink href="#contact">Contact</NavLink>
+            <NavLink to="/#product">Product</NavLink>
+            <NavLink to="/#how">How it works</NavLink>
+            <NavLink to="/pricing">Pricing</NavLink>
+            <NavLink to="/contact">Contact</NavLink>
           </nav>
 
           {/* Desktop CTAs */}
@@ -59,16 +59,20 @@ export function Navbar({ isAuthed, dashboardHref }) {
               style={{ backgroundColor: '#E0E5EC', boxShadow: 'inset 6px 6px 10px rgb(163,177,198,0.6), inset -6px -6px 10px rgba(255,255,255,0.5)' }}
             >
               <div className="flex flex-col gap-1">
-                {['#product', '#how', '#security', '#contact'].map((href, i) => (
-                  <a
-                    key={href}
-                    href={href}
+                {[
+                  { to: '/#product', label: 'Product' },
+                  { to: '/#how',     label: 'How it works' },
+                  { to: '/pricing',  label: 'Pricing' },
+                  { to: '/contact',  label: 'Contact' },
+                ].map((item) => (
+                  <RouterLink
+                    key={item.to}
+                    to={item.to}
                     onClick={() => setOpen(false)}
                     className="rounded-xl px-4 py-3 text-sm font-medium text-neu-muted transition duration-300 hover:text-neu-fg"
-                    style={{ ':hover': { boxShadow: '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)' } }}
                   >
-                    {['Product', 'How it works', 'Security', 'Contact'][i]}
-                  </a>
+                    {item.label}
+                  </RouterLink>
                 ))}
               </div>
               <div className="mt-3 flex flex-col gap-2 border-t border-white/40 pt-3">
@@ -89,17 +93,17 @@ export function Navbar({ isAuthed, dashboardHref }) {
   );
 }
 
-function NavLink({ href, children }) {
+function NavLink({ to, children }) {
   return (
-    <a
-      href={href}
+    <RouterLink
+      to={to}
       className="rounded-xl px-4 py-2 text-sm font-medium text-neu-muted transition duration-300 ease-out hover:text-neu-fg neu-focus"
       style={{ backgroundColor: '#E0E5EC' }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
     >
       {children}
-    </a>
+    </RouterLink>
   );
 }
 

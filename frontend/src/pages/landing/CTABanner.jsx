@@ -54,7 +54,7 @@ export function CTABanner({ isAuthed, dashboardHref }) {
             ) : (
               <>
                 <PrimaryBtn as={RouterLink} to="/login">Get started — it&apos;s free →</PrimaryBtn>
-                <SecondaryBtn href="mailto:hello@amldock.app">Talk to us</SecondaryBtn>
+                <SecondaryBtn as={RouterLink} to="/contact">Talk to us</SecondaryBtn>
               </>
             )}
           </div>
@@ -96,16 +96,17 @@ function PrimaryBtn({ as: Tag = 'button', to, href, children }) {
   );
 }
 
-function SecondaryBtn({ href, children }) {
+function SecondaryBtn({ as: Tag = 'a', to, href, children }) {
+  const props = to ? { to } : href ? { href } : {};
   return (
-    <a
-      href={href}
+    <Tag
+      {...props}
       className="inline-flex items-center justify-center rounded-2xl px-7 py-4 text-[0.95rem] font-medium text-neu-fg transition duration-300 ease-out hover:-translate-y-0.5 active:translate-y-px neu-focus"
       style={{ backgroundColor: '#E0E5EC', boxShadow: EXT }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = EXT; }}
     >
       {children}
-    </a>
+    </Tag>
   );
 }

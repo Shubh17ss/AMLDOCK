@@ -2,6 +2,8 @@ import { Route, Routes } from 'react-router-dom';
 import { AppShell } from '../components/AppShell.jsx';
 import { ProtectedRoute } from '../auth/ProtectedRoute.jsx';
 import { LandingPage } from '../pages/LandingPage.jsx';
+import { PricingPage } from '../pages/PricingPage.jsx';
+import { ContactPage } from '../pages/ContactPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
@@ -20,6 +22,8 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/contact" element={<ContactPage />} />
       <Route path="/login" element={<LoginPage />} />
 
       <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
