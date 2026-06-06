@@ -29,7 +29,7 @@ public class S3FileStorageService implements FileStorageService {
 
     public S3FileStorageService(S3Client client,
                                 S3Presigner presigner,
-                                @Value("${amldock.s3.bucket}") String bucket) {
+                                @Value("${S3_BUCKET:amldock-deals-documents}") String bucket) {
         this.client = client;
         this.presigner = presigner;
         this.bucket = bucket;

@@ -23,9 +23,9 @@ public class DataSeeder implements CommandLineRunner {
 
     public DataSeeder(UserRepository users,
                       PasswordEncoder encoder,
-                      @Value("${amldock.seed.admin-email}") String adminEmail,
-                      @Value("${amldock.seed.admin-password}") String adminPassword,
-                      @Value("${amldock.seed.admin-name}") String adminName) {
+                      @Value("${SEED_ADMIN_EMAIL:admin@amldock.local}") String adminEmail,
+                      @Value("${SEED_ADMIN_PASSWORD:Admin123!}") String adminPassword,
+                      @Value("${SEED_ADMIN_NAME:Default Admin}") String adminName) {
         this.users = users;
         this.encoder = encoder;
         this.adminEmail = adminEmail;

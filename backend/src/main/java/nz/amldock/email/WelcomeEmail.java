@@ -16,7 +16,7 @@ public class WelcomeEmail {
 
     private final String appBaseUrl;
 
-    public WelcomeEmail(@Value("${amldock.mail.app-base-url}") String appBaseUrl) {
+    public WelcomeEmail(@Value("${APP_BASE_URL:http://localhost:5173}") String appBaseUrl) {
         // Strip trailing slash so we can append paths cleanly.
         this.appBaseUrl = appBaseUrl.endsWith("/")
                 ? appBaseUrl.substring(0, appBaseUrl.length() - 1)

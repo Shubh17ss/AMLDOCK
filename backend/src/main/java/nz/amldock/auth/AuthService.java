@@ -43,7 +43,7 @@ public class AuthService {
                        JwtService jwt,
                        RefreshTokenRepository refreshRepo,
                        AuditService audit,
-                       @Value("${amldock.jwt.refresh-ttl-days}") long refreshTtlDays) {
+                       @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays) {
         this.authManager = authManager;
         this.users = users;
         this.jwt = jwt;

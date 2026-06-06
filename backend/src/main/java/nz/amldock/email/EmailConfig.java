@@ -13,10 +13,10 @@ public class EmailConfig {
 
     @Bean
     public EmailService emailService(
-            @Value("${amldock.mail.enabled}") boolean enabled,
-            @Value("${amldock.mail.from}") String fromAddress,
-            @Value("${amldock.mail.from-name}") String fromName,
-            @Value("${amldock.mail.reply-to:}") String replyTo,
+            @Value("${MAIL_ENABLED:false}") boolean enabled,
+            @Value("${MAIL_FROM:noreply@amldock.local}") String fromAddress,
+            @Value("${MAIL_FROM_NAME:AML_DOCK}") String fromName,
+            @Value("${MAIL_REPLY_TO:}") String replyTo,
             ObjectProvider<JavaMailSender> sender) {
         JavaMailSender mailSender = sender.getIfAvailable();
         if (!enabled || mailSender == null) {

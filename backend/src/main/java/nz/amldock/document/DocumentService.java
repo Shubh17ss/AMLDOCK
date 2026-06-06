@@ -57,9 +57,9 @@ public class DocumentService {
                            FileStorageService storage,
                            DealLifecycleService lifecycle,
                            AuditService audit,
-                           @Value("${amldock.s3.max-bytes}") long maxBytes,
-                           @Value("${amldock.s3.upload-ttl-minutes}") long uploadTtlMinutes,
-                           @Value("${amldock.s3.download-ttl-minutes}") long downloadTtlMinutes) {
+                           @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
+                           @Value("${S3_UPLOAD_TTL_MINUTES:5}") long uploadTtlMinutes,
+                           @Value("${S3_DOWNLOAD_TTL_MINUTES:5}") long downloadTtlMinutes) {
         this.documents = documents;
         this.deals = deals;
         this.branches = branches;

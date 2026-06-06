@@ -14,13 +14,13 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @Configuration
 public class StorageConfig {
 
-    @Value("${amldock.s3.region}")
+    @Value("${AWS_REGION:ap-southeast-2}")
     private String region;
 
-    @Value("${amldock.aws.access-key-id:}")
+    @Value("${AWS_ACCESS_KEY_ID:}")
     private String accessKeyId;
 
-    @Value("${amldock.aws.secret-access-key:}")
+    @Value("${AWS_SECRET_ACCESS_KEY:}")
     private String secretAccessKey;
 
     @Bean
