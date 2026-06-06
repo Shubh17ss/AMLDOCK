@@ -3,6 +3,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
 logging:
   level:
     nz.amldock: DEBUG
+    org.hibernate.SQL: DEBUG

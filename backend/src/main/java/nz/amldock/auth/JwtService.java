@@ -19,8 +19,8 @@ public class JwtService {
     private final SecretKey key;
     private final Duration accessTtl;
 
-    public JwtService(@Value("${amldock.jwt.secret}") String secret,
-                      @Value("${amldock.jwt.access-ttl-minutes}") long accessTtlMinutes) {
+    public JwtService(@Value("${JWT_SECRET:dev-secret-change-me-dev-secret-change-me-32chars}") String secret,
+                      @Value("${amldock.jwt.access-ttl-minutes:15}") long accessTtlMinutes) {
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < 32) {
             throw new IllegalStateException("amldock.jwt.secret must be at least 32 bytes (256 bits)");
