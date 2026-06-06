@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir D:\\\\AML_DOCK)"
+      "Bash(dir D:\\\\AML_DOCK)",
+      "Bash(npx vite *)",
+      "Bash(dir D:\\\\AML_DOCK\\\\frontend\\\\assets\\\\logos *)",
+      "Bash(python *)"
     ]
   }
 }

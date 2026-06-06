@@ -1,12 +1,65 @@
-/* Tailwind layers used only by the landing page.
-   Preflight is disabled in tailwind.config.js to coexist with MUI's CssBaseline,
-   so only the utilities/components/base scoped to elements that opt in apply. */
+/* ── Google Fonts — must be first ───────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+
+/* ── FK Grotesk Trial — local, available for app shell ──────────────── */
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-Light.otf') format('opentype'); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-LightItalic.otf') format('opentype'); font-weight: 300; font-style: italic; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-Regular.otf') format('opentype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-Italic.otf') format('opentype'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-Medium.otf') format('opentype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-MediumItalic.otf') format('opentype'); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-Bold.otf') format('opentype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-BoldItalic.otf') format('opentype'); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-Black.otf') format('opentype'); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskTrial-BlackItalic.otf') format('opentype'); font-weight: 900; font-style: italic; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Mono Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskMonoTrial-Regular.otf') format('opentype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Mono Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskMonoTrial-Medium.otf') format('opentype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Mono Trial'; src: url('../FK-Grotesk-Font-Family/FKGroteskMonoTrial-Bold.otf') format('opentype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+/* ── Tailwind ────────────────────────────────────────────────────────── */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Smooth anchor scrolling on the landing page (and inherited by the rest of the app —
-   harmless on dashboards because they don't use anchor links). */
-html {
-  scroll-behavior: smooth;
+/* ── Global ──────────────────────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+a    { text-decoration: none; }
+
+/* ── Neumorphism CSS custom properties ───────────────────────────────── */
+:root {
+  --neu-base:         #E0E5EC;
+  --neu-fg:           #3D4852;
+  --neu-muted:        #6B7280;
+  --neu-accent:       #6C63FF;
+  --neu-teal:         #38B2AC;
+  --shadow-ext:       9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5);
+  --shadow-ext-hover: 12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6);
+  --shadow-ext-sm:    5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5);
+  --shadow-inset:     inset 6px 6px 10px rgb(163,177,198,0.6), inset -6px -6px 10px rgba(255,255,255,0.5);
+  --shadow-inset-d:   inset 10px 10px 20px rgb(163,177,198,0.7), inset -10px -10px 20px rgba(255,255,255,0.6);
+  --shadow-inset-sm:  inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5);
+}
+
+/* ── Entrance animations ─────────────────────────────────────────────── */
+@keyframes neuFadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes menuSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.neu-fade-up   { animation: neuFadeUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.neu-delay-1   { animation-delay: 80ms; }
+.neu-delay-2   { animation-delay: 170ms; }
+.neu-delay-3   { animation-delay: 270ms; }
+.neu-delay-4   { animation-delay: 380ms; }
+
+.neu-menu-slide { animation: menuSlide 0.2s ease-out both; }
+
+/* ── Focus rings — accessible neumorphic ─────────────────────────────── */
+.neu-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--neu-base), 0 0 0 4px var(--neu-accent);
 }

@@ -1,7 +1,6 @@
 import { AppBar, Box, Drawer, Stack, Toolbar, Typography } from '@mui/material';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { palette } from '../theme/theme.js';
 import { SidebarNav } from './SidebarNav.jsx';
 import { UserMenu } from './UserMenu.jsx';
 
@@ -41,46 +40,40 @@ export function AppShell() {
           '& .MuiDrawer-paper': {
             width: SIDEBAR_WIDTH,
             boxSizing: 'border-box',
-            border: 'none',
-            backgroundColor: '#ffffff',
-            // soft right-side shadow gives the depth effect
-            boxShadow: '4px 0 16px rgba(15, 42, 79, 0.06), 1px 0 0 rgba(15, 42, 79, 0.04)',
             display: 'flex',
             flexDirection: 'column',
           },
         }}
       >
+        {/* Brand lockup */}
         <Box
           component={RouterLink}
           to={user ? '/app' : '/'}
           sx={{
             display: 'flex', alignItems: 'center', gap: 1.25,
-            px: 2.5, py: 5.25,
+            px: 2.5, py: 2.5,
             textDecoration: 'none', color: 'inherit',
-            borderBottom: `1px solid ${palette.ink[100]}`,
+            boxShadow: 'inset 0 -1px 0 rgba(163,177,198,0.4)',
           }}
         >
           <Box sx={{
-            width: 32, height: 32, borderRadius: 1.5,
-            background: `linear-gradient(135deg, ${palette.trust[500]} 0%, ${palette.trust[700]} 100%)`,
+            width: 36, height: 36, borderRadius: 2,
+            backgroundColor: '#E0E5EC',
+            boxShadow: '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 10px rgba(15, 42, 79, 0.18)',
+            flexShrink: 0,
           }}>
-            <Typography sx={{
-              color: '#fff', fontWeight: 800, fontSize: '0.85rem',
-              letterSpacing: '0.04em',
-            }}>
-              A
-            </Typography>
+            <ShieldCheckIcon />
           </Box>
           <Box>
             <Typography sx={{
-              fontWeight: 700, color: palette.trust[800],
-              letterSpacing: '0.12em', fontSize: '0.92rem',
+              fontWeight: 800, color: '#3D4852',
+              letterSpacing: '0.1em', fontSize: '0.9rem',
+              fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
             }}>
               AMLDOCK
             </Typography>
-            <Typography variant="caption" sx={{ color: palette.ink[500], lineHeight: 1 }}>
+            <Typography variant="caption" sx={{ color: '#6B7280', lineHeight: 1 }}>
               Compliance, calmer
             </Typography>
           </Box>
@@ -88,22 +81,25 @@ export function AppShell() {
 
         <SidebarNav />
 
-        <Box sx={{ p: 2, borderTop: `1px solid ${palette.ink[100]}` }}>
-          <Typography variant="caption" sx={{ color: palette.ink[500] }}>
+        <Box sx={{
+          p: 2,
+          boxShadow: 'inset 0 1px 0 rgba(163,177,198,0.4)',
+        }}>
+          <Typography variant="caption" sx={{ color: '#6B7280' }}>
             © {new Date().getFullYear()} AML&middot;DOCK
           </Typography>
         </Box>
       </Drawer>
 
       {/* Main column: top bar + content */}
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0, padding:'1.4rem 0'}}>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0, padding: '1.4rem 0' }}>
         <AppBar position="sticky">
           <Toolbar sx={{ gap: 2 }}>
             <Stack spacing={0.1} sx={{ flexGrow: 1, minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: palette.ink[500] }}>
+              <Typography variant="caption" sx={{ color: '#6B7280' }}>
                 {user ? roleDisplay(user.role) : ''}
               </Typography>
-              <Typography variant="h6" noWrap sx={{ color: palette.ink[900] }}>
+              <Typography variant="h6" noWrap sx={{ color: '#3D4852', fontWeight: 700 }}>
                 {pageTitle}
               </Typography>
             </Stack>
@@ -121,10 +117,25 @@ export function AppShell() {
 
 function roleDisplay(role) {
   switch (role) {
-    case 'BROKER': return 'Broker workspace';
+    case 'BROKER':     return 'Broker workspace';
     case 'COMPLIANCE': return 'Compliance workspace';
-    case 'MANAGER': return 'Admin & oversight';
-    case 'FIRM_USER': return 'Firm workspace';
-    default: return '';
+    case 'MANAGER':    return 'Admin & oversight';
+    case 'FIRM_USER':  return 'Firm workspace';
+    default:           return '';
   }
+}
+
+function ShieldCheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+      <path
+        d="M10 2L3 5.5V10C3 13.87 6.13 17.5 10 18.5C13.87 17.5 17 13.87 17 10V5.5L10 2Z"
+        fill="rgba(108,99,255,0.15)" stroke="#6C63FF" strokeWidth="1.5" strokeLinejoin="round"
+      />
+      <path
+        d="M6.5 10L8.5 12L13.5 7.5"
+        stroke="#6C63FF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+      />
+    </svg>
+  );
 }

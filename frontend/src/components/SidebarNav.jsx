@@ -9,32 +9,37 @@ import BusinessIcon from '@mui/icons-material/Business';
 import PeopleIcon from '@mui/icons-material/People';
 import HistoryIcon from '@mui/icons-material/History';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { palette } from '../theme/theme.js';
+
+const NEU_ACCENT  = '#6C63FF';
+const NEU_FG      = '#3D4852';
+const NEU_MUTED   = '#6B7280';
+const EXT_SM      = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
+const INSET_SM    = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
 
 function navConfigFor(role) {
   switch (role) {
     case 'BROKER':
       return [
-        { label: 'Dashboard', to: '/app', icon: <DashboardIcon /> },
-        { label: 'My deals', to: '/my-deals', icon: <DescriptionIcon /> },
-        { label: 'New deal', to: '/deals/new', icon: <AddCircleOutlineIcon /> },
+        { label: 'Dashboard', to: '/app',      icon: <DashboardIcon /> },
+        { label: 'My deals',  to: '/my-deals', icon: <DescriptionIcon /> },
+        { label: 'New deal',  to: '/deals/new', icon: <AddCircleOutlineIcon /> },
       ];
     case 'COMPLIANCE':
       return [
-        { label: 'Dashboard', to: '/app', icon: <DashboardIcon /> },
-        { label: 'Queue', to: '/queue', icon: <InboxIcon /> },
+        { label: 'Dashboard', to: '/app',   icon: <DashboardIcon /> },
+        { label: 'Queue',     to: '/queue', icon: <InboxIcon /> },
       ];
     case 'MANAGER':
       return [
-        { label: 'Dashboard', to: '/app', icon: <DashboardIcon /> },
-        { label: 'Queue', to: '/queue', icon: <InboxIcon /> },
-        { label: 'Firms', to: '/admin/firms', icon: <BusinessIcon />, group: 'Admin' },
-        { label: 'Users', to: '/admin/users', icon: <PeopleIcon />, group: 'Admin' },
-        { label: 'Audit', to: '/admin/audit', icon: <HistoryIcon />, group: 'Admin' },
+        { label: 'Dashboard', to: '/app',          icon: <DashboardIcon /> },
+        { label: 'Queue',     to: '/queue',         icon: <InboxIcon /> },
+        { label: 'Firms',     to: '/admin/firms',   icon: <BusinessIcon />,  group: 'Admin' },
+        { label: 'Users',     to: '/admin/users',   icon: <PeopleIcon />,    group: 'Admin' },
+        { label: 'Audit',     to: '/admin/audit',   icon: <HistoryIcon />,   group: 'Admin' },
       ];
     case 'FIRM_USER':
       return [
-        { label: 'Dashboard', to: '/app', icon: <DashboardIcon /> },
+        { label: 'Dashboard', to: '/app',        icon: <DashboardIcon /> },
         { label: 'Firm deals', to: '/firm/deals', icon: <BusinessCenterIcon /> },
       ];
     default:
@@ -47,7 +52,6 @@ export function SidebarNav() {
   const { pathname } = useLocation();
   const items = navConfigFor(user?.role);
 
-  // Group items: ungrouped first, then by group label.
   const ungrouped = items.filter((i) => !i.group);
   const grouped = items.reduce((acc, item) => {
     if (item.group) (acc[item.group] ??= []).push(item);
@@ -62,7 +66,7 @@ export function SidebarNav() {
           <Typography
             variant="caption"
             sx={{
-              px: 1.5, color: palette.ink[500],
+              px: 1.5, color: NEU_MUTED,
               fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
             }}
           >
@@ -83,32 +87,33 @@ function NavList({ items, pathname, sx }) {
           pathname === item.to ||
           (item.to !== '/app' && pathname.startsWith(item.to + '/'));
         return (
-          <ListItem key={item.to} disablePadding sx={{ mb: 0.25 }}>
+          <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton
               component={RouterLink}
               to={item.to}
               sx={{
                 py: 0.9,
-                color: active ? palette.trust[700] : palette.ink[700],
-                backgroundColor: active ? palette.trust[100] : 'transparent',
+                borderRadius: 2,
+                backgroundColor: '#E0E5EC',
+                color: active ? NEU_ACCENT : NEU_FG,
+                boxShadow: active ? EXT_SM : 'none',
+                transition: 'box-shadow 0.25s ease, color 0.25s ease',
                 '&:hover': {
-                  backgroundColor: active ? palette.trust[100] : palette.ink[100],
+                  backgroundColor: '#E0E5EC',
+                  boxShadow: active ? EXT_SM : INSET_SM,
                 },
-                ...(active && {
-                  boxShadow: `inset 3px 0 0 ${palette.trust[500]}`,
-                }),
               }}
             >
               <ListItemIcon sx={{
                 minWidth: 36,
-                color: active ? palette.trust[600] : palette.ink[500],
+                color: active ? NEU_ACCENT : NEU_MUTED,
               }}>
                 {item.icon}
               </ListItemIcon>
               <ListItemText
                 primary={item.label}
                 primaryTypographyProps={{
-                  fontWeight: active ? 600 : 500,
+                  fontWeight: active ? 700 : 500,
                   fontSize: '0.9rem',
                 }}
               />

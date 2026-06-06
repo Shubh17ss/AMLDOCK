@@ -1,96 +1,143 @@
-import { OwnershipTreeMock } from './mockups/OwnershipTreeMock.jsx';
-import { EvidenceMock } from './mockups/EvidenceMock.jsx';
-import { AuditTrailMock } from './mockups/AuditTrailMock.jsx';
+const EXT    = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)';
+const EXT_SM = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
+const INSET_D= 'inset 10px 10px 20px rgb(163,177,198,0.7), inset -10px -10px 20px rgba(255,255,255,0.6)';
+
+const FEATURES = [
+  {
+    eyebrow: 'Ownership',
+    title: 'Map complex structures in minutes',
+    desc: 'Build the ownership tree that actually reflects the deal — trusts, companies, natural persons — with percentages and roles on every edge. Cycle detection and validation come standard.',
+    bullets: ['Natural persons, NZ companies, trusts', 'Trustee / beneficiary / shareholder edges', 'Cycle & percentage validation on save'],
+    accent: '#6C63FF',
+    icon: <OwnershipIcon />,
+  },
+  {
+    eyebrow: 'Evidence',
+    title: 'Every document exactly where it belongs',
+    desc: 'Passports, trust deeds, sale agreements — uploaded once, attached to the right node, reviewable side-by-side with the ownership tree. S3-backed, presigned URLs, no proxying.',
+    bullets: ['Deal-level and per-node attachments', 'PDF + image preview side-by-side', 'Short-lived presigned downloads only'],
+    accent: '#38B2AC',
+    icon: <EvidenceIcon />,
+  },
+  {
+    eyebrow: 'Decisions',
+    title: 'Approvals that stand up to scrutiny',
+    desc: 'Every approve, reject, and override is captured in an immutable record — with actor, IP, before/after, and decision notes. Manager override is one click, always justified.',
+    bullets: ['Per-deal audit panel + admin-wide search', 'Approve / Reject / Override with notes', 'Filter by actor, action, entity, date'],
+    accent: '#6C63FF',
+    icon: <DecisionsIcon />,
+  },
+];
 
 export function Features() {
   return (
-    <section id="product" className="relative mt-20">
-      <div className="mx-auto max-w-7xl px-6 pt-24 text-center">
-        <h2 className="mt-3 font-baskerville text-3xl font-bold text-trust-900 sm:text-4xl">
-          Three jobs. One quiet workspace.
-        </h2>
-        <p className="mx-auto mt-3 max-w-2xl font-baskerville text-lg text-trust-700">
-          Brokers prepare. Compliance officers verify. Managers decide. AMLDOCK keeps
-          everyone on the same page — literally.
-        </p>
+    <section id="product" className="py-24 md:py-32">
+      <div className="mx-auto max-w-7xl px-6">
+        {/* Section header */}
+        <div className="text-center mb-16">
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.25em] text-neu-muted mb-3">
+            The platform
+          </p>
+          <h2 className="font-display text-3xl font-extrabold tracking-tight text-neu-fg sm:text-4xl">
+            Three jobs. One quiet workspace.
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-[1.02rem] leading-relaxed text-neu-muted">
+            Brokers prepare. Compliance officers verify. Managers decide. AMLDOCK keeps everyone
+            on the same page — literally.
+          </p>
+        </div>
+
+        {/* Feature cards */}
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map(f => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
+        </div>
       </div>
-
-      <FeatureRow
-        eyebrow="Ownership"
-        title="Map nested ownership in minutes — not afternoons."
-        body="Build the structure that actually reflects the deal: trusts with trustees, companies with shareholders, partners and beneficiaries — with percentages and roles on every edge. Cycle and percentage validation come standard."
-        bullets={[
-          'Natural persons, NZ companies, trusts, partnerships',
-          'Trustee / beneficiary / shareholder / partner edges',
-          'Cycle detection on save',
-        ]}
-        ctaHref="/login"
-        ctaLabel="Open the workspace"
-        mockup={<OwnershipTreeMock />}
-      />
-
-      <FeatureRow
-        reverse
-        eyebrow="Evidence"
-        title="Every document where you need it, never where you don't."
-        body="Driver licences, passports, sale agreements, trust deeds — uploaded once, attached to the right node, reviewable side-by-side with the ownership tree. S3-backed, presigned URLs, no proxying."
-        bullets={[
-          'Deal-level and per-node attachments',
-          'PDF + image preview, side-by-side',
-          'Short-lived presigned downloads only',
-        ]}
-        ctaHref="/login"
-        ctaLabel="See the evidence room"
-        mockup={<EvidenceMock />}
-      />
-
-      <FeatureRow
-        eyebrow="Decisions"
-        title="Approvals you can defend in writing."
-        body="Every claim, approval, rejection, and override leaves an immutable record — with actor, IP, before/after, and decision notes. Manager override is one click, always justified, always visible."
-        bullets={[
-          'Per-deal audit panel + admin-wide search',
-          'Approve / Reject / Override with required notes',
-          'Filter by actor, action, entity, date range',
-        ]}
-        ctaHref="/login"
-        ctaLabel="Explore the audit log"
-        mockup={<AuditTrailMock />}
-      />
     </section>
   );
 }
 
-function FeatureRow({ eyebrow, title, body, bullets, ctaHref, ctaLabel, mockup, reverse }) {
+function FeatureCard({ eyebrow, title, desc, bullets, accent, icon }) {
   return (
-    <div className="mx-auto mt-20 grid max-w-7xl items-center gap-12 px-6 md:grid-cols-12 md:gap-16 md:mt-28">
-      <div className={['md:col-span-5', reverse ? 'md:order-2' : ''].join(' ')}>
-        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-trust-500">
-          {eyebrow}
-        </p>
-        <h3 className="mt-2 font-baskerville text-2xl font-bold leading-tight text-trust-900 sm:text-3xl">
-          {title}
-        </h3>
-        <p className="mt-4 font-baskerville text-base leading-relaxed text-trust-700">{body}</p>
-        <ul className="mt-5 space-y-2 text-sm text-trust-700">
-          {bullets.map((b) => (
-            <li key={b} className="flex items-start gap-2.5">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-trust-500" />
-              <span>{b}</span>
-            </li>
-          ))}
-        </ul>
-        <a
-          href={ctaHref}
-          className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-trust-700 hover:text-trust-900"
+    <div
+      className="group rounded-[32px] p-8 transition duration-300 ease-out hover:-translate-y-0.5 cursor-default"
+      style={{ backgroundColor: '#E0E5EC', boxShadow: EXT }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = EXT; }}
+    >
+      {/* Icon well */}
+      <div
+        className="mb-6 flex h-16 w-16 items-center justify-center rounded-[20px]"
+        style={{ backgroundColor: '#E0E5EC', boxShadow: INSET_D }}
+      >
+        <div
+          className="flex h-9 w-9 items-center justify-center rounded-2xl"
+          style={{ backgroundColor: '#E0E5EC', boxShadow: EXT_SM }}
         >
-          {ctaLabel} <span aria-hidden="true">→</span>
-        </a>
+          {icon}
+        </div>
       </div>
-      <div className={['relative md:col-span-7', reverse ? 'md:order-1' : ''].join(' ')}>
-        <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-br from-trust-100/50 via-white/0 to-warm-100/40 blur-2xl" />
-        {mockup}
-      </div>
+
+      {/* Eyebrow */}
+      <p
+        className="mb-2 text-[0.65rem] font-semibold uppercase tracking-[0.22em]"
+        style={{ color: accent }}
+      >
+        {eyebrow}
+      </p>
+
+      {/* Title */}
+      <h3 className="font-display text-[1.15rem] font-bold leading-snug text-neu-fg mb-3">
+        {title}
+      </h3>
+
+      {/* Description */}
+      <p className="text-[0.9rem] leading-relaxed text-neu-muted mb-5">{desc}</p>
+
+      {/* Bullets */}
+      <ul className="list-none p-0 space-y-2">
+        {bullets.map(b => (
+          <li key={b} className="flex items-start gap-2.5 text-[0.82rem] text-neu-muted">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="mt-0.5 shrink-0">
+              <circle cx="7" cy="7" r="6.5" stroke={accent} strokeWidth="1" opacity="0.5" />
+              <path d="M4 7l2 2 4-4" stroke={accent} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>{b}</span>
+          </li>
+        ))}
+      </ul>
     </div>
+  );
+}
+
+function OwnershipIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <circle cx="9" cy="3.5" r="2" stroke="#6C63FF" strokeWidth="1.4" />
+      <circle cx="3.5" cy="13.5" r="2" stroke="#6C63FF" strokeWidth="1.4" />
+      <circle cx="14.5" cy="13.5" r="2" stroke="#6C63FF" strokeWidth="1.4" />
+      <path d="M9 5.5v3M9 8.5L3.5 11.5M9 8.5L14.5 11.5" stroke="#6C63FF" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function EvidenceIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect x="3" y="2" width="10" height="13" rx="2" stroke="#38B2AC" strokeWidth="1.4" />
+      <path d="M6 6h4M6 9h4M6 12h2" stroke="#38B2AC" strokeWidth="1.4" strokeLinecap="round" />
+      <rect x="10" y="8" width="5" height="7" rx="1.5" fill="#E0E5EC" stroke="#38B2AC" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function DecisionsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M9 2L3 5V9.5C3 12.93 5.69 16.11 9 17C12.31 16.11 15 12.93 15 9.5V5L9 2Z"
+        stroke="#6C63FF" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M6 9l2 2 4-4" stroke="#6C63FF" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

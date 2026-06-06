@@ -6,21 +6,17 @@ import { Features } from './landing/Features.jsx';
 import { HowItWorks } from './landing/HowItWorks.jsx';
 import { CTABanner } from './landing/CTABanner.jsx';
 import { Footer } from './landing/Footer.jsx';
-import { GradientBackground } from './landing/GradientBackground.jsx';
 
-/**
- * Public landing page — Persona-inspired flow.
- * Tailwind-only so it stays out of MUI's way; preflight is disabled in tailwind.config
- * so the rest of the (MUI) app keeps its baseline reset.
- */
 export function LandingPage() {
   const { status, user } = useAuth();
   const isAuthed = status === 'authed' && user;
   const dashboardHref = '/app';
 
   return (
-    <div className="relative min-h-screen bg-white font-baskerville text-trust-900">
-      <GradientBackground />
+    <div
+      className="relative min-h-screen font-body text-neu-fg"
+      style={{ backgroundColor: '#E0E5EC' }}
+    >
       <Navbar isAuthed={isAuthed} dashboardHref={dashboardHref} />
       <main>
         <Hero isAuthed={isAuthed} dashboardHref={dashboardHref} />

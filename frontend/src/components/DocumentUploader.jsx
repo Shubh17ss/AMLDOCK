@@ -5,6 +5,7 @@ import {
   MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Tooltip, Typography,
 } from '@mui/material';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -13,6 +14,7 @@ import {
   DOCUMENT_TYPES, deleteDocument, fetchDownloadUrl, listDealDocuments,
   listNodeDocuments, uploadToS3,
 } from '../api/documents.js';
+import { CameraCaptureDialog } from './CameraCaptureDialog.jsx';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -34,6 +36,7 @@ export function DocumentUploader({
   const [documentType, setDocumentType] = useState('OTHER');
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(null); // { name, phase, percent }
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const isNodeScoped = ownershipNodeId != null;
   const listKey = isNodeScoped ? ['documents', 'node', ownershipNodeId] : ['documents', dealId];
@@ -75,15 +78,23 @@ export function DocumentUploader({
     onError: (e) => setError(e.response?.data?.message || 'Delete failed'),
   });
 
-  const handleFile = (e) => {
-    const file = e.target.files?.[0];
+  const validateAndUpload = (file) => {
     if (!file) return;
     if (file.size > MAX_BYTES) {
       setError(`File exceeds ${formatBytes(MAX_BYTES)} limit`);
-      e.target.value = '';
       return;
     }
     uploadMut.mutate(file);
+  };
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    validateAndUpload(file);
+    if (file && file.size > MAX_BYTES) e.target.value = '';
+  };
+
+  const handleCameraCapture = (file) => {
+    validateAndUpload(file);
   };
 
   const handleDownload = async (id) => {
@@ -113,6 +124,15 @@ export function DocumentUploader({
                     disabled={uploadMut.isPending || !dealId}>
               {uploadMut.isPending ? 'Uploading…' : 'Upload'}
             </Button>
+            <Tooltip title="Capture with camera">
+              <span>
+                <Button variant="outlined" startIcon={<CameraAltIcon />}
+                        onClick={() => setCameraOpen(true)}
+                        disabled={uploadMut.isPending || !dealId}>
+                  Camera
+                </Button>
+              </span>
+            </Tooltip>
             <input ref={inputRef} type="file" hidden onChange={handleFile} />
           </Stack>
         )}
@@ -199,6 +219,13 @@ export function DocumentUploader({
           </TableBody>
         </Table>
       </TableContainer>
+
+      <CameraCaptureDialog
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={handleCameraCapture}
+        suggestedName={documentType?.toLowerCase()}
+      />
     </Stack>
   );
 }
