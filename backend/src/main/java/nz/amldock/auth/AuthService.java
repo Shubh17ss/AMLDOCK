@@ -38,16 +38,23 @@ public class AuthService {
     private final Duration refreshTtl;
     private final SecureRandom rng = new SecureRandom();
 
+    private final boolean secureCookies;
+    private final String sameSite;
+
     public AuthService(AuthenticationManager authManager,
                        UserRepository users,
                        JwtService jwt,
                        RefreshTokenRepository refreshRepo,
                        AuditService audit,
-                       @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays) {
+                       @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays,
+                       @Value("${COOKIE_SECURE:false}") boolean secureCookies,
+                       @Value("${COOKIE_SAME_SITE:Lax}") String sameSite) {
         this.authManager = authManager;
         this.users = users;
         this.jwt = jwt;
         this.refreshRepo = refreshRepo;
+        this.secureCookies = secureCookies;
+        this.sameSite = sameSite;
         this.audit = audit;
         this.refreshTtl = Duration.ofDays(refreshTtlDays);
     }
@@ -140,10 +147,10 @@ public class AuthService {
     private void addCookie(HttpServletResponse response, String name, String value, int maxAgeSeconds, String path) {
         Cookie c = new Cookie(name, value);
         c.setHttpOnly(true);
-        c.setSecure(false); // dev only — flip to true behind HTTPS in prod
+        c.setSecure(secureCookies);
         c.setPath(path);
         c.setMaxAge(maxAgeSeconds);
-        c.setAttribute("SameSite", "Lax");
+        c.setAttribute("SameSite", sameSite);
         response.addCookie(c);
     }
 
