@@ -1,0 +1,238 @@
+import { Box, Typography } from '@mui/material';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext.jsx';
+
+const NEU_BASE   = '#E0E5EC';
+const NEU_ACCENT = '#6C63FF';
+const NEU_MUTED  = '#6B7280';
+const EXT_SM     = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
+const EXT        = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)';
+const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+
+function navItemsFor(role) {
+  switch (role) {
+    case 'BROKER': return [
+      { label: 'Home',     to: '/app',       Icon: HomeIcon },
+      { label: 'My Deals', to: '/my-deals',  Icon: DealsIcon },
+      { label: 'New',      to: '/deals/new', Icon: PlusIcon,  accent: true },
+      { label: 'Profile',  to: '/profile',   Icon: ProfileIcon },
+    ];
+    case 'COMPLIANCE': return [
+      { label: 'Home',    to: '/app',     Icon: HomeIcon },
+      { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
+      { label: 'Profile', to: '/profile', Icon: ProfileIcon },
+    ];
+    case 'MANAGER': return [
+      { label: 'Home',    to: '/app',     Icon: HomeIcon },
+      { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
+      { label: 'Profile', to: '/profile', Icon: ProfileIcon },
+    ];
+    case 'FIRM_USER': return [
+      { label: 'Home',   to: '/app',        Icon: HomeIcon },
+      { label: 'Deals',  to: '/firm/deals', Icon: DealsIcon },
+      { label: 'Profile',to: '/profile',    Icon: ProfileIcon },
+    ];
+    default: return [
+      { label: 'Home',    to: '/app',     Icon: HomeIcon },
+      { label: 'Profile', to: '/profile', Icon: ProfileIcon },
+    ];
+  }
+}
+
+function isActive(pathname, to) {
+  if (to === '/app') return pathname === '/app';
+  return pathname === to || pathname.startsWith(to + '/');
+}
+
+export function BottomNav() {
+  const { user } = useAuth();
+  const { pathname } = useLocation();
+  const items = navItemsFor(user?.role);
+
+  return (
+    <Box
+      component="nav"
+      sx={{
+        display: { xs: 'flex', md: 'none' },
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1200,
+        backgroundColor: NEU_BASE,
+        boxShadow: '0 -6px 20px rgb(163,177,198,0.5), 0 1px 0 rgba(255,255,255,0.9)',
+        px: 1,
+        pt: 1,
+        pb: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
+        alignItems: 'flex-end',
+        justifyContent: 'space-around',
+      }}
+    >
+      {items.map((item) => {
+        const active = isActive(pathname, item.to);
+
+        if (item.accent) {
+          return (
+            <Box
+              key={item.to}
+              component={RouterLink}
+              to={item.to}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 0.5,
+                textDecoration: 'none',
+                mb: 0.5,
+              }}
+            >
+              <Box sx={{
+                width: 54,
+                height: 54,
+                borderRadius: '50%',
+                backgroundColor: NEU_ACCENT,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: active
+                  ? INSET_SM
+                  : EXT,
+                transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+                transform: 'translateY(-10px)',
+                '&:active': { boxShadow: INSET_SM, transform: 'translateY(-8px)' },
+              }}>
+                <item.Icon color="#fff" size={22} />
+              </Box>
+              <Typography sx={{
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                color: NEU_ACCENT,
+                letterSpacing: '0.03em',
+                lineHeight: 1,
+                mt: '-6px',
+              }}>
+                {item.label}
+              </Typography>
+            </Box>
+          );
+        }
+
+        return (
+          <Box
+            key={item.to}
+            component={RouterLink}
+            to={item.to}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 0.5,
+              textDecoration: 'none',
+              minWidth: 52,
+              py: 0.5,
+            }}
+          >
+            <Box sx={{
+              width: 44,
+              height: 44,
+              borderRadius: 2.5,
+              backgroundColor: NEU_BASE,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: active ? INSET_SM : 'none',
+              transition: 'box-shadow 0.2s ease',
+              '&:active': { boxShadow: INSET_SM },
+            }}>
+              <item.Icon
+                color={active ? NEU_ACCENT : NEU_MUTED}
+                size={22}
+                filled={active}
+              />
+            </Box>
+            <Typography sx={{
+              fontSize: '0.6rem',
+              fontWeight: active ? 700 : 500,
+              color: active ? NEU_ACCENT : NEU_MUTED,
+              letterSpacing: '0.02em',
+              lineHeight: 1,
+              transition: 'color 0.2s ease',
+            }}>
+              {item.label}
+            </Typography>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+// ── Premium stroke icons ───────────────────────────────────────────────────────
+
+function HomeIcon({ color = '#6B7280', size = 22, filled = false }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1H15v-5a1 1 0 00-1-1h-4a1 1 0 00-1 1v5H4a1 1 0 01-1-1V10.5z"
+        fill={filled ? `${color}22` : 'none'}
+        stroke={color}
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DealsIcon({ color = '#6B7280', size = 22, filled = false }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect
+        x="4" y="4" width="12" height="15" rx="2"
+        fill={filled ? `${color}22` : 'none'}
+        stroke={color} strokeWidth="1.75"
+      />
+      <path d="M8 9h6M8 12h6M8 15h4" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="7" y="2" width="10" height="3" rx="1" fill={color} opacity="0.3" />
+    </svg>
+  );
+}
+
+function PlusIcon({ color = '#fff', size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M12 5v14M5 12h14" stroke={color} strokeWidth="2.25" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function QueueIcon({ color = '#6B7280', size = 22, filled = false }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M22 12h-5.5l-1.5 3h-6l-1.5-3H2"
+        stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      />
+      <path
+        d="M5.5 5.1L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.5-6.9A2 2 0 0016.76 4H7.24A2 2 0 005.5 5.1z"
+        fill={filled ? `${color}22` : 'none'}
+        stroke={color} strokeWidth="1.75" strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ProfileIcon({ color = '#6B7280', size = 22, filled = false }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle
+        cx="12" cy="8" r="4"
+        fill={filled ? `${color}22` : 'none'}
+        stroke={color} strokeWidth="1.75"
+      />
+      <path
+        d="M4 20c0-4 3.6-7 8-7s8 3 8 7"
+        stroke={color} strokeWidth="1.75" strokeLinecap="round"
+      />
+    </svg>
+  );
+}

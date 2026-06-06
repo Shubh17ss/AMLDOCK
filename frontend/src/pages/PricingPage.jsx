@@ -1,3 +1,4 @@
+import {useEffect} from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { Link as RouterLink } from 'react-router-dom';
 import '../landing.css';
@@ -78,6 +79,10 @@ const CHECK = (
 export function PricingPage() {
   const { status, user } = useAuth();
   const isAuthed = status === 'authed' && user;
+
+  useEffect(()=>{
+    window.scrollTo(0, 0);
+  },[])
 
   return (
     <div className="relative min-h-screen font-body text-neu-fg" style={{ backgroundColor: '#E0E5EC' }}>

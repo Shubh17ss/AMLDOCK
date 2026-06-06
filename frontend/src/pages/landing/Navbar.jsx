@@ -1,15 +1,36 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import logoSrc from '../../../assets/logos/image.png';
 import './Navbar.css';
 
+const CLOSE_DURATION = 200; // ms — must match menuRise animation
+
 export function Navbar({ isAuthed, dashboardHref }) {
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef(null);
+
+  const openMenu = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setClosing(false);
+    setOpen(true);
+  };
+
+  const closeMenu = () => {
+    setClosing(true);
+    closeTimer.current = setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, CLOSE_DURATION);
+  };
+
+  const handleToggle = () => (open ? closeMenu() : openMenu());
+  const handleLinkClick = () => { setOpen(false); setClosing(false); };
 
   return (
     <header
       className="sticky top-0 z-50"
-      style={{ backgroundColor: '#E0E5EC', boxShadow: '0 6px 16px rgb(163,177,198,0.45), 0 -1px 0 rgba(255,255,255,0.9)' }}
+      style={{ backgroundColor: '#E0E5EC', boxShadow: '0 6px 16px rgb(163,177,198,0.45), 0 -1px 0 rgba(255,255,255,0.9)', position: 'sticky' }}
     >
       <div className="mx-auto max-w-7xl px-6">
         <div className="flex h-[5.5rem] items-center justify-between">
@@ -41,19 +62,33 @@ export function Navbar({ isAuthed, dashboardHref }) {
 
           {/* Hamburger */}
           <button
-            className="flex h-11 w-11 items-center justify-center rounded-2xl transition duration-300 ease-out md:hidden neu-focus"
-            style={{ backgroundColor: '#E0E5EC', boxShadow: open ? 'inset 4px 4px 8px rgb(163,177,198,0.6), inset -4px -4px 8px rgba(255,255,255,0.5)' : '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)' }}
-            onClick={() => setOpen(!open)}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl transition-shadow duration-300 ease-out md:hidden neu-focus"
+            style={{
+              backgroundColor: '#E0E5EC',
+              boxShadow: open
+                ? 'inset 4px 4px 8px rgb(163,177,198,0.6), inset -4px -4px 8px rgba(255,255,255,0.5)'
+                : '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)',
+            }}
+            onClick={handleToggle}
             aria-label={open ? 'Close menu' : 'Open menu'}
             aria-expanded={open}
           >
-            {open ? <XIcon /> : <MenuIcon />}
+            {/* key forces remount → triggers spin-in animation on every swap */}
+            <span key={open ? 'x' : 'menu'} className="neu-ham-icon flex items-center justify-center">
+              {open ? <XIcon /> : <MenuIcon />}
+            </span>
           </button>
         </div>
 
-        {/* Mobile menu */}
-        {open && (
-          <div className="neu-menu-slide pb-5 md:hidden">
+      </div>
+
+      {/* Mobile menu — absolute so it overlays content without shifting layout */}
+      {(open || closing) && (
+        <div
+          className={`${closing ? 'neu-menu-close' : 'neu-menu-open'} absolute left-0 right-0 top-full md:hidden`}
+          style={{ zIndex: 49 }}
+        >
+          <div className="mx-auto max-w-7xl px-6 pb-4 pt-2">
             <div
               className="rounded-[20px] p-4"
               style={{ backgroundColor: '#E0E5EC', boxShadow: 'inset 6px 6px 10px rgb(163,177,198,0.6), inset -6px -6px 10px rgba(255,255,255,0.5)' }}
@@ -68,8 +103,8 @@ export function Navbar({ isAuthed, dashboardHref }) {
                   <RouterLink
                     key={item.to}
                     to={item.to}
-                    onClick={() => setOpen(false)}
-                    className="rounded-xl px-4 py-3 text-sm font-medium text-neu-muted transition duration-300 hover:text-neu-fg"
+                    onClick={handleLinkClick}
+                    className="neu-menu-item rounded-xl px-4 py-3 text-sm font-medium text-neu-muted transition duration-200 hover:text-neu-fg"
                   >
                     {item.label}
                   </RouterLink>
@@ -77,18 +112,18 @@ export function Navbar({ isAuthed, dashboardHref }) {
               </div>
               <div className="mt-3 flex flex-col gap-2 border-t border-white/40 pt-3">
                 {isAuthed ? (
-                  <PrimaryBtn as={RouterLink} to={dashboardHref} fullWidth>Open dashboard</PrimaryBtn>
+                  <PrimaryBtn as={RouterLink} to={dashboardHref} fullWidth onClick={handleLinkClick}>Open dashboard</PrimaryBtn>
                 ) : (
                   <>
-                    <SecondaryBtn as={RouterLink} to="/login" fullWidth>Sign in</SecondaryBtn>
-                    <PrimaryBtn as={RouterLink} to="/login" fullWidth>Get started</PrimaryBtn>
+                    <SecondaryBtn as={RouterLink} to="/login" fullWidth onClick={handleLinkClick}>Sign in</SecondaryBtn>
+                    <PrimaryBtn as={RouterLink} to="/login" fullWidth onClick={handleLinkClick}>Get started</PrimaryBtn>
                   </>
                 )}
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </header>
   );
 }
@@ -107,11 +142,12 @@ function NavLink({ to, children }) {
   );
 }
 
-function PrimaryBtn({ as: Tag = 'button', to, href, children, fullWidth }) {
+function PrimaryBtn({ as: Tag = 'button', to, href, children, fullWidth, onClick }) {
   const props = to ? { to } : href ? { href } : {};
   return (
     <Tag
       {...props}
+      onClick={onClick}
       className={`inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-bold text-white transition duration-300 ease-out hover:-translate-y-px active:translate-y-px neu-focus ${fullWidth ? 'w-full' : ''}`}
       style={{
         backgroundColor: '#6C63FF',
@@ -125,11 +161,12 @@ function PrimaryBtn({ as: Tag = 'button', to, href, children, fullWidth }) {
   );
 }
 
-function SecondaryBtn({ as: Tag = 'button', to, href, children, fullWidth }) {
+function SecondaryBtn({ as: Tag = 'button', to, href, children, fullWidth, onClick }) {
   const props = to ? { to } : href ? { href } : {};
   return (
     <Tag
       {...props}
+      onClick={onClick}
       className={`inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-medium text-neu-fg transition duration-300 ease-out hover:-translate-y-px active:translate-y-px neu-focus ${fullWidth ? 'w-full' : ''}`}
       style={{
         backgroundColor: '#E0E5EC',

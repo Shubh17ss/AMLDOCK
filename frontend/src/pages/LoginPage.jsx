@@ -8,6 +8,7 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
+import logoSrc from '../../assets/logos/image.png';
 
 const NEU_BASE   = '#E0E5EC';
 const NEU_FG     = '#3D4852';
@@ -177,21 +178,10 @@ function Brand() {
       to="/"
       sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, textDecoration: 'none' }}
     >
-      <Box sx={{
-        width: 36, height: 36, borderRadius: 2,
-        backgroundColor: NEU_BASE,
-        boxShadow: EXT_SM,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <ShieldCheckIcon />
-      </Box>
-      <Typography sx={{
-        fontWeight: 800, color: NEU_FG,
-        letterSpacing: '0.1em', fontSize: '0.9rem',
-        fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
-      }}>
-        AMLDOCK
-      </Typography>
+     <RouterLink to="/" className="flex items-center neu-focus rounded-2xl">
+            <img src={logoSrc} alt="AMLDOCK" className="h-24 w-auto object-contain" />
+          </RouterLink>
+
     </Box>
   );
 }

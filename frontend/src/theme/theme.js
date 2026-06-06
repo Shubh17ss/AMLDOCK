@@ -205,6 +205,14 @@ export const theme = createTheme({
           color: NEU_MUTED,
           '&.Mui-focused': { color: NEU_ACCENT },
           '&.Mui-error':   { color: '#EF4444' },
+          // When the label shrinks/floats it sits on top of the inset
+          // box-shadow "border". Give it a solid background so the shadow
+          // line doesn't visually cross through the label text.
+          '&.MuiInputLabel-shrink': {
+            backgroundColor: NEU_BASE,
+            paddingInline: '4px',
+            borderRadius: '4px',
+          },
         },
       },
     },
