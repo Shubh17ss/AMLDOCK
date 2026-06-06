@@ -11,6 +11,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { deleteDeal, getDeal, overrideDeal, submitDeal } from '../api/deals.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
+import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
 import { OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 
@@ -92,6 +93,8 @@ export function DealDetailPage() {
       {(deal.status === 'APPROVED' || deal.status === 'REJECTED') && (
         <DecisionCard deal={deal} />
       )}
+
+      <BrokerNotesCard deal={deal} />
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>

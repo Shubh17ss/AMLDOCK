@@ -11,5 +11,6 @@ public record UpdateDealRequest(
         String pocName,
         String pocRole,
         String pocPhone,
-        String pocEmail
+        String pocEmail,
+        String notes
 ) {}

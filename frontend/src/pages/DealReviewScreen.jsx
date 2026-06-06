@@ -15,6 +15,7 @@ import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
 import { AttachToParentDialog } from '../features/ownership/AttachToParentDialog.jsx';
 import { PdfViewerPane } from '../features/ownership/PdfViewerPane.jsx';
 import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
+import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
 import { DecideDialog, OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
@@ -130,6 +131,10 @@ export function DealReviewScreen() {
       )}
 
       <DealSummaryStrip deal={deal} />
+
+      {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && (
+        <BrokerNotesCard deal={deal} />
+      )}
 
       <DealAuditPanel dealId={dealId} />
 

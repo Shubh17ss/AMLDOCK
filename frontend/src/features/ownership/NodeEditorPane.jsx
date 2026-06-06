@@ -6,9 +6,13 @@ import {
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { EDGE_ROLES } from '../../api/ownership.js';
+import { listNodeDocuments, uploadToS3 } from '../../api/documents.js';
 import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
+import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
+import { VoiceClip } from '../../components/VoiceClip.jsx';
 
 // Three user-facing manual states mapped onto the existing backend enum.
 const VERIFICATION_OPTIONS = [
@@ -29,9 +33,11 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   const [form, setForm] = useState(null);
   const [edgeForm, setEdgeForm] = useState({ percentage: '', role: '' });
   const [verification, setVerification] = useState({ status: 'IN_PROGRESS', notes: '' });
+  const [verificationVoice, setVerificationVoice] = useState(null); // Blob | null
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [verificationSaved, setVerificationSaved] = useState(false);
+  const qc = useQueryClient();
 
   const selected = useMemo(
     () => tree?.nodes?.find((n) => n.id === selectedNodeId) ?? null,
@@ -66,12 +72,21 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
         status: selected.verificationStatus ?? 'IN_PROGRESS',
         notes: selected.verificationNotes ?? '',
       });
+      setVerificationVoice(null);
       setError(null);
       setVerificationSaved(false);
     } else {
       setForm(null);
     }
   }, [selected?.id]);
+
+  // Existing per-node voice notes for the Verifications tab.
+  const nodeDocsQ = useQuery({
+    queryKey: ['documents', 'node', selectedNodeId],
+    queryFn: () => listNodeDocuments(selectedNodeId),
+    enabled: Boolean(selectedNodeId) && tab === 2,
+  });
+  const nodeVoiceNotes = (nodeDocsQ.data ?? []).filter((d) => d.documentType === 'VOICE_NOTE');
 
   useEffect(() => {
     if (incomingEdge) {
@@ -107,6 +122,7 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
     setError(null);
     setVerificationSaved(false);
     try {
+      // 1) Status + text notes
       await useTree.updateNode.mutateAsync({
         nodeId: selected.id,
         payload: {
@@ -116,9 +132,29 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
           verificationNotes: verification.notes ?? '',
         },
       });
+
+      // 2) Voice note (if recorded). Upload via the standard presigned-PUT pipeline,
+      //    attached to this node so it surfaces alongside the existing per-node docs.
+      if (verificationVoice) {
+        const filename = `verification-voice-${Date.now()}.webm`;
+        const file = new File([verificationVoice], filename, {
+          type: verificationVoice.type || 'audio/webm',
+        });
+        await uploadToS3({
+          file,
+          documentType: 'VOICE_NOTE',
+          dealId,
+          ownershipNodeId: selected.id,
+        });
+        setVerificationVoice(null);
+        // Refresh the per-node + per-deal document lists so the new clip appears below.
+        qc.invalidateQueries({ queryKey: ['documents', 'node', selected.id] });
+        if (dealId) qc.invalidateQueries({ queryKey: ['documents', dealId] });
+      }
+
       setVerificationSaved(true);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update verification');
+      setError(err.response?.data?.message || err.message || 'Failed to update verification');
     }
   };
 
@@ -290,6 +326,13 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
             placeholder="What did you check? Which document or call confirmed it? Anything that should be defensible later."
           />
 
+          <VoiceRecorderField
+            value={verificationVoice}
+            onChange={(blob) => { setVerificationVoice(blob); setVerificationSaved(false); }}
+            label="Voice rationale (optional)"
+            helper="Record a short voice note. Uploaded on Save verification — until then it stays local."
+          />
+
           {verificationSaved && (
             <Alert severity="success" onClose={() => setVerificationSaved(false)}>
               Verification updated.
@@ -306,6 +349,16 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
               {useTree.updateNode.isPending ? 'Saving…' : 'Save verification'}
             </Button>
           </Box>
+
+          {nodeVoiceNotes.length > 0 && (
+            <>
+              <Divider />
+              <Typography variant="subtitle2">Saved voice notes</Typography>
+              <Stack spacing={1.5}>
+                {nodeVoiceNotes.map((doc) => <VoiceClip key={doc.id} doc={doc} />)}
+              </Stack>
+            </>
+          )}
         </Stack>
       )}
     </Paper>

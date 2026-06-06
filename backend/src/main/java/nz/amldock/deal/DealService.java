@@ -5,6 +5,7 @@ import nz.amldock.client.ClientRepository;
 import nz.amldock.client.dto.ClientDto;
 import nz.amldock.client.dto.ClientInput;
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
@@ -164,6 +165,7 @@ public class DealService {
         d.setPocRole(req.pocRole());
         d.setPocPhone(orFallback(req.pocPhone(), branch.getPhone()));
         d.setPocEmail(orFallback(req.pocEmail(), branch.getEmail()));
+        d.setNotes(req.notes());
         d.setCreatedByUserId(actor.id());
         Deal saved = deals.save(d);
 
@@ -190,6 +192,7 @@ public class DealService {
         if (req.pocRole() != null) d.setPocRole(req.pocRole());
         if (req.pocPhone() != null) d.setPocPhone(req.pocPhone());
         if (req.pocEmail() != null) d.setPocEmail(req.pocEmail());
+        if (req.notes() != null) d.setNotes(req.notes());
         return d;
     }
 

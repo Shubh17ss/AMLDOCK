@@ -58,6 +58,10 @@ public class Deal extends BaseEntity {
     @Column(name = "decision_notes", columnDefinition = "text")
     private String decisionNotes;
 
+    /** General deal-level notes from the broker (set in the wizard's review step). */
+    @Column(name = "notes", columnDefinition = "text")
+    private String notes;
+
     @Column(name = "decided_by_user_id")
     private Long decidedByUserId;
 
@@ -93,6 +97,8 @@ public class Deal extends BaseEntity {
     public void setAssignedComplianceUserId(Long v) { this.assignedComplianceUserId = v; }
     public String getDecisionNotes() { return decisionNotes; }
     public void setDecisionNotes(String v) { this.decisionNotes = v; }
+    public String getNotes() { return notes; }
+    public void setNotes(String v) { this.notes = v; }
     public Long getDecidedByUserId() { return decidedByUserId; }
     public void setDecidedByUserId(Long v) { this.decidedByUserId = v; }
     public Instant getDecidedAt() { return decidedAt; }

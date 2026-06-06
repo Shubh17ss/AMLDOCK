@@ -6,9 +6,11 @@ import {
   Select, Stack, Step, StepLabel, Stepper, TextField, Typography,
 } from '@mui/material';
 import { listFirms, listBranches } from '../api/firms.js';
-import { createDeal, submitDeal } from '../api/deals.js';
+import { createDeal, submitDeal, updateDeal } from '../api/deals.js';
+import { uploadToS3 } from '../api/documents.js';
 import { AddressCascadingFields } from '../components/AddressCascadingFields.jsx';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
+import { VoiceRecorderField } from '../components/VoiceRecorderField.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 
 const STEPS = ['Firm + branch + POC', 'Property', 'Client', 'Documents', 'Review & submit'];
@@ -22,6 +24,7 @@ const EMPTY_FORM = {
   pocRole: '',
   pocPhone: '',
   pocEmail: '',
+  notes: '',
   property: {
     addressLine1: '', addressLine2: '', suburb: '', district: '', region: '',
     country: 'NZ', postcode: '', titleReference: '', legalDescription: '', landAreaSqm: '',
@@ -39,6 +42,9 @@ export function NewDealWizardPage() {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [savedDeal, setSavedDeal] = useState(null); // populated after first save
+  // Voice note recorded in the review step. Held as a Blob until the deal is persisted.
+  const [voiceBlob, setVoiceBlob] = useState(null);
+  const [voiceUploaded, setVoiceUploaded] = useState(false);
 
   // Brokers are scoped to a single firm + branch — pre-fill from their profile and lock the pickers.
   const brokerLocked = user?.role === 'BROKER' && Boolean(user.firmBranchId);
@@ -104,6 +110,7 @@ export function NewDealWizardPage() {
     pocRole: form.pocRole || null,
     pocPhone: form.pocPhone || null,
     pocEmail: form.pocEmail || null,
+    notes: form.notes || null,
     property: {
       ...form.property,
       landAreaSqm: form.property.landAreaSqm ? Number(form.property.landAreaSqm) : null,
@@ -111,11 +118,41 @@ export function NewDealWizardPage() {
     client: { ...form.client },
   });
 
+  /**
+   * Wraps the recorded voice Blob in a File and pushes it through the standard
+   * presigned-upload pipeline. Idempotent: once uploaded we clear the in-memory blob and
+   * mark uploaded so subsequent Save Draft / Submit clicks don't re-upload.
+   */
+  const uploadVoiceIfPresent = async (dealId) => {
+    if (!voiceBlob || voiceUploaded) return;
+    const ext = (voiceBlob.type && voiceBlob.type.includes('webm')) ? 'webm' : 'audio';
+    const filename = `voice-note-${Date.now()}.${ext}`;
+    const file = new File([voiceBlob], filename, { type: voiceBlob.type || 'audio/webm' });
+    try {
+      await uploadToS3({
+        file,
+        documentType: 'VOICE_NOTE',
+        dealId,
+      });
+      setVoiceUploaded(true);
+      setVoiceBlob(null);
+    } catch (e) {
+      // Don't fail the whole wizard — the broker would lose the deal if we threw.
+      setError(`Deal saved but voice note upload failed: ${e.response?.data?.message || e.message}`);
+    }
+  };
+
   const persistDraft = async () => {
-    if (savedDeal) return savedDeal; // already persisted; new wizard run for now
     setError(null);
     setSubmitting(true);
     try {
+      if (savedDeal) {
+        // Draft was auto-created at step 2→3 before notes existed on the form. Patch
+        // the latest notes through so Review-step edits aren't dropped.
+        const updated = await updateDeal(savedDeal.id, { notes: form.notes || null });
+        setSavedDeal(updated);
+        return updated;
+      }
       const created = await createDeal(buildPayload());
       setSavedDeal(created);
       return created;
@@ -138,12 +175,15 @@ export function NewDealWizardPage() {
 
   const handleSaveDraft = async () => {
     const created = await persistDraft();
-    if (created) navigate(`/deals/${created.id}`);
+    if (!created) return;
+    await uploadVoiceIfPresent(created.id);
+    navigate(`/deals/${created.id}`);
   };
 
   const handleSubmit = async () => {
     const created = await persistDraft();
     if (!created) return;
+    await uploadVoiceIfPresent(created.id);
     setSubmitting(true);
     try {
       await submitDeal(created.id);
@@ -300,6 +340,30 @@ export function NewDealWizardPage() {
                 <ReviewRow label="Type" value={form.client.clientType} />
                 <ReviewRow label="Contact" value={[form.client.email, form.client.phone].filter(Boolean).join(' · ')} />
               </ReviewBlock>
+
+              <Divider />
+              <Typography variant="h6">Notes & voice message</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Anything compliance should know before reviewing — a quick context line, a flag,
+                or a short voice memo. Voice notes stay local until you Save Draft or Submit.
+              </Typography>
+              <TextField
+                label="Notes for compliance"
+                value={form.notes}
+                onChange={setField('notes')}
+                multiline
+                minRows={4}
+                placeholder="e.g. Buyer's representative will follow up with the trust deed amendment by Friday."
+              />
+              <VoiceRecorderField
+                value={voiceBlob}
+                onChange={(blob) => { setVoiceBlob(blob); setVoiceUploaded(false); }}
+                label="Voice message (optional)"
+              />
+              {voiceUploaded && (
+                <Alert severity="success">Voice note uploaded.</Alert>
+              )}
+
               <Alert severity="info">
                 Submitting this deal will move it to <strong>SUBMITTED</strong>, locking it from further broker edits.
                 You can also save it as a draft and submit later.

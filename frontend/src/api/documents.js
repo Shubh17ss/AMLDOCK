@@ -8,6 +8,7 @@ export const DOCUMENT_TYPES = [
   { value: 'COMPANY_CERT', label: 'Company certificate' },
   { value: 'TITLE_DOC', label: 'Title document' },
   { value: 'SALE_AGREEMENT', label: 'Sale agreement' },
+  { value: 'VOICE_NOTE', label: 'Voice note' },
   { value: 'OTHER', label: 'Other' },
 ];
 
