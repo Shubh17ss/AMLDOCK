@@ -19,7 +19,7 @@ export function DealAuditPanel({ dealId, defaultExpanded = false }) {
   });
 
   return (
-    <Accordion expanded={expanded} onChange={(_, v) => setExpanded(v)} disableGutters>
+    <Accordion expanded={expanded} onChange={(_, v) => setExpanded(v)} disableGutters sx={{borderRadius: 1.5}}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
           <Typography variant="subtitle1">Audit trail</Typography>
