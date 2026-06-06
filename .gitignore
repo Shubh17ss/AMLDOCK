@@ -36,3 +36,5 @@ backend/logs/
 # Docker volume backup
 *.dump
 
+#remove .claude file
+.claude
