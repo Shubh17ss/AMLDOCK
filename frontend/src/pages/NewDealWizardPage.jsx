@@ -13,7 +13,11 @@ import { DocumentUploader } from '../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../components/VoiceRecorderField.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 
-const STEPS = ['Firm + branch + POC', 'Property', 'Client', 'Documents', 'Review & submit'];
+const NEU_ACCENT = '#6C63FF';
+const NEU_MUTED  = '#6B7280';
+const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+
+const STEPS = ['Firm + branch', 'Property', 'Client', 'Documents', 'Review'];
 
 const EMPTY_FORM = {
   firmId: '',
@@ -41,12 +45,10 @@ export function NewDealWizardPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [savedDeal, setSavedDeal] = useState(null); // populated after first save
-  // Voice note recorded in the review step. Held as a Blob until the deal is persisted.
+  const [savedDeal, setSavedDeal] = useState(null);
   const [voiceBlob, setVoiceBlob] = useState(null);
   const [voiceUploaded, setVoiceUploaded] = useState(false);
 
-  // Brokers are scoped to a single firm + branch — pre-fill from their profile and lock the pickers.
   const brokerLocked = user?.role === 'BROKER' && Boolean(user.firmBranchId);
 
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
@@ -59,8 +61,6 @@ export function NewDealWizardPage() {
   });
   const activeBranches = useMemo(() => (branchesQ.data ?? []).filter((b) => b.active), [branchesQ.data]);
 
-  // Auto-fill firm + branch from the broker's profile on first render. We do this once
-  // when the form is still empty so subsequent edits within the wizard aren't clobbered.
   useEffect(() => {
     if (!brokerLocked) return;
     if (form.firmId || form.firmBranchId) return;
@@ -72,7 +72,6 @@ export function NewDealWizardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brokerLocked]);
 
-  // When the user picks a branch, default the POC fields from that branch (if blank).
   useEffect(() => {
     const branch = activeBranches.find((b) => b.id === form.firmBranchId);
     if (!branch) return;
@@ -90,15 +89,9 @@ export function NewDealWizardPage() {
     setForm((f) => ({ ...f, [group]: { ...f[group], [key]: e.target.value } }));
 
   const stepValid = () => {
-    if (step === 0) {
-      return form.firmId && form.firmBranchId && form.transactionType;
-    }
-    if (step === 1) {
-      return form.property.addressLine1 && form.property.region && form.property.district;
-    }
-    if (step === 2) {
-      return form.client.displayName && form.client.clientType;
-    }
+    if (step === 0) return form.firmId && form.firmBranchId && form.transactionType;
+    if (step === 1) return form.property.addressLine1 && form.property.region && form.property.district;
+    if (step === 2) return form.client.displayName && form.client.clientType;
     return true;
   };
 
@@ -118,26 +111,16 @@ export function NewDealWizardPage() {
     client: { ...form.client },
   });
 
-  /**
-   * Wraps the recorded voice Blob in a File and pushes it through the standard
-   * presigned-upload pipeline. Idempotent: once uploaded we clear the in-memory blob and
-   * mark uploaded so subsequent Save Draft / Submit clicks don't re-upload.
-   */
   const uploadVoiceIfPresent = async (dealId) => {
     if (!voiceBlob || voiceUploaded) return;
     const ext = (voiceBlob.type && voiceBlob.type.includes('webm')) ? 'webm' : 'audio';
     const filename = `voice-note-${Date.now()}.${ext}`;
     const file = new File([voiceBlob], filename, { type: voiceBlob.type || 'audio/webm' });
     try {
-      await uploadToS3({
-        file,
-        documentType: 'VOICE_NOTE',
-        dealId,
-      });
+      await uploadToS3({ file, documentType: 'VOICE_NOTE', dealId });
       setVoiceUploaded(true);
       setVoiceBlob(null);
     } catch (e) {
-      // Don't fail the whole wizard — the broker would lose the deal if we threw.
       setError(`Deal saved but voice note upload failed: ${e.response?.data?.message || e.message}`);
     }
   };
@@ -147,8 +130,6 @@ export function NewDealWizardPage() {
     setSubmitting(true);
     try {
       if (savedDeal) {
-        // Draft was auto-created at step 2→3 before notes existed on the form. Patch
-        // the latest notes through so Review-step edits aren't dropped.
         const updated = await updateDeal(savedDeal.id, { notes: form.notes || null });
         setSavedDeal(updated);
         return updated;
@@ -164,7 +145,6 @@ export function NewDealWizardPage() {
     }
   };
 
-  // Auto-persist when entering the Documents step so the uploader has a deal id.
   const handleNext = async () => {
     if (step === 2 && !savedDeal) {
       const created = await persistDraft();
@@ -197,17 +177,35 @@ export function NewDealWizardPage() {
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h4">New deal</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 700 }}>New deal</Typography>
 
-      <Stepper activeStep={step}>
-        {STEPS.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
-      </Stepper>
+      {/* Desktop: full MUI Stepper */}
+      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+        <Stepper activeStep={step} alternativeLabel>
+          {STEPS.map((label) => (
+            <Step key={label}>
+              <StepLabel
+                sx={{
+                  '& .MuiStepLabel-label': { fontSize: '0.72rem', fontWeight: 600, mt: 0.5 },
+                }}
+              >
+                {label}
+              </StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      </Box>
+
+      {/* Mobile: compact progress indicator */}
+      <Box sx={{ display: { xs: 'block', sm: 'none' } }}>
+        <MobileStepIndicator step={step} total={STEPS.length} label={STEPS[step]} />
+      </Box>
 
       <Card>
         <CardContent>
           {step === 0 && (
             <Stack spacing={2}>
-              <Typography variant="h6">Firm, branch, point of contact</Typography>
+              <Typography variant="h6">Firm, branch & point of contact</Typography>
               <Divider />
               {brokerLocked && (
                 <Alert severity="info" sx={{ py: 0.5 }}>
@@ -215,7 +213,7 @@ export function NewDealWizardPage() {
                   Ask an administrator if you need to be moved.
                 </Alert>
               )}
-              <FormControl required disabled={brokerLocked}>
+              <FormControl fullWidth required disabled={brokerLocked}>
                 <InputLabel id="firm-label">Real-estate firm</InputLabel>
                 <Select labelId="firm-label" label="Real-estate firm"
                         value={form.firmId}
@@ -223,7 +221,7 @@ export function NewDealWizardPage() {
                   {activeFirms.map((f) => <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>)}
                 </Select>
               </FormControl>
-              <FormControl required disabled={brokerLocked || !form.firmId}>
+              <FormControl fullWidth required disabled={brokerLocked || !form.firmId}>
                 <InputLabel id="branch-label">Branch</InputLabel>
                 <Select labelId="branch-label" label="Branch"
                         value={form.firmBranchId}
@@ -231,8 +229,10 @@ export function NewDealWizardPage() {
                   {activeBranches.map((b) => <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>)}
                 </Select>
               </FormControl>
-              <Stack direction="row" spacing={2}>
-                <FormControl required sx={{ minWidth: 200 }}>
+
+              {/* Transaction type + value — column on mobile */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <FormControl fullWidth required>
                   <InputLabel id="txn-label">Transaction type</InputLabel>
                   <Select labelId="txn-label" label="Transaction type"
                           value={form.transactionType} onChange={setField('transactionType')}>
@@ -246,11 +246,15 @@ export function NewDealWizardPage() {
 
               <Typography variant="subtitle1" sx={{ mt: 1 }}>Point of contact</Typography>
               <Divider />
-              <Stack direction="row" spacing={2}>
+
+              {/* POC name + role — column on mobile */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="POC name" value={form.pocName} onChange={setField('pocName')} fullWidth />
                 <TextField label="POC role" value={form.pocRole} onChange={setField('pocRole')} fullWidth />
               </Stack>
-              <Stack direction="row" spacing={2}>
+
+              {/* POC phone + email — column on mobile */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="POC phone" value={form.pocPhone} onChange={setField('pocPhone')} fullWidth />
                 <TextField label="POC email" type="email" value={form.pocEmail}
                            onChange={setField('pocEmail')} fullWidth />
@@ -267,11 +271,14 @@ export function NewDealWizardPage() {
                 onChange={(next) => setForm((f) => ({ ...f, property: { ...f.property, ...next } }))}
                 required={{ region: true, district: true }}
               />
-              <Stack direction="row" spacing={2}>
+
+              {/* Title ref + land area — column on mobile */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="Title reference (LINZ)" value={form.property.titleReference}
                            onChange={setNested('property', 'titleReference')} fullWidth />
                 <TextField label="Land area (m²)" type="number" value={form.property.landAreaSqm}
-                           onChange={setNested('property', 'landAreaSqm')} sx={{ width: 180 }} />
+                           onChange={setNested('property', 'landAreaSqm')}
+                           sx={{ width: { xs: '100%', sm: 180 } }} />
               </Stack>
               <TextField label="Legal description" value={form.property.legalDescription}
                          onChange={setNested('property', 'legalDescription')} multiline minRows={2} />
@@ -282,10 +289,12 @@ export function NewDealWizardPage() {
             <Stack spacing={2}>
               <Typography variant="h6">Client</Typography>
               <Divider />
-              <Stack direction="row" spacing={2}>
+
+              {/* Display name + client type — column on mobile */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="Display name" value={form.client.displayName}
                            onChange={setNested('client', 'displayName')} fullWidth required />
-                <FormControl sx={{ minWidth: 200 }} required>
+                <FormControl fullWidth required>
                   <InputLabel id="client-type-label">Client type</InputLabel>
                   <Select labelId="client-type-label" label="Client type"
                           value={form.client.clientType} onChange={setNested('client', 'clientType')}>
@@ -294,7 +303,9 @@ export function NewDealWizardPage() {
                   </Select>
                 </FormControl>
               </Stack>
-              <Stack direction="row" spacing={2}>
+
+              {/* Email + phone — column on mobile */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField label="Email" type="email" value={form.client.email}
                            onChange={setNested('client', 'email')} fullWidth />
                 <TextField label="Phone" value={form.client.phone}
@@ -360,9 +371,7 @@ export function NewDealWizardPage() {
                 onChange={(blob) => { setVoiceBlob(blob); setVoiceUploaded(false); }}
                 label="Voice message (optional)"
               />
-              {voiceUploaded && (
-                <Alert severity="success">Voice note uploaded.</Alert>
-              )}
+              {voiceUploaded && <Alert severity="success">Voice note uploaded.</Alert>}
 
               <Alert severity="info">
                 Submitting this deal will move it to <strong>SUBMITTED</strong>, locking it from further broker edits.
@@ -375,22 +384,49 @@ export function NewDealWizardPage() {
         </CardContent>
       </Card>
 
-      <Stack direction="row" spacing={2} justifyContent="space-between">
-        <Button onClick={() => navigate('/my-deals')} disabled={submitting}>Cancel</Button>
-        <Stack direction="row" spacing={2}>
-          <Button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0 || submitting}>
+      {/* Action buttons — wrap on mobile */}
+      <Stack
+        direction={{ xs: 'column-reverse', sm: 'row' }}
+        spacing={1.5}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+      >
+        <Button onClick={() => navigate('/my-deals')} disabled={submitting} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+          Cancel
+        </Button>
+        <Stack direction="row" spacing={1.5} flexWrap="wrap" justifyContent={{ xs: 'stretch', sm: 'flex-end' }}>
+          <Button
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0 || submitting}
+            sx={{ flex: { xs: 1, sm: 'unset' } }}
+          >
             Back
           </Button>
           {step < STEPS.length - 1 ? (
-            <Button variant="contained" onClick={handleNext} disabled={!stepValid() || submitting}>
+            <Button
+              variant="contained"
+              onClick={handleNext}
+              disabled={!stepValid() || submitting}
+              sx={{ flex: { xs: 1, sm: 'unset' } }}
+            >
               {submitting && step === 2 ? 'Saving draft…' : 'Next'}
             </Button>
           ) : (
             <>
-              <Button variant="outlined" onClick={handleSaveDraft} disabled={submitting}>
+              <Button
+                variant="outlined"
+                onClick={handleSaveDraft}
+                disabled={submitting}
+                sx={{ flex: { xs: 1, sm: 'unset' } }}
+              >
                 {savedDeal ? 'Open draft' : 'Save as draft'}
               </Button>
-              <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
+              <Button
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={submitting}
+                sx={{ flex: { xs: 1, sm: 'unset' } }}
+              >
                 {submitting ? 'Submitting…' : 'Submit'}
               </Button>
             </>
@@ -398,6 +434,30 @@ export function NewDealWizardPage() {
         </Stack>
       </Stack>
     </Stack>
+  );
+}
+
+function MobileStepIndicator({ step, total, label }) {
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
+        <Typography sx={{ fontSize: '0.68rem', fontWeight: 700, color: NEU_MUTED, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Step {step + 1} of {total}
+        </Typography>
+        <Typography sx={{ fontSize: '0.82rem', fontWeight: 700, color: NEU_ACCENT }}>
+          {label}
+        </Typography>
+      </Box>
+      <Box sx={{ height: 6, borderRadius: 999, boxShadow: INSET_SM, overflow: 'hidden' }}>
+        <Box sx={{
+          height: '100%',
+          width: `${((step + 1) / total) * 100}%`,
+          backgroundColor: NEU_ACCENT,
+          borderRadius: 999,
+          transition: 'width 0.4s cubic-bezier(0.34, 1.2, 0.64, 1)',
+        }} />
+      </Box>
+    </Box>
   );
 }
 
@@ -412,8 +472,8 @@ function ReviewBlock({ title, children }) {
 
 function ReviewRow({ label, value }) {
   return (
-    <Stack direction="row" spacing={1} sx={{ py: 0.3 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110 }}>{label}</Typography>
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 1 }} sx={{ py: 0.3 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110, fontWeight: 600 }}>{label}</Typography>
       <Typography variant="body2">{value || '—'}</Typography>
     </Stack>
   );

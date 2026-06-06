@@ -58,168 +58,208 @@ export function DealDetailPage() {
   const isDraft = deal.status === 'DRAFT';
 
   return (
-    <Stack spacing={3}>
-      <Stack direction="row" spacing={2} alignItems="center">
-        <Typography variant="h4">{deal.reference ?? `Deal #${deal.id}`}</Typography>
-        <DealStatusChip status={deal.status} />
-        <Chip label={deal.transactionType} size="small" variant="outlined" />
-        <Box sx={{ flexGrow: 1 }} />
-        {isOwnerBroker && isDraft && (
-          <>
-            <Button color="error" startIcon={<DeleteOutlineIcon />}
-                    onClick={() => setConfirmDelete(true)} disabled={submitMut.isPending || deleteMut.isPending}>
+    /* Centered, max-width container */
+    <Box sx={{ maxWidth: 960, mx: 'auto', width: '100%' }}>
+      <Stack spacing={3}>
+
+        {/* ── Header card: identity + actions ─────────────────────────── */}
+        <Card>
+          <CardContent>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              justifyContent="space-between"
+              alignItems={{ xs: 'flex-start', sm: 'center' }}
+              spacing={2}
+            >
+              {/* Deal identity */}
+              <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  {deal.reference ?? `Deal #${deal.id}`}
+                </Typography>
+                <DealStatusChip status={deal.status} />
+                <Chip label={deal.transactionType} size="small" />
+              </Stack>
+
+              {/* Action buttons */}
+              <Stack direction="row" spacing={1.5} flexWrap="wrap">
+                {isOwnerBroker && isDraft && (
+                  <>
+                    <Button
+                      color="error"
+                      startIcon={<DeleteOutlineIcon />}
+                      onClick={() => setConfirmDelete(true)}
+                      disabled={submitMut.isPending || deleteMut.isPending}
+                    >
+                      Delete
+                    </Button>
+                    <Button
+                      variant="contained"
+                      startIcon={<SendIcon />}
+                      onClick={() => submitMut.mutate()}
+                      disabled={submitMut.isPending}
+                    >
+                      {submitMut.isPending ? 'Submitting…' : 'Submit for review'}
+                    </Button>
+                  </>
+                )}
+                {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && deal.status !== 'DRAFT' && (
+                  <Button variant="contained" onClick={() => navigate(`/deals/${deal.id}/review`)}>
+                    Open review
+                  </Button>
+                )}
+                {user?.role === 'MANAGER' && deal.status !== 'DRAFT' && (
+                  <Button variant="outlined" color="warning" onClick={() => setOverrideOpen(true)}>
+                    Override
+                  </Button>
+                )}
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {actionError && (
+          <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>
+        )}
+
+        {(deal.status === 'APPROVED' || deal.status === 'REJECTED') && (
+          <DecisionCard deal={deal} />
+        )}
+
+        <BrokerNotesCard deal={deal} />
+
+        {/* ── Detail cards grid ────────────────────────────────────────── */}
+        {/* Box clips the negative margin MUI Grid adds for spacing */}
+        <Box sx={{ overflow: 'hidden' }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Firm & branch</Typography>
+                <Divider sx={{ mb: 1.5 }} />
+                <DetailRow label="Firm"    value={deal.firmName} />
+                <DetailRow label="Branch"  value={deal.branchName} />
+                <DetailRow label="Value"   value={deal.transactionValueNzd != null ? NZD.format(deal.transactionValueNzd) : null} />
+                <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontWeight: 700 }}>Point of contact</Typography>
+                <DetailRow label="Name"    value={deal.pocName} />
+                <DetailRow label="Role"    value={deal.pocRole} />
+                <DetailRow label="Phone"   value={deal.pocPhone} />
+                <DetailRow label="Email"   value={deal.pocEmail} />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Property</Typography>
+                <Divider sx={{ mb: 1.5 }} />
+                <DetailRow label="Address"      value={[deal.property?.addressLine1, deal.property?.addressLine2].filter(Boolean).join(', ')} />
+                <DetailRow label="Suburb"        value={deal.property?.suburb} />
+                <DetailRow label="District"      value={deal.property?.district} />
+                <DetailRow label="Region"        value={deal.property?.region} />
+                <DetailRow label="Country"       value={deal.property?.country} />
+                <DetailRow label="Postcode"      value={deal.property?.postcode} />
+                <DetailRow label="Title ref"     value={deal.property?.titleReference} />
+                <DetailRow label="Land area"     value={deal.property?.landAreaSqm ? `${deal.property.landAreaSqm} m²` : null} />
+                <DetailRow label="Legal desc."   value={deal.property?.legalDescription} />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Client</Typography>
+                <Divider sx={{ mb: 1.5 }} />
+                <DetailRow label="Name"  value={deal.client?.displayName} />
+                <DetailRow label="Type"  value={deal.client?.clientType} />
+                <DetailRow label="Email" value={deal.client?.email} />
+                <DetailRow label="Phone" value={deal.client?.phone} />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Metadata</Typography>
+                <Divider sx={{ mb: 1.5 }} />
+                <DetailRow label="Created by" value={deal.createdByEmail} />
+                <DetailRow label="Created"    value={new Date(deal.createdAt).toLocaleString()} />
+                <DetailRow label="Updated"    value={new Date(deal.updatedAt).toLocaleString()} />
+                {deal.decidedAt && (
+                  <>
+                    <DetailRow label="Decided" value={new Date(deal.decidedAt).toLocaleString()} />
+                    <DetailRow label="Notes"   value={deal.decisionNotes} />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+        </Box>
+
+        {/* ── Documents ────────────────────────────────────────────────── */}
+        <Card>
+          <CardContent>
+            <DocumentUploader
+              dealId={deal.id}
+              canUpload={
+                user?.role === 'COMPLIANCE' ||
+                user?.role === 'MANAGER' ||
+                (isOwnerBroker && isDraft)
+              }
+              title="Documents"
+            />
+          </CardContent>
+        </Card>
+
+        {/* ── Audit log (compliance / manager only) ────────────────────── */}
+        {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && (
+          <DealAuditPanel dealId={deal.id} />
+        )}
+
+        {/* ── Delete confirm dialog ─────────────────────────────────────── */}
+        <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+          <DialogTitle>Delete this draft?</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Draft <strong>{deal.reference ?? `#${deal.id}`}</strong> will be removed permanently along with its
+              property and client records. This cannot be undone.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+            <Button color="error" variant="contained" onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}>
               Delete
             </Button>
-            <Button variant="contained" startIcon={<SendIcon />}
-                    onClick={() => submitMut.mutate()} disabled={submitMut.isPending}>
-              {submitMut.isPending ? 'Submitting…' : 'Submit for review'}
-            </Button>
-          </>
-        )}
-        {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && deal.status !== 'DRAFT' && (
-          <Button variant="contained" onClick={() => navigate(`/deals/${deal.id}/review`)}>
-            Open review
-          </Button>
-        )}
-        {user?.role === 'MANAGER' && deal.status !== 'DRAFT' && (
-          <Button variant="outlined" color="warning" onClick={() => setOverrideOpen(true)}>
-            Override
-          </Button>
-        )}
+          </DialogActions>
+        </Dialog>
+
+        <OverrideDialog
+          open={overrideOpen}
+          deal={deal}
+          onClose={() => setOverrideOpen(false)}
+          submitting={overrideMut.isPending}
+          onSubmit={(targetStatus, reason) => overrideMut.mutateAsync({ targetStatus, reason })}
+        />
       </Stack>
-
-      {actionError && <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>}
-
-      {(deal.status === 'APPROVED' || deal.status === 'REJECTED') && (
-        <DecisionCard deal={deal} />
-      )}
-
-      <BrokerNotesCard deal={deal} />
-
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle1">Firm & branch</Typography>
-              <Divider sx={{ my: 1 }} />
-              <DetailRow label="Firm" value={deal.firmName} />
-              <DetailRow label="Branch" value={deal.branchName} />
-              <DetailRow label="Value" value={deal.transactionValueNzd != null ? NZD.format(deal.transactionValueNzd) : null} />
-              <Typography variant="subtitle2" sx={{ mt: 2 }}>Point of contact</Typography>
-              <DetailRow label="Name" value={deal.pocName} />
-              <DetailRow label="Role" value={deal.pocRole} />
-              <DetailRow label="Phone" value={deal.pocPhone} />
-              <DetailRow label="Email" value={deal.pocEmail} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle1">Property</Typography>
-              <Divider sx={{ my: 1 }} />
-              <DetailRow label="Address" value={[deal.property?.addressLine1, deal.property?.addressLine2].filter(Boolean).join(', ')} />
-              <DetailRow label="Suburb" value={deal.property?.suburb} />
-              <DetailRow label="District / City" value={deal.property?.district} />
-              <DetailRow label="Region" value={deal.property?.region} />
-              <DetailRow label="Country" value={deal.property?.country} />
-              <DetailRow label="Postcode" value={deal.property?.postcode} />
-              <DetailRow label="Title ref" value={deal.property?.titleReference} />
-              <DetailRow label="Land area" value={deal.property?.landAreaSqm ? `${deal.property.landAreaSqm} m²` : null} />
-              <DetailRow label="Legal description" value={deal.property?.legalDescription} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle1">Client</Typography>
-              <Divider sx={{ my: 1 }} />
-              <DetailRow label="Name" value={deal.client?.displayName} />
-              <DetailRow label="Type" value={deal.client?.clientType} />
-              <DetailRow label="Email" value={deal.client?.email} />
-              <DetailRow label="Phone" value={deal.client?.phone} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle1">Metadata</Typography>
-              <Divider sx={{ my: 1 }} />
-              <DetailRow label="Created by" value={deal.createdByEmail} />
-              <DetailRow label="Created" value={new Date(deal.createdAt).toLocaleString()} />
-              <DetailRow label="Updated" value={new Date(deal.updatedAt).toLocaleString()} />
-              {deal.decidedAt && (
-                <>
-                  <DetailRow label="Decided" value={new Date(deal.decidedAt).toLocaleString()} />
-                  <DetailRow label="Notes" value={deal.decisionNotes} />
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Card>
-        <CardContent>
-          <DocumentUploader
-            dealId={deal.id}
-            canUpload={
-              user?.role === 'COMPLIANCE' ||
-              user?.role === 'MANAGER' ||
-              (isOwnerBroker && isDraft)
-            }
-            title="Documents"
-          />
-        </CardContent>
-      </Card>
-
-      {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && (
-        <DealAuditPanel dealId={deal.id} />
-      )}
-
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>Delete this draft?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Draft <strong>{deal.reference ?? `#${deal.id}`}</strong> will be removed permanently along with its
-            property and client records. This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <OverrideDialog
-        open={overrideOpen}
-        deal={deal}
-        onClose={() => setOverrideOpen(false)}
-        submitting={overrideMut.isPending}
-        onSubmit={(targetStatus, reason) => overrideMut.mutateAsync({ targetStatus, reason })}
-      />
-    </Stack>
+    </Box>
   );
 }
 
 function DecisionCard({ deal }) {
   const isApproved = deal.status === 'APPROVED';
   const isOverride = (deal.decisionNotes ?? '').startsWith('[OVERRIDE');
-  const severity = isApproved ? 'success' : 'error';
   return (
-    <Alert severity={severity} sx={{ alignItems: 'flex-start' }}>
+    <Alert severity={isApproved ? 'success' : 'error'} sx={{ alignItems: 'flex-start' }}>
       <Stack spacing={0.5}>
         <Typography variant="subtitle1">
           {isApproved ? 'Approved' : 'Rejected'}{isOverride ? ' (via override)' : ''}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {deal.decidedAt && new Date(deal.decidedAt).toLocaleString()}
-          {deal.createdByEmail && ' · '}
-          {deal.decidedByUserId && `by user #${deal.decidedByUserId}`}
+          {deal.decidedByUserId && ` · by user #${deal.decidedByUserId}`}
         </Typography>
         {deal.decisionNotes && (
           <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
@@ -232,10 +272,21 @@ function DecisionCard({ deal }) {
 }
 
 function DetailRow({ label, value }) {
+  if (!value) return null;
   return (
-    <Stack direction="row" spacing={1} sx={{ py: 0.5 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>{label}</Typography>
-      <Typography variant="body2">{value || '—'}</Typography>
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={{ xs: 0, sm: 1 }}
+      sx={{ py: 0.5 }}
+    >
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ minWidth: 110, fontWeight: 600, flexShrink: 0 }}
+      >
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>{value}</Typography>
     </Stack>
   );
 }

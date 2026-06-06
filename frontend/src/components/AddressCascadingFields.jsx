@@ -27,8 +27,8 @@ export function AddressCascadingFields({ value, onChange, required = {} }) {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" spacing={2}>
-        <FormControl sx={{ minWidth: 200 }} disabled>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <FormControl sx={{ minWidth: { sm: 200 }, width: { xs: '100%', sm: 'auto' } }} disabled>
           <InputLabel id="country-label">Country</InputLabel>
           <Select labelId="country-label" label="Country" value={country}>
             {COUNTRIES.map((c) => <MenuItem key={c.code} value={c.code}>{c.name}</MenuItem>)}
@@ -44,7 +44,7 @@ export function AddressCascadingFields({ value, onChange, required = {} }) {
         </FormControl>
       </Stack>
 
-      <Stack direction="row" spacing={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <FormControl fullWidth required={required.district} disabled={!region}>
           <InputLabel id="district-label">District / City</InputLabel>
           <Select labelId="district-label" label="District / City"

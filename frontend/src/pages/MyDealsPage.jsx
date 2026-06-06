@@ -57,7 +57,7 @@ export function MyDealsPage() {
       {q.isError && <Alert severity="error">Failed to load deals.</Alert>}
 
       {/* Mobile: card list */}
-      <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 1.5 }}>
+      <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 3.5 }}>
         {q.isLoading && (
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
         )}

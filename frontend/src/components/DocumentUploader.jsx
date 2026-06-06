@@ -108,27 +108,45 @@ export function DocumentUploader({
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent={{ sm: 'space-between' }}
+        alignItems={{ sm: 'center' }}
+        spacing={{ xs: 1.5, sm: 0 }}
+      >
         <Typography variant="subtitle1">{title}</Typography>
         {canUpload && (
-          <Stack direction="row" spacing={2} alignItems="center">
-            <FormControl size="small" sx={{ minWidth: 200 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            alignItems={{ sm: 'center' }}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            <FormControl size="small" sx={{ minWidth: { sm: 200 }, width: { xs: '100%', sm: 'auto' } }}>
               <InputLabel id="doc-type-label">Document type</InputLabel>
               <Select labelId="doc-type-label" label="Document type"
                       value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
                 {DOCUMENT_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
               </Select>
             </FormControl>
-            <Button variant="contained" startIcon={<CloudUploadIcon />}
-                    onClick={() => inputRef.current?.click()}
-                    disabled={uploadMut.isPending || !dealId}>
+            <Button
+              variant="contained"
+              startIcon={<CloudUploadIcon />}
+              onClick={() => inputRef.current?.click()}
+              disabled={uploadMut.isPending || !dealId}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
               {uploadMut.isPending ? 'Uploading…' : 'Upload'}
             </Button>
             <Tooltip title="Capture with camera">
-              <span>
-                <Button variant="outlined" startIcon={<CameraAltIcon />}
-                        onClick={() => setCameraOpen(true)}
-                        disabled={uploadMut.isPending || !dealId}>
+              <span style={{ width: 'inherit' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<CameraAltIcon />}
+                  onClick={() => setCameraOpen(true)}
+                  disabled={uploadMut.isPending || !dealId}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
+                >
                   Camera
                 </Button>
               </span>

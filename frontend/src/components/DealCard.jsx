@@ -40,7 +40,7 @@ export function DealCard({ deal, onClaim, onReview, claimPending }) {
       onClick={handleCardClick}
       sx={{
         backgroundColor: NEU_BASE,
-        borderRadius: 4,
+        borderRadius: 2,
         boxShadow: EXT,
         p: 2.5,
         cursor: 'pointer',
