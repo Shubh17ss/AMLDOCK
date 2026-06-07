@@ -10,8 +10,6 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { createUser, listUsers, resetUserPassword, updateUser } from '../../api/users.js';
 import { listBranches, listFirms } from '../../api/firms.js';
 
-//custom imports
-import { AddUserButton } from '../../components/Button.jsx';
 
 
 const ROLES = ['BROKER', 'COMPLIANCE', 'MANAGER', 'FIRM_USER'];
@@ -41,7 +39,9 @@ export function UsersAdminPage() {
     <Stack spacing={3}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="h4">Users</Typography>
-        <AddUserButton onClick={() => setCreateOpen(true)} />
+        <Button type="submit" variant="contained" onClick={() => setCreateOpen(true)}>
+          + Add User
+        </Button>
       </Stack>
 
       {usersQ.isError && <Alert severity="error">Failed to load users.</Alert>}
