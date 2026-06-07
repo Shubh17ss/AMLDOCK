@@ -5,9 +5,11 @@ import {
   Paper, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
   TablePagination, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import dayjs from 'dayjs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, searchAudit } from '../../api/audit.js';
 import { AuditActionChip } from '../../components/AuditActionChip.jsx';
 
@@ -16,8 +18,8 @@ const DEFAULT_FILTERS = {
   entityType: '',
   entityId: '',
   actorUserId: '',
-  from: '',
-  to: '',
+  from: null,
+  to: null,
 };
 
 export function AuditAdminPage() {
@@ -27,8 +29,8 @@ export function AuditAdminPage() {
 
   const params = {
     ...filters,
-    from: filters.from ? new Date(filters.from).toISOString() : '',
-    to: filters.to ? new Date(filters.to).toISOString() : '',
+    from: filters.from?.isValid() ? filters.from.toISOString() : '',
+    to: filters.to?.isValid() ? filters.to.toISOString() : '',
     page,
     size,
   };
@@ -72,10 +74,18 @@ export function AuditAdminPage() {
           </FormControl>
           <TextField size="small" label="Entity ID" type="number" value={filters.entityId} onChange={ch('entityId')} sx={{ width: 140 }} />
           <TextField size="small" label="Actor user ID" type="number" value={filters.actorUserId} onChange={ch('actorUserId')} sx={{ width: 140 }} />
-          <TextField size="small" label="From" type="datetime-local" InputLabelProps={{ shrink: true }}
-                     value={filters.from} onChange={ch('from')} sx={{ width: 220 }} />
-          <TextField size="small" label="To" type="datetime-local" InputLabelProps={{ shrink: true }}
-                     value={filters.to} onChange={ch('to')} sx={{ width: 220 }} />
+          <DateTimePicker
+            label="From"
+            value={filters.from}
+            onChange={(v) => setFilters((f) => ({ ...f, from: v }))}
+            slotProps={{ textField: { size: 'small', sx: { width: 220 } } }}
+          />
+          <DateTimePicker
+            label="To"
+            value={filters.to}
+            onChange={(v) => setFilters((f) => ({ ...f, to: v }))}
+            slotProps={{ textField: { size: 'small', sx: { width: 220 } } }}
+          />
         </Stack>
       </Paper>
 

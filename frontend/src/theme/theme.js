@@ -391,6 +391,87 @@ export const theme = createTheme({
         root: { backgroundColor: NEU_BASE, boxShadow: EXT_H, borderRadius: 28, border: 'none' },
       },
     },
+
+    // ── Date / Time Pickers ───────────────────────────────────────────────────
+    MuiPickersPopper: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: NEU_BASE,
+          backgroundImage: 'none',
+          boxShadow: EXT_H,
+          borderRadius: 24,
+          border: 'none',
+        },
+      },
+    },
+    MuiPickersCalendarHeader: {
+      styleOverrides: {
+        root: { color: NEU_FG },
+        label: { fontWeight: 700, color: NEU_FG },
+      },
+    },
+    MuiDayCalendar: {
+      styleOverrides: {
+        weekDayLabel: { color: NEU_MUTED, fontWeight: 600 },
+      },
+    },
+    MuiPickersDay: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'transparent',
+          color: NEU_FG,
+          borderRadius: 12,
+          '&:hover': { backgroundColor: NEU_BASE, boxShadow: INSET_SM },
+          '&.Mui-selected': {
+            backgroundColor: NEU_ACCENT,
+            color: '#fff',
+            boxShadow: EXT_SM,
+            '&:hover': { backgroundColor: '#5952cc' },
+          },
+          '&.MuiPickersDay-today': {
+            border: `2px solid ${NEU_ACCENT}`,
+            backgroundColor: 'transparent',
+          },
+        },
+      },
+    },
+    MuiTimeClock: {
+      styleOverrides: {
+        root: { backgroundColor: NEU_BASE },
+      },
+    },
+    MuiClockPointer: {
+      styleOverrides: {
+        root: { backgroundColor: NEU_ACCENT },
+        thumb: { backgroundColor: NEU_ACCENT, border: `2px solid ${NEU_ACCENT}` },
+      },
+    },
+    MuiClock: {
+      styleOverrides: {
+        clock: { backgroundColor: NEU_BASE, boxShadow: INSET },
+        pin: { backgroundColor: NEU_ACCENT },
+      },
+    },
+    MuiClockNumber: {
+      styleOverrides: {
+        root: {
+          color: NEU_FG,
+          '&.Mui-selected': { backgroundColor: NEU_ACCENT, color: '#fff' },
+        },
+      },
+    },
+    MuiPickersToolbar: {
+      styleOverrides: {
+        root: { backgroundColor: NEU_BASE, color: NEU_FG },
+      },
+    },
+    MuiDateTimePickerToolbar: {
+      styleOverrides: {
+        root: { backgroundColor: NEU_BASE },
+        dateContainer: { color: NEU_FG },
+        timeContainer: { color: NEU_FG },
+      },
+    },
   },
 });
 
