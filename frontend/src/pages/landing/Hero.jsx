@@ -36,7 +36,7 @@ export function Hero({ isAuthed, dashboardHref }) {
             >
               AML compliance,
               <br />
-              <span style={{ color: '#6C63FF' }}>finally at ease.</span>
+              <span style={{ color: '#0764a7' }}>finally at ease.</span>
             </h1>
 
             {/* Subheading */}
@@ -94,7 +94,7 @@ function HeroBtn({ primary, as: Tag = 'button', to, href, children }) {
       {...props}
       className="inline-flex items-center justify-center rounded-2xl px-6 py-3.5 text-[0.9rem] font-bold transition duration-300 ease-out hover:-translate-y-0.5 active:translate-y-px neu-focus"
       style={primary
-        ? { backgroundColor: '#6C63FF', color: '#fff', boxShadow: EXT }
+        ? { backgroundColor: '#0764a7', color: '#fff', boxShadow: EXT }
         : { backgroundColor: '#E0E5EC', color: '#3D4852', boxShadow: EXT }
       }
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6)'; }}

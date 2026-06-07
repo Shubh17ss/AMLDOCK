@@ -150,7 +150,7 @@ function PrimaryBtn({ as: Tag = 'button', to, href, children, fullWidth, onClick
       onClick={onClick}
       className={`inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-bold text-white transition duration-300 ease-out hover:-translate-y-px active:translate-y-px neu-focus ${fullWidth ? 'w-full' : ''}`}
       style={{
-        backgroundColor: '#6C63FF',
+        backgroundColor: '#0764a7',
         boxShadow: '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)',
       }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6)'; }}
