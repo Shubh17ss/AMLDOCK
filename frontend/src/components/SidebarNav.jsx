@@ -36,7 +36,6 @@ function navConfigFor(role) {
         { label: 'Dashboard', to: '/app',          icon: <DashboardIcon /> },
         { label: 'Queue',     to: '/queue',         icon: <InboxIcon /> },
         { label: 'Users',     to: '/admin/users',   icon: <PeopleIcon />,    group: 'Admin' },
-        { label: 'Audit',     to: '/admin/audit',   icon: <HistoryIcon />,   group: 'Admin' },
       ];
     case 'root':
       return [

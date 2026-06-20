@@ -79,7 +79,7 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
         <Route path="/admin/audit" element={
-          <ProtectedRoute roles={['ROOT', 'SENIOR_MANAGER']}>
+          <ProtectedRoute roles={['ROOT']}>
             <AuditAdminPage />
           </ProtectedRoute>
         } />

@@ -1,14 +1,17 @@
 package nz.amldock.user;
 
+import java.util.Arrays;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Organisational hierarchy (top tier creates the tier directly below it, never otherwise):
+ * Organisational hierarchy by privilege rank (a user may create any role with a strictly lower
+ * rank — i.e. any user can create users with lower privileges, never an equal or higher peer):
  *
- *   ROOT (platform)
- *     └─ AML_COMPLIANCE_OFFICER, SENIOR_MANAGER (firm level)
- *          └─ SALES_MANAGER (branch level)
- *               └─ AGENT, AGENT_PA, ADMIN (branch level)
+ *   ROOT (4, platform)
+ *     └─ AML_COMPLIANCE_OFFICER, SENIOR_MANAGER (3, firm level)
+ *          └─ SALES_MANAGER (2, branch level)
+ *               └─ AGENT, AGENT_PA, ADMIN (1, branch level)
  *
  * Firm/branch linkage per tier:
  *   ROOT                                  → no firm, no branch
@@ -24,18 +27,25 @@ public enum Role {
     AGENT_PA,
     ADMIN;
 
-    /** Roles this role is permitted to create. Empty = cannot create users. */
-    public Set<Role> creatableRoles() {
+    /** Higher rank = more privilege. A role may only create roles ranked strictly below it. */
+    public int privilegeRank() {
         return switch (this) {
-            case ROOT -> Set.of(AML_COMPLIANCE_OFFICER, SENIOR_MANAGER);
-            case AML_COMPLIANCE_OFFICER, SENIOR_MANAGER -> Set.of(SALES_MANAGER);
-            case SALES_MANAGER -> Set.of(AGENT, AGENT_PA, ADMIN);
-            case AGENT, AGENT_PA, ADMIN -> Set.of();
+            case ROOT -> 4;
+            case AML_COMPLIANCE_OFFICER, SENIOR_MANAGER -> 3;
+            case SALES_MANAGER -> 2;
+            case AGENT, AGENT_PA, ADMIN -> 1;
         };
     }
 
+    /** Every role with a strictly lower privilege rank. Empty = cannot create users. */
+    public Set<Role> creatableRoles() {
+        return Arrays.stream(values())
+                .filter(target -> this.privilegeRank() > target.privilegeRank())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
     public boolean canCreate(Role target) {
-        return creatableRoles().contains(target);
+        return this.privilegeRank() > target.privilegeRank();
     }
 
     /** Firm-level staff: scoped to a firm, visibility across all its branches. */

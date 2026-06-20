@@ -24,7 +24,7 @@ public class AuditController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
+    @PreAuthorize("hasRole('ROOT')")
     public PageResponse<AuditLogDto> search(
             @RequestParam(required = false) Long actorUserId,
             @RequestParam(required = false) AuditAction action,

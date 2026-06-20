@@ -25,19 +25,21 @@ export function roleLabel(role) {
   return ROLE_LABELS[role] || role || '';
 }
 
-// Which roles each role may create (top tier creates the tier below, never otherwise).
-export const CREATABLE_ROLES = {
-  ROOT: ['AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'],
-  AML_COMPLIANCE_OFFICER: ['SALES_MANAGER'],
-  SENIOR_MANAGER: ['SALES_MANAGER'],
-  SALES_MANAGER: ['AGENT', 'AGENT_PA', 'ADMIN'],
-  AGENT: [],
-  AGENT_PA: [],
-  ADMIN: [],
+// Privilege rank — a user may create any role ranked strictly below their own
+// (i.e. any user can create users with lower privileges; ROOT can create everyone).
+export const PRIVILEGE_RANK = {
+  ROOT: 4,
+  AML_COMPLIANCE_OFFICER: 3,
+  SENIOR_MANAGER: 3,
+  SALES_MANAGER: 2,
+  AGENT: 1,
+  AGENT_PA: 1,
+  ADMIN: 1,
 };
 
 export function creatableRoles(role) {
-  return CREATABLE_ROLES[role] || [];
+  const rank = PRIVILEGE_RANK[role] ?? 0;
+  return ROLES.filter((target) => rank > (PRIVILEGE_RANK[target] ?? 0));
 }
 
 // Tier helpers (match the backend firm/branch linkage rules).
