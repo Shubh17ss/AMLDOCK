@@ -23,7 +23,7 @@ public class DataSeeder implements CommandLineRunner {
 
     public DataSeeder(UserRepository users,
                       PasswordEncoder encoder,
-                      @Value("${SEED_ADMIN_EMAIL:admin@amldock.local}") String adminEmail,
+                      @Value("${SEED_ADMIN_EMAIL:shubhthe2001@gmail.com}") String adminEmail,
                       @Value("${SEED_ADMIN_PASSWORD:Admin123!}") String adminPassword,
                       @Value("${SEED_ADMIN_NAME:Default Admin}") String adminName) {
         this.users = users;
@@ -42,9 +42,9 @@ public class DataSeeder implements CommandLineRunner {
         admin.setEmail(adminEmail.toLowerCase());
         admin.setFullName(adminName);
         admin.setPasswordHash(encoder.encode(adminPassword));
-        admin.setRole(Role.MANAGER);
+        admin.setRole(Role.ROOT);
         admin.setActive(true);
         users.save(admin);
-        log.info("Seeded initial admin user: {}", adminEmail);
+        log.info("Seeded initial ROOT user: {}", adminEmail);
     }
 }

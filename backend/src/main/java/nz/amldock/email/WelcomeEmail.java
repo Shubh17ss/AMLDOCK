@@ -5,9 +5,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Renders the onboarding email a new user receives after admin creates their account.
- * The email contains the admin-set temporary password and a deep-link to the profile page
- * so they can change it on first login.
+ * Renders the onboarding email a new user receives after they are created. Accounts are
+ * passwordless — the user signs in with their email and a one-time code (OTP), so the email
+ * just points them to the sign-in page rather than carrying a temporary password.
  */
 @Component
 public class WelcomeEmail {
@@ -23,9 +23,8 @@ public class WelcomeEmail {
                 : appBaseUrl;
     }
 
-    public EmailMessage render(String recipientEmail, String fullName, Role role, String tempPassword) {
+    public EmailMessage render(String recipientEmail, String fullName, Role role) {
         String loginUrl = appBaseUrl + "/login";
-        String profileUrl = appBaseUrl + "/profile";
         String roleLabel = prettyRole(role);
 
         String text = """
@@ -35,15 +34,14 @@ public class WelcomeEmail {
 
                 Sign in at: %s
                 Email:      %s
-                Temporary password: %s
 
-                For your security, please change your password on first login:
-                  %s
+                Your account is passwordless — enter your email at sign-in and we'll send you a
+                one-time code to complete login.
 
                 If you weren't expecting this email, please contact your administrator.
 
                 — AML_DOCK
-                """.formatted(fullName, roleLabel, loginUrl, recipientEmail, tempPassword, profileUrl);
+                """.formatted(fullName, roleLabel, loginUrl, recipientEmail);
 
         String html = """
                 <!doctype html>
@@ -54,34 +52,34 @@ public class WelcomeEmail {
 
                   <table style="border-collapse: collapse; margin: 16px 0;">
                     <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Email</td><td><strong>%s</strong></td></tr>
-                    <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Temporary password</td>
-                        <td><code style="background:#f3f4f6; padding: 2px 6px; border-radius:4px;">%s</code></td></tr>
                   </table>
+
+                  <p style="color:#374151;">Your account is passwordless. Enter your email at sign-in and
+                     we'll send you a one-time code to complete login.</p>
 
                   <p style="margin: 20px 0;">
                     <a href="%s" style="display:inline-block; background:#1f4b7a; color:#ffffff; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Sign in</a>
-                    &nbsp;
-                    <a href="%s" style="display:inline-block; background:#ffffff; color:#1f4b7a; padding: 10px 18px; border-radius: 6px; text-decoration: none; border:1px solid #1f4b7a;">Change password</a>
                   </p>
 
                   <p style="color:#6b7280; font-size: 13px;">
-                    For your security, please change your temporary password on first login.
                     If you weren't expecting this email, contact your administrator.
                   </p>
                   <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AML_DOCK</p>
                 </body></html>
-                """.formatted(escape(fullName), escape(roleLabel), escape(recipientEmail),
-                        escape(tempPassword), loginUrl, profileUrl);
+                """.formatted(escape(fullName), escape(roleLabel), escape(recipientEmail), loginUrl);
 
         return EmailMessage.of(recipientEmail, SUBJECT, html, text);
     }
 
     private static String prettyRole(Role role) {
         return switch (role) {
-            case BROKER -> "Broker";
-            case COMPLIANCE -> "Compliance Officer";
-            case MANAGER -> "Manager / Admin";
-            case FIRM_USER -> "Real-Estate Firm User";
+            case ROOT -> "Platform Administrator";
+            case AML_COMPLIANCE_OFFICER -> "AML Compliance Officer";
+            case SENIOR_MANAGER -> "Senior Manager";
+            case SALES_MANAGER -> "Sales Manager";
+            case AGENT -> "Agent";
+            case AGENT_PA -> "Agent PA";
+            case ADMIN -> "Branch Admin";
         };
     }
 

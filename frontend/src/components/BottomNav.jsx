@@ -1,6 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { navProfileFor } from '../auth/roles.js';
 
 const NEU_BASE   = '#E0E5EC';
 const NEU_ACCENT = '#6C63FF';
@@ -10,27 +11,27 @@ const EXT        = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,2
 const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
 
 function navItemsFor(role) {
-  switch (role) {
-    case 'BROKER': return [
+  switch (navProfileFor(role)) {
+    case 'agent': return [
       { label: 'Home',     to: '/app',       Icon: HomeIcon },
       { label: 'My Deals', to: '/my-deals',  Icon: DealsIcon },
       { label: 'New',      to: '/deals/new', Icon: PlusIcon,  accent: true },
       { label: 'Profile',  to: '/profile',   Icon: ProfileIcon },
     ];
-    case 'COMPLIANCE': return [
-      { label: 'Home',    to: '/app',     Icon: HomeIcon },
-      { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
-      { label: 'Profile', to: '/profile', Icon: ProfileIcon },
-    ];
-    case 'MANAGER': return [
-      { label: 'Home',    to: '/app',     Icon: HomeIcon },
-      { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
-      { label: 'Profile', to: '/profile', Icon: ProfileIcon },
-    ];
-    case 'FIRM_USER': return [
+    case 'salesManager': return [
       { label: 'Home',   to: '/app',        Icon: HomeIcon },
       { label: 'Deals',  to: '/firm/deals', Icon: DealsIcon },
       { label: 'Profile',to: '/profile',    Icon: ProfileIcon },
+    ];
+    case 'firmReviewer': return [
+      { label: 'Home',    to: '/app',     Icon: HomeIcon },
+      { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
+      { label: 'Profile', to: '/profile', Icon: ProfileIcon },
+    ];
+    case 'root': return [
+      { label: 'Home',    to: '/app',     Icon: HomeIcon },
+      { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
+      { label: 'Profile', to: '/profile', Icon: ProfileIcon },
     ];
     default: return [
       { label: 'Home',    to: '/app',     Icon: HomeIcon },

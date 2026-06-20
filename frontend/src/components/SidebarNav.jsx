@@ -9,6 +9,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import PeopleIcon from '@mui/icons-material/People';
 import HistoryIcon from '@mui/icons-material/History';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { navProfileFor } from '../auth/roles.js';
 
 const NEU_ACCENT  = '#6C63FF';
 const NEU_FG      = '#3D4852';
@@ -17,30 +18,33 @@ const EXT_SM      = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,
 const INSET_SM    = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
 
 function navConfigFor(role) {
-  switch (role) {
-    case 'BROKER':
+  switch (navProfileFor(role)) {
+    case 'agent':
       return [
         { label: 'Dashboard', to: '/app',      icon: <DashboardIcon /> },
         { label: 'My deals',  to: '/my-deals', icon: <DescriptionIcon /> },
         { label: 'New deal',  to: '/deals/new', icon: <AddCircleOutlineIcon /> },
       ];
-    case 'COMPLIANCE':
+    case 'salesManager':
       return [
-        { label: 'Dashboard', to: '/app',   icon: <DashboardIcon /> },
-        { label: 'Queue',     to: '/queue', icon: <InboxIcon /> },
+        { label: 'Dashboard',   to: '/app',          icon: <DashboardIcon /> },
+        { label: 'Branch deals', to: '/firm/deals',  icon: <BusinessCenterIcon /> },
+        { label: 'Users',       to: '/admin/users',  icon: <PeopleIcon />, group: 'Admin' },
       ];
-    case 'MANAGER':
+    case 'firmReviewer':
+      return [
+        { label: 'Dashboard', to: '/app',          icon: <DashboardIcon /> },
+        { label: 'Queue',     to: '/queue',         icon: <InboxIcon /> },
+        { label: 'Users',     to: '/admin/users',   icon: <PeopleIcon />,    group: 'Admin' },
+        { label: 'Audit',     to: '/admin/audit',   icon: <HistoryIcon />,   group: 'Admin' },
+      ];
+    case 'root':
       return [
         { label: 'Dashboard', to: '/app',          icon: <DashboardIcon /> },
         { label: 'Queue',     to: '/queue',         icon: <InboxIcon /> },
         { label: 'Firms',     to: '/admin/firms',   icon: <BusinessIcon />,  group: 'Admin' },
         { label: 'Users',     to: '/admin/users',   icon: <PeopleIcon />,    group: 'Admin' },
         { label: 'Audit',     to: '/admin/audit',   icon: <HistoryIcon />,   group: 'Admin' },
-      ];
-    case 'FIRM_USER':
-      return [
-        { label: 'Dashboard', to: '/app',        icon: <DashboardIcon /> },
-        { label: 'Firm deals', to: '/firm/deals', icon: <BusinessCenterIcon /> },
       ];
     default:
       return [{ label: 'Dashboard', to: '/app', icon: <DashboardIcon /> }];

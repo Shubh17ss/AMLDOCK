@@ -68,13 +68,15 @@ public class DealService {
 
         Long effectiveCreator = null;
         Long effectiveFirm = firmIdFilter;
+        Long effectiveBranch = branchIdFilter;
         switch (actor.role()) {
-            case BROKER -> effectiveCreator = actor.id();
-            case FIRM_USER -> effectiveFirm = actor.realEstateFirmId();
-            case COMPLIANCE, MANAGER -> { /* honour passed filters verbatim */ }
+            case AGENT, AGENT_PA -> effectiveCreator = actor.id();
+            case ADMIN, SALES_MANAGER -> effectiveBranch = actor.firmBranchId();
+            case AML_COMPLIANCE_OFFICER, SENIOR_MANAGER -> effectiveFirm = actor.realEstateFirmId();
+            case ROOT -> { /* honour passed filters verbatim */ }
         }
 
-        List<Deal> results = deals.search(status, effectiveCreator, effectiveFirm, branchIdFilter);
+        List<Deal> results = deals.search(status, effectiveCreator, effectiveFirm, effectiveBranch);
         if (results.isEmpty()) return List.of();
 
         // Bulk-resolve lookups
@@ -127,20 +129,20 @@ public class DealService {
     @Transactional
     public Deal create(CreateDealRequest req) {
         UserPrincipal actor = currentPrincipal();
-        if (actor.role() != Role.BROKER) {
-            throw new BadRequestException("Only brokers may create deals");
+        if (!DealLifecycleService.isDealAuthor(actor.role())) {
+            throw new BadRequestException("Only agents may create deals");
         }
         FirmBranch branch = branches.findById(req.firmBranchId())
                 .orElseThrow(() -> new BadRequestException("Branch " + req.firmBranchId() + " not found"));
         if (!branch.isActive()) {
             throw new BadRequestException("Branch is inactive");
         }
-        // Brokers can only create deals for the branch they're assigned to.
+        // Agents can only create deals for the branch they're assigned to.
         if (actor.firmBranchId() == null) {
-            throw new ForbiddenException("Broker is not assigned to a branch — ask an administrator");
+            throw new ForbiddenException("You are not assigned to a branch — ask an administrator");
         }
         if (!actor.firmBranchId().equals(branch.getId())) {
-            throw new ForbiddenException("Brokers can only create deals on their assigned branch");
+            throw new ForbiddenException("You can only create deals on your assigned branch");
         }
 
         Property property = new Property();
@@ -217,15 +219,36 @@ public class DealService {
         return c;
     }
 
+    /**
+     * Deletes are restricted to ROOT (global) and SENIOR_MANAGER (within their own firm) — the
+     * @PreAuthorize on the controller gates the role; here we enforce the firm scope.
+     */
     @Transactional
     public void delete(Long id) {
-        Deal d = mustFindEditable(id);
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        assertCanDelete(d);
         Long propertyId = d.getPropertyId();
         Long clientId = d.getClientId();
         deals.delete(d);
         // Property and client are 1-1 with deal, so safe to clean up.
         properties.deleteById(propertyId);
         clients.deleteById(clientId);
+    }
+
+    private void assertCanDelete(Deal d) {
+        UserPrincipal actor = currentPrincipal();
+        if (actor.role() == Role.ROOT) {
+            return;
+        }
+        if (actor.role() == Role.SENIOR_MANAGER) {
+            FirmBranch branch = branches.findById(d.getFirmBranchId()).orElse(null);
+            Long dealFirmId = branch == null ? null : branch.getRealEstateFirmId();
+            if (dealFirmId == null || !dealFirmId.equals(actor.realEstateFirmId())) {
+                throw new ForbiddenException("You can only delete deals within your own firm");
+            }
+            return;
+        }
+        throw new ForbiddenException("Only ROOT or a senior manager may delete a deal");
     }
 
     @Transactional

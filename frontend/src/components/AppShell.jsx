@@ -145,11 +145,14 @@ export function AppShell() {
 
 function roleDisplay(role) {
   switch (role) {
-    case 'BROKER':     return 'Broker workspace';
-    case 'COMPLIANCE': return 'Compliance workspace';
-    case 'MANAGER':    return 'Admin & oversight';
-    case 'FIRM_USER':  return 'Firm workspace';
-    default:           return '';
+    case 'AGENT':
+    case 'AGENT_PA':              return 'Agent workspace';
+    case 'ADMIN':                 return 'Branch admin workspace';
+    case 'SALES_MANAGER':         return 'Branch oversight';
+    case 'AML_COMPLIANCE_OFFICER':return 'Compliance workspace';
+    case 'SENIOR_MANAGER':        return 'Senior management';
+    case 'ROOT':                  return 'Platform administration';
+    default:                      return '';
   }
 }
 

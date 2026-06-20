@@ -24,7 +24,7 @@ public class AuditController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
     public PageResponse<AuditLogDto> search(
             @RequestParam(required = false) Long actorUserId,
             @RequestParam(required = false) AuditAction action,
@@ -38,7 +38,7 @@ public class AuditController {
     }
 
     @GetMapping("/deal/{id}")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public List<AuditLogDto> listForDeal(@PathVariable Long id) {
         return audit.listForDeal(id);
     }

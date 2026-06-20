@@ -44,7 +44,7 @@ public class FirmController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ROOT')")
     public FirmDto create(@Valid @RequestBody CreateFirmRequest req) {
         RealEstateFirm f = firms.create(req);
         audit.record(AuditAction.FIRM_CREATED, "RealEstateFirm", f.getId(), "Created firm " + f.getName());
@@ -52,7 +52,7 @@ public class FirmController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ROOT')")
     public FirmDto update(@PathVariable Long id, @RequestBody UpdateFirmRequest req) {
         RealEstateFirm f = firms.update(id, req);
         audit.record(AuditAction.FIRM_UPDATED, "RealEstateFirm", f.getId(), "Updated firm " + f.getName());
@@ -65,7 +65,7 @@ public class FirmController {
     }
 
     @PostMapping("/{id}/branches")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public BranchDto createBranch(@PathVariable Long id, @Valid @RequestBody CreateBranchRequest req) {
         FirmBranch b = branches.create(id, req);
         audit.record(AuditAction.BRANCH_CREATED, "FirmBranch", b.getId(),

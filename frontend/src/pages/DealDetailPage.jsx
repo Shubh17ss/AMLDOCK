@@ -8,6 +8,7 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SendIcon from '@mui/icons-material/Send';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { isDealAuthor, isDealReviewer, canDelete, canOverride } from '../auth/roles.js';
 import { deleteDeal, getDeal, overrideDeal, submitDeal } from '../api/deals.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
@@ -54,7 +55,7 @@ export function DealDetailPage() {
   }
 
   const deal = q.data;
-  const isOwnerBroker = user?.role === 'BROKER' && user.userId === deal.createdByUserId;
+  const isOwnerAgent = isDealAuthor(user?.role) && user.userId === deal.createdByUserId;
   const isDraft = deal.status === 'DRAFT';
 
   return (
@@ -82,32 +83,32 @@ export function DealDetailPage() {
 
               {/* Action buttons */}
               <Stack direction="row" spacing={1.5} flexWrap="wrap">
-                {isOwnerBroker && isDraft && (
-                  <>
-                    <Button
-                      color="error"
-                      startIcon={<DeleteOutlineIcon />}
-                      onClick={() => setConfirmDelete(true)}
-                      disabled={submitMut.isPending || deleteMut.isPending}
-                    >
-                      Delete
-                    </Button>
-                    <Button
-                      variant="contained"
-                      startIcon={<SendIcon />}
-                      onClick={() => submitMut.mutate()}
-                      disabled={submitMut.isPending}
-                    >
-                      {submitMut.isPending ? 'Submitting…' : 'Submit for review'}
-                    </Button>
-                  </>
+                {isOwnerAgent && isDraft && (
+                  <Button
+                    variant="contained"
+                    startIcon={<SendIcon />}
+                    onClick={() => submitMut.mutate()}
+                    disabled={submitMut.isPending}
+                  >
+                    {submitMut.isPending ? 'Submitting…' : 'Submit for review'}
+                  </Button>
                 )}
-                {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && deal.status !== 'DRAFT' && (
+                {canDelete(user?.role) && (
+                  <Button
+                    color="error"
+                    startIcon={<DeleteOutlineIcon />}
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={submitMut.isPending || deleteMut.isPending}
+                  >
+                    Delete
+                  </Button>
+                )}
+                {isDealReviewer(user?.role) && deal.status !== 'DRAFT' && (
                   <Button variant="contained" onClick={() => navigate(`/deals/${deal.id}/review`)}>
                     Open review
                   </Button>
                 )}
-                {user?.role === 'MANAGER' && deal.status !== 'DRAFT' && (
+                {canOverride(user?.role) && deal.status !== 'DRAFT' && (
                   <Button variant="outlined" color="warning" onClick={() => setOverrideOpen(true)}>
                     Override
                   </Button>
@@ -205,17 +206,16 @@ export function DealDetailPage() {
             <DocumentUploader
               dealId={deal.id}
               canUpload={
-                user?.role === 'COMPLIANCE' ||
-                user?.role === 'MANAGER' ||
-                (isOwnerBroker && isDraft)
+                isDealReviewer(user?.role) ||
+                (isOwnerAgent && isDraft)
               }
               title="Documents"
             />
           </CardContent>
         </Card>
 
-        {/* ── Audit log (compliance / manager only) ────────────────────── */}
-        {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && (
+        {/* ── Audit log (deal reviewers only) ──────────────────────────── */}
+        {isDealReviewer(user?.role) && (
           <DealAuditPanel dealId={deal.id} />
         )}
 

@@ -50,7 +50,7 @@ public class DealController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('BROKER')")
+    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
     public DealDto create(@Valid @RequestBody CreateDealRequest req) {
         Deal d = deals.create(req);
         audit.record(AuditAction.DEAL_CREATED, "Deal", d.getId(),
@@ -59,35 +59,35 @@ public class DealController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('BROKER')")
+    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
     public DealDto update(@PathVariable Long id, @RequestBody UpdateDealRequest req) {
         Deal d = deals.update(id, req);
         return deals.toDtoAfterMutation(d);
     }
 
     @PatchMapping("/{id}/property")
-    @PreAuthorize("hasRole('BROKER')")
+    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
     public DealDto updateProperty(@PathVariable Long id, @RequestBody PropertyInput input) {
         deals.updateProperty(id, input);
         return deals.get(id);
     }
 
     @PatchMapping("/{id}/client")
-    @PreAuthorize("hasRole('BROKER')")
+    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
     public DealDto updateClient(@PathVariable Long id, @Valid @RequestBody ClientInput input) {
         deals.updateClient(id, input);
         return deals.get(id);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('BROKER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         deals.delete(id);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/submit")
-    @PreAuthorize("hasRole('BROKER')")
+    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
     public DealDto submit(@PathVariable Long id) {
         Deal d = deals.submit(id);
         audit.record(AuditAction.DEAL_SUBMITTED, "Deal", d.getId(),
@@ -96,7 +96,7 @@ public class DealController {
     }
 
     @PostMapping("/{id}/assign")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public DealDto assign(@PathVariable Long id) {
         Deal d = deals.assign(id);
         audit.record(AuditAction.DEAL_ASSIGNED, "Deal", d.getId(),
@@ -105,7 +105,7 @@ public class DealController {
     }
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public DealDto approve(@PathVariable Long id, @Valid @RequestBody DecideRequest req) {
         Deal d = deals.approve(id, req.notes());
         audit.record(AuditAction.DEAL_APPROVED, "Deal", d.getId(),
@@ -114,7 +114,7 @@ public class DealController {
     }
 
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public DealDto reject(@PathVariable Long id, @Valid @RequestBody DecideRequest req) {
         Deal d = deals.reject(id, req.notes());
         audit.record(AuditAction.DEAL_REJECTED, "Deal", d.getId(),
@@ -123,7 +123,7 @@ public class DealController {
     }
 
     @PostMapping("/{id}/override")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasRole('SENIOR_MANAGER')")
     public DealDto override(@PathVariable Long id, @Valid @RequestBody OverrideRequest req) {
         DealService.OverrideResult result = deals.override(id, req.targetStatus(), req.reason());
         audit.record(AuditAction.DEAL_OVERRIDDEN, "Deal", result.deal().getId(),

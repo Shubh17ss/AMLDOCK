@@ -43,7 +43,7 @@ public class OwnershipController {
     /* ---------- nodes ---------- */
 
     @PostMapping("/nodes")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public NodeDto createNode(@PathVariable Long dealId, @Valid @RequestBody CreateNodeRequest req) {
         NodeDto node = ownership.createNode(dealId, req);
         audit.record(AuditAction.NODE_CREATED, "OwnershipNode", node.id(),
@@ -52,7 +52,7 @@ public class OwnershipController {
     }
 
     @PatchMapping("/nodes/{nodeId}")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public NodeDto updateNode(@PathVariable Long dealId, @PathVariable Long nodeId,
                               @RequestBody UpdateNodeRequest req) {
         NodeDto node = ownership.updateNode(dealId, nodeId, req);
@@ -62,7 +62,7 @@ public class OwnershipController {
     }
 
     @DeleteMapping("/nodes/{nodeId}")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
     public ResponseEntity<Void> deleteNode(@PathVariable Long dealId, @PathVariable Long nodeId,
                                            @RequestParam(defaultValue = "false") boolean force) {
         ownership.deleteNode(dealId, nodeId, force);
@@ -74,7 +74,7 @@ public class OwnershipController {
     /* ---------- edges ---------- */
 
     @PostMapping("/edges")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public EdgeDto createEdge(@PathVariable Long dealId, @Valid @RequestBody CreateEdgeRequest req) {
         EdgeDto edge = ownership.createEdge(dealId, req);
         audit.record(AuditAction.EDGE_CREATED, "OwnershipEdge", edge.id(),
@@ -85,7 +85,7 @@ public class OwnershipController {
     }
 
     @PatchMapping("/edges/{edgeId}")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public EdgeDto updateEdge(@PathVariable Long dealId, @PathVariable Long edgeId,
                               @Valid @RequestBody UpdateEdgeRequest req) {
         EdgeDto edge = ownership.updateEdge(dealId, edgeId, req);
@@ -95,7 +95,7 @@ public class OwnershipController {
     }
 
     @DeleteMapping("/edges/{edgeId}")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
     public ResponseEntity<Void> deleteEdge(@PathVariable Long dealId, @PathVariable Long edgeId) {
         ownership.deleteEdge(dealId, edgeId);
         audit.record(AuditAction.EDGE_DELETED, "OwnershipEdge", edgeId, "Removed edge " + edgeId);
@@ -105,7 +105,7 @@ public class OwnershipController {
     /* ---------- root ---------- */
 
     @PostMapping("/root")
-    @PreAuthorize("hasAnyRole('COMPLIANCE','MANAGER')")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public TreeDto setRoot(@PathVariable Long dealId, @RequestBody SetRootRequest req) {
         return ownership.setRoot(dealId, req.nodeId());
     }

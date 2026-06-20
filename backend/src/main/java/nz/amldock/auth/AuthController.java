@@ -6,7 +6,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import nz.amldock.auth.dto.AuthResponse;
 import nz.amldock.auth.dto.LoginRequest;
+import nz.amldock.auth.dto.OtpRequestRequest;
+import nz.amldock.auth.dto.OtpVerifyRequest;
 import nz.amldock.user.UserPrincipal;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,9 +27,31 @@ public class AuthController {
         this.auth = auth;
     }
 
-    @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest req, HttpServletResponse response) {
-        return auth.login(req.email(), req.password(), response);
+    /* ---------- email + OTP login (all roles except ROOT) ---------- */
+
+    @PostMapping("/otp/request")
+    public ResponseEntity<Void> requestOtp(@Valid @RequestBody OtpRequestRequest req) {
+        auth.requestLoginOtp(req.email());
+        // Always 204 — never reveal whether the account exists.
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/otp/verify")
+    public AuthResponse verifyOtp(@Valid @RequestBody OtpVerifyRequest req, HttpServletResponse response) {
+        return auth.verifyLoginOtp(req.email(), req.code(), response);
+    }
+
+    /* ---------- ROOT password + OTP login (dedicated route) ---------- */
+
+    @PostMapping("/admin/login")
+    public ResponseEntity<Void> adminLogin(@Valid @RequestBody LoginRequest req) {
+        auth.adminLogin(req.email(), req.password());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/admin/verify")
+    public AuthResponse adminVerify(@Valid @RequestBody OtpVerifyRequest req, HttpServletResponse response) {
+        return auth.adminVerify(req.email(), req.code(), response);
     }
 
     @PostMapping("/refresh")

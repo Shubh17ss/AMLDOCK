@@ -5,7 +5,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.auth.dto.AuthResponse;
+import nz.amldock.auth.otp.OtpPurpose;
+import nz.amldock.auth.otp.OtpService;
 import nz.amldock.common.exception.ApiException;
+import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +38,7 @@ public class AuthService {
     private final JwtService jwt;
     private final RefreshTokenRepository refreshRepo;
     private final AuditService audit;
+    private final OtpService otp;
     private final Duration refreshTtl;
     private final SecureRandom rng = new SecureRandom();
 
@@ -46,6 +50,7 @@ public class AuthService {
                        JwtService jwt,
                        RefreshTokenRepository refreshRepo,
                        AuditService audit,
+                       OtpService otp,
                        @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays,
                        @Value("${COOKIE_SECURE:false}") boolean secureCookies,
                        @Value("${COOKIE_SAME_SITE:Lax}") String sameSite) {
@@ -56,28 +61,100 @@ public class AuthService {
         this.secureCookies = secureCookies;
         this.sameSite = sameSite;
         this.audit = audit;
+        this.otp = otp;
         this.refreshTtl = Duration.ofDays(refreshTtlDays);
     }
 
+    /* ---------- email + OTP login (all roles except ROOT) ---------- */
+
+    /**
+     * Step 1 of the passwordless flow: email a one-time code. Silent for unknown/disabled accounts
+     * and for ROOT (who must use the admin route) so the endpoint can't be used to enumerate users.
+     */
     @Transactional
-    public AuthResponse login(String email, String rawPassword, HttpServletResponse response) {
+    public void requestLoginOtp(String email) {
+        users.findByEmailIgnoreCase(email).ifPresent(u -> {
+            if (u.getRole() == Role.ROOT || !u.isActive()) {
+                return;
+            }
+            otp.issue(u, OtpPurpose.LOGIN);
+            audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_REQUESTED, "User", u.getId(),
+                    "Login OTP requested for " + u.getEmail());
+        });
+    }
+
+    /** Step 2: verify the code and issue session cookies. */
+    @Transactional
+    public AuthResponse verifyLoginOtp(String email, String code, HttpServletResponse response) {
+        User u = activeNonRoot(email);
+        try {
+            otp.verify(u, code, OtpPurpose.LOGIN);
+        } catch (RuntimeException ex) {
+            audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_FAILED, "User", u.getId(),
+                    "Login OTP verification failed for " + u.getEmail());
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code");
+        }
+        issueCookies(u, response);
+        audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
+                "User " + u.getEmail() + " logged in via OTP");
+        return toAuthResponse(u);
+    }
+
+    /* ---------- ROOT password + OTP login (dedicated route) ---------- */
+
+    /** Step 1: verify the ROOT password, then email the second-factor code. */
+    @Transactional
+    public void adminLogin(String email, String rawPassword) {
+        User u;
         try {
             Authentication auth = authManager.authenticate(
                     new UsernamePasswordAuthenticationToken(email, rawPassword));
-            User u = users.findByEmailIgnoreCase(auth.getName())
+            u = users.findByEmailIgnoreCase(auth.getName())
                     .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
-            if (!u.isActive()) {
-                throw new ApiException(HttpStatus.FORBIDDEN, "User is disabled");
-            }
-            issueCookies(u, response);
-            audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
-                    "User " + u.getEmail() + " logged in");
-            return toAuthResponse(u);
         } catch (BadCredentialsException ex) {
             audit.record(AuditAction.USER_LOGIN_FAILED, "User", null,
-                    "Failed login attempt for email " + email);
+                    "Failed admin login attempt for email " + email);
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
+        if (u.getRole() != Role.ROOT) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This route is for the platform administrator only");
+        }
+        if (!u.isActive()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "User is disabled");
+        }
+        otp.issue(u, OtpPurpose.ADMIN_LOGIN);
+        audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_REQUESTED, "User", u.getId(),
+                "Admin login OTP requested for " + u.getEmail());
+    }
+
+    /** Step 2: verify the ROOT second-factor code and issue session cookies. */
+    @Transactional
+    public AuthResponse adminVerify(String email, String code, HttpServletResponse response) {
+        User u = users.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code"));
+        if (u.getRole() != Role.ROOT || !u.isActive()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code");
+        }
+        try {
+            otp.verify(u, code, OtpPurpose.ADMIN_LOGIN);
+        } catch (RuntimeException ex) {
+            audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_FAILED, "User", u.getId(),
+                    "Admin OTP verification failed for " + u.getEmail());
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code");
+        }
+        issueCookies(u, response);
+        audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
+                "ROOT " + u.getEmail() + " logged in via password + OTP");
+        return toAuthResponse(u);
+    }
+
+    private User activeNonRoot(String email) {
+        User u = users.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code"));
+        if (u.getRole() == Role.ROOT || !u.isActive()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code");
+        }
+        return u;
     }
 
     @Transactional

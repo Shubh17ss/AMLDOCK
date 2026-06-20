@@ -12,6 +12,7 @@ import { AddressCascadingFields } from '../components/AddressCascadingFields.jsx
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../components/VoiceRecorderField.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { isDealAuthor } from '../auth/roles.js';
 
 const NEU_ACCENT = '#6C63FF';
 const NEU_MUTED  = '#6B7280';
@@ -49,7 +50,7 @@ export function NewDealWizardPage() {
   const [voiceBlob, setVoiceBlob] = useState(null);
   const [voiceUploaded, setVoiceUploaded] = useState(false);
 
-  const brokerLocked = user?.role === 'BROKER' && Boolean(user.firmBranchId);
+  const brokerLocked = isDealAuthor(user?.role) && Boolean(user.firmBranchId);
 
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const activeFirms = useMemo(() => (firmsQ.data ?? []).filter((f) => f.active), [firmsQ.data]);

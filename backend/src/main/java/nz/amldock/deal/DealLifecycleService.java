@@ -17,34 +17,52 @@ import java.util.Set;
 public class DealLifecycleService {
 
     public void assertOwnerEditable(Deal deal, UserPrincipal actor) {
-        assertBrokerOwner(deal, actor);
+        assertDealOwner(deal, actor);
         if (deal.getStatus() != DealStatus.DRAFT) {
-            throw new BadRequestException("Only DRAFT deals may be edited by the broker");
+            throw new BadRequestException("Only DRAFT deals may be edited by their owner");
         }
     }
 
-    public void assertBrokerOwner(Deal deal, UserPrincipal actor) {
-        if (actor.role() != Role.BROKER) {
-            throw new ForbiddenException("Only brokers may modify their own draft deals");
+    /** Deals are authored/owned by the branch-level deal creators: AGENT, AGENT_PA, ADMIN. */
+    public void assertDealOwner(Deal deal, UserPrincipal actor) {
+        if (!isDealAuthor(actor.role())) {
+            throw new ForbiddenException("Only agents may modify their own draft deals");
         }
         if (!actor.id().equals(deal.getCreatedByUserId())) {
             throw new ForbiddenException("Not your deal");
         }
     }
 
+    static boolean isDealAuthor(Role role) {
+        return role == Role.AGENT || role == Role.AGENT_PA || role == Role.ADMIN;
+    }
+
+    /**
+     * Read scope:
+     *   AGENT / AGENT_PA           → own deals only
+     *   ADMIN / SALES_MANAGER      → any deal in their branch
+     *   AML_COMPLIANCE_OFFICER /
+     *     SENIOR_MANAGER           → any deal in their firm
+     *   ROOT                       → all deals
+     */
     public void assertCanRead(Deal deal, UserPrincipal actor, Long branchFirmId) {
         switch (actor.role()) {
-            case BROKER -> {
+            case AGENT, AGENT_PA -> {
                 if (!actor.id().equals(deal.getCreatedByUserId())) {
                     throw new ForbiddenException("Not your deal");
                 }
             }
-            case FIRM_USER -> {
+            case ADMIN, SALES_MANAGER -> {
+                if (actor.firmBranchId() == null || !actor.firmBranchId().equals(deal.getFirmBranchId())) {
+                    throw new ForbiddenException("Not your branch's deal");
+                }
+            }
+            case AML_COMPLIANCE_OFFICER, SENIOR_MANAGER -> {
                 if (branchFirmId == null || !branchFirmId.equals(actor.realEstateFirmId())) {
                     throw new ForbiddenException("Not your firm's deal");
                 }
             }
-            case COMPLIANCE, MANAGER -> { /* all access */ }
+            case ROOT -> { /* all access */ }
         }
     }
 
@@ -56,8 +74,8 @@ public class DealLifecycleService {
 
     /** SUBMITTED → UNDER_REVIEW (or no-op if already assigned to this caller). */
     public void assign(Deal deal, UserPrincipal actor) {
-        if (actor.role() != Role.COMPLIANCE && actor.role() != Role.MANAGER) {
-            throw new ForbiddenException("Only compliance officers or managers may claim a deal");
+        if (!isDecider(actor.role())) {
+            throw new ForbiddenException("Only compliance officers or senior managers may claim a deal");
         }
         if (deal.getStatus() == DealStatus.DRAFT) {
             throw new BadRequestException("Deal must be submitted before it can be claimed");
@@ -94,13 +112,13 @@ public class DealLifecycleService {
     }
 
     /**
-     * MANAGER-only force transition to an arbitrary target. Reason required and prefixed
+     * SENIOR_MANAGER-only force transition to an arbitrary target. Reason required and prefixed
      * into the decision notes so the override is visible in any subsequent UI.
      * Returns the previous status so the caller can include it in the audit record.
      */
     public DealStatus override(Deal deal, UserPrincipal actor, DealStatus target, String reason) {
-        if (actor.role() != Role.MANAGER) {
-            throw new ForbiddenException("Only managers may override a deal's status");
+        if (actor.role() != Role.SENIOR_MANAGER) {
+            throw new ForbiddenException("Only senior managers may override a deal's status");
         }
         if (target == null) {
             throw new BadRequestException("Target status is required");
@@ -131,9 +149,14 @@ public class DealLifecycleService {
     }
 
     private void assertDecider(UserPrincipal actor) {
-        if (actor.role() != Role.COMPLIANCE && actor.role() != Role.MANAGER) {
-            throw new ForbiddenException("Only compliance officers or managers may decide a deal");
+        if (!isDecider(actor.role())) {
+            throw new ForbiddenException("Only compliance officers or senior managers may decide a deal");
         }
+    }
+
+    /** Firm-level reviewers who can change a deal's status. */
+    static boolean isDecider(Role role) {
+        return role == Role.AML_COMPLIANCE_OFFICER || role == Role.SENIOR_MANAGER;
     }
 
     private void requireNotes(String notes, String message) {

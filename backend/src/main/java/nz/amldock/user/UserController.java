@@ -46,24 +46,25 @@ public class UserController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER')")
-    public List<UserDto> list() {
-        return users.findAll().stream().map(UserDto::from).toList();
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
+    public List<UserDto> list(@AuthenticationPrincipal UserPrincipal principal) {
+        return users.findVisible(principal).stream().map(UserDto::from).toList();
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
     public UserDto get(@PathVariable Long id) {
         return UserDto.from(users.findById(id));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('MANAGER')")
-    public UserDto create(@Valid @RequestBody CreateUserRequest req) {
-        User u = users.create(req);
+    @PreAuthorize("isAuthenticated()")
+    public UserDto create(@AuthenticationPrincipal UserPrincipal principal,
+                          @Valid @RequestBody CreateUserRequest req) {
+        User u = users.create(principal, req);
         audit.record(AuditAction.USER_CREATED, "User", u.getId(),
                 "Created user " + u.getEmail() + " with role " + u.getRole());
-        sendWelcomeEmail(u, req.password());
+        sendWelcomeEmail(u);
         return UserDto.from(u);
     }
 
@@ -72,10 +73,10 @@ public class UserController {
      * Audits success/failure on the async chain so the per-user trail stays complete even
      * if SMTP is slow or down. Failures here must never propagate to the create response.
      */
-    private void sendWelcomeEmail(User user, String tempPassword) {
+    private void sendWelcomeEmail(User user) {
         try {
             EmailMessage message = welcomeEmail.render(user.getEmail(), user.getFullName(),
-                    user.getRole(), tempPassword);
+                    user.getRole());
             email.send(message).whenComplete((sent, ex) -> {
                 try {
                     if (Boolean.TRUE.equals(sent)) {
@@ -100,7 +101,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
     public UserDto update(@PathVariable Long id, @RequestBody UpdateUserRequest req) {
         Role before = users.findById(id).getRole();
         User u = users.update(id, req);
@@ -114,7 +115,7 @@ public class UserController {
     }
 
     @PostMapping("/{id}/reset-password")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasRole('ROOT')")
     public ResponseEntity<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequest req) {
         users.resetPassword(id, req.newPassword());
         audit.record(AuditAction.USER_PASSWORD_RESET, "User", id, "Password reset by admin");

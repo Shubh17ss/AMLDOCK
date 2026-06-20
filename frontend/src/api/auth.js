@@ -1,7 +1,22 @@
 import { apiClient } from './client.js';
 
-export async function login(email, password) {
-  const { data } = await apiClient.post('/auth/login', { email, password });
+// --- Email + OTP login (all roles except ROOT) ---
+export async function requestOtp(email) {
+  await apiClient.post('/auth/otp/request', { email });
+}
+
+export async function verifyOtp(email, code) {
+  const { data } = await apiClient.post('/auth/otp/verify', { email, code });
+  return data;
+}
+
+// --- ROOT password + OTP login (dedicated route) ---
+export async function adminLogin(email, password) {
+  await apiClient.post('/auth/admin/login', { email, password });
+}
+
+export async function adminVerify(email, code) {
+  const { data } = await apiClient.post('/auth/admin/verify', { email, code });
   return data;
 }
 

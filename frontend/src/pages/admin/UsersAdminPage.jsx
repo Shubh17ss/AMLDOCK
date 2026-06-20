@@ -9,17 +9,12 @@ import {
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { createUser, listUsers, resetUserPassword, updateUser } from '../../api/users.js';
 import { listBranches, listFirms } from '../../api/firms.js';
-
-
-
-const ROLES = ['BROKER', 'COMPLIANCE', 'MANAGER', 'FIRM_USER'];
-
-// Roles that need a firm linked. BROKER additionally needs a branch.
-const FIRM_REQUIRED_ROLES = new Set(['BROKER', 'FIRM_USER']);
-const BRANCH_REQUIRED_ROLES = new Set(['BROKER']);
+import { useAuth } from '../../auth/AuthContext.jsx';
+import { creatableRoles, requiresFirm, requiresBranch, roleLabel } from '../../auth/roles.js';
 
 export function UsersAdminPage() {
   const qc = useQueryClient();
+  const { user: currentUser } = useAuth();
   const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const firmsById = useMemo(() => {
@@ -39,9 +34,11 @@ export function UsersAdminPage() {
     <Stack spacing={3}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="h4">Users</Typography>
-        <Button type="submit" variant="contained" onClick={() => setCreateOpen(true)}>
-          + Add User
-        </Button>
+        {creatableRoles(currentUser?.role).length > 0 && (
+          <Button variant="contained" onClick={() => setCreateOpen(true)}>
+            + Add User
+          </Button>
+        )}
       </Stack>
 
       {usersQ.isError && <Alert severity="error">Failed to load users.</Alert>}
@@ -65,6 +62,7 @@ export function UsersAdminPage() {
               <UserRow
                 key={u.id}
                 user={u}
+                canResetPassword={currentUser?.role === 'ROOT' && u.role === 'ROOT'}
                 firmName={u.realEstateFirmId
                   ? (firmsById.get(u.realEstateFirmId)?.name ?? `#${u.realEstateFirmId}`)
                   : null}
@@ -83,14 +81,14 @@ export function UsersAdminPage() {
         </Table>
       </TableContainer>
 
-      <CreateUserDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateUserDialog open={createOpen} onClose={() => setCreateOpen(false)} currentUser={currentUser} />
       <ResetPasswordDialog target={resetTarget} onClose={() => setResetTarget(null)} />
     </Stack>
   );
 }
 
 /** Single row, lazily fetches the user's branch name when they have one. */
-function UserRow({ user, firmName, onToggleActive, onResetPassword }) {
+function UserRow({ user, firmName, canResetPassword, onToggleActive, onResetPassword }) {
   // Only brokers carry a branch; lazy-load just for those rows.
   const branchesQ = useQuery({
     queryKey: ['firms', user.realEstateFirmId, 'branches'],
@@ -106,63 +104,86 @@ function UserRow({ user, firmName, onToggleActive, onResetPassword }) {
       <TableCell>{user.id}</TableCell>
       <TableCell>{user.fullName}</TableCell>
       <TableCell>{user.email}</TableCell>
-      <TableCell><Chip size="small" label={user.role} /></TableCell>
+      <TableCell><Chip size="small" label={roleLabel(user.role)} /></TableCell>
       <TableCell>{firmName ?? '—'}</TableCell>
       <TableCell>{branchName ?? '—'}</TableCell>
       <TableCell>
         <Switch checked={user.active} onChange={(e) => onToggleActive(e.target.checked)} />
       </TableCell>
       <TableCell align="right">
-        <Tooltip title="Reset password">
-          <IconButton size="small" onClick={onResetPassword}>
-            <RestartAltIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        {canResetPassword && (
+          <Tooltip title="Reset password">
+            <IconButton size="small" onClick={onResetPassword}>
+              <RestartAltIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </TableCell>
     </TableRow>
   );
 }
 
-const EMPTY_FORM = {
-  email: '', fullName: '', role: 'BROKER', password: '',
-  realEstateFirmId: '', firmBranchId: '',
-};
-
-function CreateUserDialog({ open, onClose }) {
+function CreateUserDialog({ open, onClose, currentUser }) {
   const qc = useQueryClient();
-  const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
-  const activeFirms = (firmsQ.data ?? []).filter((f) => f.active);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const creatorRole = currentUser?.role;
+  const allowedRoles = creatableRoles(creatorRole);
+  const isRoot = creatorRole === 'ROOT';
+  const isSalesManager = creatorRole === 'SALES_MANAGER';
+
+  const emptyForm = () => ({
+    email: '', fullName: '', role: allowedRoles[0] ?? '',
+    realEstateFirmId: '', firmBranchId: '',
+  });
+  const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState(null);
 
-  const needsFirm = FIRM_REQUIRED_ROLES.has(form.role);
-  const needsBranch = BRANCH_REQUIRED_ROLES.has(form.role);
+  // Reset the form whenever the dialog opens so we never carry stale state across opens.
+  useEffect(() => {
+    if (open) { setForm(emptyForm()); setError(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  // Branches list, only when we have a firm picked and we actually need a branch.
+  const needsFirm = requiresFirm(form.role);
+  const needsBranch = requiresBranch(form.role);
+
+  // ROOT picks the firm; everyone else creates within their own firm.
+  const firmId = isRoot ? form.realEstateFirmId : currentUser?.realEstateFirmId;
+
+  // ROOT chooses among active firms; firm-level creators choose a branch in their own firm;
+  // a sales manager's new users inherit the sales manager's branch.
+  const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms, enabled: isRoot });
+  const activeFirms = (firmsQ.data ?? []).filter((f) => f.active);
+
+  const showBranchPicker = needsBranch && !isSalesManager; // firm-level creating a sales manager
   const branchesQ = useQuery({
-    queryKey: ['firms', form.realEstateFirmId, 'branches'],
-    queryFn: () => listBranches(form.realEstateFirmId),
-    enabled: needsBranch && Boolean(form.realEstateFirmId),
+    queryKey: ['firms', firmId, 'branches'],
+    queryFn: () => listBranches(firmId),
+    enabled: showBranchPicker && Boolean(firmId),
   });
   const activeBranches = (branchesQ.data ?? []).filter((b) => b.active);
 
-  // Reset branch when the firm or role changes so we never carry a stale id.
+  // Reset the chosen branch when firm/role changes.
   useEffect(() => {
     setForm((f) => ({ ...f, firmBranchId: '' }));
   }, [form.realEstateFirmId, form.role]);
+
+  const resolvedBranchId = () => {
+    if (!needsBranch) return null;
+    if (isSalesManager) return currentUser?.firmBranchId ?? null;
+    return form.firmBranchId ? Number(form.firmBranchId) : null;
+  };
 
   const mut = useMutation({
     mutationFn: () => createUser({
       email: form.email,
       fullName: form.fullName,
       role: form.role,
-      password: form.password,
-      realEstateFirmId: needsFirm && form.realEstateFirmId ? Number(form.realEstateFirmId) : null,
-      firmBranchId: needsBranch && form.firmBranchId ? Number(form.firmBranchId) : null,
+      realEstateFirmId: needsFirm && firmId ? Number(firmId) : null,
+      firmBranchId: resolvedBranchId(),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
-      setForm(EMPTY_FORM);
+      setForm(emptyForm());
       setError(null);
       onClose();
     },
@@ -173,9 +194,9 @@ function CreateUserDialog({ open, onClose }) {
   const ch = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const submittable =
-    form.email && form.fullName && form.password && form.role &&
-    (!needsFirm || form.realEstateFirmId) &&
-    (!needsBranch || form.firmBranchId);
+    form.email && form.fullName && form.role &&
+    (!needsFirm || firmId) &&
+    (!needsBranch || isSalesManager || form.firmBranchId);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -183,18 +204,19 @@ function CreateUserDialog({ open, onClose }) {
         <DialogTitle>New user</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              New users sign in with their email and a one-time code — no password is set.
+            </Typography>
             <TextField label="Full name" value={form.fullName} onChange={ch('fullName')} required />
             <TextField label="Email" type="email" value={form.email} onChange={ch('email')} required />
-            <TextField label="Temporary password" type="password" value={form.password}
-                       onChange={ch('password')} required helperText="At least 8 characters" />
-            <FormControl fullWidth>
+            <FormControl fullWidth required>
               <InputLabel id="role-label">Role</InputLabel>
               <Select labelId="role-label" label="Role" value={form.role} onChange={ch('role')}>
-                {ROLES.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                {allowedRoles.map((r) => <MenuItem key={r} value={r}>{roleLabel(r)}</MenuItem>)}
               </Select>
             </FormControl>
 
-            {needsFirm && (
+            {isRoot && needsFirm && (
               <FormControl fullWidth required>
                 <InputLabel id="firm-label">Real-estate firm</InputLabel>
                 <Select labelId="firm-label" label="Real-estate firm"
@@ -213,8 +235,8 @@ function CreateUserDialog({ open, onClose }) {
               </FormControl>
             )}
 
-            {needsBranch && (
-              <FormControl fullWidth required disabled={!form.realEstateFirmId}>
+            {showBranchPicker && (
+              <FormControl fullWidth required disabled={!firmId}>
                 <InputLabel id="branch-label">Branch</InputLabel>
                 <Select labelId="branch-label" label="Branch"
                         value={form.firmBranchId}
@@ -223,12 +245,18 @@ function CreateUserDialog({ open, onClose }) {
                     <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
                   ))}
                 </Select>
-                {form.realEstateFirmId && activeBranches.length === 0 && !branchesQ.isLoading && (
+                {firmId && activeBranches.length === 0 && !branchesQ.isLoading && (
                   <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
                     This firm has no active branches — add one under <strong>Firms</strong> first.
                   </Typography>
                 )}
               </FormControl>
+            )}
+
+            {needsBranch && isSalesManager && (
+              <Typography variant="caption" color="text.secondary">
+                This user will be created in your branch.
+              </Typography>
             )}
 
             {error && <Alert severity="error">{error}</Alert>}

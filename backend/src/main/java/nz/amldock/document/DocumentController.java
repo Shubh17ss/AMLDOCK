@@ -7,6 +7,7 @@ import nz.amldock.document.dto.DownloadUrlResponse;
 import nz.amldock.document.dto.UploadUrlRequest;
 import nz.amldock.document.dto.UploadUrlResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -57,6 +58,7 @@ public class DocumentController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         documents.delete(id);
         return ResponseEntity.noContent().build();

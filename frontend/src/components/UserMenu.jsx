@@ -7,6 +7,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { ROLE_LABELS } from '../auth/roles.js';
 
 const NEU_FG    = '#3D4852';
 const NEU_MUTED = '#6B7280';
@@ -14,12 +15,7 @@ const EXT_SM    = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,25
 const EXT_H     = '12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6)';
 const INSET_SM  = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
 
-const ROLE_LABEL = {
-  BROKER:     'Broker',
-  COMPLIANCE: 'Compliance Officer',
-  MANAGER:    'Manager / Admin',
-  FIRM_USER:  'Firm User',
-};
+const ROLE_LABEL = ROLE_LABELS;
 
 function initialsFor(nameOrEmail = '') {
   const parts = nameOrEmail.split(/\s+/).filter(Boolean);

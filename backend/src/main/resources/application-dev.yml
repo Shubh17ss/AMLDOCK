@@ -3,6 +3,21 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  # Local-dev SMTP: free, no-auth test relay. Catches outbound mail without real credentials.
+  mail:
+    host: smtp.freesmtpservers.com
+    port: 25
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# Actually send mail in dev (the SmtpEmailService switch reads MAIL_ENABLED).
+MAIL_ENABLED: true
+MAIL_SMTP_AUTH: false
+MAIL_SMTP_STARTTLS: false
 
 logging:
   level:

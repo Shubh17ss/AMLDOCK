@@ -13,13 +13,18 @@ const NEU_MUTED  = '#6B7280';
 const NEU_ACCENT = '#6C63FF';
 const EXT        = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)';
 
-export function LoginPage() {
-  const { user, status, requestOtp, verifyOtp } = useAuth();
+/**
+ * Hardened sign-in for the platform administrator (ROOT): password first, then an
+ * email one-time code as a second factor. All other roles use the email + OTP route at /login.
+ */
+export function AdminLoginPage() {
+  const { user, status, adminLogin, adminVerify } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [step, setStep] = useState('email'); // 'email' | 'code'
+  const [step, setStep] = useState('credentials'); // 'credentials' | 'code'
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -29,16 +34,16 @@ export function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
-  const handleRequest = async (e) => {
+  const handleCredentials = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      await requestOtp(email);
+      await adminLogin(email, password);
       setStep('code');
-      showToast({ severity: 'info', message: 'If that email is registered, a code is on its way.' });
+      showToast({ severity: 'info', message: 'Password accepted — check your email for a code.' });
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not send a code. Try again.');
+      setError(err.response?.data?.message || 'Invalid credentials');
     } finally {
       setSubmitting(false);
     }
@@ -49,7 +54,7 @@ export function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await verifyOtp(email, code);
+      await adminVerify(email, code);
       showToast({ severity: 'success', message: 'Welcome back' });
       const from = location.state?.from?.pathname || '/app';
       navigate(from, { replace: true });
@@ -61,13 +66,11 @@ export function LoginPage() {
   };
 
   return (
-    <Box sx={{
-      minHeight: '100vh',
-      backgroundColor: NEU_BASE,
-      display: 'flex', flexDirection: 'column',
-    }}>
+    <Box sx={{ minHeight: '100vh', backgroundColor: NEU_BASE, display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', px: { xs: 3, sm: 5 }, py: 2.5 }}>
-        <Brand />
+        <Box component={RouterLink} to="/" sx={{ display: 'inline-flex', textDecoration: 'none' }}>
+          <img src={logoSrc} alt="AMLDOCK" className="h-24 w-auto object-contain" />
+        </Box>
       </Box>
 
       <Box sx={{
@@ -84,32 +87,35 @@ export function LoginPage() {
               fontWeight: 800, color: NEU_FG,
               fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
             }}>
-              Sign in
+              Administrator sign-in
             </Typography>
             <Typography variant="body2" sx={{ color: NEU_MUTED }}>
-              {step === 'email'
-                ? "Enter your email — we'll send you a one-time code."
-                : `We sent a 6-digit code to ${email}.`}
+              {step === 'credentials'
+                ? 'Password, then a one-time code sent to your email.'
+                : `Enter the 6-digit code we sent to ${email}.`}
             </Typography>
           </Stack>
 
-          {step === 'email' ? (
-            <Box component="form" onSubmit={handleRequest}>
+          {step === 'credentials' ? (
+            <Box component="form" onSubmit={handleCredentials}>
               <Stack spacing={2.5}>
                 <TextField
-                  label="Email"
-                  type="email"
-                  value={email}
+                  label="Email" type="email" value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required autoFocus autoComplete="email" fullWidth
+                />
+                <TextField
+                  label="Password" type="password" value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required autoComplete="current-password" fullWidth
                 />
                 {error && <Alert severity="error">{error}</Alert>}
                 <Button
                   type="submit" variant="contained" size="large"
-                  disabled={submitting || !email}
+                  disabled={submitting || !email || !password}
                   sx={{ py: 1.5, mt: 1 }}
                 >
-                  {submitting ? 'Sending code…' : 'Send code'}
+                  {submitting ? 'Checking…' : 'Continue'}
                 </Button>
               </Stack>
             </Box>
@@ -117,8 +123,7 @@ export function LoginPage() {
             <Box component="form" onSubmit={handleVerify}>
               <Stack spacing={2.5}>
                 <TextField
-                  label="One-time code"
-                  value={code}
+                  label="One-time code" value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   required autoFocus fullWidth
                   inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', autoComplete: 'one-time-code' }}
@@ -131,49 +136,18 @@ export function LoginPage() {
                 >
                   {submitting ? 'Verifying…' : 'Verify & sign in'}
                 </Button>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Link
-                    href="#"
-                    onClick={(e) => { e.preventDefault(); setStep('email'); setCode(''); setError(null); }}
-                    underline="hover"
-                    sx={{ fontSize: '0.8rem', color: NEU_MUTED, fontWeight: 500 }}
-                  >
-                    Use a different email
-                  </Link>
-                  <Link
-                    href="#"
-                    onClick={handleRequest}
-                    underline="hover"
-                    sx={{ fontSize: '0.8rem', color: NEU_ACCENT, fontWeight: 500 }}
-                  >
-                    Resend code
-                  </Link>
-                </Box>
               </Stack>
             </Box>
           )}
+
+          <Box sx={{ mt: 3, textAlign: 'center' }}>
+            <Link component={RouterLink} to="/login" underline="hover"
+                  sx={{ fontSize: '0.8rem', color: NEU_ACCENT, fontWeight: 500 }}>
+              Not an administrator? Sign in here
+            </Link>
+          </Box>
         </Box>
       </Box>
-
-      <Box sx={{ py: 3, textAlign: 'center', color: NEU_MUTED, fontSize: '0.78rem' }}>
-        © {new Date().getFullYear()} AMLDOCK · Compliance, calmer
-        {' · '}
-        <Link component={RouterLink} to="/admin-login" underline="hover" sx={{ color: NEU_MUTED }}>
-          Administrator sign-in
-        </Link>
-      </Box>
-    </Box>
-  );
-}
-
-function Brand() {
-  return (
-    <Box
-      component={RouterLink}
-      to="/"
-      sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, textDecoration: 'none' }}
-    >
-      <img src={logoSrc} alt="AMLDOCK" className="h-24 w-auto object-contain" />
     </Box>
   );
 }

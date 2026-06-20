@@ -5,7 +5,11 @@ import { LandingPage } from '../pages/LandingPage.jsx';
 import { PricingPage } from '../pages/PricingPage.jsx';
 import { ContactPage } from '../pages/ContactPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
+import { AdminLoginPage } from '../pages/AdminLoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
+import {
+  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, USER_MANAGER_ROLES,
+} from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
@@ -25,56 +29,57 @@ export function AppRoutes() {
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/admin-login" element={<AdminLoginPage />} />
 
       <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
         <Route path="/app" element={<HomeRedirect />} />
         <Route path="/profile" element={<ProfilePage />} />
 
         <Route path="/my-deals" element={
-          <ProtectedRoute roles={['BROKER']}>
+          <ProtectedRoute roles={DEAL_AUTHOR_ROLES}>
             <MyDealsPage />
           </ProtectedRoute>
         } />
         <Route path="/deals/new" element={
-          <ProtectedRoute roles={['BROKER']}>
+          <ProtectedRoute roles={DEAL_AUTHOR_ROLES}>
             <NewDealWizardPage />
           </ProtectedRoute>
         } />
         <Route path="/deals/:id" element={<DealDetailPage />} />
         <Route path="/deals/:id/review" element={
-          <ProtectedRoute roles={['COMPLIANCE', 'MANAGER']}>
+          <ProtectedRoute roles={DEAL_REVIEWER_ROLES}>
             <DealReviewScreen />
           </ProtectedRoute>
         } />
 
         <Route path="/queue" element={
-          <ProtectedRoute roles={['COMPLIANCE', 'MANAGER']}>
+          <ProtectedRoute roles={['ROOT', ...DEAL_REVIEWER_ROLES]}>
             <QueuePage />
           </ProtectedRoute>
         } />
         <Route path="/firm/deals" element={
-          <ProtectedRoute roles={['FIRM_USER']}>
+          <ProtectedRoute roles={['SALES_MANAGER', ...DEAL_REVIEWER_ROLES, 'ROOT']}>
             <FirmDealsPage />
           </ProtectedRoute>
         } />
         <Route path="/firm/deals/:id" element={
-          <ProtectedRoute roles={['FIRM_USER']}>
+          <ProtectedRoute roles={['SALES_MANAGER', ...DEAL_REVIEWER_ROLES, 'ROOT']}>
             <DealDetailPage />
           </ProtectedRoute>
         } />
 
         <Route path="/admin/users" element={
-          <ProtectedRoute roles={['MANAGER']}>
+          <ProtectedRoute roles={USER_MANAGER_ROLES}>
             <UsersAdminPage />
           </ProtectedRoute>
         } />
         <Route path="/admin/firms" element={
-          <ProtectedRoute roles={['MANAGER']}>
+          <ProtectedRoute roles={['ROOT']}>
             <FirmsAdminPage />
           </ProtectedRoute>
         } />
         <Route path="/admin/audit" element={
-          <ProtectedRoute roles={['MANAGER']}>
+          <ProtectedRoute roles={['ROOT', 'SENIOR_MANAGER']}>
             <AuditAdminPage />
           </ProtectedRoute>
         } />

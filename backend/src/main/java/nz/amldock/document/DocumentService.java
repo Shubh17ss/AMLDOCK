@@ -124,8 +124,8 @@ public class DocumentService {
             throw new BadRequestException("Document is deleted");
         }
         UserPrincipal actor = currentPrincipal();
-        if (!actor.id().equals(doc.getUploadedByUserId()) && actor.role() != Role.MANAGER) {
-            throw new ForbiddenException("Only the uploader (or a manager) may confirm this upload");
+        if (!actor.id().equals(doc.getUploadedByUserId()) && !canManageDocuments(actor.role())) {
+            throw new ForbiddenException("Only the uploader (or an elevated role) may confirm this upload");
         }
 
         if (!storage.exists(doc.getS3Key())) {
@@ -181,13 +181,14 @@ public class DocumentService {
         return new DownloadUrlResponse(url, (int) downloadTtl.toSeconds());
     }
 
+    /** Deletes are restricted to ROOT and SENIOR_MANAGER (gated by @PreAuthorize on the controller). */
     @Transactional
     public void delete(Long id) {
         Document d = documents.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
-        if (!actor.id().equals(d.getUploadedByUserId()) && actor.role() != Role.MANAGER) {
-            throw new ForbiddenException("Only the uploader or a manager may delete this document");
+        if (actor.role() != Role.ROOT && actor.role() != Role.SENIOR_MANAGER) {
+            throw new ForbiddenException("Only ROOT or a senior manager may delete a document");
         }
         if (d.getStatus() == DocumentStatus.DELETED) return;
 
@@ -202,17 +203,11 @@ public class DocumentService {
     private Deal mustLoadDealForWrite(Long dealId) {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new BadRequestException("Deal " + dealId + " not found"));
-        UserPrincipal actor = currentPrincipal();
-        // Brokers may upload to their own draft. Compliance/manager may upload to any visible deal.
-        switch (actor.role()) {
-            case BROKER -> {
-                if (!actor.id().equals(deal.getCreatedByUserId())) {
-                    throw new ForbiddenException("Not your deal");
-                }
-            }
-            case COMPLIANCE, MANAGER -> { /* allowed */ }
-            case FIRM_USER -> throw new ForbiddenException("Firm users may not upload documents");
-        }
+        // Upload scope mirrors read scope: agents to their own deal, branch-elevated to their
+        // branch, firm-level to their firm, ROOT to all.
+        Long firmId = branches.findById(deal.getFirmBranchId())
+                .map(FirmBranch::getRealEstateFirmId).orElse(null);
+        lifecycle.assertCanRead(deal, currentPrincipal(), firmId);
         return deal;
     }
 
@@ -254,5 +249,14 @@ public class DocumentService {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof UserPrincipal up) return up;
         throw new BadRequestException("No authenticated user");
+    }
+
+    /** Roles that may manage documents beyond their own uploads (confirm on behalf of another). */
+    private static boolean canManageDocuments(Role role) {
+        return role == Role.ROOT
+                || role == Role.AML_COMPLIANCE_OFFICER
+                || role == Role.SENIOR_MANAGER
+                || role == Role.SALES_MANAGER
+                || role == Role.ADMIN;
     }
 }

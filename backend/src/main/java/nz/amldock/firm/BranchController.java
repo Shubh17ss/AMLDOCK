@@ -32,7 +32,7 @@ public class BranchController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public BranchDto update(@PathVariable Long id, @RequestBody UpdateBranchRequest req) {
         FirmBranch b = branches.update(id, req);
         audit.record(AuditAction.BRANCH_UPDATED, "FirmBranch", b.getId(), "Updated branch " + b.getName());
@@ -40,7 +40,7 @@ public class BranchController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
     public ResponseEntity<Void> deactivate(@PathVariable Long id) {
         branches.deactivate(id);
         audit.record(AuditAction.BRANCH_DELETED, "FirmBranch", id, "Deactivated branch " + id);

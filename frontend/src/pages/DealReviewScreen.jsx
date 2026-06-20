@@ -12,6 +12,7 @@ import EditNoteIcon from '@mui/icons-material/EditNote';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { approveDeal, assignDeal, getDeal, overrideDeal, rejectDeal } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { isDealReviewer } from '../auth/roles.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
 import { NodeEditorPane } from '../features/ownership/NodeEditorPane.jsx';
@@ -105,9 +106,9 @@ export function DealReviewScreen() {
   const isFirstNode = !tree.tree || tree.tree.nodes.length === 0;
   const canClaim    = deal.status === 'SUBMITTED';
   const isUnderReview = deal.status === 'UNDER_REVIEW';
-  const isManager   = user?.role === 'MANAGER';
+  const isOverrider = user?.role === 'SENIOR_MANAGER';
   const canDecide   = isUnderReview;
-  const canOverride = isManager && deal.status !== 'DRAFT';
+  const canOverride = isOverrider && deal.status !== 'DRAFT';
 
   // Switch to node tab automatically when a node is selected on mobile
   const handleSelectNode = (nodeId) => {
@@ -172,7 +173,7 @@ export function DealReviewScreen() {
 
       <DealSummaryStrip deal={deal} />
 
-      {(user?.role === 'COMPLIANCE' || user?.role === 'MANAGER') && (
+      {isDealReviewer(user?.role) && (
         <BrokerNotesCard deal={deal} />
       )}
 

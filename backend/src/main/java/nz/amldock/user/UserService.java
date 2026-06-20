@@ -1,6 +1,7 @@
 package nz.amldock.user;
 
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
@@ -37,25 +38,56 @@ public class UserService {
         return users.findAll();
     }
 
+    /** Users the actor is allowed to see, scoped to their tier. */
+    @Transactional(readOnly = true)
+    public List<User> findVisible(UserPrincipal actor) {
+        Role role = actor.role();
+        if (role == Role.ROOT) {
+            return users.findAll();
+        }
+        if (role.isFirmLevel()) {
+            return users.findByRealEstateFirmId(actor.realEstateFirmId());
+        }
+        if (role == Role.SALES_MANAGER) {
+            return users.findByFirmBranchId(actor.firmBranchId());
+        }
+        // Agents / branch admins don't manage users.
+        return List.of();
+    }
+
     @Transactional(readOnly = true)
     public User findById(Long id) {
         return users.findById(id).orElseThrow(() -> new NotFoundException("User " + id + " not found"));
     }
 
+    /**
+     * Create a user below the actor in the hierarchy. Enforces:
+     *   1. the actor may create the requested role (top tier creates the tier below, never otherwise);
+     *   2. firm/branch linkage matches the target role's tier;
+     *   3. the new user lands within the actor's own scope (firm for firm-level creators,
+     *      firm + branch for the sales manager).
+     */
     @Transactional
-    public User create(CreateUserRequest req) {
+    public User create(UserPrincipal creator, CreateUserRequest req) {
+        if (!creator.role().canCreate(req.role())) {
+            throw new ForbiddenException(creator.role() + " is not permitted to create " + req.role() + " users");
+        }
         if (users.existsByEmailIgnoreCase(req.email())) {
             throw new BadRequestException("Email already in use");
         }
-        validateFirmLinkage(req.role(), req.realEstateFirmId(), req.firmBranchId());
+
+        Long firmId = req.realEstateFirmId();
+        Long branchId = req.firmBranchId();
+        bindCreationScope(creator, req.role(), firmId, branchId);
+        validateFirmLinkage(req.role(), firmId, branchId);
 
         User u = new User();
         u.setEmail(req.email().toLowerCase());
         u.setFullName(req.fullName());
         u.setRole(req.role());
-        u.setRealEstateFirmId(req.realEstateFirmId());
-        u.setFirmBranchId(req.firmBranchId());
-        u.setPasswordHash(encoder.encode(req.password()));
+        u.setRealEstateFirmId(firmId);
+        u.setFirmBranchId(branchId);
+        // Passwordless: these users sign in with email + OTP.
         u.setActive(true);
         return users.save(u);
     }
@@ -66,21 +98,13 @@ public class UserService {
         if (req.fullName() != null && !req.fullName().isBlank()) {
             u.setFullName(req.fullName());
         }
-        // Role changes also reset the firm/branch linkage. If only the firm/branch
-        // changes (role stays), the patch still re-validates after the new values land.
         if (req.role() != null) {
             u.setRole(req.role());
             u.setRealEstateFirmId(req.realEstateFirmId());
             u.setFirmBranchId(req.firmBranchId());
         } else {
-            if (req.realEstateFirmId() != null || u.getRole() != Role.BROKER) {
-                // For non-broker roles, allow explicit firm change. For broker, allow firm change too —
-                // but a firm change without an accompanying branch change won't satisfy the constraint.
-                if (req.realEstateFirmId() != null) u.setRealEstateFirmId(req.realEstateFirmId());
-            }
-            if (req.firmBranchId() != null) {
-                u.setFirmBranchId(req.firmBranchId());
-            }
+            if (req.realEstateFirmId() != null) u.setRealEstateFirmId(req.realEstateFirmId());
+            if (req.firmBranchId() != null) u.setFirmBranchId(req.firmBranchId());
         }
         if (req.active() != null) {
             u.setActive(req.active());
@@ -89,15 +113,22 @@ public class UserService {
         return u;
     }
 
+    /** Password management applies to ROOT only — all other roles are passwordless (email + OTP). */
     @Transactional
     public void resetPassword(Long id, String newPassword) {
         User u = findById(id);
+        if (u.getRole() != Role.ROOT) {
+            throw new BadRequestException("Only ROOT has a password; other users sign in with email + OTP");
+        }
         u.setPasswordHash(encoder.encode(newPassword));
     }
 
     @Transactional
     public void changeOwnPassword(Long id, String currentPassword, String newPassword) {
         User u = findById(id);
+        if (u.getPasswordHash() == null) {
+            throw new BadRequestException("This account signs in with email + OTP and has no password");
+        }
         if (!encoder.matches(currentPassword, u.getPasswordHash())) {
             throw new BadRequestException("Current password is incorrect");
         }
@@ -105,34 +136,49 @@ public class UserService {
     }
 
     /**
-     * Per-role linkage rules:
-     *   BROKER    → firmId required, branchId required, branch.firmId == firmId
-     *   FIRM_USER → firmId required, branchId must be null (sees every branch of the firm)
-     *   COMPLIANCE / MANAGER → neither set (internal staff)
+     * Bind the new user into the creator's scope. ROOT can place firm-level users into any firm;
+     * firm-level creators must keep new sales managers in their own firm; the sales manager must
+     * keep new agents/admins in its own firm + branch.
+     */
+    private void bindCreationScope(UserPrincipal creator, Role targetRole, Long firmId, Long branchId) {
+        if (creator.role() == Role.ROOT) {
+            return; // ROOT assigns firm freely (validateFirmLinkage still checks the firm exists & is active)
+        }
+        if (creator.role().isFirmLevel()) {
+            // Creating a SALES_MANAGER inside the creator's firm.
+            if (firmId == null || !firmId.equals(creator.realEstateFirmId())) {
+                throw new ForbiddenException("You can only create users within your own firm");
+            }
+            return;
+        }
+        if (creator.role() == Role.SALES_MANAGER) {
+            // Creating AGENT / AGENT_PA / ADMIN inside the creator's firm + branch.
+            if (firmId == null || !firmId.equals(creator.realEstateFirmId())
+                    || branchId == null || !branchId.equals(creator.firmBranchId())) {
+                throw new ForbiddenException("You can only create users within your own branch");
+            }
+        }
+    }
+
+    /**
+     * Per-tier linkage rules:
+     *   ROOT                                   → firmId null, branchId null
+     *   AML_COMPLIANCE_OFFICER / SENIOR_MANAGER → firmId required, branchId null
+     *   SALES_MANAGER / AGENT / AGENT_PA / ADMIN → firmId required, branchId required (branch in firm)
      */
     private void validateFirmLinkage(Role role, Long firmId, Long branchId) {
-        switch (role) {
-            case BROKER -> {
-                requireFirm(firmId, "BROKER requires realEstateFirmId");
-                requireBranch(branchId, "BROKER requires firmBranchId");
-                requireActiveFirm(firmId);
-                requireBranchInFirm(branchId, firmId);
-            }
-            case FIRM_USER -> {
-                requireFirm(firmId, "FIRM_USER requires realEstateFirmId");
-                if (branchId != null) {
-                    throw new BadRequestException("FIRM_USER must not have firmBranchId — they see every branch of their firm");
-                }
-                requireActiveFirm(firmId);
-            }
-            case COMPLIANCE, MANAGER -> {
-                if (firmId != null) {
-                    throw new BadRequestException(role + " must not have realEstateFirmId");
-                }
-                if (branchId != null) {
-                    throw new BadRequestException(role + " must not have firmBranchId");
-                }
-            }
+        if (!role.requiresFirm()) {
+            if (firmId != null) throw new BadRequestException(role + " must not have realEstateFirmId");
+            if (branchId != null) throw new BadRequestException(role + " must not have firmBranchId");
+            return;
+        }
+        requireFirm(firmId, role + " requires realEstateFirmId");
+        requireActiveFirm(firmId);
+        if (role.requiresBranch()) {
+            requireBranch(branchId, role + " requires firmBranchId");
+            requireBranchInFirm(branchId, firmId);
+        } else if (branchId != null) {
+            throw new BadRequestException(role + " must not have firmBranchId — they see every branch of their firm");
         }
     }
 
