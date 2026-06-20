@@ -69,9 +69,13 @@ public class FirmService {
         if (firms.existsByNameIgnoreCase(req.name())) {
             throw new BadRequestException("Firm name already in use");
         }
+        String nzbn = blankToNull(req.nzbn());
+        if (nzbn != null && firms.existsByNzbnIgnoreCase(nzbn)) {
+            throw new BadRequestException("NZBN/ABN already in use");
+        }
         RealEstateFirm f = new RealEstateFirm();
         f.setName(req.name());
-        f.setNzbn(req.nzbn());
+        f.setNzbn(nzbn);
         f.setLiaisonName(req.liaisonName());
         f.setLiaisonEmail(req.liaisonEmail());
         f.setLiaisonContactNumber(req.liaisonContactNumber());
@@ -85,6 +89,10 @@ public class FirmService {
         createPlaceholderBranches(saved.getId(), req.numberOfBranches());
         provisionSeniorManager(saved.getId(), req.seniorManagerName(), req.seniorManagerEmail());
         return saved;
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
     }
 
     private void createPlaceholderBranches(Long firmId, Integer count) {
@@ -112,12 +120,18 @@ public class FirmService {
         RealEstateFirm f = firms.findById(id)
                 .orElseThrow(() -> new NotFoundException("Firm " + id + " not found"));
         if (req.name() != null && !req.name().isBlank() && !req.name().equalsIgnoreCase(f.getName())) {
-            if (firms.existsByNameIgnoreCase(req.name())) {
+            if (firms.existsByNameIgnoreCaseAndIdNot(req.name(), f.getId())) {
                 throw new BadRequestException("Firm name already in use");
             }
             f.setName(req.name());
         }
-        if (req.nzbn() != null) f.setNzbn(req.nzbn());
+        if (req.nzbn() != null) {
+            String nzbn = blankToNull(req.nzbn());
+            if (nzbn != null && firms.existsByNzbnIgnoreCaseAndIdNot(nzbn, f.getId())) {
+                throw new BadRequestException("NZBN/ABN already in use");
+            }
+            f.setNzbn(nzbn);
+        }
         if (req.liaisonName() != null) f.setLiaisonName(req.liaisonName());
         if (req.liaisonEmail() != null) f.setLiaisonEmail(req.liaisonEmail());
         if (req.liaisonContactNumber() != null) f.setLiaisonContactNumber(req.liaisonContactNumber());

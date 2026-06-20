@@ -68,19 +68,24 @@ public class AuthService {
     /* ---------- email + OTP login (all roles except ROOT) ---------- */
 
     /**
-     * Step 1 of the passwordless flow: email a one-time code. Silent for unknown/disabled accounts
-     * and for ROOT (who must use the admin route) so the endpoint can't be used to enumerate users.
+     * Step 1 of the passwordless flow: email a one-time code. Surfaces a clear error when the
+     * email isn't attached to an eligible account (note: this intentionally allows the caller to
+     * tell which emails have accounts — acceptable for an internal tool).
      */
     @Transactional
     public void requestLoginOtp(String email) {
-        users.findByEmailIgnoreCase(email).ifPresent(u -> {
-            if (u.getRole() == Role.ROOT || !u.isActive()) {
-                return;
-            }
-            otp.issue(u, OtpPurpose.LOGIN);
-            audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_REQUESTED, "User", u.getId(),
-                    "Login OTP requested for " + u.getEmail());
-        });
+        User u = users.findByEmailIgnoreCase(email).orElse(null);
+        // ROOT is not a normal-route account — give the same generic response as an unknown email
+        // so the normal sign-in never reveals that an email belongs to the administrator.
+        if (u == null || u.getRole() == Role.ROOT) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "No user is attached to this email");
+        }
+        if (!u.isActive()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This account is disabled — contact your administrator");
+        }
+        otp.issue(u, OtpPurpose.LOGIN);
+        audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_REQUESTED, "User", u.getId(),
+                "Login OTP requested for " + u.getEmail());
     }
 
     /** Step 2: verify the code and issue session cookies. */

@@ -31,8 +31,8 @@ public class AuthController {
 
     @PostMapping("/otp/request")
     public ResponseEntity<Void> requestOtp(@Valid @RequestBody OtpRequestRequest req) {
+        // Throws a clear error (e.g. 404) if no eligible account is attached to the email.
         auth.requestLoginOtp(req.email());
-        // Always 204 — never reveal whether the account exists.
         return ResponseEntity.noContent().build();
     }
 

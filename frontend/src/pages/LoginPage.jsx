@@ -36,9 +36,9 @@ export function LoginPage() {
     try {
       await requestOtp(email);
       setStep('code');
-      showToast({ severity: 'info', message: 'If that email is registered, a code is on its way.' });
+      showToast({ severity: 'success', message: 'A one-time code is on its way.' });
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not send a code. Try again.');
+      setError(err.response?.data?.message || 'No user is attached to this email');
     } finally {
       setSubmitting(false);
     }
