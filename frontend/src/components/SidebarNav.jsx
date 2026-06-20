@@ -27,15 +27,15 @@ function navConfigFor(role) {
       ];
     case 'salesManager':
       return [
-        { label: 'Dashboard',   to: '/app',          icon: <DashboardIcon /> },
-        { label: 'Branch deals', to: '/firm/deals',  icon: <BusinessCenterIcon /> },
-        { label: 'Users',       to: '/admin/users',  icon: <PeopleIcon />, group: 'Admin' },
+        { label: 'Dashboard',   to: '/app',           icon: <DashboardIcon /> },
+        { label: 'Branch deals', to: '/firm/deals',   icon: <BusinessCenterIcon /> },
+        { label: 'Users',       to: '/branch-users',  icon: <PeopleIcon />, group: 'Admin' },
       ];
     case 'firmReviewer':
       return [
         { label: 'Dashboard', to: '/app',          icon: <DashboardIcon /> },
         { label: 'Queue',     to: '/queue',         icon: <InboxIcon /> },
-        { label: 'Users',     to: '/admin/users',   icon: <PeopleIcon />,    group: 'Admin' },
+        { label: 'My firm',   to: '/my-firm',       icon: <BusinessIcon />,  group: 'Admin' },
       ];
     case 'root':
       return [

@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Switch,
+  IconButton, Paper, Stack, Switch,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
   Tooltip, Typography,
 } from '@mui/material';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { createUser, listUsers, resetUserPassword, updateUser } from '../../api/users.js';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { deleteUser, listUsers, resetUserPassword, updateUser } from '../../api/users.js';
 import { listBranches, listFirms } from '../../api/firms.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { creatableRoles, requiresFirm, requiresBranch, roleLabel } from '../../auth/roles.js';
+import { creatableRoles, roleLabel } from '../../auth/roles.js';
+import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
 
 export function UsersAdminPage() {
   const qc = useQueryClient();
@@ -28,6 +30,11 @@ export function UsersAdminPage() {
   const updateMut = useMutation({
     mutationFn: ({ id, payload }) => updateUser(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id) => deleteUser(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: (err) => window.alert(err.response?.data?.message || 'Failed to delete user'),
   });
 
   return (
@@ -63,11 +70,15 @@ export function UsersAdminPage() {
                 key={u.id}
                 user={u}
                 canResetPassword={currentUser?.role === 'ROOT' && u.role === 'ROOT'}
+                canDelete={currentUser?.role === 'ROOT' && u.role !== 'ROOT'}
                 firmName={u.realEstateFirmId
                   ? (firmsById.get(u.realEstateFirmId)?.name ?? `#${u.realEstateFirmId}`)
                   : null}
                 onToggleActive={(v) => updateMut.mutate({ id: u.id, payload: { active: v } })}
                 onResetPassword={() => setResetTarget(u)}
+                onDelete={() => {
+                  if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
+                }}
               />
             ))}
             {usersQ.data?.length === 0 && (
@@ -88,7 +99,7 @@ export function UsersAdminPage() {
 }
 
 /** Single row, lazily fetches the user's branch name when they have one. */
-function UserRow({ user, firmName, canResetPassword, onToggleActive, onResetPassword }) {
+function UserRow({ user, firmName, canResetPassword, canDelete, onToggleActive, onResetPassword, onDelete }) {
   // Only brokers carry a branch; lazy-load just for those rows.
   const branchesQ = useQuery({
     queryKey: ['firms', user.realEstateFirmId, 'branches'],
@@ -118,158 +129,15 @@ function UserRow({ user, firmName, canResetPassword, onToggleActive, onResetPass
             </IconButton>
           </Tooltip>
         )}
+        {canDelete && (
+          <Tooltip title="Delete user">
+            <IconButton size="small" color="error" onClick={onDelete}>
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </TableCell>
     </TableRow>
-  );
-}
-
-function CreateUserDialog({ open, onClose, currentUser }) {
-  const qc = useQueryClient();
-  const creatorRole = currentUser?.role;
-  const allowedRoles = creatableRoles(creatorRole);
-  const isRoot = creatorRole === 'ROOT';
-  const isSalesManager = creatorRole === 'SALES_MANAGER';
-
-  const emptyForm = () => ({
-    email: '', fullName: '', role: allowedRoles[0] ?? '',
-    realEstateFirmId: '', firmBranchId: '',
-  });
-  const [form, setForm] = useState(emptyForm);
-  const [error, setError] = useState(null);
-
-  // Reset the form whenever the dialog opens so we never carry stale state across opens.
-  useEffect(() => {
-    if (open) { setForm(emptyForm()); setError(null); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const needsFirm = requiresFirm(form.role);
-  const needsBranch = requiresBranch(form.role);
-
-  // ROOT picks the firm; everyone else creates within their own firm.
-  const firmId = isRoot ? form.realEstateFirmId : currentUser?.realEstateFirmId;
-
-  // ROOT chooses among active firms; firm-level creators choose a branch in their own firm;
-  // a sales manager's new users inherit the sales manager's branch.
-  const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms, enabled: isRoot });
-  const activeFirms = (firmsQ.data ?? []).filter((f) => f.active);
-
-  const showBranchPicker = needsBranch && !isSalesManager; // firm-level creating a sales manager
-  const branchesQ = useQuery({
-    queryKey: ['firms', firmId, 'branches'],
-    queryFn: () => listBranches(firmId),
-    enabled: showBranchPicker && Boolean(firmId),
-  });
-  const activeBranches = (branchesQ.data ?? []).filter((b) => b.active);
-
-  // Reset the chosen branch when firm/role changes.
-  useEffect(() => {
-    setForm((f) => ({ ...f, firmBranchId: '' }));
-  }, [form.realEstateFirmId, form.role]);
-
-  const resolvedBranchId = () => {
-    if (!needsBranch) return null;
-    if (isSalesManager) return currentUser?.firmBranchId ?? null;
-    return form.firmBranchId ? Number(form.firmBranchId) : null;
-  };
-
-  const mut = useMutation({
-    mutationFn: () => createUser({
-      email: form.email,
-      fullName: form.fullName,
-      role: form.role,
-      realEstateFirmId: needsFirm && firmId ? Number(firmId) : null,
-      firmBranchId: resolvedBranchId(),
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users'] });
-      setForm(emptyForm());
-      setError(null);
-      onClose();
-    },
-    onError: (err) => setError(err.response?.data?.message || 'Failed to create user'),
-  });
-
-  const submit = (e) => { e.preventDefault(); mut.mutate(); };
-  const ch = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-
-  const submittable =
-    form.email && form.fullName && form.role &&
-    (!needsFirm || firmId) &&
-    (!needsBranch || isSalesManager || form.firmBranchId);
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <Box component="form" onSubmit={submit}>
-        <DialogTitle>New user</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography variant="caption" color="text.secondary">
-              New users sign in with their email and a one-time code — no password is set.
-            </Typography>
-            <TextField label="Full name" value={form.fullName} onChange={ch('fullName')} required />
-            <TextField label="Email" type="email" value={form.email} onChange={ch('email')} required />
-            <FormControl fullWidth required>
-              <InputLabel id="role-label">Role</InputLabel>
-              <Select labelId="role-label" label="Role" value={form.role} onChange={ch('role')}>
-                {allowedRoles.map((r) => <MenuItem key={r} value={r}>{roleLabel(r)}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            {isRoot && needsFirm && (
-              <FormControl fullWidth required>
-                <InputLabel id="firm-label">Real-estate firm</InputLabel>
-                <Select labelId="firm-label" label="Real-estate firm"
-                        value={form.realEstateFirmId}
-                        onChange={ch('realEstateFirmId')}
-                        disabled={activeFirms.length === 0}>
-                  {activeFirms.map((f) => (
-                    <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
-                  ))}
-                </Select>
-                {activeFirms.length === 0 && (
-                  <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
-                    No active firms — create one under <strong>Firms</strong> first.
-                  </Typography>
-                )}
-              </FormControl>
-            )}
-
-            {showBranchPicker && (
-              <FormControl fullWidth required disabled={!firmId}>
-                <InputLabel id="branch-label">Branch</InputLabel>
-                <Select labelId="branch-label" label="Branch"
-                        value={form.firmBranchId}
-                        onChange={ch('firmBranchId')}>
-                  {activeBranches.map((b) => (
-                    <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
-                  ))}
-                </Select>
-                {firmId && activeBranches.length === 0 && !branchesQ.isLoading && (
-                  <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
-                    This firm has no active branches — add one under <strong>Firms</strong> first.
-                  </Typography>
-                )}
-              </FormControl>
-            )}
-
-            {needsBranch && isSalesManager && (
-              <Typography variant="caption" color="text.secondary">
-                This user will be created in your branch.
-              </Typography>
-            )}
-
-            {error && <Alert severity="error">{error}</Alert>}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained" disabled={mut.isPending || !submittable}>
-            {mut.isPending ? 'Creating…' : 'Create'}
-          </Button>
-        </DialogActions>
-      </Box>
-    </Dialog>
   );
 }
 

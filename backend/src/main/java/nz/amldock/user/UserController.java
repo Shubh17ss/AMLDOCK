@@ -11,6 +11,7 @@ import nz.amldock.user.dto.UserDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -60,9 +61,10 @@ public class UserController {
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
-    public UserDto update(@PathVariable Long id, @RequestBody UpdateUserRequest req) {
+    public UserDto update(@AuthenticationPrincipal UserPrincipal principal,
+                          @PathVariable Long id, @RequestBody UpdateUserRequest req) {
         Role before = users.findById(id).getRole();
-        User u = users.update(id, req);
+        User u = users.update(principal, id, req);
         audit.record(AuditAction.USER_UPDATED, "User", u.getId(),
                 "Updated user " + u.getEmail());
         if (req.role() != null && req.role() != before) {
@@ -70,6 +72,16 @@ public class UserController {
                     "Role changed from " + before + " to " + u.getRole());
         }
         return UserDto.from(u);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
+    public ResponseEntity<Void> delete(@AuthenticationPrincipal UserPrincipal principal,
+                                       @PathVariable Long id) {
+        User u = users.findById(id);
+        users.delete(principal, id);
+        audit.record(AuditAction.USER_DELETED, "User", id, "Deleted user " + u.getEmail());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/reset-password")

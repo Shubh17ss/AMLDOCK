@@ -19,13 +19,15 @@ function navItemsFor(role) {
       { label: 'Profile',  to: '/profile',   Icon: ProfileIcon },
     ];
     case 'salesManager': return [
-      { label: 'Home',   to: '/app',        Icon: HomeIcon },
-      { label: 'Deals',  to: '/firm/deals', Icon: DealsIcon },
-      { label: 'Profile',to: '/profile',    Icon: ProfileIcon },
+      { label: 'Home',   to: '/app',          Icon: HomeIcon },
+      { label: 'Deals',  to: '/firm/deals',   Icon: DealsIcon },
+      { label: 'Users',  to: '/branch-users', Icon: ProfileIcon },
+      { label: 'Profile',to: '/profile',      Icon: ProfileIcon },
     ];
     case 'firmReviewer': return [
       { label: 'Home',    to: '/app',     Icon: HomeIcon },
       { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
+      { label: 'Firm',    to: '/my-firm', Icon: DealsIcon },
       { label: 'Profile', to: '/profile', Icon: ProfileIcon },
     ];
     case 'root': return [

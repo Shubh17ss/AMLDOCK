@@ -9,6 +9,7 @@ import nz.amldock.firm.RealEstateFirm;
 import nz.amldock.firm.RealEstateFirmRepository;
 import nz.amldock.user.dto.CreateUserRequest;
 import nz.amldock.user.dto.UpdateUserRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,24 +94,93 @@ public class UserService {
     }
 
     @Transactional
-    public User update(Long id, UpdateUserRequest req) {
+    public User update(UserPrincipal actor, Long id, UpdateUserRequest req) {
         User u = findById(id);
+        assertCanManage(actor, u);
+        boolean isRoot = actor.role() == Role.ROOT;
+
         if (req.fullName() != null && !req.fullName().isBlank()) {
             u.setFullName(req.fullName());
         }
-        if (req.role() != null) {
-            u.setRole(req.role());
-            u.setRealEstateFirmId(req.realEstateFirmId());
-            u.setFirmBranchId(req.firmBranchId());
-        } else {
-            if (req.realEstateFirmId() != null) u.setRealEstateFirmId(req.realEstateFirmId());
-            if (req.firmBranchId() != null) u.setFirmBranchId(req.firmBranchId());
+        if (req.email() != null && !req.email().isBlank() && !req.email().equalsIgnoreCase(u.getEmail())) {
+            if (users.existsByEmailIgnoreCaseAndIdNot(req.email(), u.getId())) {
+                throw new BadRequestException("Email already in use");
+            }
+            u.setEmail(req.email().toLowerCase());
         }
-        if (req.active() != null) {
-            u.setActive(req.active());
+        // Role / firm / branch / active are platform-admin concerns — firm-level managers may
+        // only edit name + email of the users in their firm.
+        if (isRoot) {
+            if (req.role() != null) {
+                u.setRole(req.role());
+                u.setRealEstateFirmId(req.realEstateFirmId());
+                u.setFirmBranchId(req.firmBranchId());
+            } else {
+                if (req.realEstateFirmId() != null) u.setRealEstateFirmId(req.realEstateFirmId());
+                if (req.firmBranchId() != null) u.setFirmBranchId(req.firmBranchId());
+            }
+            if (req.active() != null) {
+                u.setActive(req.active());
+            }
         }
         validateFirmLinkage(u.getRole(), u.getRealEstateFirmId(), u.getFirmBranchId());
         return u;
+    }
+
+    @Transactional
+    public void delete(UserPrincipal actor, Long id) {
+        User u = findById(id);
+        assertCanManage(actor, u);
+        if (u.getRole() == Role.ROOT) {
+            throw new ForbiddenException("Administrator accounts can't be deleted");
+        }
+        if (actor.id().equals(u.getId())) {
+            throw new BadRequestException("You can't delete your own account");
+        }
+        try {
+            users.delete(u);
+            users.flush(); // surface FK violations now rather than at commit
+        } catch (DataIntegrityViolationException e) {
+            throw new BadRequestException(
+                    "This user owns deals or documents and can't be deleted — deactivate them instead");
+        }
+    }
+
+    /**
+     * Who an actor may edit/delete:
+     *   ROOT        → anyone, except another ROOT account.
+     *   firm-level  → users in their own firm, except senior-manager / compliance-officer peers.
+     *   everyone else → no one.
+     */
+    private void assertCanManage(UserPrincipal actor, User target) {
+        if (actor.role() == Role.ROOT) {
+            if (target.getRole() == Role.ROOT && !actor.id().equals(target.getId())) {
+                throw new ForbiddenException("Another administrator account can't be managed here");
+            }
+            return;
+        }
+        if (actor.role().isFirmLevel()) {
+            if (target.getRealEstateFirmId() == null
+                    || !target.getRealEstateFirmId().equals(actor.realEstateFirmId())) {
+                throw new ForbiddenException("This user is not in your firm");
+            }
+            if (target.getRole() == Role.SENIOR_MANAGER || target.getRole() == Role.AML_COMPLIANCE_OFFICER) {
+                throw new ForbiddenException(
+                        "Senior managers and compliance officers can't be edited or deleted here");
+            }
+            return;
+        }
+        if (actor.role() == Role.SALES_MANAGER) {
+            if (target.getFirmBranchId() == null || !target.getFirmBranchId().equals(actor.firmBranchId())) {
+                throw new ForbiddenException("This user is not in your branch");
+            }
+            // A sales manager may only manage the branch staff they can create (agents/admins).
+            if (!actor.role().canCreate(target.getRole())) {
+                throw new ForbiddenException("You can only manage agents in your branch");
+            }
+            return;
+        }
+        throw new ForbiddenException("You are not permitted to manage users");
     }
 
     /** Password management applies to ROOT only — all other roles are passwordless (email + OTP). */

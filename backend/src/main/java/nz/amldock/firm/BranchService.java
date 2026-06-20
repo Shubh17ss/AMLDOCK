@@ -46,6 +46,7 @@ public class BranchService {
         if (!firms.existsById(firmId)) {
             throw new NotFoundException("Firm " + firmId + " not found");
         }
+        firmService.assertVisible(firmId);
         branches.findByRealEstateFirmIdAndNameIgnoreCase(firmId, req.name())
                 .ifPresent(b -> { throw new BadRequestException("Branch name already in use for this firm"); });
         FirmBranch b = new FirmBranch();
@@ -68,6 +69,7 @@ public class BranchService {
     public FirmBranch update(Long id, UpdateBranchRequest req) {
         FirmBranch b = branches.findById(id)
                 .orElseThrow(() -> new NotFoundException("Branch " + id + " not found"));
+        firmService.assertVisible(b.getRealEstateFirmId());
         if (req.name() != null && !req.name().isBlank() && !req.name().equalsIgnoreCase(b.getName())) {
             branches.findByRealEstateFirmIdAndNameIgnoreCase(b.getRealEstateFirmId(), req.name())
                     .ifPresent(existing -> { throw new BadRequestException("Branch name already in use for this firm"); });
@@ -90,6 +92,7 @@ public class BranchService {
     public void deactivate(Long id) {
         FirmBranch b = branches.findById(id)
                 .orElseThrow(() -> new NotFoundException("Branch " + id + " not found"));
+        firmService.assertVisible(b.getRealEstateFirmId());
         b.setActive(false);
     }
 }

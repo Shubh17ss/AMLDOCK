@@ -7,8 +7,11 @@ import { ContactPage } from '../pages/ContactPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { AdminLoginPage } from '../pages/AdminLoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
+import { MyFirmPage } from '../pages/MyFirmPage.jsx';
+import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
+import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
-  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, USER_MANAGER_ROLES,
+  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
@@ -68,14 +71,30 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
 
+        <Route path="/my-firm" element={
+          <ProtectedRoute roles={DEAL_REVIEWER_ROLES}>
+            <MyFirmPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/branch-users" element={
+          <ProtectedRoute roles={['SALES_MANAGER']}>
+            <BranchUsersPage />
+          </ProtectedRoute>
+        } />
+
         <Route path="/admin/users" element={
-          <ProtectedRoute roles={USER_MANAGER_ROLES}>
+          <ProtectedRoute roles={['ROOT']}>
             <UsersAdminPage />
           </ProtectedRoute>
         } />
         <Route path="/admin/firms" element={
           <ProtectedRoute roles={['ROOT']}>
             <FirmsAdminPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/firms/:id" element={
+          <ProtectedRoute roles={['ROOT']}>
+            <FirmAdminDetailPage />
           </ProtectedRoute>
         } />
         <Route path="/admin/audit" element={

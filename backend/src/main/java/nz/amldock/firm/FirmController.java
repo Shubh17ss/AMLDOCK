@@ -52,7 +52,7 @@ public class FirmController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('ROOT')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public FirmDto update(@PathVariable Long id, @RequestBody UpdateFirmRequest req) {
         RealEstateFirm f = firms.update(id, req);
         audit.record(AuditAction.FIRM_UPDATED, "RealEstateFirm", f.getId(), "Updated firm " + f.getName());

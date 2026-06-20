@@ -119,18 +119,28 @@ public class FirmService {
     public RealEstateFirm update(Long id, UpdateFirmRequest req) {
         RealEstateFirm f = firms.findById(id)
                 .orElseThrow(() -> new NotFoundException("Firm " + id + " not found"));
-        if (req.name() != null && !req.name().isBlank() && !req.name().equalsIgnoreCase(f.getName())) {
-            if (firms.existsByNameIgnoreCaseAndIdNot(req.name(), f.getId())) {
-                throw new BadRequestException("Firm name already in use");
-            }
-            f.setName(req.name());
+        UserPrincipal actor = currentPrincipal();
+        boolean isRoot = actor != null && actor.role() == Role.ROOT;
+        if (!isRoot) {
+            // Firm-level managers may only touch their own firm…
+            assertVisible(id);
         }
-        if (req.nzbn() != null) {
-            String nzbn = blankToNull(req.nzbn());
-            if (nzbn != null && firms.existsByNzbnIgnoreCaseAndIdNot(nzbn, f.getId())) {
-                throw new BadRequestException("NZBN/ABN already in use");
+        // …and the firm name, NZBN/ABN, and active flag are platform-admin-only (immutable here).
+        if (isRoot) {
+            if (req.name() != null && !req.name().isBlank() && !req.name().equalsIgnoreCase(f.getName())) {
+                if (firms.existsByNameIgnoreCaseAndIdNot(req.name(), f.getId())) {
+                    throw new BadRequestException("Firm name already in use");
+                }
+                f.setName(req.name());
             }
-            f.setNzbn(nzbn);
+            if (req.nzbn() != null) {
+                String nzbn = blankToNull(req.nzbn());
+                if (nzbn != null && firms.existsByNzbnIgnoreCaseAndIdNot(nzbn, f.getId())) {
+                    throw new BadRequestException("NZBN/ABN already in use");
+                }
+                f.setNzbn(nzbn);
+            }
+            if (req.active() != null) f.setActive(req.active());
         }
         if (req.liaisonName() != null) f.setLiaisonName(req.liaisonName());
         if (req.liaisonEmail() != null) f.setLiaisonEmail(req.liaisonEmail());
@@ -139,7 +149,6 @@ public class FirmService {
         if (req.seniorManagerEmail() != null) f.setSeniorManagerEmail(req.seniorManagerEmail());
         if (req.seniorManagerContactNumber() != null) f.setSeniorManagerContactNumber(req.seniorManagerContactNumber());
         if (req.numberOfBranches() != null) f.setNumberOfBranches(req.numberOfBranches());
-        if (req.active() != null) f.setActive(req.active());
         return f;
     }
 

@@ -15,6 +15,10 @@ export async function updateUser(id, payload) {
   return data;
 }
 
+export async function deleteUser(id) {
+  await apiClient.delete(`/users/${id}`);
+}
+
 export async function resetUserPassword(id, newPassword) {
   await apiClient.post(`/users/${id}/reset-password`, { newPassword });
 }
