@@ -3,16 +3,11 @@ package nz.amldock.user;
 import jakarta.validation.Valid;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
-import nz.amldock.email.EmailMessage;
-import nz.amldock.email.EmailService;
-import nz.amldock.email.WelcomeEmail;
 import nz.amldock.user.dto.ChangePasswordRequest;
 import nz.amldock.user.dto.CreateUserRequest;
 import nz.amldock.user.dto.ResetPasswordRequest;
 import nz.amldock.user.dto.UpdateUserRequest;
 import nz.amldock.user.dto.UserDto;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,19 +25,14 @@ import java.util.List;
 @RequestMapping("/api/users")
 public class UserController {
 
-    private static final Logger log = LoggerFactory.getLogger(UserController.class);
-
     private final UserService users;
     private final AuditService audit;
-    private final EmailService email;
-    private final WelcomeEmail welcomeEmail;
+    private final UserOnboarding onboarding;
 
-    public UserController(UserService users, AuditService audit,
-                          EmailService email, WelcomeEmail welcomeEmail) {
+    public UserController(UserService users, AuditService audit, UserOnboarding onboarding) {
         this.users = users;
         this.audit = audit;
-        this.email = email;
-        this.welcomeEmail = welcomeEmail;
+        this.onboarding = onboarding;
     }
 
     @GetMapping
@@ -64,40 +54,8 @@ public class UserController {
         User u = users.create(principal, req);
         audit.record(AuditAction.USER_CREATED, "User", u.getId(),
                 "Created user " + u.getEmail() + " with role " + u.getRole());
-        sendWelcomeEmail(u);
+        onboarding.sendWelcome(u);
         return UserDto.from(u);
-    }
-
-    /**
-     * Fire-and-forget: render the welcome email and hand it to the (async) EmailService.
-     * Audits success/failure on the async chain so the per-user trail stays complete even
-     * if SMTP is slow or down. Failures here must never propagate to the create response.
-     */
-    private void sendWelcomeEmail(User user) {
-        try {
-            EmailMessage message = welcomeEmail.render(user.getEmail(), user.getFullName(),
-                    user.getRole());
-            email.send(message).whenComplete((sent, ex) -> {
-                try {
-                    if (Boolean.TRUE.equals(sent)) {
-                        audit.record(AuditAction.USER_WELCOME_EMAIL_SENT, "User", user.getId(),
-                                "Welcome email sent to " + user.getEmail());
-                    } else {
-                        audit.record(AuditAction.USER_WELCOME_EMAIL_FAILED, "User", user.getId(),
-                                "Welcome email could not be delivered to " + user.getEmail());
-                    }
-                } catch (Exception auditEx) {
-                    log.warn("Could not write welcome-email audit for user {}: {}",
-                            user.getEmail(), auditEx.getMessage());
-                }
-            });
-        } catch (Exception e) {
-            log.warn("Failed to dispatch welcome email for user {}: {}", user.getEmail(), e.getMessage(), e);
-            try {
-                audit.record(AuditAction.USER_WELCOME_EMAIL_FAILED, "User", user.getId(),
-                        "Welcome email dispatch failed: " + e.getMessage());
-            } catch (Exception ignored) { /* never block create on audit */ }
-        }
     }
 
     @PatchMapping("/{id}")

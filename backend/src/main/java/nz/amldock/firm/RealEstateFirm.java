@@ -19,19 +19,29 @@ public class RealEstateFirm extends BaseEntity {
     @Column(nullable = false, unique = true)
     private String name;
 
-    @Column(name = "trading_name")
-    private String tradingName;
-
+    /** NZBN (NZ) or ABN (AU) — a free-form business number. */
     private String nzbn;
 
-    @Column(name = "head_office_address", columnDefinition = "text")
-    private String headOfficeAddress;
+    @Column(name = "liaison_name")
+    private String liaisonName;
 
-    @Column(name = "contact_email")
-    private String contactEmail;
+    @Column(name = "liaison_email")
+    private String liaisonEmail;
 
-    @Column(name = "contact_phone")
-    private String contactPhone;
+    @Column(name = "liaison_contact_number")
+    private String liaisonContactNumber;
+
+    @Column(name = "senior_manager_name")
+    private String seniorManagerName;
+
+    @Column(name = "senior_manager_email")
+    private String seniorManagerEmail;
+
+    @Column(name = "senior_manager_contact_number")
+    private String seniorManagerContactNumber;
+
+    @Column(name = "number_of_branches")
+    private Integer numberOfBranches;
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
@@ -39,16 +49,22 @@ public class RealEstateFirm extends BaseEntity {
     public Long getId() { return id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
-    public String getTradingName() { return tradingName; }
-    public void setTradingName(String tradingName) { this.tradingName = tradingName; }
     public String getNzbn() { return nzbn; }
     public void setNzbn(String nzbn) { this.nzbn = nzbn; }
-    public String getHeadOfficeAddress() { return headOfficeAddress; }
-    public void setHeadOfficeAddress(String headOfficeAddress) { this.headOfficeAddress = headOfficeAddress; }
-    public String getContactEmail() { return contactEmail; }
-    public void setContactEmail(String contactEmail) { this.contactEmail = contactEmail; }
-    public String getContactPhone() { return contactPhone; }
-    public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
+    public String getLiaisonName() { return liaisonName; }
+    public void setLiaisonName(String liaisonName) { this.liaisonName = liaisonName; }
+    public String getLiaisonEmail() { return liaisonEmail; }
+    public void setLiaisonEmail(String liaisonEmail) { this.liaisonEmail = liaisonEmail; }
+    public String getLiaisonContactNumber() { return liaisonContactNumber; }
+    public void setLiaisonContactNumber(String liaisonContactNumber) { this.liaisonContactNumber = liaisonContactNumber; }
+    public String getSeniorManagerName() { return seniorManagerName; }
+    public void setSeniorManagerName(String seniorManagerName) { this.seniorManagerName = seniorManagerName; }
+    public String getSeniorManagerEmail() { return seniorManagerEmail; }
+    public void setSeniorManagerEmail(String seniorManagerEmail) { this.seniorManagerEmail = seniorManagerEmail; }
+    public String getSeniorManagerContactNumber() { return seniorManagerContactNumber; }
+    public void setSeniorManagerContactNumber(String seniorManagerContactNumber) { this.seniorManagerContactNumber = seniorManagerContactNumber; }
+    public Integer getNumberOfBranches() { return numberOfBranches; }
+    public void setNumberOfBranches(Integer numberOfBranches) { this.numberOfBranches = numberOfBranches; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
 }

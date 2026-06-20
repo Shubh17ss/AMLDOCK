@@ -6,7 +6,11 @@ import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.firm.dto.CreateFirmRequest;
 import nz.amldock.firm.dto.UpdateFirmRequest;
 import nz.amldock.user.Role;
+import nz.amldock.user.User;
+import nz.amldock.user.UserOnboarding;
 import nz.amldock.user.UserPrincipal;
+import nz.amldock.user.UserService;
+import nz.amldock.user.dto.CreateUserRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,10 +20,22 @@ import java.util.List;
 @Service
 public class FirmService {
 
-    private final RealEstateFirmRepository firms;
+    /** Guard rail so a typo'd branch count can't spawn an unbounded number of rows. */
+    private static final int MAX_AUTO_BRANCHES = 100;
 
-    public FirmService(RealEstateFirmRepository firms) {
+    private final RealEstateFirmRepository firms;
+    private final FirmBranchRepository branches;
+    private final UserService userService;
+    private final UserOnboarding onboarding;
+
+    public FirmService(RealEstateFirmRepository firms,
+                       FirmBranchRepository branches,
+                       UserService userService,
+                       UserOnboarding onboarding) {
         this.firms = firms;
+        this.branches = branches;
+        this.userService = userService;
+        this.onboarding = onboarding;
     }
 
     @Transactional(readOnly = true)
@@ -42,6 +58,12 @@ public class FirmService {
         return f;
     }
 
+    /**
+     * Onboard a firm in one step: create the firm record, pre-create the requested number of
+     * placeholder branches, and provision a SENIOR_MANAGER login for the firm (passwordless, gets
+     * an OTP welcome email). All in one transaction — if any part fails (e.g. the senior-manager
+     * email is already in use) the whole onboarding rolls back.
+     */
     @Transactional
     public RealEstateFirm create(CreateFirmRequest req) {
         if (firms.existsByNameIgnoreCase(req.name())) {
@@ -49,13 +71,40 @@ public class FirmService {
         }
         RealEstateFirm f = new RealEstateFirm();
         f.setName(req.name());
-        f.setTradingName(req.tradingName());
         f.setNzbn(req.nzbn());
-        f.setHeadOfficeAddress(req.headOfficeAddress());
-        f.setContactEmail(req.contactEmail());
-        f.setContactPhone(req.contactPhone());
+        f.setLiaisonName(req.liaisonName());
+        f.setLiaisonEmail(req.liaisonEmail());
+        f.setLiaisonContactNumber(req.liaisonContactNumber());
+        f.setSeniorManagerName(req.seniorManagerName());
+        f.setSeniorManagerEmail(req.seniorManagerEmail());
+        f.setSeniorManagerContactNumber(req.seniorManagerContactNumber());
+        f.setNumberOfBranches(req.numberOfBranches());
         f.setActive(true);
-        return firms.save(f);
+        RealEstateFirm saved = firms.save(f);
+
+        createPlaceholderBranches(saved.getId(), req.numberOfBranches());
+        provisionSeniorManager(saved.getId(), req.seniorManagerName(), req.seniorManagerEmail());
+        return saved;
+    }
+
+    private void createPlaceholderBranches(Long firmId, Integer count) {
+        int n = count == null ? 0 : Math.min(Math.max(count, 0), MAX_AUTO_BRANCHES);
+        for (int i = 1; i <= n; i++) {
+            FirmBranch b = new FirmBranch();
+            b.setRealEstateFirmId(firmId);
+            b.setName("Branch " + i);
+            b.setActive(true);
+            branches.save(b);
+        }
+    }
+
+    private void provisionSeniorManager(Long firmId, String name, String email) {
+        // The actor is ROOT (firm creation is ROOT-only); UserService enforces that ROOT may
+        // create a SENIOR_MANAGER and validates firm linkage. Name falls back to the email.
+        String fullName = (name == null || name.isBlank()) ? email : name;
+        CreateUserRequest smReq = new CreateUserRequest(email, fullName, Role.SENIOR_MANAGER, firmId, null);
+        User sm = userService.create(currentPrincipal(), smReq);
+        onboarding.sendWelcome(sm);
     }
 
     @Transactional
@@ -68,11 +117,14 @@ public class FirmService {
             }
             f.setName(req.name());
         }
-        if (req.tradingName() != null) f.setTradingName(req.tradingName());
         if (req.nzbn() != null) f.setNzbn(req.nzbn());
-        if (req.headOfficeAddress() != null) f.setHeadOfficeAddress(req.headOfficeAddress());
-        if (req.contactEmail() != null) f.setContactEmail(req.contactEmail());
-        if (req.contactPhone() != null) f.setContactPhone(req.contactPhone());
+        if (req.liaisonName() != null) f.setLiaisonName(req.liaisonName());
+        if (req.liaisonEmail() != null) f.setLiaisonEmail(req.liaisonEmail());
+        if (req.liaisonContactNumber() != null) f.setLiaisonContactNumber(req.liaisonContactNumber());
+        if (req.seniorManagerName() != null) f.setSeniorManagerName(req.seniorManagerName());
+        if (req.seniorManagerEmail() != null) f.setSeniorManagerEmail(req.seniorManagerEmail());
+        if (req.seniorManagerContactNumber() != null) f.setSeniorManagerContactNumber(req.seniorManagerContactNumber());
+        if (req.numberOfBranches() != null) f.setNumberOfBranches(req.numberOfBranches());
         if (req.active() != null) f.setActive(req.active());
         return f;
     }

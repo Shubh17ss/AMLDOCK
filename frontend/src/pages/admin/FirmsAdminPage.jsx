@@ -43,10 +43,7 @@ export function FirmsAdminPage() {
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
                 <Typography variant="h6">{firm.name}</Typography>
-                {firm.tradingName && (
-                  <Typography variant="body2" color="text.secondary">({firm.tradingName})</Typography>
-                )}
-                {firm.nzbn && <Chip size="small" label={`NZBN ${firm.nzbn}`} />}
+                {firm.nzbn && <Chip size="small" label={`NZBN/ABN ${firm.nzbn}`} />}
                 <Box sx={{ flexGrow: 1 }} />
                 <Stack direction="row" spacing={1} alignItems="center" onClick={(e) => e.stopPropagation()}>
                   <Typography variant="body2">Active</Typography>
@@ -153,7 +150,10 @@ function FirmBranchesPanel({ firm }) {
 }
 
 const EMPTY_FIRM = {
-  name: '', tradingName: '', nzbn: '', headOfficeAddress: '', contactEmail: '', contactPhone: '',
+  name: '', nzbn: '',
+  liaisonName: '', liaisonEmail: '', liaisonContactNumber: '',
+  seniorManagerName: '', seniorManagerEmail: '', seniorManagerContactNumber: '',
+  numberOfBranches: '',
 };
 
 function CreateFirmDialog({ open, onClose }) {
@@ -161,7 +161,10 @@ function CreateFirmDialog({ open, onClose }) {
   const [form, setForm] = useState(EMPTY_FIRM);
   const [error, setError] = useState(null);
   const mut = useMutation({
-    mutationFn: () => createFirm({ ...form }),
+    mutationFn: () => createFirm({
+      ...form,
+      numberOfBranches: form.numberOfBranches === '' ? null : Number(form.numberOfBranches),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['firms'] });
       setForm(EMPTY_FIRM);
@@ -172,25 +175,44 @@ function CreateFirmDialog({ open, onClose }) {
   });
   const submit = (e) => { e.preventDefault(); mut.mutate(); };
   const ch = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submittable = form.name && form.liaisonEmail && form.seniorManagerEmail;
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <Box component="form" onSubmit={submit}>
         <DialogTitle>New real-estate firm</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="Name" value={form.name} onChange={ch('name')} required />
-            <TextField label="Trading name" value={form.tradingName} onChange={ch('tradingName')} />
-            <TextField label="NZBN" value={form.nzbn} onChange={ch('nzbn')} />
-            <TextField label="Head office address" value={form.headOfficeAddress}
-                       onChange={ch('headOfficeAddress')} multiline minRows={2} />
-            <TextField label="Contact email" type="email" value={form.contactEmail} onChange={ch('contactEmail')} />
-            <TextField label="Contact phone" value={form.contactPhone} onChange={ch('contactPhone')} />
+            <TextField label="Firm name" value={form.name} onChange={ch('name')} required />
+            <TextField label="NZBN/ABN" value={form.nzbn} onChange={ch('nzbn')} />
+
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Liaison</Typography>
+            <TextField label="Liaison name" value={form.liaisonName} onChange={ch('liaisonName')} />
+            <TextField label="Liaison email" type="email" value={form.liaisonEmail}
+                       onChange={ch('liaisonEmail')} required />
+            <TextField label="Liaison contact number" value={form.liaisonContactNumber}
+                       onChange={ch('liaisonContactNumber')} />
+
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Senior manager</Typography>
+            <TextField label="Senior manager name" value={form.seniorManagerName}
+                       onChange={ch('seniorManagerName')} />
+            <TextField label="Senior manager email" type="email" value={form.seniorManagerEmail}
+                       onChange={ch('seniorManagerEmail')} required
+                       helperText="A passwordless SENIOR_MANAGER login is created with this email." />
+            <TextField label="Senior manager contact number" value={form.seniorManagerContactNumber}
+                       onChange={ch('seniorManagerContactNumber')} />
+
+            <TextField label="Number of branches" type="number" value={form.numberOfBranches}
+                       onChange={ch('numberOfBranches')} inputProps={{ min: 0, max: 100 }}
+                       helperText="Creates this many placeholder branches (Branch 1…N) to rename later." />
+
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained" disabled={mut.isPending}>
+          <Button type="submit" variant="contained" disabled={mut.isPending || !submittable}>
             {mut.isPending ? 'Creating…' : 'Create'}
           </Button>
         </DialogActions>
