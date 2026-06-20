@@ -1,54 +1,13 @@
 import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import DescriptionIcon from '@mui/icons-material/Description';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import InboxIcon from '@mui/icons-material/Inbox';
-import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
-import BusinessIcon from '@mui/icons-material/Business';
-import PeopleIcon from '@mui/icons-material/People';
-import HistoryIcon from '@mui/icons-material/History';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { navProfileFor } from '../auth/roles.js';
+import { navConfigFor, DASHBOARD_PATH } from '../navigation/navConfig.jsx';
 
 const NEU_ACCENT  = '#6C63FF';
 const NEU_FG      = '#3D4852';
 const NEU_MUTED   = '#6B7280';
 const EXT_SM      = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
 const INSET_SM    = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
-
-function navConfigFor(role) {
-  switch (navProfileFor(role)) {
-    case 'agent':
-      return [
-        { label: 'Dashboard', to: '/app',      icon: <DashboardIcon /> },
-        { label: 'My deals',  to: '/my-deals', icon: <DescriptionIcon /> },
-        { label: 'New deal',  to: '/deals/new', icon: <AddCircleOutlineIcon /> },
-      ];
-    case 'salesManager':
-      return [
-        { label: 'Dashboard',   to: '/app',           icon: <DashboardIcon /> },
-        { label: 'Branch deals', to: '/firm/deals',   icon: <BusinessCenterIcon /> },
-        { label: 'Users',       to: '/branch-users',  icon: <PeopleIcon />, group: 'Admin' },
-      ];
-    case 'firmReviewer':
-      return [
-        { label: 'Dashboard', to: '/app',          icon: <DashboardIcon /> },
-        { label: 'Queue',     to: '/queue',         icon: <InboxIcon /> },
-        { label: 'My firm',   to: '/my-firm',       icon: <BusinessIcon />,  group: 'Admin' },
-      ];
-    case 'root':
-      return [
-        { label: 'Dashboard', to: '/app',          icon: <DashboardIcon /> },
-        { label: 'Queue',     to: '/queue',         icon: <InboxIcon /> },
-        { label: 'Firms',     to: '/admin/firms',   icon: <BusinessIcon />,  group: 'Admin' },
-        { label: 'Users',     to: '/admin/users',   icon: <PeopleIcon />,    group: 'Admin' },
-        { label: 'Audit',     to: '/admin/audit',   icon: <HistoryIcon />,   group: 'Admin' },
-      ];
-    default:
-      return [{ label: 'Dashboard', to: '/app', icon: <DashboardIcon /> }];
-  }
-}
 
 export function SidebarNav() {
   const { user } = useAuth();
@@ -88,7 +47,7 @@ function NavList({ items, pathname, sx }) {
       {items.map((item) => {
         const active =
           pathname === item.to ||
-          (item.to !== '/app' && pathname.startsWith(item.to + '/'));
+          (item.to !== DASHBOARD_PATH && pathname.startsWith(item.to + '/'));
         return (
           <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton

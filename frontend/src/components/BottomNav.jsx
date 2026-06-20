@@ -13,30 +13,30 @@ const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px 
 function navItemsFor(role) {
   switch (navProfileFor(role)) {
     case 'agent': return [
-      { label: 'Home',     to: '/app',       Icon: HomeIcon },
+      { label: 'Home',     to: '/dashboard', Icon: HomeIcon },
       { label: 'My Deals', to: '/my-deals',  Icon: DealsIcon },
       { label: 'New',      to: '/deals/new', Icon: PlusIcon,  accent: true },
       { label: 'Profile',  to: '/profile',   Icon: ProfileIcon },
     ];
     case 'salesManager': return [
-      { label: 'Home',   to: '/app',          Icon: HomeIcon },
+      { label: 'Home',   to: '/dashboard',    Icon: HomeIcon },
       { label: 'Deals',  to: '/firm/deals',   Icon: DealsIcon },
       { label: 'Users',  to: '/branch-users', Icon: ProfileIcon },
       { label: 'Profile',to: '/profile',      Icon: ProfileIcon },
     ];
     case 'firmReviewer': return [
-      { label: 'Home',    to: '/app',     Icon: HomeIcon },
+      { label: 'Home',    to: '/dashboard', Icon: HomeIcon },
       { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
       { label: 'Firm',    to: '/my-firm', Icon: DealsIcon },
       { label: 'Profile', to: '/profile', Icon: ProfileIcon },
     ];
     case 'root': return [
-      { label: 'Home',    to: '/app',     Icon: HomeIcon },
+      { label: 'Home',    to: '/dashboard', Icon: HomeIcon },
       { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
       { label: 'Profile', to: '/profile', Icon: ProfileIcon },
     ];
     default: return [
-      { label: 'Home',    to: '/app',     Icon: HomeIcon },
+      { label: 'Home',    to: '/dashboard', Icon: HomeIcon },
       { label: 'Profile', to: '/profile', Icon: ProfileIcon },
     ];
   }

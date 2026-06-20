@@ -14,6 +14,7 @@ import {
   DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
+import { DashboardPage } from '../pages/DashboardPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
 import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
@@ -36,6 +37,7 @@ export function AppRoutes() {
 
       <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
         <Route path="/app" element={<HomeRedirect />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
 
         <Route path="/my-deals" element={
