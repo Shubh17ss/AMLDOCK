@@ -12,6 +12,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import dayjs from 'dayjs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, searchAudit } from '../../api/audit.js';
 import { AuditActionChip } from '../../components/AuditActionChip.jsx';
+import { PageHeader } from '../../components/PageHeader.jsx';
 
 const DEFAULT_FILTERS = {
   action: '',
@@ -46,15 +47,18 @@ export function AuditAdminPage() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h4">Audit log</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button onClick={reset}>Reset filters</Button>
-          <Tooltip title="Refresh">
-            <IconButton onClick={() => q.refetch()}><RefreshIcon /></IconButton>
-          </Tooltip>
-        </Stack>
-      </Stack>
+      <PageHeader
+        eyebrow={`${q.data?.totalElements ?? 0} events · platform trail`}
+        title="Audit log"
+        actions={
+          <>
+            <Button onClick={reset}>Reset filters</Button>
+            <Tooltip title="Refresh">
+              <IconButton onClick={() => q.refetch()}><RefreshIcon /></IconButton>
+            </Tooltip>
+          </>
+        }
+      />
 
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>

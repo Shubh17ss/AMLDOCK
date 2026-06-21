@@ -3,6 +3,7 @@ import { Alert, Box, Button, Card, CardContent, Divider, Stack, TextField, Typog
 import { useAuth } from '../auth/AuthContext.jsx';
 import { roleLabel } from '../auth/roles.js';
 import { changePassword } from '../api/auth.js';
+import { PageHeader } from '../components/PageHeader.jsx';
 
 export function ProfilePage() {
   const { user } = useAuth();
@@ -29,7 +30,7 @@ export function ProfilePage() {
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h4">Profile</Typography>
+      <PageHeader eyebrow={roleLabel(user?.role)} title="Profile" />
       <Card>
         <CardContent>
           <Stack spacing={1}>

@@ -2,13 +2,11 @@ import { Box, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { navProfileFor } from '../auth/roles.js';
+import { tokens, shadows } from '../theme/theme.js';
 
-const NEU_BASE   = '#E0E5EC';
-const NEU_ACCENT = '#6C63FF';
-const NEU_MUTED  = '#6B7280';
-const EXT_SM     = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
-const EXT        = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)';
-const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+const NEU_BASE   = tokens.tile;
+const NEU_ACCENT = tokens.blue;
+const NEU_MUTED  = tokens.muted;
 
 function navItemsFor(role) {
   switch (navProfileFor(role)) {
@@ -62,8 +60,10 @@ export function BottomNav() {
         left: 0,
         right: 0,
         zIndex: 1200,
-        backgroundColor: NEU_BASE,
-        boxShadow: '0 -6px 20px rgb(163,177,198,0.5), 0 1px 0 rgba(255,255,255,0.9)',
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        backdropFilter: 'saturate(180%) blur(12px)',
+        borderTop: `1px solid ${tokens.hairline}`,
+        boxShadow: '0 -2px 14px rgba(16,24,40,0.06)',
         px: 1,
         pt: 1,
         pb: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
@@ -97,12 +97,10 @@ export function BottomNav() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: active
-                  ? INSET_SM
-                  : EXT,
+                boxShadow: shadows.md,
                 transition: 'box-shadow 0.2s ease, transform 0.2s ease',
                 transform: 'translateY(-10px)',
-                '&:active': { boxShadow: INSET_SM, transform: 'translateY(-8px)' },
+                '&:active': { transform: 'translateY(-8px)' },
               }}>
                 <item.Icon color="#fff" size={22} />
               </Box>
@@ -139,13 +137,11 @@ export function BottomNav() {
               width: 44,
               height: 44,
               borderRadius: 2.5,
-              backgroundColor: NEU_BASE,
+              backgroundColor: active ? tokens.blueWash : 'transparent',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: active ? INSET_SM : 'none',
-              transition: 'box-shadow 0.2s ease',
-              '&:active': { boxShadow: INSET_SM },
+              transition: 'background-color 0.2s ease',
             }}>
               <item.Icon
                 color={active ? NEU_ACCENT : NEU_MUTED}

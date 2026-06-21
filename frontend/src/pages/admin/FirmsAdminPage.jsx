@@ -7,6 +7,8 @@ import {
   TableRow, TextField, Typography,
 } from '@mui/material';
 import { createFirm, listFirms, updateFirm } from '../../api/firms.js';
+import { PageHeader } from '../../components/PageHeader.jsx';
+import AddBusinessIcon from '@mui/icons-material/AddBusiness';
 
 export function FirmsAdminPage() {
   const qc = useQueryClient();
@@ -21,10 +23,15 @@ export function FirmsAdminPage() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h4">Real-estate firms</Typography>
-        <Button variant="contained" onClick={() => setCreateOpen(true)}>New firm</Button>
-      </Stack>
+      <PageHeader
+        eyebrow={`${firmsQ.data?.length ?? 0} firms · ${(firmsQ.data ?? []).filter((f) => f.active).length} active`}
+        title="Real-estate firms"
+        actions={
+          <Button variant="contained" startIcon={<AddBusinessIcon />} onClick={() => setCreateOpen(true)}>
+            New firm
+          </Button>
+        }
+      />
 
       {firmsQ.isError && <Alert severity="error">Failed to load firms.</Alert>}
       {firmsQ.data?.length === 0 && (

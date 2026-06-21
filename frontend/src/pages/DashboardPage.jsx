@@ -1,57 +1,52 @@
-import { cloneElement } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Box, Card, CardActionArea, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { getFirm } from '../api/firms.js';
-import { navConfigFor, DASHBOARD_PATH } from '../navigation/navConfig.jsx';
+import { navProfileFor, roleLabel } from '../auth/roles.js';
+import { AgentDashboard } from './dashboard/AgentDashboard.jsx';
+import { BranchDashboard } from './dashboard/BranchDashboard.jsx';
+import { ReviewerDashboard } from './dashboard/ReviewerDashboard.jsx';
+import { RootDashboard } from './dashboard/RootDashboard.jsx';
+import { tokens, fonts } from '../theme/theme.js';
 
-const NEU_ACCENT = '#6C63FF';
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
 
-/** Landing hub: clickable tiles for each of the user's other menu options. */
+const stamp = () =>
+  new Date().toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    .toUpperCase();
+
+/** Role-aware bento dashboard. The launcher tiles are gone — each role gets a command center. */
 export function DashboardPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const firmId = user?.realEstateFirmId;
-  const firmQ = useQuery({
-    queryKey: ['firm', firmId],
-    queryFn: () => getFirm(firmId),
-    enabled: Boolean(firmId),
-  });
-  const tiles = navConfigFor(user?.role)
-    .filter((item) => item.to !== DASHBOARD_PATH)
-    .map((item) => (item.to === '/my-firm' && firmQ.data?.name
-      ? { ...item, label: firmQ.data.name }
-      : item));
+  const firstName = (user?.fullName || '').trim().split(/\s+/)[0] || null;
+
+  const Dashboard = {
+    agent: AgentDashboard,
+    salesManager: BranchDashboard,
+    firmReviewer: ReviewerDashboard,
+    root: RootDashboard,
+  }[navProfileFor(user?.role)] ?? AgentDashboard;
 
   return (
-    <Stack spacing={3}>
-      <Box>
-        <Typography variant="h4">Dashboard</Typography>
-        <Typography variant="body2" color="text.secondary">
-          {user?.fullName ? `Welcome, ${user.fullName}.` : 'Welcome.'} Choose where to go.
-        </Typography>
+    <Stack spacing={{ xs: 2.5, md: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+        <Box>
+          <Typography sx={{
+            fontFamily: fonts.mono, fontSize: '0.68rem', letterSpacing: '0.16em',
+            color: tokens.muted, textTransform: 'uppercase', mb: 0.75,
+          }}>
+            {stamp()} . {roleLabel(user?.role)}
+          </Typography>
+          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.03em', color: tokens.ink }}>
+            {greeting()}{firstName ? `, ${firstName}` : ''}.
+          </Typography>
+        </Box>
       </Box>
 
-      <Box sx={{
-        display: 'grid',
-        gap: 2,
-        gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' },
-      }}>
-        {tiles.map((item) => (
-          <Card key={item.to} variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardActionArea onClick={() => navigate(item.to)} sx={{ height: '100%' }}>
-              <Stack spacing={1.5} alignItems="center" justifyContent="center"
-                     sx={{ py: 4, px: 2, textAlign: 'center' }}>
-                <Box sx={{ color: NEU_ACCENT, display: 'flex' }}>
-                  {cloneElement(item.icon, { sx: { fontSize: 44 } })}
-                </Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{item.label}</Typography>
-              </Stack>
-            </CardActionArea>
-          </Card>
-        ))}
-      </Box>
+      <Dashboard />
     </Stack>
   );
 }

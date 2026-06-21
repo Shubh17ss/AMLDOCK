@@ -2,8 +2,10 @@ import { Box, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContai
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
+import { fonts } from '../theme/theme.js';
+import { formatNZD, timeAgo } from '../utils/formatters.js';
 
-const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
+const mono = { fontFamily: fonts.mono, fontSize: '0.8rem' };
 
 export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No deals yet.' }) {
   const navigate = useNavigate();
@@ -37,16 +39,16 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
         <TableBody>
           {deals.map((d) => (
             <TableRow key={d.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/deals/${d.id}`)}>
-              <TableCell>{d.reference ?? `#${d.id}`}</TableCell>
+              <TableCell sx={mono}>{d.reference ?? `#${d.id}`}</TableCell>
               <TableCell><DealStatusChip status={d.status} /></TableCell>
               <TableCell>{d.transactionType}</TableCell>
-              <TableCell>{d.transactionValueNzd != null ? NZD.format(d.transactionValueNzd) : '—'}</TableCell>
+              <TableCell sx={mono}>{formatNZD(d.transactionValueNzd)}</TableCell>
               {showFirm && <TableCell>{d.firmName ?? '—'}</TableCell>}
               <TableCell>{d.branchName ?? '—'}</TableCell>
               <TableCell>{d.clientDisplayName ?? '—'}</TableCell>
               <TableCell>{d.propertyAddress ?? '—'}</TableCell>
               <TableCell>{d.createdByEmail ?? '—'}</TableCell>
-              <TableCell>{d.updatedAt ? new Date(d.updatedAt).toLocaleString() : '—'}</TableCell>
+              <TableCell sx={{ color: 'text.secondary' }}>{timeAgo(d.updatedAt)}</TableCell>
               <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                 <Tooltip title="Open">
                   <IconButton size="small" onClick={() => navigate(`/deals/${d.id}`)}>

@@ -1,20 +1,45 @@
 import { createTheme } from '@mui/material';
 
-// ── Neumorphic design tokens ─────────────────────────────────────────────────
-const NEU_BASE   = '#E0E5EC';
-const NEU_FG     = '#3D4852';
-const NEU_MUTED  = '#6B7280';
-const NEU_ACCENT = '#6C63FF';
-const NEU_TEAL   = '#38B2AC';
+// ── "Clearance" design tokens — Apple-flat, white canvas / blue primary / ink ──
+// Replaces the previous purple neumorphic system. White surfaces, soft single-source
+// shadows, 1px hairlines, a confident blue primary, near-black ink, and FK Grotesk
+// (display + mono "ledger" voice). Tokens are re-exported for components that need them.
+export const tokens = {
+  canvas:    '#FFFFFF',
+  tile:      '#FFFFFF',
+  hairline:  '#E7ECF3',
+  hairline2: '#D7DEEA',
+  ink:       '#111111',
+  muted:     '#5A6576',
+  blue:      '#1B5FE3',
+  blueDark:  '#1648B0',
+  blueWash:  '#EAF1FE',
+  // Deal-status semantics (used only where a status is actually shown).
+  draft:     '#64748B',
+  submitted: '#1B5FE3',
+  review:    '#B45309',
+  approved:  '#15803D',
+  rejected:  '#DC2626',
+};
 
-const EXT      = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)';
-const EXT_H    = '12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6)';
-const EXT_SM   = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
-const INSET    = 'inset 6px 6px 10px rgb(163,177,198,0.6), inset -6px -6px 10px rgba(255,255,255,0.5)';
-const INSET_D  = 'inset 10px 10px 20px rgb(163,177,198,0.7), inset -10px -10px 20px rgba(255,255,255,0.6)';
-const INSET_SM = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+const T = tokens;
 
-// Legacy palette tokens — kept so components that import { palette } still compile.
+// Apple-style soft elevation (single light source — no neumorphic dual shadow).
+export const shadows = {
+  sm:   '0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10)',
+  md:   '0 1px 3px rgba(16,24,40,0.07), 0 8px 24px rgba(16,24,40,0.09)',
+  lg:   '0 4px 10px rgba(16,24,40,0.09), 0 20px 48px rgba(16,24,40,0.15)',
+  focus:'0 0 0 3px rgba(27,95,227,0.22)',
+};
+
+// Typography roles.
+export const fonts = {
+  display: '"FK Grotesk Trial", "Plus Jakarta Sans", system-ui, sans-serif',
+  body:    '"DM Sans", system-ui, -apple-system, sans-serif',
+  mono:    '"FK Grotesk Mono Trial", ui-monospace, "SFMono-Regular", monospace',
+};
+
+// Legacy palette tokens — kept so components that still import { palette } compile.
 const trust = {
   50: '#f3f7fb', 100: '#e1ecf6', 200: '#bfd6ea', 300: '#94b8d8',
   400: '#5e8fbe', 500: '#1f4b7a', 600: '#173a61', 700: '#102d4c',
@@ -28,45 +53,52 @@ const ink = {
 export const theme = createTheme({
   palette: {
     mode: 'light',
-    primary:    { main: NEU_ACCENT, dark: '#5952cc', light: '#8B84FF', contrastText: '#fff' },
-    secondary:  { main: NEU_TEAL,   dark: '#2c8f8a', light: '#6fcfcb', contrastText: '#fff' },
-    background: { default: NEU_BASE, paper: NEU_BASE },
-    text:       { primary: NEU_FG, secondary: NEU_MUTED },
-    divider:    'rgba(163,177,198,0.4)',
-    error:      { main: '#EF4444', contrastText: '#fff' },
-    warning:    { main: '#F59E0B', contrastText: '#fff' },
-    success:    { main: NEU_TEAL,  contrastText: '#fff' },
-    info:       { main: NEU_ACCENT, contrastText: '#fff' },
+    primary:    { main: T.blue, dark: T.blueDark, light: '#4F86F0', contrastText: '#fff' },
+    secondary:  { main: T.ink, dark: '#111111', light: '#39414F', contrastText: '#fff' },
+    background: { default: T.canvas, paper: T.tile },
+    text:       { primary: T.ink, secondary: T.muted },
+    divider:    T.hairline,
+    error:      { main: T.rejected, contrastText: '#fff' },
+    warning:    { main: T.review, contrastText: '#fff' },
+    success:    { main: T.approved, contrastText: '#fff' },
+    info:       { main: T.blue, contrastText: '#fff' },
   },
 
-  shape: { borderRadius: 16 },
+  shape: { borderRadius: 12 },
 
   typography: {
-    fontFamily: '"DM Sans", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif',
-    h1: { fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontWeight: 800, letterSpacing: '-0.02em' },
-    h2: { fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontWeight: 800, letterSpacing: '-0.02em' },
-    h3: { fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontWeight: 700, letterSpacing: '-0.01em' },
-    h4: { fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontWeight: 700, letterSpacing: '-0.01em' },
-    h5: { fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontWeight: 700, letterSpacing: '-0.01em' },
-    h6: { fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontWeight: 600 },
+    fontFamily: fonts.body,
+    h1: { fontFamily: fonts.display, fontWeight: 800, letterSpacing: '-0.025em' },
+    h2: { fontFamily: fonts.display, fontWeight: 800, letterSpacing: '-0.025em' },
+    h3: { fontFamily: fonts.display, fontWeight: 700, letterSpacing: '-0.02em' },
+    h4: { fontFamily: fonts.display, fontWeight: 700, letterSpacing: '-0.02em' },
+    h5: { fontFamily: fonts.display, fontWeight: 700, letterSpacing: '-0.015em' },
+    h6: { fontFamily: fonts.display, fontWeight: 700, letterSpacing: '-0.01em' },
     subtitle1: { fontWeight: 600 },
-    body1: { color: NEU_FG },
-    body2: { color: NEU_MUTED },
-    caption: { color: NEU_MUTED },
+    body1: { color: T.ink },
+    body2: { color: T.muted },
+    caption: { color: T.muted },
     button: { textTransform: 'none', fontWeight: 600, letterSpacing: 0 },
   },
 
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: { backgroundColor: T.canvas, color: T.ink },
+        '*::selection': { backgroundColor: T.blueWash },
+      },
+    },
+
     // ── Paper / Card ──────────────────────────────────────────────────────────
     MuiPaper: {
       defaultProps: { elevation: 0 },
       styleOverrides: {
         root: {
-          backgroundColor: NEU_BASE,
+          backgroundColor: T.tile,
           backgroundImage: 'none',
-          boxShadow: EXT,
-          border: 'none',
-          borderRadius: 24,
+          boxShadow: shadows.md,
+          border: `1px solid ${T.hairline}`,
+          borderRadius: 18,
         },
       },
     },
@@ -74,19 +106,17 @@ export const theme = createTheme({
       defaultProps: { variant: 'elevation' },
       styleOverrides: {
         root: {
-          backgroundColor: NEU_BASE,
+          backgroundColor: T.tile,
           backgroundImage: 'none',
-          boxShadow: EXT,
-          border: 'none',
-          borderRadius: 28,
-          transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+          boxShadow: shadows.md,
+          border: `1px solid ${T.hairline}`,
+          borderRadius: 20,
+          transition: 'box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease',
         },
       },
     },
     MuiCardContent: {
-      styleOverrides: {
-        root: { padding: 24, '&:last-child': { paddingBottom: 24 } },
-      },
+      styleOverrides: { root: { padding: 24, '&:last-child': { paddingBottom: 24 } } },
     },
 
     // ── App bar ───────────────────────────────────────────────────────────────
@@ -94,11 +124,12 @@ export const theme = createTheme({
       defaultProps: { elevation: 0, color: 'inherit' },
       styleOverrides: {
         root: {
-          backgroundColor: NEU_BASE,
+          backgroundColor: 'rgba(255,255,255,0.85)',
+          backdropFilter: 'saturate(180%) blur(12px)',
           backgroundImage: 'none',
-          boxShadow: '0 6px 16px rgb(163,177,198,0.45), 0 -1px 0 rgba(255,255,255,0.9)',
-          border: 'none',
-          color: NEU_FG,
+          boxShadow: 'none',
+          borderBottom: `1px solid ${T.hairline}`,
+          color: T.ink,
         },
       },
     },
@@ -110,10 +141,11 @@ export const theme = createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: NEU_BASE,
+          backgroundColor: T.tile,
           backgroundImage: 'none',
-          border: 'none',
-          boxShadow: '6px 0 20px rgb(163,177,198,0.5), -1px 0 0 rgba(255,255,255,0.9)',
+          borderRight: `1px solid ${T.hairline}`,
+          boxShadow: 'none',
+          borderRadius: 0,
         },
       },
     },
@@ -123,57 +155,48 @@ export const theme = createTheme({
       defaultProps: { disableElevation: true },
       styleOverrides: {
         root: {
-          borderRadius: 16,
+          borderRadius: 12,
           paddingInline: 16,
           paddingBlock: 8,
-          boxShadow: EXT_SM,
-          backgroundColor: NEU_BASE,
-          transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-          '&:hover': { boxShadow: EXT_H, transform: 'translateY(-1px)', backgroundColor: NEU_BASE },
-          '&:active': { boxShadow: INSET_SM, transform: 'translateY(0.5px)' },
-          '&.Mui-disabled': { boxShadow: INSET_SM, color: NEU_MUTED, backgroundColor: NEU_BASE, opacity: 0.6 },
+          boxShadow: 'none',
+          transition: 'background-color 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease',
+          '&:active': { transform: 'translateY(0.5px)' },
+          '&.Mui-focusVisible': { boxShadow: shadows.focus },
         },
         containedPrimary: {
-          backgroundColor: NEU_ACCENT,
+          backgroundColor: T.blue,
           color: '#fff',
-          boxShadow: EXT_SM,
-          '&:hover': { backgroundColor: '#5952cc', boxShadow: EXT_H, transform: 'translateY(-1px)' },
-          '&:active': {
-            backgroundColor: NEU_ACCENT,
-            boxShadow: 'inset 4px 4px 8px rgba(73,65,204,0.4), inset -4px -4px 8px rgba(255,255,255,0.15)',
-            transform: 'translateY(0.5px)',
-          },
-          '&.Mui-disabled': { backgroundColor: NEU_BASE },
+          boxShadow: shadows.sm,
+          '&:hover': { backgroundColor: T.blueDark, boxShadow: shadows.md },
+          '&.Mui-disabled': { backgroundColor: '#C5D2EC', color: '#fff' },
         },
         containedSecondary: {
-          backgroundColor: NEU_TEAL,
+          backgroundColor: T.ink,
           color: '#fff',
-          '&:hover': { backgroundColor: '#2c8f8a' },
+          '&:hover': { backgroundColor: '#111111' },
         },
         outlined: {
-          backgroundColor: NEU_BASE,
-          border: 'none',
-          '&:hover': { border: 'none', backgroundColor: NEU_BASE },
+          backgroundColor: T.tile,
+          borderColor: T.hairline2,
+          color: T.ink,
+          '&:hover': { borderColor: T.blue, backgroundColor: T.blueWash },
         },
         text: {
-          boxShadow: 'none',
-          backgroundColor: 'transparent',
-          '&:hover': { boxShadow: 'none', backgroundColor: 'rgba(163,177,198,0.12)', transform: 'none' },
-          '&:active': { boxShadow: 'none', transform: 'none' },
+          color: T.blue,
+          '&:hover': { backgroundColor: T.blueWash },
         },
-        sizeSmall: { borderRadius: 12, paddingInline: 10, paddingBlock: 5 },
-        sizeLarge: { borderRadius: 20, paddingInline: 24, paddingBlock: 12, fontSize: '1rem' },
+        sizeSmall: { borderRadius: 10, paddingInline: 12, paddingBlock: 5 },
+        sizeLarge: { borderRadius: 14, paddingInline: 22, paddingBlock: 12, fontSize: '1rem' },
       },
     },
     MuiIconButton: {
       styleOverrides: {
         root: {
-          backgroundColor: NEU_BASE,
-          boxShadow: EXT_SM,
-          borderRadius: 12,
-          transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-          '&:hover': { boxShadow: EXT_H, transform: 'translateY(-1px)', backgroundColor: NEU_BASE },
-          '&:active': { boxShadow: INSET_SM, transform: 'translateY(0.5px)' },
+          borderRadius: 10,
+          color: T.muted,
+          transition: 'background-color 0.2s ease, color 0.2s ease',
+          '&:hover': { backgroundColor: 'rgba(14,19,32,0.05)', color: T.ink },
+          '&.Mui-focusVisible': { boxShadow: shadows.focus },
         },
       },
     },
@@ -182,52 +205,42 @@ export const theme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          backgroundColor: NEU_BASE,
-          borderRadius: 16,
-          boxShadow: INSET,
-          transition: 'box-shadow 0.3s ease',
-          '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
-          '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
-          '&.Mui-focused': {
-            boxShadow: `${INSET_D}, 0 0 0 2px ${NEU_BASE}, 0 0 0 4px ${NEU_ACCENT}`,
-          },
-          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
-          '&.Mui-error': {
-            boxShadow: `${INSET}, 0 0 0 2px ${NEU_BASE}, 0 0 0 3px #EF4444`,
-          },
-          '&.Mui-error .MuiOutlinedInput-notchedOutline': { border: 'none' },
+          backgroundColor: T.tile,
+          borderRadius: 12,
+          transition: 'box-shadow 0.2s ease',
+          '& .MuiOutlinedInput-notchedOutline': { borderColor: T.hairline2 },
+          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B7C2D6' },
+          '&.Mui-focused': { boxShadow: shadows.focus },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: T.blue, borderWidth: 1.5 },
+          '&.Mui-error .MuiOutlinedInput-notchedOutline': { borderColor: T.rejected },
         },
       },
     },
     MuiInputLabel: {
       styleOverrides: {
         root: {
-          color: NEU_MUTED,
-          '&.Mui-focused': { color: NEU_ACCENT },
-          '&.Mui-error':   { color: '#EF4444' },
-          // When the label shrinks/floats it sits on top of the inset
-          // box-shadow "border". Give it a solid background so the shadow
-          // line doesn't visually cross through the label text.
-          '&.MuiInputLabel-shrink': {
-            backgroundColor: NEU_BASE,
-            paddingInline: '4px',
-            borderRadius: '4px',
-          },
+          color: T.muted,
+          '&.Mui-focused': { color: T.blue },
+          '&.Mui-error':   { color: T.rejected },
         },
       },
     },
     MuiSelect: {
-      styleOverrides: {
-        root: { backgroundColor: NEU_BASE },
-      },
+      styleOverrides: { root: { backgroundColor: T.tile } },
     },
 
-    // ── Chips ─────────────────────────────────────────────────────────────────
+    // ── Chips — soft tonal badges ──────────────────────────────────────────────
     MuiChip: {
       defaultProps: { size: 'small' },
       styleOverrides: {
-        root: { fontWeight: 600, borderRadius: 999, fontSize: '0.72rem', border: 'none' },
+        root: { fontWeight: 700, borderRadius: 8, fontSize: '0.7rem', border: 'none', letterSpacing: '0.01em' },
         sizeSmall: { height: 22 },
+        colorDefault: { backgroundColor: '#EEF1F6', color: T.muted },
+        colorInfo:    { backgroundColor: T.blueWash, color: T.blueDark },
+        colorPrimary: { backgroundColor: T.blueWash, color: T.blueDark },
+        colorWarning: { backgroundColor: '#FEF3E2', color: T.review },
+        colorSuccess: { backgroundColor: '#E6F4EC', color: T.approved },
+        colorError:   { backgroundColor: '#FCEAEA', color: T.rejected },
       },
     },
 
@@ -235,31 +248,30 @@ export const theme = createTheme({
     MuiListItemButton: {
       styleOverrides: {
         root: {
-          borderRadius: 14,
-          transition: 'box-shadow 0.25s ease',
-          '&:hover': { backgroundColor: NEU_BASE, boxShadow: INSET_SM },
+          borderRadius: 10,
+          transition: 'background-color 0.2s ease, color 0.2s ease',
+          '&:hover': { backgroundColor: '#F2F5FA' },
           '&.Mui-selected': {
-            backgroundColor: NEU_BASE,
-            color: NEU_ACCENT,
-            boxShadow: EXT_SM,
-            '&:hover': { backgroundColor: NEU_BASE, boxShadow: EXT_SM },
+            backgroundColor: T.blueWash,
+            color: T.blue,
+            '&:hover': { backgroundColor: T.blueWash },
           },
         },
       },
     },
     MuiListItemIcon: {
-      styleOverrides: { root: { minWidth: 36 } },
+      styleOverrides: { root: { minWidth: 36, color: 'inherit' } },
     },
 
     // ── Tables ────────────────────────────────────────────────────────────────
     MuiTableContainer: {
       styleOverrides: {
         root: {
-          backgroundColor: NEU_BASE,
+          backgroundColor: T.tile,
           backgroundImage: 'none',
-          boxShadow: EXT,
-          border: 'none',
-          borderRadius: 24,
+          boxShadow: shadows.sm,
+          border: `1px solid ${T.hairline}`,
+          borderRadius: 16,
         },
       },
     },
@@ -270,14 +282,13 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiTableCell-root': {
-            backgroundColor: NEU_BASE,
-            color: NEU_MUTED,
+            backgroundColor: '#FBFCFE',
+            color: T.muted,
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.06em',
             fontSize: '0.7rem',
-            borderBottom: 'none',
-            boxShadow: INSET_SM,
+            borderBottom: `1px solid ${T.hairline}`,
           },
         },
       },
@@ -285,9 +296,9 @@ export const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         root: {
-          backgroundColor: NEU_BASE,
-          borderBottom: 'none',
-          color: NEU_FG,
+          backgroundColor: 'transparent',
+          borderBottom: `1px solid ${T.hairline}`,
+          color: T.ink,
           padding: '12px 16px',
           fontSize: '0.875rem',
         },
@@ -298,10 +309,8 @@ export const theme = createTheme({
     MuiTableRow: {
       styleOverrides: {
         root: {
-          transition: 'background-color 0.2s ease',
-          '&.MuiTableRow-hover:hover .MuiTableCell-root': {
-            backgroundColor: 'rgba(255,255,255,0.3)',
-          },
+          transition: 'background-color 0.15s ease',
+          '&.MuiTableRow-hover:hover': { backgroundColor: '#F5F8FD' },
           '&:last-child .MuiTableCell-root': { borderBottom: 'none' },
         },
       },
@@ -311,11 +320,11 @@ export const theme = createTheme({
     MuiMenu: {
       styleOverrides: {
         paper: {
-          backgroundColor: NEU_BASE,
+          backgroundColor: T.tile,
           backgroundImage: 'none',
-          boxShadow: EXT_H,
-          borderRadius: 20,
-          border: 'none',
+          boxShadow: shadows.lg,
+          borderRadius: 14,
+          border: `1px solid ${T.hairline}`,
           marginTop: 8,
         },
       },
@@ -323,11 +332,11 @@ export const theme = createTheme({
     MuiMenuItem: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 8,
           margin: '2px 6px',
-          transition: 'box-shadow 0.2s ease',
-          '&:hover': { backgroundColor: NEU_BASE, boxShadow: INSET_SM },
-          '&.Mui-selected': { backgroundColor: NEU_BASE, boxShadow: INSET_SM, color: NEU_ACCENT },
+          transition: 'background-color 0.15s ease',
+          '&:hover': { backgroundColor: '#F2F5FA' },
+          '&.Mui-selected': { backgroundColor: T.blueWash, color: T.blue },
         },
       },
     },
@@ -335,60 +344,73 @@ export const theme = createTheme({
     // ── Alerts ────────────────────────────────────────────────────────────────
     MuiAlert: {
       styleOverrides: {
-        root: { borderRadius: 16, border: 'none', boxShadow: INSET_SM },
-        standardError:   { backgroundColor: 'rgba(239,68,68,0.08)',  color: '#b91c1c' },
-        standardSuccess: { backgroundColor: 'rgba(56,178,172,0.08)',  color: '#0f766e' },
-        standardInfo:    { backgroundColor: 'rgba(108,99,255,0.08)',  color: '#4338ca' },
-        standardWarning: { backgroundColor: 'rgba(245,158,11,0.08)',  color: '#b45309' },
+        root: { borderRadius: 12, border: '1px solid transparent', boxShadow: 'none' },
+        standardError:   { backgroundColor: '#FCEAEA', color: '#9B1C1C', borderColor: '#F6D2D2' },
+        standardSuccess: { backgroundColor: '#E6F4EC', color: '#106233', borderColor: '#CDE9D8' },
+        standardInfo:    { backgroundColor: T.blueWash, color: T.blueDark, borderColor: '#D4E4FD' },
+        standardWarning: { backgroundColor: '#FEF3E2', color: '#92400E', borderColor: '#FBE3C0' },
       },
     },
 
-    // ── Tabs ─────────────────────────────────────────────────────────────────
+    // ── Tabs — clean segmented control ─────────────────────────────────────────
     MuiTabs: {
       styleOverrides: {
-        root: { backgroundColor: NEU_BASE, borderRadius: 999, boxShadow: INSET_SM, padding: '4px', minHeight: 40 },
-        indicator: { height: '100%', borderRadius: 999, backgroundColor: NEU_BASE, boxShadow: EXT_SM, zIndex: 0 },
+        root: {
+          backgroundColor: '#F1F4F9',
+          borderRadius: 999,
+          padding: 4,
+          minHeight: 40,
+        },
+        indicator: { height: '100%', borderRadius: 999, backgroundColor: T.tile, boxShadow: shadows.sm, zIndex: 0 },
       },
     },
     MuiTab: {
       styleOverrides: {
         root: {
-          textTransform: 'none', fontWeight: 600, minHeight: 36,
-          borderRadius: 999, zIndex: 1,
-          transition: 'color 0.3s ease',
-          '&.Mui-selected': { color: NEU_ACCENT },
+          textTransform: 'none', fontWeight: 600, minHeight: 32,
+          borderRadius: 999, zIndex: 1, color: T.muted,
+          transition: 'color 0.2s ease',
+          '&.Mui-selected': { color: T.ink },
         },
       },
     },
 
     // ── Misc ─────────────────────────────────────────────────────────────────
     MuiDivider: {
-      styleOverrides: { root: { borderColor: 'rgba(163,177,198,0.4)' } },
+      styleOverrides: { root: { borderColor: T.hairline } },
     },
     MuiAvatar: {
       styleOverrides: {
-        root: { backgroundColor: NEU_ACCENT, color: '#fff', fontWeight: 700, boxShadow: EXT_SM },
+        root: { backgroundColor: T.blue, color: '#fff', fontWeight: 700 },
       },
     },
     MuiTooltip: {
       styleOverrides: {
-        tooltip: { backgroundColor: NEU_FG, color: NEU_BASE, fontSize: '0.72rem', borderRadius: 10, boxShadow: EXT_SM },
-        arrow: { color: NEU_FG },
+        tooltip: { backgroundColor: T.ink, color: '#fff', fontSize: '0.72rem', borderRadius: 8, fontWeight: 500 },
+        arrow: { color: T.ink },
       },
     },
     MuiSkeleton: {
-      styleOverrides: {
-        root: { backgroundColor: 'rgba(163,177,198,0.3)', borderRadius: 12 },
-      },
+      styleOverrides: { root: { backgroundColor: '#EAEEF4', borderRadius: 10 } },
     },
     MuiBadge: {
+      styleOverrides: { badge: { backgroundColor: T.blue, color: '#fff' } },
+    },
+    MuiDialog: {
       styleOverrides: {
-        badge: { backgroundColor: NEU_ACCENT, color: '#fff' },
+        paper: { backgroundColor: T.tile, boxShadow: shadows.lg, borderRadius: 20, border: `1px solid ${T.hairline}` },
       },
     },
-    MuiDialogPaper: {
+    MuiSwitch: {
       styleOverrides: {
-        root: { backgroundColor: NEU_BASE, boxShadow: EXT_H, borderRadius: 28, border: 'none' },
+        root: { padding: 8 },
+        track: { borderRadius: 22 / 2, backgroundColor: '#C7D0DE', opacity: 1 },
+        thumb: { color: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,0.3)' },
+        switchBase: {
+          color: '#fff',
+          '&.Mui-checked': { color: '#fff' },
+          '&.Mui-checked + .MuiSwitch-track': { backgroundColor: T.blue, opacity: 1 },
+        },
       },
     },
 
@@ -396,81 +418,42 @@ export const theme = createTheme({
     MuiPickersPopper: {
       styleOverrides: {
         paper: {
-          backgroundColor: NEU_BASE,
-          backgroundImage: 'none',
-          boxShadow: EXT_H,
-          borderRadius: 24,
-          border: 'none',
+          backgroundColor: T.tile, backgroundImage: 'none',
+          boxShadow: shadows.lg, borderRadius: 16, border: `1px solid ${T.hairline}`,
         },
       },
     },
     MuiPickersCalendarHeader: {
-      styleOverrides: {
-        root: { color: NEU_FG },
-        label: { fontWeight: 700, color: NEU_FG },
-      },
+      styleOverrides: { root: { color: T.ink }, label: { fontWeight: 700, color: T.ink } },
     },
     MuiDayCalendar: {
-      styleOverrides: {
-        weekDayLabel: { color: NEU_MUTED, fontWeight: 600 },
-      },
+      styleOverrides: { weekDayLabel: { color: T.muted, fontWeight: 600 } },
     },
     MuiPickersDay: {
       styleOverrides: {
         root: {
-          backgroundColor: 'transparent',
-          color: NEU_FG,
-          borderRadius: 12,
-          '&:hover': { backgroundColor: NEU_BASE, boxShadow: INSET_SM },
+          color: T.ink,
+          borderRadius: 10,
+          '&:hover': { backgroundColor: '#F2F5FA' },
           '&.Mui-selected': {
-            backgroundColor: NEU_ACCENT,
-            color: '#fff',
-            boxShadow: EXT_SM,
-            '&:hover': { backgroundColor: '#5952cc' },
+            backgroundColor: T.blue, color: '#fff',
+            '&:hover': { backgroundColor: T.blueDark },
           },
-          '&.MuiPickersDay-today': {
-            border: `2px solid ${NEU_ACCENT}`,
-            backgroundColor: 'transparent',
-          },
+          '&.MuiPickersDay-today': { border: `1.5px solid ${T.blue}`, backgroundColor: 'transparent' },
         },
-      },
-    },
-    MuiTimeClock: {
-      styleOverrides: {
-        root: { backgroundColor: NEU_BASE },
       },
     },
     MuiClockPointer: {
-      styleOverrides: {
-        root: { backgroundColor: NEU_ACCENT },
-        thumb: { backgroundColor: NEU_ACCENT, border: `2px solid ${NEU_ACCENT}` },
-      },
+      styleOverrides: { root: { backgroundColor: T.blue }, thumb: { backgroundColor: T.blue, border: `2px solid ${T.blue}` } },
     },
     MuiClock: {
-      styleOverrides: {
-        clock: { backgroundColor: NEU_BASE, boxShadow: INSET },
-        pin: { backgroundColor: NEU_ACCENT },
-      },
+      styleOverrides: { pin: { backgroundColor: T.blue } },
     },
     MuiClockNumber: {
-      styleOverrides: {
-        root: {
-          color: NEU_FG,
-          '&.Mui-selected': { backgroundColor: NEU_ACCENT, color: '#fff' },
-        },
-      },
+      styleOverrides: { root: { color: T.ink, '&.Mui-selected': { backgroundColor: T.blue, color: '#fff' } } },
     },
     MuiPickersToolbar: {
-      styleOverrides: {
-        root: { backgroundColor: NEU_BASE, color: NEU_FG },
-      },
-    },
-    MuiDateTimePickerToolbar: {
-      styleOverrides: {
-        root: { backgroundColor: NEU_BASE },
-        dateContainer: { color: NEU_FG },
-        timeContainer: { color: NEU_FG },
-      },
+      styleOverrides: { root: { color: T.ink } },
     },
   },
 });

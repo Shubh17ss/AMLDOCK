@@ -15,13 +15,12 @@ import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { StatusPills } from '../components/StatusPills.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
+import { tokens } from '../theme/theme.js';
 
 const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
 const DEFAULT_STATUS = 'SUBMITTED';
 const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
-
-const INSET_SM = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
-const EXT_SM   = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
 
 export function QueuePage() {
   const qc = useQueryClient();
@@ -55,7 +54,10 @@ export function QueuePage() {
 
   return (
     <Stack spacing={2.5}>
-      <Typography variant="h5" sx={{ fontWeight: 700 }}>Compliance queue</Typography>
+      <PageHeader
+        eyebrow={`${deals.length} ${deals.length === 1 ? 'deal' : 'deals'} · ${status === 'ALL' ? 'all statuses' : status.replace('_', ' ').toLowerCase()}`}
+        title="Compliance queue"
+      />
 
       {/* Status filter — pills on mobile, selects on desktop */}
       <Box sx={{ display: { xs: 'block', md: 'none' } }}>
@@ -76,9 +78,9 @@ export function QueuePage() {
                 sx={{
                   border: 'none', borderRadius: 999, px: 2, py: 0.75,
                   fontSize: '0.72rem', fontWeight: active ? 700 : 500,
-                  color: active ? '#6C63FF' : '#6B7280',
-                  backgroundColor: '#E0E5EC',
-                  boxShadow: active ? INSET_SM : EXT_SM,
+                  color: active ? tokens.blue : tokens.muted,
+                  backgroundColor: active ? tokens.blueWash : tokens.tile,
+                  border: `1px solid ${active ? 'transparent' : tokens.hairline}`,
                   cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, fontFamily: 'inherit',
                 }}
               >
@@ -117,11 +119,11 @@ export function QueuePage() {
         {!dealsQ.isLoading && deals.length === 0 && (
           <Box sx={{
             borderRadius: 4, p: 4, textAlign: 'center',
-            boxShadow: 'inset 6px 6px 10px rgb(163,177,198,0.4), inset -6px -6px 10px rgba(255,255,255,0.4)',
+            backgroundColor: tokens.tile, border: `1px solid ${tokens.hairline}`,
           }}>
             <Typography sx={{ fontSize: '1.5rem', mb: 1 }}>📥</Typography>
-            <Typography sx={{ fontWeight: 700, color: '#3D4852' }}>Queue is clear</Typography>
-            <Typography sx={{ fontSize: '0.85rem', color: '#6B7280', mt: 0.5 }}>No deals match this filter.</Typography>
+            <Typography sx={{ fontWeight: 700, color: tokens.ink }}>Queue is clear</Typography>
+            <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>No deals match this filter.</Typography>
           </Box>
         )}
         {deals.map((d) => (
@@ -207,8 +209,8 @@ function SkeletonCard() {
   return (
     <Box sx={{
       borderRadius: 4, p: 2.5, height: 140,
-      boxShadow: 'inset 6px 6px 10px rgb(163,177,198,0.4), inset -6px -6px 10px rgba(255,255,255,0.4)',
-      backgroundColor: '#E0E5EC',
+      border: `1px solid ${tokens.hairline}`,
+      backgroundColor: '#F1F4F9',
       animation: 'pulse 1.5s ease-in-out infinite',
       '@keyframes pulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.6 } },
     }} />

@@ -3,6 +3,7 @@ import { Alert, Stack, Typography } from '@mui/material';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { getFirm } from '../api/firms.js';
 import { FirmManageView } from '../features/firm/FirmManageView.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
 
 export function MyFirmPage() {
   const { user } = useAuth();
@@ -15,7 +16,7 @@ export function MyFirmPage() {
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h4">{firmQ.data?.name ?? 'My firm'}</Typography>
+      <PageHeader eyebrow="your firm" title={firmQ.data?.name ?? 'My firm'} />
       {firmId
         ? <FirmManageView firmId={firmId} currentUser={user} editableIdentity={false} />
         : <Alert severity="info">Your account isn't linked to a firm.</Alert>}

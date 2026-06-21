@@ -3,6 +3,7 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { FirmManageView } from '../../features/firm/FirmManageView.jsx';
+import { PageHeader } from '../../components/PageHeader.jsx';
 
 /** ROOT per-firm management — same view senior managers / compliance officers use for their firm. */
 export function FirmAdminDetailPage() {
@@ -17,7 +18,7 @@ export function FirmAdminDetailPage() {
           Back to firms
         </Button>
       </Box>
-      <Typography variant="h4">Manage firm</Typography>
+      <PageHeader eyebrow="firm · manage" title="Manage firm" />
       <FirmManageView firmId={firmId} currentUser={user} editableIdentity />
     </Stack>
   );

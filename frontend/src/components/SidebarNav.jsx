@@ -4,12 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { getFirm } from '../api/firms.js';
 import { navConfigFor, DASHBOARD_PATH } from '../navigation/navConfig.jsx';
-
-const NEU_ACCENT  = '#6C63FF';
-const NEU_FG      = '#3D4852';
-const NEU_MUTED   = '#6B7280';
-const EXT_SM      = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
-const INSET_SM    = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+import { tokens } from '../theme/theme.js';
 
 export function SidebarNav() {
   const { user } = useAuth();
@@ -38,8 +33,8 @@ export function SidebarNav() {
           <Typography
             variant="caption"
             sx={{
-              px: 1.5, color: NEU_MUTED,
-              fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+              px: 1.5, color: tokens.muted,
+              fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: '0.66rem',
             }}
           >
             {label}
@@ -63,31 +58,22 @@ function NavList({ items, pathname, sx }) {
             <ListItemButton
               component={RouterLink}
               to={item.to}
+              selected={active}
               sx={{
                 py: 0.9,
-                borderRadius: 2,
-                backgroundColor: '#E0E5EC',
-                color: active ? NEU_ACCENT : NEU_FG,
-                boxShadow: active ? EXT_SM : 'none',
-                transition: 'box-shadow 0.25s ease, color 0.25s ease',
-                '&:hover': {
-                  backgroundColor: '#E0E5EC',
-                  boxShadow: active ? EXT_SM : INSET_SM,
-                },
+                borderRadius: 2.5,
+                color: active ? tokens.blue : tokens.ink,
+                '&.Mui-selected': { backgroundColor: tokens.blueWash, color: tokens.blue },
+                '&.Mui-selected:hover': { backgroundColor: tokens.blueWash },
+                '&:hover': { backgroundColor: '#F2F5FA' },
               }}
             >
-              <ListItemIcon sx={{
-                minWidth: 36,
-                color: active ? NEU_ACCENT : NEU_MUTED,
-              }}>
+              <ListItemIcon sx={{ minWidth: 36, color: active ? tokens.blue : tokens.muted }}>
                 {item.icon}
               </ListItemIcon>
               <ListItemText
                 primary={item.label}
-                primaryTypographyProps={{
-                  fontWeight: active ? 700 : 500,
-                  fontSize: '0.9rem',
-                }}
+                primaryTypographyProps={{ fontWeight: active ? 700 : 500, fontSize: '0.9rem' }}
               />
             </ListItemButton>
           </ListItem>

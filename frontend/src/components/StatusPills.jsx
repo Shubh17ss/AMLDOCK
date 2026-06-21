@@ -1,18 +1,16 @@
 import { Box, Typography } from '@mui/material';
+import { tokens } from '../theme/theme.js';
 
-const NEU_BASE   = '#E0E5EC';
-const NEU_ACCENT = '#6C63FF';
-const NEU_MUTED  = '#6B7280';
-const EXT_SM     = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
-const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+const NEU_ACCENT = tokens.blue;
+const NEU_MUTED  = tokens.muted;
 
 const STATUS_DOTS = {
-  ALL:          '#6B7280',
-  DRAFT:        '#9CA3AF',
-  SUBMITTED:    '#6C63FF',
-  UNDER_REVIEW: '#F59E0B',
-  APPROVED:     '#38B2AC',
-  REJECTED:     '#EF4444',
+  ALL:          tokens.muted,
+  DRAFT:        tokens.draft,
+  SUBMITTED:    tokens.submitted,
+  UNDER_REVIEW: tokens.review,
+  APPROVED:     tokens.approved,
+  REJECTED:     tokens.rejected,
 };
 
 export function StatusPills({ value, onChange, options }) {
@@ -48,10 +46,10 @@ export function StatusPills({ value, onChange, options }) {
               whiteSpace: 'nowrap',
               flexShrink: 0,
               fontFamily: 'inherit',
-              backgroundColor: NEU_BASE,
-              boxShadow: active ? INSET_SM : EXT_SM,
-              transition: 'box-shadow 0.2s ease',
-              '&:active': { boxShadow: INSET_SM },
+              backgroundColor: active ? tokens.blueWash : tokens.tile,
+              border: `1px solid ${active ? 'transparent' : tokens.hairline}`,
+              transition: 'background-color 0.2s ease, border-color 0.2s ease',
+              '&:hover': { borderColor: active ? 'transparent' : tokens.hairline2 },
             }}
           >
             <Box

@@ -7,11 +7,13 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import logoSrc from '../../assets/logos/image.png';
 
-const NEU_BASE   = '#E0E5EC';
-const NEU_FG     = '#3D4852';
-const NEU_MUTED  = '#6B7280';
-const NEU_ACCENT = '#6C63FF';
-const EXT        = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)';
+import { tokens, shadows } from '../theme/theme.js';
+
+const NEU_BASE   = tokens.canvas;
+const NEU_FG     = tokens.ink;
+const NEU_MUTED  = tokens.muted;
+const NEU_ACCENT = tokens.blue;
+const EXT        = shadows.md;
 
 /**
  * Hardened sign-in for the platform administrator (ROOT): password first, then an
@@ -78,8 +80,8 @@ export function AdminLoginPage() {
         px: 2, py: { xs: 3, sm: 6 },
       }}>
         <Box sx={{
-          width: '100%', maxWidth: 420,
-          backgroundColor: NEU_BASE, borderRadius: 4, boxShadow: EXT,
+          width: '100%', maxWidth: 480,
+          backgroundColor: tokens.tile, border: `1px solid ${tokens.hairline}`, borderRadius: 4, boxShadow: EXT,
           p: { xs: 4, sm: 5 },
         }}>
           <Stack spacing={0.5} sx={{ mb: 4 }}>

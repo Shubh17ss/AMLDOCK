@@ -14,6 +14,7 @@ import nz.amldock.user.dto.BulkCreateUsersRequest;
 import nz.amldock.user.dto.CreateUserRequest;
 import nz.amldock.user.dto.UpdateUserRequest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,9 +43,12 @@ public class UserService {
         this.encoder = encoder;
     }
 
+    // Stable display order so toggling active/inactive (or any update) never reshuffles the list.
+    private static final Sort BY_ID = Sort.by(Sort.Direction.ASC, "id");
+
     @Transactional(readOnly = true)
     public List<User> findAll() {
-        return users.findAll();
+        return users.findAll(BY_ID);
     }
 
     /** Users the actor is allowed to see, scoped to their tier. */
@@ -52,13 +56,13 @@ public class UserService {
     public List<User> findVisible(UserPrincipal actor) {
         Role role = actor.role();
         if (role == Role.ROOT) {
-            return users.findAll();
+            return users.findAll(BY_ID);
         }
         if (role.isFirmLevel()) {
-            return users.findByRealEstateFirmId(actor.realEstateFirmId());
+            return users.findByRealEstateFirmIdOrderByIdAsc(actor.realEstateFirmId());
         }
         if (role == Role.SALES_MANAGER) {
-            return users.findByFirmBranchId(actor.firmBranchId());
+            return users.findByFirmBranchIdOrderByIdAsc(actor.firmBranchId());
         }
         // Agents / branch admins don't manage users.
         return List.of();

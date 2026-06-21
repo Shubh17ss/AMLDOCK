@@ -6,6 +6,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import App from './App.jsx';
+import './styles/fonts.css';
 import { theme } from './theme/theme.js';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import { ToastProvider } from './components/ToastProvider.jsx';

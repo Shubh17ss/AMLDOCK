@@ -1,28 +1,17 @@
 import { Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
+import { tokens, shadows } from '../theme/theme.js';
+import { formatNZD, timeAgo } from '../utils/formatters.js';
 
-const NEU_BASE   = '#E0E5EC';
-const NEU_FG     = '#3D4852';
-const NEU_MUTED  = '#6B7280';
-const NEU_ACCENT = '#6C63FF';
-const NEU_TEAL   = '#38B2AC';
-const EXT        = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)';
-const EXT_H      = '12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6)';
-const EXT_SM     = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
-const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+const NEU_BASE   = tokens.tile;
+const NEU_FG     = tokens.ink;
+const NEU_MUTED  = tokens.muted;
+const NEU_ACCENT = tokens.blue;
+const EXT        = shadows.md;
+const EXT_SM     = shadows.sm;
 
-const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
-
-function timeAgo(dateStr) {
-  if (!dateStr) return '—';
-  const diff = (Date.now() - new Date(dateStr)) / 1000;
-  if (diff < 60)     return 'just now';
-  if (diff < 3600)   return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400)  return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
-}
+const NZD = { format: formatNZD };
 
 export function DealCard({ deal, onClaim, onReview, claimPending }) {
   const navigate = useNavigate();
@@ -40,17 +29,16 @@ export function DealCard({ deal, onClaim, onReview, claimPending }) {
       onClick={handleCardClick}
       sx={{
         backgroundColor: NEU_BASE,
-        borderRadius: 2,
+        border: `1px solid ${tokens.hairline}`,
+        borderRadius: 4,
         boxShadow: EXT,
         p: 2.5,
         cursor: 'pointer',
-        transition: 'box-shadow 0.25s ease, transform 0.25s ease',
+        transition: 'box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
-        '&:active': {
-          boxShadow: INSET_SM,
-          transform: 'scale(0.99)',
-        },
+        '&:hover': { boxShadow: shadows.lg, borderColor: tokens.hairline2 },
+        '&:active': { transform: 'scale(0.995)' },
       }}
     >
       {/* Row 1: reference + status */}
@@ -151,7 +139,7 @@ function MetaPill({ children, muted }) {
         fontSize: '0.72rem',
         fontWeight: 600,
         color: muted ? NEU_MUTED : NEU_FG,
-        boxShadow: INSET_SM,
+        backgroundColor: '#F2F5FA',
         letterSpacing: '0.02em',
       }}
     >
@@ -181,10 +169,11 @@ function ActionButton({ children, onClick, disabled, accent }) {
         opacity: disabled ? 0.5 : 1,
         backgroundColor: accent ? NEU_ACCENT : NEU_BASE,
         color: accent ? '#fff' : NEU_FG,
+        border: accent ? '1px solid transparent' : `1px solid ${tokens.hairline2}`,
         boxShadow: EXT_SM,
-        transition: 'box-shadow 0.2s ease',
+        transition: 'box-shadow 0.2s ease, background-color 0.2s ease',
         flex: accent ? 1 : 'none',
-        '&:active:not(:disabled)': { boxShadow: INSET_SM },
+        '&:hover:not(:disabled)': { backgroundColor: accent ? tokens.blueDark : '#F2F5FA' },
       }}
     >
       {children}
@@ -196,8 +185,8 @@ function LocationDot() {
   return (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
       <path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5 4.5 8.5 4.5 8.5S12.5 9.5 12.5 6c0-2.5-2-4.5-4.5-4.5z"
-        fill="rgba(108,99,255,0.15)" stroke="#6C63FF" strokeWidth="1.25" />
-      <circle cx="8" cy="6" r="1.5" fill="#6C63FF" />
+        fill="rgba(27,95,227,0.12)" stroke={tokens.blue} strokeWidth="1.25" />
+      <circle cx="8" cy="6" r="1.5" fill={tokens.blue} />
     </svg>
   );
 }
@@ -205,8 +194,8 @@ function LocationDot() {
 function PersonDot() {
   return (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="5.5" r="2.5" stroke="#38B2AC" strokeWidth="1.25" fill="rgba(56,178,172,0.15)" />
-      <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#38B2AC" strokeWidth="1.25" strokeLinecap="round" />
+      <circle cx="8" cy="5.5" r="2.5" stroke={tokens.muted} strokeWidth="1.25" fill="rgba(90,101,118,0.12)" />
+      <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke={tokens.muted} strokeWidth="1.25" strokeLinecap="round" />
     </svg>
   );
 }

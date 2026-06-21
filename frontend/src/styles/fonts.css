@@ -1,0 +1,12 @@
+/* FK Grotesk — local trial faces, loaded app-wide (landing.css is page-scoped).
+   Display + numerals: "FK Grotesk Trial". Ledger / data voice: "FK Grotesk Mono Trial". */
+
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../../FK-Grotesk-Font-Family/FKGroteskTrial-Light.otf') format('opentype'); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../../FK-Grotesk-Font-Family/FKGroteskTrial-Regular.otf') format('opentype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../../FK-Grotesk-Font-Family/FKGroteskTrial-Medium.otf') format('opentype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../../FK-Grotesk-Font-Family/FKGroteskTrial-Bold.otf') format('opentype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Trial'; src: url('../../FK-Grotesk-Font-Family/FKGroteskTrial-Black.otf') format('opentype'); font-weight: 800 900; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'FK Grotesk Mono Trial'; src: url('../../FK-Grotesk-Font-Family/FKGroteskMonoTrial-Regular.otf') format('opentype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Mono Trial'; src: url('../../FK-Grotesk-Font-Family/FKGroteskMonoTrial-Medium.otf') format('opentype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'FK Grotesk Mono Trial'; src: url('../../FK-Grotesk-Font-Family/FKGroteskMonoTrial-Bold.otf') format('opentype'); font-weight: 700; font-style: normal; font-display: swap; }

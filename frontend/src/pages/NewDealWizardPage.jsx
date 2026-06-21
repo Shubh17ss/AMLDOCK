@@ -13,10 +13,12 @@ import { DocumentUploader } from '../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../components/VoiceRecorderField.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor } from '../auth/roles.js';
+import { PageHeader } from '../components/PageHeader.jsx';
+import { tokens } from '../theme/theme.js';
 
-const NEU_ACCENT = '#6C63FF';
-const NEU_MUTED  = '#6B7280';
-const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+const NEU_ACCENT = tokens.blue;
+const NEU_MUTED  = tokens.muted;
+const INSET_SM   = 'inset 0 1px 2px rgba(16,24,40,0.06)';
 
 const STEPS = ['Firm + branch', 'Property', 'Client', 'Documents', 'Review'];
 
@@ -178,7 +180,7 @@ export function NewDealWizardPage() {
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h5" sx={{ fontWeight: 700 }}>New deal</Typography>
+      <PageHeader eyebrow={`step ${step + 1} of ${STEPS.length}`} title="New deal" />
 
       {/* Desktop: full MUI Stepper */}
       <Box sx={{ display: { xs: 'none', sm: 'block' } }}>

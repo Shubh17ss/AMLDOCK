@@ -9,11 +9,11 @@ import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { StatusPills } from '../components/StatusPills.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
+import AddIcon from '@mui/icons-material/AddCircleOutline';
+import { tokens, shadows } from '../theme/theme.js';
 
 const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
-
-const EXT_SM = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
-const INSET_SM = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
 
 export function MyDealsPage() {
   const [status, setStatus] = useState('ALL');
@@ -27,29 +27,15 @@ export function MyDealsPage() {
 
   return (
     <Stack spacing={2.5}>
-      {/* Header row */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>My deals</Typography>
-        <Box
-          component={RouterLink}
-          to="/deals/new"
-          sx={{
-            display: 'inline-flex', alignItems: 'center', gap: 0.75,
-            borderRadius: 3, px: 2, py: 1,
-            fontSize: '0.85rem', fontWeight: 700,
-            color: '#fff', backgroundColor: '#6C63FF',
-            textDecoration: 'none',
-            boxShadow: EXT_SM,
-            transition: 'box-shadow 0.2s ease',
-            '&:active': { boxShadow: INSET_SM },
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth="2.25" strokeLinecap="round" />
-          </svg>
-          New deal
-        </Box>
-      </Box>
+      <PageHeader
+        eyebrow={`${deals.length} ${deals.length === 1 ? 'deal' : 'deals'} · on your desk`}
+        title="My deals"
+        actions={
+          <Button variant="contained" component={RouterLink} to="/deals/new" startIcon={<AddIcon />}>
+            New deal
+          </Button>
+        }
+      />
 
       {/* Status filter pills */}
       <StatusPills value={status} onChange={setStatus} options={STATUSES} />
@@ -104,10 +90,10 @@ function SkeletonCard() {
   return (
     <Box sx={{
       borderRadius: 4, p: 2.5, height: 140,
-      boxShadow: 'inset 6px 6px 10px rgb(163,177,198,0.4), inset -6px -6px 10px rgba(255,255,255,0.4)',
-      backgroundColor: '#E0E5EC',
+      border: `1px solid ${tokens.hairline}`,
+      backgroundColor: '#F1F4F9',
       animation: 'pulse 1.5s ease-in-out infinite',
-      '@keyframes pulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.6 } },
+      '@keyframes pulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.55 } },
     }} />
   );
 }
@@ -116,11 +102,11 @@ function MobileEmpty({ icon, title, description, action }) {
   return (
     <Box sx={{
       borderRadius: 4, p: 4, textAlign: 'center',
-      boxShadow: 'inset 6px 6px 10px rgb(163,177,198,0.4), inset -6px -6px 10px rgba(255,255,255,0.4)',
+      backgroundColor: tokens.tile, border: `1px solid ${tokens.hairline}`,
     }}>
       <Typography sx={{ fontSize: '2rem', mb: 1 }}>{icon}</Typography>
-      <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#3D4852', mb: 0.5 }}>{title}</Typography>
-      {description && <Typography sx={{ fontSize: '0.85rem', color: '#6B7280', mb: 2 }}>{description}</Typography>}
+      <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: tokens.ink, mb: 0.5 }}>{title}</Typography>
+      {description && <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mb: 2 }}>{description}</Typography>}
       {action}
     </Box>
   );
@@ -135,9 +121,9 @@ function ActionBtn({ to, children }) {
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: 3, px: 3, py: 1.25,
         fontSize: '0.85rem', fontWeight: 700,
-        color: '#fff', backgroundColor: '#6C63FF',
+        color: '#fff', backgroundColor: tokens.blue,
         textDecoration: 'none',
-        boxShadow: EXT_SM,
+        boxShadow: shadows.sm,
       }}
     >
       {children}

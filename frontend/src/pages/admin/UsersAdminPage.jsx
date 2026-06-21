@@ -13,6 +13,8 @@ import { listBranches, listFirms } from '../../api/firms.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { creatableRoles, roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
+import { PageHeader } from '../../components/PageHeader.jsx';
+import AddIcon from '@mui/icons-material/PersonAddAlt1';
 
 export function UsersAdminPage() {
   const qc = useQueryClient();
@@ -39,14 +41,15 @@ export function UsersAdminPage() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h4">Users</Typography>
-        {creatableRoles(currentUser?.role).length > 0 && (
-          <Button variant="contained" onClick={() => setCreateOpen(true)}>
-            + Add User
+      <PageHeader
+        eyebrow={`${usersQ.data?.length ?? 0} users · all firms`}
+        title="Users"
+        actions={creatableRoles(currentUser?.role).length > 0 && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
+            Add user
           </Button>
         )}
-      </Stack>
+      />
 
       {usersQ.isError && <Alert severity="error">Failed to load users.</Alert>}
 

@@ -24,14 +24,15 @@ import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
 import { DecideDialog, OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
+import { tokens, shadows } from '../theme/theme.js';
 
 const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
 
-const NEU_BASE   = '#E0E5EC';
-const NEU_ACCENT = '#6C63FF';
-const NEU_MUTED  = '#6B7280';
-const EXT_SM     = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
-const INSET_SM   = 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+const NEU_BASE   = tokens.tile;
+const NEU_ACCENT = tokens.blue;
+const NEU_MUTED  = tokens.muted;
+const EXT_SM     = shadows.sm;
+const INSET_SM   = 'inset 0 1px 2px rgba(16,24,40,0.06)';
 
 export function DealReviewScreen() {
   const { id } = useParams();
