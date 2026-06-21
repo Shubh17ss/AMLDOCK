@@ -1,7 +1,9 @@
 import { cloneElement } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Box, Card, CardActionArea, Stack, Typography } from '@mui/material';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { getFirm } from '../api/firms.js';
 import { navConfigFor, DASHBOARD_PATH } from '../navigation/navConfig.jsx';
 
 const NEU_ACCENT = '#6C63FF';
@@ -10,7 +12,17 @@ const NEU_ACCENT = '#6C63FF';
 export function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const tiles = navConfigFor(user?.role).filter((item) => item.to !== DASHBOARD_PATH);
+  const firmId = user?.realEstateFirmId;
+  const firmQ = useQuery({
+    queryKey: ['firm', firmId],
+    queryFn: () => getFirm(firmId),
+    enabled: Boolean(firmId),
+  });
+  const tiles = navConfigFor(user?.role)
+    .filter((item) => item.to !== DASHBOARD_PATH)
+    .map((item) => (item.to === '/my-firm' && firmQ.data?.name
+      ? { ...item, label: firmQ.data.name }
+      : item));
 
   return (
     <Stack spacing={3}>

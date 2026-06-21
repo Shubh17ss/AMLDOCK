@@ -10,8 +10,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import { createBranch, deactivateBranch, listBranches, updateBranch } from '../../api/firms.js';
 
 const EMPTY_BRANCH = {
-  name: '', addressLine1: '', addressLine2: '', suburb: '', city: '', postcode: '',
-  phone: '', email: '', managerName: '', managerEmail: '',
+  name: '', addressLine1: '', suburb: '', city: '', postcode: '',
+  phone: '', managerName: '', managerEmail: '',
 };
 
 /** Branches of a firm with add / edit, and (for ROOT / senior managers) deactivate. */
@@ -50,7 +50,7 @@ export function FirmBranchesCard({ firmId, canDeactivate = false }) {
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>City</TableCell>
-                <TableCell>Manager</TableCell>
+                <TableCell>Liaison</TableCell>
                 <TableCell>Phone</TableCell>
                 <TableCell>Active</TableCell>
                 <TableCell align="right">Actions</TableCell>
@@ -137,26 +137,22 @@ function BranchDialog({ mode, firmId, open: openProp, branch, onClose }) {
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField label="Branch name" value={form.name ?? ''} onChange={ch('name')} required />
             <TextField label="Address line 1" value={form.addressLine1 ?? ''} onChange={ch('addressLine1')} />
-            <TextField label="Address line 2" value={form.addressLine2 ?? ''} onChange={ch('addressLine2')} />
             <Stack direction="row" spacing={2}>
               <TextField label="Suburb" value={form.suburb ?? ''} onChange={ch('suburb')} fullWidth />
               <TextField label="City" value={form.city ?? ''} onChange={ch('city')} fullWidth />
-              <TextField label="Postcode" value={form.postcode ?? ''} onChange={ch('postcode')} sx={{ width: 140 }} />
             </Stack>
+            <TextField label="Postcode" value={form.postcode ?? ''} onChange={ch('postcode')} fullWidth />
+            <TextField label="Phone" value={form.phone ?? ''} onChange={ch('phone')} fullWidth />
             <Stack direction="row" spacing={2}>
-              <TextField label="Phone" value={form.phone ?? ''} onChange={ch('phone')} fullWidth />
-              <TextField label="Email" type="email" value={form.email ?? ''} onChange={ch('email')} fullWidth />
-            </Stack>
-            <Stack direction="row" spacing={2}>
-              <TextField label="Manager name" value={form.managerName ?? ''} onChange={ch('managerName')} fullWidth />
-              <TextField label="Manager email" type="email" value={form.managerEmail ?? ''} onChange={ch('managerEmail')} fullWidth />
+              <TextField label="Liaison name" value={form.managerName ?? ''} onChange={ch('managerName')} fullWidth />
+              <TextField label="Liaison email" type="email" value={form.managerEmail ?? ''} onChange={ch('managerEmail')} fullWidth required />
             </Stack>
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained" disabled={mut.isPending || !form.name}>
+          <Button type="submit" variant="contained" disabled={mut.isPending || !form.name || !form.managerEmail}>
             {mut.isPending ? 'Saving…' : (isEdit ? 'Save' : 'Create')}
           </Button>
         </DialogActions>

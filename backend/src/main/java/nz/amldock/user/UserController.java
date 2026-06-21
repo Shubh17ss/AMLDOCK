@@ -3,6 +3,7 @@ package nz.amldock.user;
 import jakarta.validation.Valid;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
+import nz.amldock.user.dto.BulkCreateUsersRequest;
 import nz.amldock.user.dto.ChangePasswordRequest;
 import nz.amldock.user.dto.CreateUserRequest;
 import nz.amldock.user.dto.ResetPasswordRequest;
@@ -57,6 +58,17 @@ public class UserController {
                 "Created user " + u.getEmail() + " with role " + u.getRole());
         onboarding.sendWelcome(u);
         return UserDto.from(u);
+    }
+
+    @PostMapping("/bulk")
+    @PreAuthorize("isAuthenticated()")
+    public List<UserDto> createBulk(@AuthenticationPrincipal UserPrincipal principal,
+                                    @RequestBody BulkCreateUsersRequest req) {
+        List<User> created = users.createBulk(principal, req);
+        audit.record(AuditAction.USER_CREATED, "User", null,
+                "Imported " + created.size() + " users");
+        // Imported users get no welcome email by design.
+        return created.stream().map(UserDto::from).toList();
     }
 
     @PatchMapping("/{id}")

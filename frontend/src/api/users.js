@@ -10,6 +10,11 @@ export async function createUser(payload) {
   return data;
 }
 
+export async function bulkCreateUsers(payload) {
+  const { data } = await apiClient.post('/users/bulk', payload);
+  return data;
+}
+
 export async function updateUser(id, payload) {
   const { data } = await apiClient.patch(`/users/${id}`, payload);
   return data;

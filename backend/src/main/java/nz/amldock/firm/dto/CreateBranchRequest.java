@@ -13,5 +13,5 @@ public record CreateBranchRequest(
         String phone,
         @Email String email,
         String managerName,
-        @Email String managerEmail
+        @NotBlank @Email String managerEmail
 ) {}

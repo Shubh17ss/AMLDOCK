@@ -1,12 +1,16 @@
 package nz.amldock.user;
 
+import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.common.exception.BulkValidationException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
+import nz.amldock.common.web.ApiError;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
 import nz.amldock.firm.RealEstateFirmRepository;
+import nz.amldock.user.dto.BulkCreateUsersRequest;
 import nz.amldock.user.dto.CreateUserRequest;
 import nz.amldock.user.dto.UpdateUserRequest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -14,7 +18,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 public class UserService {
@@ -91,6 +99,113 @@ public class UserService {
         // Passwordless: these users sign in with email + OTP.
         u.setActive(true);
         return users.save(u);
+    }
+
+    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
+    /**
+     * Bulk-create users from a parsed CSV. Every row is validated against the same rules as the
+     * single-user {@link #create} path (role feasibility, scope binding, firm/branch linkage,
+     * email uniqueness) plus in-file duplicate detection. All-or-nothing: if any row is invalid,
+     * a {@link BulkValidationException} listing every reason is thrown and nothing is persisted.
+     * No onboarding/welcome emails are sent for imported users.
+     */
+    @Transactional
+    public List<User> createBulk(UserPrincipal creator, BulkCreateUsersRequest req) {
+        List<BulkCreateUsersRequest.Row> rows = req.rows() == null ? List.of() : req.rows();
+        if (rows.isEmpty()) {
+            throw new BadRequestException("The file has no rows to import");
+        }
+
+        // Firm context: ROOT supplies it; everyone else is pinned to their own firm.
+        Long contextFirmId = creator.role() == Role.ROOT ? req.realEstateFirmId() : creator.realEstateFirmId();
+
+        List<ApiError.FieldError> errors = new ArrayList<>();
+        List<User> toSave = new ArrayList<>();
+        Set<String> seenEmails = new HashSet<>();
+
+        for (int i = 0; i < rows.size(); i++) {
+            BulkCreateUsersRequest.Row row = rows.get(i);
+            String field = "row " + (i + 1);
+            try {
+                String fullName = row.fullName() == null ? "" : row.fullName().trim();
+                String email = row.email() == null ? "" : row.email().trim();
+                if (fullName.isEmpty()) throw new BadRequestException("full name is required");
+                if (email.isEmpty()) throw new BadRequestException("email is required");
+                if (!EMAIL.matcher(email).matches()) throw new BadRequestException("invalid email: " + email);
+
+                Role role = parseRole(row.role());
+                if (!creator.role().canCreate(role)) {
+                    throw new ForbiddenException("you are not permitted to create " + role + " users");
+                }
+
+                String emailKey = email.toLowerCase();
+                if (!seenEmails.add(emailKey)) {
+                    throw new BadRequestException("duplicate email in file: " + email);
+                }
+                if (users.existsByEmailIgnoreCase(email)) {
+                    throw new BadRequestException("email already in use: " + email);
+                }
+
+                Long firmId = role.requiresFirm() ? contextFirmId : null;
+                Long branchId = resolveBranchId(creator, role, firmId, row.branchName());
+
+                bindCreationScope(creator, role, firmId, branchId);
+                validateFirmLinkage(role, firmId, branchId);
+
+                User u = new User();
+                u.setEmail(emailKey);
+                u.setFullName(fullName);
+                u.setRole(role);
+                u.setRealEstateFirmId(firmId);
+                u.setFirmBranchId(branchId);
+                u.setActive(true);
+                toSave.add(u);
+            } catch (ApiException ex) {
+                errors.add(new ApiError.FieldError(field, ex.getMessage()));
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new BulkValidationException(errors);
+        }
+        return users.saveAll(toSave);
+    }
+
+    /** Normalise a free-text role: case-, space- and hyphen-insensitive against the enum names. */
+    private Role parseRole(String raw) {
+        if (raw == null || raw.isBlank()) throw new BadRequestException("role is required");
+        String norm = raw.trim().toUpperCase().replace(' ', '_').replace('-', '_');
+        for (Role r : Role.values()) {
+            if (r.name().equals(norm)) return r;
+        }
+        throw new BadRequestException("unknown role: " + raw.trim());
+    }
+
+    /**
+     * Resolve the branch for an imported user. A sales manager's new staff are forced into their
+     * own branch (the CSV branch column is ignored); firm-level / ROOT importers resolve the branch
+     * by name within the firm. Firm-level target roles must leave the branch blank.
+     */
+    private Long resolveBranchId(UserPrincipal creator, Role role, Long firmId, String branchName) {
+        if (!role.requiresBranch()) {
+            if (branchName != null && !branchName.isBlank()) {
+                throw new BadRequestException(role + " must not have a branch — leave the branch column blank");
+            }
+            return null;
+        }
+        if (creator.role() == Role.SALES_MANAGER) {
+            return creator.firmBranchId(); // bindCreationScope/validateFirmLinkage verify it
+        }
+        if (firmId == null) {
+            throw new BadRequestException("no firm context to resolve the branch");
+        }
+        if (branchName == null || branchName.isBlank()) {
+            throw new BadRequestException("branch is required for " + role);
+        }
+        FirmBranch branch = branches.findByRealEstateFirmIdAndNameIgnoreCase(firmId, branchName.trim())
+                .orElseThrow(() -> new BadRequestException("branch not found in this firm: " + branchName.trim()));
+        return branch.getId();
     }
 
     @Transactional

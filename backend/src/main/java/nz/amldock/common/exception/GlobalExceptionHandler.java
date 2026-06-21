@@ -25,6 +25,12 @@ public class GlobalExceptionHandler {
                 .body(ApiError.of(ex.getStatus().value(), ex.getStatus().getReasonPhrase(), ex.getMessage()));
     }
 
+    @ExceptionHandler(BulkValidationException.class)
+    public ResponseEntity<ApiError> handleBulk(BulkValidationException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiError.of(400, "Bad Request", ex.getMessage(), ex.getErrors()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex) {
         List<ApiError.FieldError> fields = ex.getBindingResult().getFieldErrors().stream()
