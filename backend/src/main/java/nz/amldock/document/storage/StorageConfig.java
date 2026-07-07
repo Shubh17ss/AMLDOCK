@@ -14,13 +14,17 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @Configuration
 public class StorageConfig {
 
-    @Value("${AWS_REGION:ap-southeast-2}")
+    // Bind the canonical amldock.* properties (application.yml), which themselves resolve
+    // from AWS_REGION / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars with a fallback.
+    // Reading the bare env-var names here meant the yml credentials were never picked up,
+    // so local runs fell through to the default provider chain and failed to load any creds.
+    @Value("${amldock.s3.region:ap-southeast-2}")
     private String region;
 
-    @Value("${AWS_ACCESS_KEY_ID:}")
+    @Value("${amldock.aws.access-key-id:}")
     private String accessKeyId;
 
-    @Value("${AWS_SECRET_ACCESS_KEY:}")
+    @Value("${amldock.aws.secret-access-key:}")
     private String secretAccessKey;
 
     @Bean

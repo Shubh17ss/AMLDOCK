@@ -1,10 +1,11 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { CLR, SH } from './clr.js';
+import { Reveal } from './reveal.jsx';
 
 export function CTABanner({ isAuthed, dashboardHref }) {
   return (
     <section id="contact" className="py-24 px-6 md:py-28">
-      <div
+      <Reveal
         className="relative mx-auto max-w-5xl overflow-hidden rounded-[32px] p-14 sm:p-20"
         style={{ background: `linear-gradient(140deg, ${CLR.blue} 0%, ${CLR.blueDark} 100%)`, boxShadow: SH.lg }}
       >
@@ -32,7 +33,7 @@ export function CTABanner({ isAuthed, dashboardHref }) {
           </div>
 
           <h2 className="font-grotesk text-3xl font-extrabold sm:text-5xl" style={{ color: '#fff', letterSpacing: '-0.03em' }}>
-            Deals compliant — without hassle
+            Compliant Deals — Without Hassle
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-[1.05rem] leading-relaxed" style={{ color: 'rgba(255,255,255,0.86)' }}>
             Spin up your firm in minutes. Invite your brokers and compliance officers.
@@ -63,7 +64,7 @@ export function CTABanner({ isAuthed, dashboardHref }) {
             ))}
           </div>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

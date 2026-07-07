@@ -23,6 +23,7 @@ import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
 import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
 import { DecideDialog, OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
+import { DealCapturedInfo } from '../features/deal/DealCapturedInfo.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { tokens, shadows } from '../theme/theme.js';
 
@@ -153,7 +154,18 @@ export function DealReviewScreen() {
           {canDecide && (
             <>
               <Button variant="outlined" color="error" onClick={() => setDecideMode('reject')}>Reject</Button>
-              <Button variant="contained" sx={{backgroundColor:'#2E8B57'}} onClick={() => setDecideMode('approve')}>Approve</Button>
+              <Button
+                variant="contained"
+                sx={{
+                  backgroundColor: '#2E8B57',
+                  '&:hover': {
+                    backgroundColor: '#2d905a',
+                  },
+                }}
+                onClick={() => setDecideMode('approve')}
+              >
+                Approve
+              </Button>
             </>
           )}
           {canOverride && (
@@ -172,7 +184,7 @@ export function DealReviewScreen() {
         </Alert>
       )}
 
-      <DealSummaryStrip deal={deal} />
+      <DealCapturedInfo deal={deal} />
 
       {isDealReviewer(user?.role) && (
         <BrokerNotesCard deal={deal} />
@@ -430,29 +442,5 @@ function DragHandle() {
       width: 6, height: '100%', bgcolor: 'divider',
       cursor: 'col-resize', '&:hover': { bgcolor: 'primary.main' },
     }} />
-  );
-}
-
-/* ── Deal summary strip ──────────────────────────────────────────────────── */
-function DealSummaryStrip({ deal }) {
-  return (
-    <Paper variant="outlined" sx={{ p: 1.5 }}>
-      <Stack direction="row" spacing={{ xs: 2, sm: 4 }} flexWrap="wrap" rowGap={1}>
-        <SummaryItem label="Firm"     value={deal.firmName} />
-        <SummaryItem label="Branch"   value={deal.branchName} />
-        <SummaryItem label="Client"   value={deal.client?.displayName} />
-        <SummaryItem label="Property" value={[deal.property?.addressLine1, deal.property?.suburb, deal.property?.district].filter(Boolean).join(', ')} />
-        <SummaryItem label="POC"      value={[deal.pocName, deal.pocEmail].filter(Boolean).join(' · ')} />
-      </Stack>
-    </Paper>
-  );
-}
-
-function SummaryItem({ label, value }) {
-  return (
-    <Box sx={{ minWidth: 0 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{label}</Typography>
-      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{value || '—'}</Typography>
-    </Box>
   );
 }

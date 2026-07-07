@@ -1,5 +1,6 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { CLR } from './clr.js';
+import { Reveal } from './reveal.jsx';
 
 const COLUMNS = [
   {
@@ -43,7 +44,7 @@ const COLUMNS = [
 export function Footer() {
   return (
     <footer style={{ backgroundColor: '#fff', borderTop: `1px solid ${CLR.hairline}` }}>
-      <div className="mx-auto max-w-7xl px-6 py-16">
+      <Reveal className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-12">
 
           {/* Brand block */}
@@ -99,7 +100,7 @@ export function Footer() {
             Built for the NZ AML/CFT Act 2009.
           </p>
         </div>
-      </div>
+      </Reveal>
     </footer>
   );
 }

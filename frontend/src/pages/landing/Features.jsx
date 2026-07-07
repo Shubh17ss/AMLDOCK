@@ -1,4 +1,5 @@
 import { CLR } from './clr.js';
+import { Reveal } from './reveal.jsx';
 
 const FEATURES = [
   {
@@ -29,7 +30,7 @@ export function Features() {
     <section id="product" className="py-24 md:py-28">
       <div className="mx-auto max-w-7xl px-6">
         {/* Section header */}
-        <div className="text-center mb-14">
+        <Reveal className="text-center mb-14">
           <p className="clr-eyebrow inline-flex items-center gap-2 mb-4">
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CLR.blue }} />
             The platform
@@ -41,12 +42,14 @@ export function Features() {
             Brokers prepare. Compliance officers verify. Managers decide. AMLDOCK keeps everyone
             on the same page — literally.
           </p>
-        </div>
+        </Reveal>
 
         {/* Feature cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map(f => (
-            <FeatureCard key={f.title} {...f} />
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={i * 100} className="h-full">
+              <FeatureCard {...f} />
+            </Reveal>
           ))}
         </div>
       </div>
@@ -56,7 +59,7 @@ export function Features() {
 
 function FeatureCard({ eyebrow, title, desc, bullets, icon }) {
   return (
-    <div className="clr-card clr-lift group rounded-3xl p-7">
+    <div className="clr-card clr-lift group h-full rounded-3xl p-7">
       {/* Icon well */}
       <div
         className="mb-6 flex items-center justify-center rounded-2xl"
