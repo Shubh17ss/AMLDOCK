@@ -96,3 +96,86 @@ a    { text-decoration: none; }
   outline: none;
   box-shadow: 0 0 0 2px var(--neu-base), 0 0 0 4px var(--neu-accent);
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   "Clearance" marketing layer — matches the live app (src/theme/theme.js).
+   White canvas, blue primary, ink text, soft single-source shadows over 1px
+   hairlines, FK Grotesk display + mono "ledger" voice. No neumorphism.
+   ══════════════════════════════════════════════════════════════════════ */
+:root {
+  --clr-blue:      #1B5FE3;
+  --clr-blue-dark: #1648B0;
+  --clr-ink:       #111111;
+  --clr-muted:     #5A6576;
+  --clr-hairline:  #E7ECF3;
+  --clr-hairline2: #D7DEEA;
+  --clr-wash:      #EAF1FE;
+  --clr-sh-sm: 0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10);
+  --clr-sh-md: 0 1px 3px rgba(16,24,40,0.07), 0 8px 24px rgba(16,24,40,0.09);
+  --clr-sh-lg: 0 4px 10px rgba(16,24,40,0.09), 0 20px 48px rgba(16,24,40,0.15);
+}
+
+/* Surface — white tile, hairline edge, soft elevation */
+.clr-card {
+  background: #fff;
+  border: 1px solid var(--clr-hairline);
+  box-shadow: var(--clr-sh-md);
+  transition: box-shadow .3s ease, transform .3s ease, border-color .3s ease;
+}
+.clr-lift { transition: box-shadow .3s ease, transform .3s ease, border-color .3s ease; }
+.clr-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--clr-sh-lg);
+  border-color: var(--clr-hairline2);
+}
+
+/* Ledger eyebrow — the signature device (FK Grotesk Mono, letterspaced) */
+.clr-eyebrow {
+  font-family: 'FK Grotesk Mono Trial', ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--clr-muted);
+}
+
+/* Accessible focus ring (matches theme.js shadows.focus) */
+.clr-focus:focus-visible {
+  outline: none;
+  box-shadow: var(--clr-sh-sm), 0 0 0 3px rgba(27,95,227,0.22);
+}
+
+/* Orchestrated page-load — mirrors the app's bentoRise */
+@keyframes clrRise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.clr-rise { opacity: 0; animation: clrRise .55s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.clr-d1 { animation-delay: 60ms; }
+.clr-d2 { animation-delay: 130ms; }
+.clr-d3 { animation-delay: 200ms; }
+.clr-d4 { animation-delay: 270ms; }
+.clr-d5 { animation-delay: 340ms; }
+
+/* Faint "audit grid" — depth on the white hero without a background fill */
+.clr-grid {
+  background-image:
+    linear-gradient(to right,  rgba(27,95,227,0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(27,95,227,0.06) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 60% at 72% 8%, #000 0%, transparent 72%);
+          mask-image: radial-gradient(ellipse 75% 60% at 72% 8%, #000 0%, transparent 72%);
+}
+
+/* Gentle float for the hero product tile */
+@keyframes clrFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+.clr-float { animation: clrFloat 5s ease-in-out infinite; }
+
+/* Respect reduced-motion — the neumorphic layer never did */
+@media (prefers-reduced-motion: reduce) {
+  .clr-rise, .clr-float, .neu-fade-up, .animate-float { animation: none !important; opacity: 1 !important; }
+  .clr-lift:hover { transform: none; }
+}

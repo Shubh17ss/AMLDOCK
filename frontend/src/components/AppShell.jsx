@@ -84,7 +84,7 @@ export function AppShell() {
                 AMLDOCK
               </Typography>
               <Typography variant="caption" sx={{ color: tokens.muted, lineHeight: 1 }}>
-                Compliance, calmer
+                Compliance
               </Typography>
             </Box>
           </Box>

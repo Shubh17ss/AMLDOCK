@@ -220,7 +220,9 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           color: T.muted,
-          '&.Mui-focused': { color: T.blue },
+          // Keep the floated label ink on focus so it stays legible against the
+          // blue outline instead of merging into it (both were blue before).
+          '&.Mui-focused': { color: T.ink },
           '&.Mui-error':   { color: T.rejected },
         },
       },

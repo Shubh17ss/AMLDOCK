@@ -31,8 +31,8 @@ export function LandingPage() {
 
   return (
     <div
-      className="relative min-h-screen font-body text-neu-fg"
-      style={{ backgroundColor: '#E0E5EC' }}
+      className="relative min-h-screen font-body"
+      style={{ backgroundColor: '#FFFFFF', color: '#111111' }}
     >
       <Navbar isAuthed={isAuthed} dashboardHref={dashboardHref} />
       <main>

@@ -1,37 +1,35 @@
-const EXT    = '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255,0.5)';
-const EXT_SM = '5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255,0.5)';
-const INSET_SM= 'inset 3px 3px 6px rgb(163,177,198,0.6), inset -3px -3px 6px rgba(255,255,255,0.5)';
+import { CLR } from './clr.js';
 
 const STEPS = [
   {
     n: '01',
     role: 'Broker',
-    roleColor: '#6C63FF',
-    roleBg: 'rgba(108,99,255,0.1)',
+    roleColor: CLR.blue,
+    roleBg: CLR.blueWash,
     title: 'Open a deal',
     body: 'Pick the firm and branch, capture the property and client, attach the IDs the seller hands over.',
   },
   {
     n: '02',
     role: 'Broker',
-    roleColor: '#6C63FF',
-    roleBg: 'rgba(108,99,255,0.1)',
+    roleColor: CLR.blue,
+    roleBg: CLR.blueWash,
     title: 'Submit for review',
     body: 'Hand-off in one click. The deal moves out of the broker workspace and into the compliance queue.',
   },
   {
     n: '03',
     role: 'Compliance',
-    roleColor: '#38B2AC',
-    roleBg: 'rgba(56,178,172,0.1)',
+    roleColor: CLR.approved,
+    roleBg: '#E6F4EC',
     title: 'Verify the structure',
     body: 'Claim the deal, build the ownership tree, run LINZ / NZBN / IDV checks, attach documents as needed.',
   },
   {
     n: '04',
     role: 'Manager',
-    roleColor: '#3D4852',
-    roleBg: 'rgba(61,72,82,0.08)',
+    roleColor: CLR.ink,
+    roleBg: '#EEF1F6',
     title: 'Decide with confidence',
     body: 'Approve, reject, or override — with notes attached. Decision is broadcast back to the broker and firm.',
   },
@@ -39,17 +37,18 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section id="how" className="py-24 md:py-32">
+    <section id="how" className="py-24 md:py-28" style={{ borderTop: `1px solid ${CLR.hairline}` }}>
       <div className="mx-auto max-w-7xl px-6">
         {/* Section header */}
-        <div className="mb-16 max-w-xl">
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.25em] text-neu-muted mb-3">
+        <div className="mb-14 max-w-xl">
+          <p className="clr-eyebrow inline-flex items-center gap-2 mb-4">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CLR.blue }} />
             The lifecycle
           </p>
-          <h2 className="font-display text-3xl font-extrabold tracking-tight text-neu-fg sm:text-4xl">
+          <h2 className="font-grotesk text-3xl font-extrabold sm:text-4xl" style={{ color: CLR.ink, letterSpacing: '-0.03em' }}>
             Draft. Submit. Review. Decide.
           </h2>
-          <p className="mt-4 text-[1.02rem] leading-relaxed text-neu-muted">
+          <p className="mt-4 text-[1.02rem] leading-relaxed" style={{ color: CLR.muted }}>
             Each role moves the deal exactly one notch forward. No emails, no spreadsheets,
             no "Where did you save the trust deed?"
           </p>
@@ -61,41 +60,33 @@ export function HowItWorks() {
             <li key={s.n} className="relative">
               {/* Desktop connector */}
               {i < STEPS.length - 1 && (
-                <div
-                  className="absolute top-8 left-full z-10 hidden w-6 -translate-x-3 lg:block"
-                  aria-hidden="true"
-                >
-                  <div className="h-px border-t-2 border-dashed" style={{ borderColor: 'rgba(108,99,255,0.2)' }} />
+                <div className="absolute top-10 left-full z-0 hidden w-6 lg:block" aria-hidden="true">
+                  <div className="mx-1.5 h-px border-t-2 border-dashed" style={{ borderColor: CLR.hairline2 }} />
                 </div>
               )}
 
-              <div
-                className="h-full rounded-[28px] p-6 transition duration-300 ease-out hover:-translate-y-0.5"
-                style={{ backgroundColor: '#E0E5EC', boxShadow: EXT }}
-                onMouseEnter={e => { e.currentTarget.style.boxShadow = '12px 12px 20px rgb(163,177,198,0.7), -12px -12px 20px rgba(255,255,255,0.6)'; }}
-                onMouseLeave={e => { e.currentTarget.style.boxShadow = EXT; }}
-              >
-                {/* Number circle */}
-                <div className="mb-4 flex items-center gap-3">
-                  <div
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-display text-base font-extrabold"
-                    style={{ backgroundColor: '#E0E5EC', boxShadow: EXT_SM, color: '#6C63FF' }}
+              <div className="clr-card clr-lift h-full rounded-3xl p-6">
+                {/* Oversized ledger numeral */}
+                <div className="mb-4 flex items-center justify-between">
+                  <span
+                    className="font-bold leading-none"
+                    style={{ fontFamily: '"FK Grotesk Mono Trial", monospace', fontSize: '2.4rem', color: CLR.blue, letterSpacing: '-0.02em' }}
                   >
                     {s.n}
-                  </div>
+                  </span>
                   {/* Role badge */}
                   <span
-                    className="rounded-full px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-wider"
-                    style={{ backgroundColor: s.roleBg, color: s.roleColor, boxShadow: INSET_SM }}
+                    className="rounded-md px-2.5 py-1 text-[0.62rem] font-bold uppercase tracking-wider"
+                    style={{ backgroundColor: s.roleBg, color: s.roleColor }}
                   >
                     {s.role}
                   </span>
                 </div>
 
-                <h3 className="font-display text-[1rem] font-bold leading-snug text-neu-fg mb-2">
+                <h3 className="font-grotesk text-[1.05rem] font-bold leading-snug mb-2" style={{ color: CLR.ink, letterSpacing: '-0.01em' }}>
                   {s.title}
                 </h3>
-                <p className="text-[0.85rem] leading-relaxed text-neu-muted">{s.body}</p>
+                <p className="text-[0.85rem] leading-relaxed" style={{ color: CLR.muted }}>{s.body}</p>
               </div>
             </li>
           ))}

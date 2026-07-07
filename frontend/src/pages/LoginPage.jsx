@@ -158,7 +158,7 @@ export function LoginPage() {
       </Box>
 
       <Box sx={{ py: 3, textAlign: 'center', color: NEU_MUTED, fontSize: '0.78rem' }}>
-        © {new Date().getFullYear()} AMLDOCK · Compliance, calmer
+        © {new Date().getFullYear()} AMLDOCK · All rights reserved
         {' · '}
         <Link component={RouterLink} to="/admin-login" underline="hover" sx={{ color: NEU_MUTED }}>
           Administrator sign-in
