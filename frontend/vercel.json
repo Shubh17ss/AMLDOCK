@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://amldock.onrender.com/api/:path*"
+      "destination": "https://endeared-cube-displease.ngrok-free.dev/api/:path*"
     },
     {
       "source": "/(.*)",
