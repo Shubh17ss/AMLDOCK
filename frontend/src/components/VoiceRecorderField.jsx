@@ -1,74 +1,91 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import MicIcon from '@mui/icons-material/Mic';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
-import { AudioRecorder } from 'react-audio-voice-recorder';
+import { useAudioRecorder } from 'react-audio-voice-recorder';
 import { palette, tokens } from '../theme/theme.js';
 
+function formatTime(totalSeconds) {
+  const s = Math.floor((totalSeconds ?? 0) % 60).toString().padStart(2, '0');
+  const m = Math.floor((totalSeconds ?? 0) / 60).toString();
+  return `${m}:${s}`;
+}
+
 /**
- * Wraps react-audio-voice-recorder's `<AudioRecorder>`. Stopping a take (its built-in disk
- * icon) only *finishes* the recording into a local preview — it does NOT attach it to the
- * deal. The broker then reviews the clip and presses an explicit "Save recording" button to
- * commit it up to the parent via `onChange(blob)`. This removes the ambiguity of the
- * recorder's own save/download icon.
+ * Voice-note recorder built on react-audio-voice-recorder's `useAudioRecorder` hook so we
+ * render our own controls — the packaged `<AudioRecorder>` widget exposed a disk/file icon
+ * that read as "download" rather than "save", and could overflow its container.
  *
- * `value` is the committed Blob (or null); pass it down so the field rehydrates on tab
- * switches inside the wizard. Object URLs are created only when previewing and revoked on
- * cleanup to avoid leaks.
+ * Flow: Record → (live timer, Pause/Resume, an explicit "Save recording" button, Cancel) →
+ * on Save the finished Blob is committed to the parent via `onChange(blob)`. Nothing uploads
+ * here — the caller uploads when the wider deal is saved/submitted.
+ *
+ * `value` is the committed Blob (or null); pass it down so the field rehydrates a saved clip
+ * on wizard tab switches. Object URLs are created only for playback and revoked on cleanup.
  */
 export function VoiceRecorderField({
   value,
   onChange,
   label = 'Voice note',
-  helper = 'Tap the mic to record. When you stop, review the clip and press "Save recording" to attach it — it only uploads when you save or submit the deal.',
+  helper = 'Tap Record to start. Press "Save recording" to attach it — it only uploads when you save or submit the deal.',
 }) {
-  // A finished-but-not-yet-attached take. Takes precedence over `value` for preview so the
-  // broker can review before committing.
-  const [pendingBlob, setPendingBlob] = useState(null);
+  const {
+    startRecording,
+    stopRecording,
+    togglePauseResume,
+    recordingBlob,
+    isRecording,
+    isPaused,
+    recordingTime,
+  } = useAudioRecorder(
+    { noiseSuppression: true, echoCancellation: true },
+    (err) => console.warn('Microphone not available', err),
+    { audioBitsPerSecond: 96000 },
+  );
+
   const [objectUrl, setObjectUrl] = useState(null);
+  // Captures whether the just-stopped take should be attached ('save') or dropped ('discard').
+  const intentRef = useRef(null);
 
-  const previewBlob = pendingBlob ?? value ?? null;
-
-  // Refresh / revoke the playback URL when the previewed Blob changes.
+  // Playback URL for the committed value.
   useEffect(() => {
-    if (!previewBlob) {
+    if (!value) {
       setObjectUrl(null);
       return undefined;
     }
-    const url = URL.createObjectURL(previewBlob);
+    const url = URL.createObjectURL(value);
     setObjectUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [previewBlob]);
+  }, [value]);
 
-  const handleRecordingComplete = (blob) => {
-    // Hold locally — attach to the deal only when the broker explicitly saves.
-    setPendingBlob(blob);
-  };
+  // The hook hands back the Blob asynchronously after stopRecording(); honour the intent
+  // captured when the button was pressed.
+  useEffect(() => {
+    if (!recordingBlob) return;
+    if (intentRef.current === 'save') onChange?.(recordingBlob);
+    intentRef.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingBlob]);
 
-  const handleSaveRecording = () => {
-    if (!pendingBlob) return;
-    onChange?.(pendingBlob);
-    setPendingBlob(null);
-  };
+  const handleSave = () => { intentRef.current = 'save'; stopRecording(); };
+  const handleCancel = () => { intentRef.current = 'discard'; stopRecording(); };
+  const handleDiscardSaved = () => { onChange?.(null); };
 
-  const handleDiscard = () => {
-    setPendingBlob(null);
-    onChange?.(null);
-  };
-
-  const isPending = Boolean(pendingBlob);
-  const isSaved = !isPending && Boolean(value);
+  const isSaved = Boolean(value) && !isRecording;
 
   return (
-    <Stack spacing={1.25}>
+    <Stack spacing={1.25} sx={{ width: '100%', minWidth: 0 }}>
       <Stack direction="row" spacing={1} alignItems="center">
         <GraphicEqIcon fontSize="small" sx={{ color: palette.trust[500] }} />
         <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>{label}</Typography>
-        {(isPending || isSaved) && (
+        {isSaved && (
           <Tooltip title="Discard recording">
-            <IconButton size="small" color="error" onClick={handleDiscard}>
+            <IconButton size="small" color="error" onClick={handleDiscardSaved}>
               <DeleteOutlineIcon fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -78,53 +95,80 @@ export function VoiceRecorderField({
 
       <Box
         sx={{
-          // Pad the recorder controls inside a soft card so they don't look detached.
           p: 1.5,
           borderRadius: 1.5,
           border: `1px solid ${palette.ink[200]}`,
           bgcolor: palette.ink[50],
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 1.5,
-          minHeight: 56,
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
+          overflow: 'hidden',
         }}
       >
-        <AudioRecorder
-          onRecordingComplete={handleRecordingComplete}
-          onNotAllowedOrFound={(err) => console.warn('Microphone not available', err)}
-          audioTrackConstraints={{ noiseSuppression: true, echoCancellation: true }}
-          downloadOnSavePress={false}
-          downloadFileExtension="webm"
-          showVisualizer={true}
-          mediaRecorderOptions={{ audioBitsPerSecond: 96000 }}
-        />
-        {previewBlob && objectUrl && (
-          <Box sx={{ flexGrow: 1, minWidth: 200 }}>
-            <audio controls src={objectUrl} style={{ width: '100%' }} />
+        {/* Idle */}
+        {!isRecording && !isSaved && (
+          <Button variant="contained" startIcon={<MicIcon />} onClick={startRecording}>
+            Record voice note
+          </Button>
+        )}
+
+        {/* Recording / paused */}
+        {isRecording && (
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ minWidth: 0 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+              <Box
+                sx={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  bgcolor: tokens.rejected,
+                  flexShrink: 0,
+                  '@keyframes voicePulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.3 } },
+                  animation: isPaused ? 'none' : 'voicePulse 1.2s ease-in-out infinite',
+                }}
+              />
+              <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 42, fontVariantNumeric: 'tabular-nums' }}>
+                {formatTime(recordingTime)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {isPaused ? 'Paused' : 'Recording…'}
+              </Typography>
+            </Stack>
+
+            <Box sx={{ flexGrow: 1 }} />
+
+            <Button
+              size="small"
+              color="inherit"
+              startIcon={isPaused ? <PlayArrowIcon /> : <PauseIcon />}
+              onClick={togglePauseResume}
+            >
+              {isPaused ? 'Resume' : 'Pause'}
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<CheckCircleOutlineIcon />}
+              onClick={handleSave}
+            >
+              Save recording
+            </Button>
+            <Button size="small" color="error" onClick={handleCancel}>
+              Cancel
+            </Button>
+          </Stack>
+        )}
+
+        {/* Saved — playback */}
+        {isSaved && objectUrl && (
+          <Stack spacing={0.5} sx={{ width: '100%', minWidth: 0 }}>
+            <Box component="audio" controls src={objectUrl} sx={{ width: '100%', maxWidth: '100%' }} />
             <Typography variant="caption" color="text.secondary">
-              {(previewBlob.size / 1024).toFixed(1)} KB · {isSaved ? 'saved — uploads on submit' : 'not saved yet'}
+              {(value.size / 1024).toFixed(1)} KB · saved — uploads on submit
             </Typography>
-          </Box>
+          </Stack>
         )}
       </Box>
-
-      {/* Explicit save/discard for a finished-but-unattached take. */}
-      {isPending && (
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<CheckCircleOutlineIcon />}
-            onClick={handleSaveRecording}
-          >
-            Save recording
-          </Button>
-          <Button size="small" color="inherit" onClick={handleDiscard}>
-            Discard
-          </Button>
-        </Stack>
-      )}
 
       {isSaved && (
         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: tokens.approved }}>

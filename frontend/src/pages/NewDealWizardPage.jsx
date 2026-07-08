@@ -72,6 +72,12 @@ export function NewDealWizardPage() {
   });
   const activeBranches = useMemo(() => (branchesQ.data ?? []).filter((b) => b.active), [branchesQ.data]);
 
+  // Each step change returns the user to the top of the form (the whole page scrolls via the
+  // window in AppShell) so they start reading a fresh step from its heading.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
+
   useEffect(() => {
     if (!brokerLocked) return;
     if (form.firmId || form.firmBranchId) return;
