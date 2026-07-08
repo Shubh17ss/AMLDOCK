@@ -119,7 +119,9 @@ export function DealReviewScreen() {
   };
 
   return (
-    <Stack spacing={2} sx={{ height: { md: 'calc(100vh - 110px)' } }}>
+    // Let the page scroll instead of trapping everything in one viewport-height flexbox —
+    // that clipped the info cards and squeezed the workspace panels on shorter screens.
+    <Stack spacing={2}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       {isMobile ? (
@@ -248,7 +250,7 @@ export function DealReviewScreen() {
             )}
 
             {mobileTab === 'tree' && (
-              <Box sx={{ borderRadius: 2, p: 2, boxShadow: INSET_SM, minHeight: 300 }}>
+              <Box sx={{ borderRadius: 2, p: 2, boxShadow: INSET_SM, minHeight: 300, maxHeight: '62vh', overflow: 'auto' }}>
                 {tree.loading ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
                 ) : tree.error ? (
@@ -268,7 +270,7 @@ export function DealReviewScreen() {
             )}
 
             {mobileTab === 'node' && (
-              <Box sx={{ borderRadius: 2, overflow: 'hidden' }}>
+              <Box sx={{ borderRadius: 2, overflow: 'hidden', height: '62vh', minHeight: 360 }}>
                 <NodeEditorPane
                   tree={tree.tree}
                   selectedNodeId={selectedNodeId}
@@ -282,8 +284,9 @@ export function DealReviewScreen() {
           </Box>
         </Stack>
       ) : (
-        /* Desktop: resizable 3-panel layout */
-        <Box sx={{ flexGrow: 1, minHeight: 0, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+        /* Desktop: resizable 3-panel layout — its own bounded height with a floor so the
+           panels stay usable regardless of how tall the info cards above grow. */
+        <Box sx={{ height: 'calc(100vh - 160px)', minHeight: 560, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
           <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
             <Panel defaultSize={36} minSize={20}>
               <Box sx={{ height: '100%', p: 1, overflow: 'hidden' }}>

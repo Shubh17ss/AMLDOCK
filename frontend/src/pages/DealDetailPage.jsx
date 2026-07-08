@@ -133,7 +133,7 @@ export function DealDetailPage() {
         <Box sx={{ overflow: 'hidden' }}>
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
-            <Card sx={{ height: '100%' }}>
+            <Card sx={{ height: '100%', minHeight: 200, overflow: 'auto' }}>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Firm & branch</Typography>
                 <Divider sx={{ mb: 1.5 }} />
@@ -150,7 +150,7 @@ export function DealDetailPage() {
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <Card sx={{ height: '100%' }}>
+            <Card sx={{ height: '100%', minHeight: 200, overflow: 'auto' }}>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Property</Typography>
                 <Divider sx={{ mb: 1.5 }} />
@@ -168,7 +168,7 @@ export function DealDetailPage() {
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <Card sx={{ height: '100%' }}>
+            <Card sx={{ height: '100%', minHeight: 200, overflow: 'auto' }}>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Client</Typography>
                 <Divider sx={{ mb: 1.5 }} />
@@ -181,7 +181,7 @@ export function DealDetailPage() {
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <Card sx={{ height: '100%' }}>
+            <Card sx={{ height: '100%', minHeight: 200, overflow: 'auto' }}>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Metadata</Typography>
                 <Divider sx={{ mb: 1.5 }} />
@@ -210,6 +210,8 @@ export function DealDetailPage() {
                 (isOwnerAgent && isDraft)
               }
               title="Documents"
+              hideVoiceNotes
+              scrollTable
             />
           </CardContent>
         </Card>

@@ -11,10 +11,16 @@ import { uploadToS3 } from '../api/documents.js';
 import { AddressCascadingFields } from '../components/AddressCascadingFields.jsx';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../components/VoiceRecorderField.jsx';
+import { LoadingOverlay } from '../components/LoadingOverlay.jsx';
+import { useToast } from '../components/ToastProvider.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor } from '../auth/roles.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
+
+// Deal-status notifications sit top-centre so they read as a prominent, page-level result
+// rather than an incidental corner toast.
+const TOP_CENTER = { vertical: 'top', horizontal: 'center' };
 
 const NEU_ACCENT = tokens.blue;
 const NEU_MUTED  = tokens.muted;
@@ -44,10 +50,12 @@ const EMPTY_FORM = {
 export function NewDealWizardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [overlay, setOverlay] = useState(null); // { title, subText } | null — full-page blur
   const [savedDeal, setSavedDeal] = useState(null);
   const [voiceBlob, setVoiceBlob] = useState(null);
   const [voiceUploaded, setVoiceUploaded] = useState(false);
@@ -157,29 +165,48 @@ export function NewDealWizardPage() {
   };
 
   const handleSaveDraft = async () => {
-    const created = await persistDraft();
-    if (!created) return;
-    await uploadVoiceIfPresent(created.id);
-    navigate(`/deals/${created.id}`);
+    setOverlay({ title: 'Saving draft', subText: 'Saving the deal details and uploading any attachments…' });
+    try {
+      const created = await persistDraft();
+      if (!created) {
+        showToast({ severity: 'error', message: error || 'Failed to save draft', anchorOrigin: TOP_CENTER });
+        return;
+      }
+      await uploadVoiceIfPresent(created.id);
+      showToast({ severity: 'success', message: 'Draft saved', anchorOrigin: TOP_CENTER });
+      navigate(`/deals/${created.id}`);
+    } finally {
+      setOverlay(null);
+    }
   };
 
   const handleSubmit = async () => {
-    const created = await persistDraft();
-    if (!created) return;
-    await uploadVoiceIfPresent(created.id);
-    setSubmitting(true);
+    setOverlay({
+      title: 'Submitting deal',
+      subText: 'Saving details, uploading attachments and sending the deal for review…',
+    });
     try {
+      const created = await persistDraft();
+      if (!created) {
+        showToast({ severity: 'error', message: error || 'Failed to submit', anchorOrigin: TOP_CENTER });
+        return;
+      }
+      await uploadVoiceIfPresent(created.id);
       await submitDeal(created.id);
+      showToast({ severity: 'success', message: 'Deal submitted for review', anchorOrigin: TOP_CENTER });
       navigate(`/deals/${created.id}`);
     } catch (e) {
-      setError(e.response?.data?.message || 'Failed to submit');
+      const msg = e.response?.data?.message || 'Failed to submit';
+      setError(msg);
+      showToast({ severity: 'error', message: msg, anchorOrigin: TOP_CENTER });
     } finally {
-      setSubmitting(false);
+      setOverlay(null);
     }
   };
 
   return (
     <Stack spacing={3}>
+      <LoadingOverlay open={Boolean(overlay)} title={overlay?.title} subText={overlay?.subText} />
       <PageHeader eyebrow={`step ${step + 1} of ${STEPS.length}`} title="New deal" />
 
       {/* Desktop: full MUI Stepper */}

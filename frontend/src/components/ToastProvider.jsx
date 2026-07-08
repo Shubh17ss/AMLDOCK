@@ -41,7 +41,7 @@ export function ToastProvider({ children }) {
         autoHideDuration={current?.autoHideMs ?? 5000}
         onClose={handleClose}
         TransitionProps={{ onExited: handleExited }}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={current?.anchorOrigin ?? { vertical: 'bottom', horizontal: 'right' }}
       >
         {current ? (
           <Alert severity={current.severity} variant="filled" onClose={handleClose} sx={{ width: '100%' }}>

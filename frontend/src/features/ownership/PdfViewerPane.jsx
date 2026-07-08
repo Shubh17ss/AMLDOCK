@@ -28,7 +28,9 @@ export function PdfViewerPane({ dealId, selectedDocumentId, onSelectDocument }) 
     enabled: Boolean(dealId),
   });
 
-  const documents = docsQ.data ?? [];
+  // Voice notes are played in the Broker notes card above this pane, so keep them out of the
+  // "Open document" picker — this viewer only handles previewable files (PDFs / images).
+  const documents = (docsQ.data ?? []).filter((d) => d.documentType !== 'VOICE_NOTE');
   const selected = useMemo(
     () => documents.find((d) => d.id === selectedDocumentId) ?? null,
     [documents, selectedDocumentId],

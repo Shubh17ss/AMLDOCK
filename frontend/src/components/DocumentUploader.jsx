@@ -30,6 +30,8 @@ export function DocumentUploader({
   canUpload = true,
   title = 'Documents',
   onViewDocument = null,
+  hideVoiceNotes = false,
+  scrollTable = false,
 }) {
   const qc = useQueryClient();
   const inputRef = useRef(null);
@@ -96,6 +98,12 @@ export function DocumentUploader({
   const handleCameraCapture = (file) => {
     validateAndUpload(file);
   };
+
+  // Optionally drop voice notes — some screens surface them separately (e.g. a Broker
+  // notes card) and don't want them repeated in the document table.
+  const rows = (listQ.data ?? []).filter(
+    (d) => !(hideVoiceNotes && d.documentType === 'VOICE_NOTE'),
+  );
 
   const handleDownload = async (id) => {
     try {
@@ -182,8 +190,12 @@ export function DocumentUploader({
         </Paper>
       )}
 
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={scrollTable ? { maxHeight: 420 } : undefined}
+      >
+        <Table size="small" stickyHeader={scrollTable}>
           <TableHead>
             <TableRow>
               <TableCell>File</TableCell>
@@ -195,7 +207,7 @@ export function DocumentUploader({
             </TableRow>
           </TableHead>
           <TableBody>
-            {(listQ.data ?? []).map((d) => (
+            {rows.map((d) => (
               <TableRow key={d.id}>
                 <TableCell>{d.originalFilename}</TableCell>
                 <TableCell><Chip size="small" label={d.documentType} /></TableCell>
@@ -227,7 +239,7 @@ export function DocumentUploader({
                 </TableCell>
               </TableRow>
             ))}
-            {(!listQ.data || listQ.data.length === 0) && (
+            {rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                   No documents yet.

@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="./assets/logos/image_chrome.png"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget=overlays-content: the on-screen keyboard overlays the page
+         instead of resizing the layout viewport, so the fixed bottom nav stays pinned to
+         the real screen bottom (behind the keyboard) rather than riding up with it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=overlays-content" />
     <title>AMLDOCK</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
