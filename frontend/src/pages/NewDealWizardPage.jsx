@@ -5,6 +5,7 @@ import {
   Alert, Box, Button, Card, CardContent, Divider, FormControl, InputLabel, MenuItem,
   Select, Stack, Step, StepLabel, Stepper, TextField, Typography,
 } from '@mui/material';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { listFirms, listBranches } from '../api/firms.js';
 import { createDeal, submitDeal, updateDeal } from '../api/deals.js';
 import { uploadToS3 } from '../api/documents.js';
@@ -168,22 +169,6 @@ export function NewDealWizardPage() {
       if (!created) return;
     }
     setStep((s) => s + 1);
-  };
-
-  const handleSaveDraft = async () => {
-    setOverlay({ title: 'Saving draft', subText: 'Saving the deal details and uploading any attachments…' });
-    try {
-      const created = await persistDraft();
-      if (!created) {
-        showToast({ severity: 'error', message: error || 'Failed to save draft', anchorOrigin: TOP_CENTER });
-        return;
-      }
-      await uploadVoiceIfPresent(created.id);
-      showToast({ severity: 'success', message: 'Draft saved', anchorOrigin: TOP_CENTER });
-      navigate(`/deals/${created.id}`);
-    } finally {
-      setOverlay(null);
-    }
   };
 
   const handleSubmit = async () => {
@@ -411,7 +396,7 @@ export function NewDealWizardPage() {
 
               <Alert severity="info">
                 Submitting this deal will move it to <strong>SUBMITTED</strong>, locking it from further broker edits.
-                You can also save it as a draft and submit later.
+                Your progress is already saved as a draft, so you can leave and finish it later from <strong>My deals</strong>.
               </Alert>
             </Stack>
           )}
@@ -427,9 +412,23 @@ export function NewDealWizardPage() {
         justifyContent="space-between"
         alignItems={{ xs: 'stretch', sm: 'center' }}
       >
-        <Button onClick={() => navigate('/my-deals')} disabled={submitting} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-          Cancel
-        </Button>
+        {/* Wrapped in a Box using padding-top for the mobile gap: the parent Stack's
+            `spacing` sets a margin on each direct child, which overrode the button's own `mt`.
+            Padding isn't touched by Stack spacing, so it reliably adds space above. */}
+        <Box sx={{ width: { xs: '100%', sm: 'auto' }, pt: { xs: 5, sm: 0 } }}>
+          <Button
+            onClick={() => navigate('/my-deals')}
+            disabled={submitting}
+            startIcon={<DeleteOutlineIcon />}
+            sx={{
+              width: { xs: '100%', sm: 'auto' },
+              color: tokens.rejected,
+              '&:hover': { backgroundColor: '#FCEAEA', color: tokens.rejected },
+            }}
+          >
+            Discard
+          </Button>
+        </Box>
         <Stack direction="row" spacing={1.5} flexWrap="wrap" justifyContent={{ xs: 'stretch', sm: 'flex-end' }}>
           <Button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
@@ -448,24 +447,14 @@ export function NewDealWizardPage() {
               {submitting && step === 2 ? 'Saving draft…' : 'Next'}
             </Button>
           ) : (
-            <>
-              <Button
-                variant="outlined"
-                onClick={handleSaveDraft}
-                disabled={submitting}
-                sx={{ flex: { xs: 1, sm: 'unset' } }}
-              >
-                {savedDeal ? 'Open draft' : 'Save as draft'}
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleSubmit}
-                disabled={submitting}
-                sx={{ flex: { xs: 1, sm: 'unset' } }}
-              >
-                {submitting ? 'Submitting…' : 'Submit'}
-              </Button>
-            </>
+            <Button
+              variant="contained"
+              onClick={handleSubmit}
+              disabled={submitting}
+              sx={{ flex: { xs: 1, sm: 'unset' } }}
+            >
+              {submitting ? 'Submitting…' : 'Submit'}
+            </Button>
           )}
         </Stack>
       </Stack>
