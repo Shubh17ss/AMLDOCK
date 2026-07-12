@@ -9,7 +9,9 @@ import {
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { assignDeal, listDeals } from '../api/deals.js';
-import { listFirms } from '../api/firms.js';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { DEAL_REVIEWER_ROLES } from '../auth/roles.js';
+import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
@@ -19,24 +21,38 @@ import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
 
 const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
-const DEFAULT_STATUS = 'SUBMITTED';
+const DEFAULT_STATUS = 'ALL';
 const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
 
-export function QueuePage() {
+/**
+ * Deals — the full deal list with a status filter (formerly the compliance queue
+ * at /queue). Firm/branch narrowing comes from the sidebar scope selector, so the
+ * list always matches the workspace scope. Claim and review actions appear only
+ * for reviewers (and ROOT).
+ */
+export function DealsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const { firm, branch } = useDashboardScope();
   const [status, setStatus] = useState(DEFAULT_STATUS);
-  const [firmId, setFirmId] = useState('ALL');
   const [actionError, setActionError] = useState(null);
 
-  const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
+  const canReview = Boolean(user) && ['ROOT', ...DEAL_REVIEWER_ROLES].includes(user.role);
 
+  // The backend enforces role scope regardless; ROOT and firm-level reviewers get
+  // real firm/branch filtering from these params.
   const params = {};
   if (status !== 'ALL') params.status = status;
-  if (firmId !== 'ALL') params.firmId = firmId;
-  const dealsQ = useQuery({ queryKey: ['deals', 'queue', status, firmId], queryFn: () => listDeals(params) });
-  const deals = dealsQ.data ?? [];
+  if (firm?.id) params.firmId = firm.id;
+  if (branch?.id) params.branchId = branch.id;
+  const dealsQ = useQuery({
+    queryKey: ['deals', 'list', status, firm?.id ?? null, branch?.id ?? null],
+    queryFn: () => listDeals(params),
+  });
+  // Belt-and-braces: also narrow client-side by the scope's firm/branch names.
+  const deals = useScopedDeals(dealsQ.data);
 
   const claimMut = useMutation({
     mutationFn: (id) => assignDeal(id),
@@ -55,57 +71,24 @@ export function QueuePage() {
   return (
     <Stack spacing={2.5}>
       <PageHeader
-        eyebrow={`${deals.length} ${deals.length === 1 ? 'deal' : 'deals'} · ${status === 'ALL' ? 'all statuses' : status.replace('_', ' ').toLowerCase()}`}
-        title="Compliance queue"
+        eyebrow={[
+          `${deals.length} ${deals.length === 1 ? 'deal' : 'deals'}`,
+          status === 'ALL' ? 'all statuses' : status.replace('_', ' ').toLowerCase(),
+          firm?.name,
+          branch?.name,
+        ].filter(Boolean).join(' · ')}
+        title="Deals"
       />
 
-      {/* Status filter — pills on mobile, selects on desktop */}
+      {/* Status filter — pills on mobile, select on desktop. Firm/branch come from the sidebar scope. */}
       <Box sx={{ display: { xs: 'block', md: 'none' } }}>
         <StatusPills value={status} onChange={setStatus} options={STATUSES} />
       </Box>
-
-      {/* Firm filter — mobile chip row */}
-      {(firmsQ.data ?? []).length > 0 && (
-        <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1, overflowX: 'auto', pb: 0.5, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
-          {['ALL', ...(firmsQ.data ?? []).map(f => f.id)].map((fid) => {
-            const label = fid === 'ALL' ? 'All firms' : (firmsQ.data ?? []).find(f => f.id === fid)?.name ?? fid;
-            const active = firmId === fid;
-            return (
-              <Box
-                key={fid}
-                component="button"
-                onClick={() => setFirmId(fid)}
-                sx={{
-                  border: 'none', borderRadius: 999, px: 2, py: 0.75,
-                  fontSize: '0.72rem', fontWeight: active ? 700 : 500,
-                  color: active ? tokens.blue : tokens.muted,
-                  backgroundColor: active ? tokens.blueWash : tokens.tile,
-                  border: `1px solid ${active ? 'transparent' : tokens.hairline}`,
-                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, fontFamily: 'inherit',
-                }}
-              >
-                {label}
-              </Box>
-            );
-          })}
-        </Box>
-      )}
-
-      {/* Desktop filters */}
       <Stack direction="row" spacing={2} sx={{ display: { xs: 'none', md: 'flex' } }}>
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <InputLabel id="status-label">Status</InputLabel>
           <Select labelId="status-label" label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
             {STATUSES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: 240 }}>
-          <InputLabel id="firm-label">Firm</InputLabel>
-          <Select labelId="firm-label" label="Firm" value={firmId} onChange={(e) => setFirmId(e.target.value)}>
-            <MenuItem value="ALL">All firms</MenuItem>
-            {(firmsQ.data ?? []).map((f) => (
-              <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
-            ))}
           </Select>
         </FormControl>
       </Stack>
@@ -121,8 +104,8 @@ export function QueuePage() {
             borderRadius: 4, p: 4, textAlign: 'center',
             backgroundColor: tokens.tile, border: `1px solid ${tokens.hairline}`,
           }}>
-            <Typography sx={{ fontSize: '1.5rem', mb: 1 }}>📥</Typography>
-            <Typography sx={{ fontWeight: 700, color: tokens.ink }}>Queue is clear</Typography>
+            <Typography sx={{ fontSize: '1.5rem', mb: 1 }}>📁</Typography>
+            <Typography sx={{ fontWeight: 700, color: tokens.ink }}>No deals</Typography>
             <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>No deals match this filter.</Typography>
           </Box>
         )}
@@ -130,8 +113,8 @@ export function QueuePage() {
           <DealCard
             key={d.id}
             deal={d}
-            onClaim={d.status === 'SUBMITTED' ? claimMut.mutate : undefined}
-            onReview={d.status === 'UNDER_REVIEW' ? true : undefined}
+            onClaim={canReview && d.status === 'SUBMITTED' ? claimMut.mutate : undefined}
+            onReview={canReview && d.status === 'UNDER_REVIEW' ? true : undefined}
             claimPending={claimMut.isPending}
           />
         ))}
@@ -149,7 +132,7 @@ export function QueuePage() {
                   <TableCell>Status</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Value (NZD)</TableCell>
-                  <TableCell>Firm</TableCell>
+                  <TableCell>Reporting entity</TableCell>
                   <TableCell>Branch</TableCell>
                   <TableCell>Client</TableCell>
                   <TableCell>Property</TableCell>
@@ -170,13 +153,13 @@ export function QueuePage() {
                     <TableCell>{d.propertyAddress ?? '—'}</TableCell>
                     <TableCell>{d.updatedAt ? new Date(d.updatedAt).toLocaleString() : '—'}</TableCell>
                     <TableCell align="right">
-                      {d.status === 'SUBMITTED' && (
+                      {canReview && d.status === 'SUBMITTED' && (
                         <Button size="small" variant="contained" startIcon={<PlayArrowIcon />}
                           onClick={() => claimMut.mutate(d.id)} disabled={claimMut.isPending}>
                           Claim
                         </Button>
                       )}
-                      {d.status === 'UNDER_REVIEW' && (
+                      {canReview && d.status === 'UNDER_REVIEW' && (
                         <Button size="small" variant="outlined" onClick={() => navigate(`/deals/${d.id}/review`)}>
                           Open review
                         </Button>

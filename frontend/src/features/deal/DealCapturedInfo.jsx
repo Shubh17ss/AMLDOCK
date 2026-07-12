@@ -62,7 +62,7 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
           <Divider sx={{ my: 1.5 }} />
           <Grid container spacing={{ xs: 2, md: 3 }} rowSpacing={{ xs: 2.5, md: 3 }}>
             <Group title="Firm & transaction">
-              <Row label="Firm"        value={deal.firmName} />
+              <Row label="Reporting entity" value={deal.firmName} />
               <Row label="Branch"      value={deal.branchName} />
               <Row label="Transaction" value={TXN_LABEL[deal.transactionType] ?? deal.transactionType} />
               <Row label="Value"       value={deal.transactionValueNzd != null ? NZD.format(deal.transactionValueNzd) : null} />

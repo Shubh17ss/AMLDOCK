@@ -24,25 +24,25 @@ export function FirmsAdminPage() {
   return (
     <Stack spacing={3}>
       <PageHeader
-        eyebrow={`${firmsQ.data?.length ?? 0} firms · ${(firmsQ.data ?? []).filter((f) => f.active).length} active`}
-        title="Real-estate firms"
+        eyebrow={`${firmsQ.data?.length ?? 0} reporting entities · ${(firmsQ.data ?? []).filter((f) => f.active).length} active`}
+        title="Reporting entities"
         actions={
           <Button variant="contained" startIcon={<AddBusinessIcon />} onClick={() => setCreateOpen(true)}>
-            New firm
+            New reporting entity
           </Button>
         }
       />
 
-      {firmsQ.isError && <Alert severity="error">Failed to load firms.</Alert>}
+      {firmsQ.isError && <Alert severity="error">Failed to load reporting entities.</Alert>}
       {firmsQ.data?.length === 0 && (
-        <Alert severity="info">No firms yet — create one to start onboarding deals.</Alert>
+        <Alert severity="info">No reporting entities yet — create one to start onboarding deals.</Alert>
       )}
 
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Firm name</TableCell>
+              <TableCell>Entity name</TableCell>
               <TableCell>NZBN/ABN</TableCell>
               <TableCell>Senior manager</TableCell>
               <TableCell>Active</TableCell>
@@ -63,7 +63,7 @@ export function FirmsAdminPage() {
                 </TableCell>
                 <TableCell align="right">
                   <Button size="small" variant="outlined"
-                          onClick={() => navigate(`/admin/firms/${firm.id}`)}>
+                          onClick={() => navigate(`/settings/reporting-entities/${firm.id}`)}>
                     Manage
                   </Button>
                 </TableCell>
@@ -100,7 +100,7 @@ function CreateFirmDialog({ open, onClose }) {
       setError(null);
       onClose();
     },
-    onError: (err) => setError(err.response?.data?.message || 'Failed to create firm'),
+    onError: (err) => setError(err.response?.data?.message || 'Failed to create reporting entity'),
   });
   const submit = (e) => { e.preventDefault(); mut.mutate(); };
   const ch = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -110,10 +110,10 @@ function CreateFirmDialog({ open, onClose }) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <Box component="form" onSubmit={submit}>
-        <DialogTitle>New real-estate firm</DialogTitle>
+        <DialogTitle>New reporting entity</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="Firm name" value={form.name} onChange={ch('name')} required />
+            <TextField label="Entity name" value={form.name} onChange={ch('name')} required />
             <TextField label="NZBN/ABN" value={form.nzbn} onChange={ch('nzbn')} />
 
             <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Liaison</Typography>

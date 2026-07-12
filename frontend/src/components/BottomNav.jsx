@@ -24,13 +24,13 @@ function navItemsFor(role) {
     ];
     case 'firmReviewer': return [
       { label: 'Home',    to: '/dashboard', Icon: HomeIcon },
-      { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
+      { label: 'Deals',   to: '/cdd/deals', Icon: QueueIcon },
       { label: 'Firm',    to: '/my-firm', Icon: DealsIcon },
       { label: 'Profile', to: '/profile', Icon: ProfileIcon },
     ];
     case 'root': return [
       { label: 'Home',    to: '/dashboard', Icon: HomeIcon },
-      { label: 'Queue',   to: '/queue',   Icon: QueueIcon },
+      { label: 'Deals',   to: '/cdd/deals', Icon: QueueIcon },
       { label: 'Profile', to: '/profile', Icon: ProfileIcon },
     ];
     default: return [

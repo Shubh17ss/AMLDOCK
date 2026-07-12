@@ -42,7 +42,7 @@ export function UsersAdminPage() {
   return (
     <Stack spacing={3}>
       <PageHeader
-        eyebrow={`${usersQ.data?.length ?? 0} users · all firms`}
+        eyebrow={`${usersQ.data?.length ?? 0} users · all reporting entities`}
         title="Users"
         actions={creatableRoles(currentUser?.role).length > 0 && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
@@ -61,7 +61,7 @@ export function UsersAdminPage() {
               <TableCell>Name</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Role</TableCell>
-              <TableCell>Firm</TableCell>
+              <TableCell>Reporting entity</TableCell>
               <TableCell>Branch</TableCell>
               <TableCell>Active</TableCell>
               <TableCell align="right">Actions</TableCell>

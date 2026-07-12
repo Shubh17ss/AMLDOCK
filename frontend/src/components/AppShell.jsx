@@ -6,6 +6,8 @@ import { roleLabel } from '../auth/roles.js';
 import { SidebarNav } from './SidebarNav.jsx';
 import { UserMenu, initialsFor } from './UserMenu.jsx';
 import { BottomNav } from './BottomNav.jsx';
+import { moduleTitleFor } from '../navigation/moduleRegistry.jsx';
+import { DashboardScopeProvider } from '../dashboard/DashboardScope.jsx';
 import { tokens } from '../theme/theme.js';
 
 const SIDEBAR_WIDTH = 260;
@@ -14,10 +16,7 @@ const TITLE_BY_PATH_PREFIX = [
   ['/my-deals',    'My deals'],
   ['/deals/new',   'New deal'],
   ['/deals/',      'Deal'],
-  ['/queue',       'Compliance queue'],
   ['/firm/deals',  'Firm deals'],
-  ['/admin/users', 'Users'],
-  ['/admin/firms', 'Firms'],
   ['/admin/audit', 'Audit log'],
   ['/profile',     'Profile'],
   ['/dashboard',   'Dashboard'],
@@ -26,7 +25,8 @@ const TITLE_BY_PATH_PREFIX = [
 
 function titleFor(pathname) {
   const match = TITLE_BY_PATH_PREFIX.find(([prefix]) => pathname.startsWith(prefix));
-  return match ? match[1] : 'AML·DOCK';
+  if (match) return match[1];
+  return moduleTitleFor(pathname) ?? 'AML·DOCK';
 }
 
 export function AppShell() {
@@ -41,6 +41,7 @@ export function AppShell() {
   };
 
   return (
+    <DashboardScopeProvider>
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
 
       {/* Sidebar — desktop only */}
@@ -65,11 +66,15 @@ export function AppShell() {
               px: 2.5, py: 2.5,
               textDecoration: 'none', color: 'inherit',
               borderBottom: `1px solid ${tokens.hairline}`,
+              background: 'linear-gradient(180deg, #FFFFFF 0%, #F7FAFF 100%)',
+              boxShadow: '0 6px 16px -12px rgba(16,24,40,0.18)',
+              position: 'relative', zIndex: 1,
             }}
           >
             <Box sx={{
               width: 38, height: 38, borderRadius: 2.5,
               background: `linear-gradient(140deg, ${tokens.blue}, ${tokens.blueDark})`,
+              boxShadow: '0 4px 10px -3px rgba(27,95,227,0.45), inset 0 1px 0 rgba(255,255,255,0.25)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0,
             }}>
@@ -164,17 +169,29 @@ export function AppShell() {
           component="main"
           sx={{
             flexGrow: 1,
+            position: 'relative',
             p: { xs: 2, md: 4 },
             pb: { xs: 'calc(80px + env(safe-area-inset-bottom, 0px))', md: 4 },
           }}
         >
-          <Outlet />
+          {/* Ambient canvas wash — gives the frosted tiles something to blur. */}
+          <Box aria-hidden sx={{
+            position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
+            background: `
+              radial-gradient(920px 480px at 88% -12%, rgba(27,95,227,0.075), transparent 62%),
+              radial-gradient(720px 460px at -8% 110%, rgba(27,95,227,0.05), transparent 58%)
+            `,
+          }} />
+          <Box sx={{ position: 'relative', zIndex: 1 }}>
+            <Outlet />
+          </Box>
         </Box>
       </Box>
 
       {/* Bottom nav — mobile only */}
       <BottomNav />
     </Box>
+    </DashboardScopeProvider>
   );
 }
 

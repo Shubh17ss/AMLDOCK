@@ -8,8 +8,8 @@ export function HomeRedirect() {
   switch (navProfileFor(user.role)) {
     case 'agent': return <Navigate to="/my-deals" replace />;
     case 'salesManager': return <Navigate to="/firm/deals" replace />;
-    case 'firmReviewer': return <Navigate to="/queue" replace />;
-    case 'root': return <Navigate to="/admin/users" replace />;
+    case 'firmReviewer': return <Navigate to="/cdd/deals" replace />;
+    case 'root': return <Navigate to="/settings/users" replace />;
     default: return <Navigate to="/profile" replace />;
   }
 }

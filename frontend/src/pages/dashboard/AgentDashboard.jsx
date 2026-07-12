@@ -6,6 +6,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import { listDeals } from '../../api/deals.js';
 import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles, STATUS_META } from '../../components/bento/Bento.jsx';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
+import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { formatNZDCompact } from '../../utils/formatters.js';
 import { tokens } from '../../theme/theme.js';
 
@@ -14,11 +15,10 @@ const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValueNzd || 0), 
 
 export function AgentDashboard() {
   const q = useQuery({ queryKey: ['deals', 'mine', 'ALL'], queryFn: () => listDeals() });
+  const deals = useScopedDeals(q.data);
 
   if (q.isError) return <Alert severity="error">We couldn’t load your deals. Refresh to try again.</Alert>;
   if (q.isLoading) return <Bento><SkeletonTiles /></Bento>;
-
-  const deals = q.data ?? [];
   const drafts = deals.filter((d) => d.status === 'DRAFT');
   const inReview = deals.filter((d) => d.status === 'SUBMITTED' || d.status === 'UNDER_REVIEW');
   const approved = deals.filter((d) => d.status === 'APPROVED');

@@ -12,6 +12,7 @@ import { searchAudit } from '../../api/audit.js';
 import {
   Bento, HeroTile, StatTile, ListTile, ActionTile, DistributionTile, SkeletonTiles, STATUS_META,
 } from '../../components/bento/Bento.jsx';
+import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { timeAgo } from '../../utils/formatters.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
@@ -21,10 +22,11 @@ export function RootDashboard() {
   const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const auditQ = useQuery({ queryKey: ['audit', { size: 8 }], queryFn: () => searchAudit({ size: 8 }) });
 
+  const deals = useScopedDeals(dealsQ.data);
+
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load platform data. Refresh to try again.</Alert>;
   if (dealsQ.isLoading || firmsQ.isLoading || usersQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
 
-  const deals = dealsQ.data ?? [];
   const firms = firmsQ.data ?? [];
   const users = usersQ.data ?? [];
   const activity = auditQ.data?.items ?? [];
@@ -42,17 +44,17 @@ export function RootDashboard() {
         eyebrow="PLATFORM · LIVE"
         value={deals.length}
         label={deals.length === 1 ? 'deal on the platform' : 'deals on the platform'}
-        caption={`${firms.length} firms · ${users.length} users`}
+        caption={`${firms.length} reporting entities · ${users.length} users`}
         action={
-          <Button component={RouterLink} to="/queue" startIcon={<InboxIcon />}
+          <Button component={RouterLink} to="/cdd/deals" startIcon={<InboxIcon />}
                   sx={{ bgcolor: '#fff', color: tokens.blue, fontWeight: 700, '&:hover': { bgcolor: '#EEF3FF' } }}>
-            Review queue
+            Review deals
           </Button>
         }
       />
 
-      <StatTile index={1} eyebrow="FIRMS" value={firms.length} label="Registered" to="/admin/firms" />
-      <StatTile index={2} eyebrow="USERS" value={users.length} label="Across all firms" to="/admin/users" />
+      <StatTile index={1} eyebrow="REPORTING ENTITIES" value={firms.length} label="Registered" to="/settings/reporting-entities" />
+      <StatTile index={2} eyebrow="USERS" value={users.length} label="Across all firms" to="/settings/users" />
       <DistributionTile
         index={3}
         eyebrow="DEAL STATUS · MIX"
@@ -71,16 +73,16 @@ export function RootDashboard() {
         empty={auditQ.isError ? 'Activity feed unavailable.' : 'No recent activity.'}
       />
 
-      <StatTile index={5} eyebrow="ACTIVE FIRMS" dot={tokens.approved} value={activeFirms}
-                label={`${firms.length - activeFirms} inactive`} to="/admin/firms" />
+      <StatTile index={5} eyebrow="ACTIVE ENTITIES" dot={tokens.approved} value={activeFirms}
+                label={`${firms.length - activeFirms} inactive`} to="/settings/reporting-entities" />
       <StatTile index={6} eyebrow="AWAITING" dot={STATUS_META.SUBMITTED.c} value={count('SUBMITTED')}
-                label="In the queue" color={count('SUBMITTED') ? tokens.submitted : undefined} to="/queue" />
+                label="Awaiting review" color={count('SUBMITTED') ? tokens.submitted : undefined} to="/cdd/deals" />
 
       <ActionTile
         index={7}
         actions={[
-          { to: '/admin/firms', label: 'Firms', icon: <BusinessIcon fontSize="small" />, primary: true },
-          { to: '/admin/users', label: 'Users', icon: <PeopleIcon fontSize="small" /> },
+          { to: '/settings/reporting-entities', label: 'Reporting entities', icon: <BusinessIcon fontSize="small" />, primary: true },
+          { to: '/settings/users', label: 'Users', icon: <PeopleIcon fontSize="small" /> },
           { to: '/admin/audit', label: 'Audit log', icon: <HistoryIcon fontSize="small" /> },
         ]}
       />

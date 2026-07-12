@@ -136,8 +136,8 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId }) {
 
           {showFirmPicker && needsFirm && (
             <FormControl fullWidth required>
-              <InputLabel id="firm-label">Real-estate firm</InputLabel>
-              <Select labelId="firm-label" label="Real-estate firm"
+              <InputLabel id="firm-label">Reporting entity</InputLabel>
+              <Select labelId="firm-label" label="Reporting entity"
                       value={form.realEstateFirmId}
                       onChange={ch('realEstateFirmId')}
                       disabled={activeFirms.length === 0}>
@@ -147,7 +147,7 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId }) {
               </Select>
               {activeFirms.length === 0 && (
                 <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
-                  No active firms — create one under <strong>Firms</strong> first.
+                  No active reporting entities — create one under <strong>Reporting Entities</strong> first.
                 </Typography>
               )}
             </FormControl>
@@ -165,7 +165,7 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId }) {
               </Select>
               {firmId && activeBranches.length === 0 && !branchesQ.isLoading && (
                 <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
-                  This firm has no active branches — add one under <strong>Firms</strong> first.
+                  This reporting entity has no active branches — add one under <strong>Reporting Entities</strong> first.
                 </Typography>
               )}
             </FormControl>

@@ -27,7 +27,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
             <TableCell>Status</TableCell>
             <TableCell>Type</TableCell>
             <TableCell>Value (NZD)</TableCell>
-            {showFirm && <TableCell>Firm</TableCell>}
+            {showFirm && <TableCell>Reporting entity</TableCell>}
             <TableCell>Branch</TableCell>
             <TableCell>Client</TableCell>
             <TableCell>Property</TableCell>

@@ -27,7 +27,7 @@ const NEU_ACCENT = tokens.blue;
 const NEU_MUTED  = tokens.muted;
 const INSET_SM   = 'inset 0 1px 2px rgba(16,24,40,0.06)';
 
-const STEPS = ['Firm + branch', 'Property', 'Client', 'Documents', 'Review'];
+const STEPS = ['Entity + branch', 'Property', 'Client', 'Documents', 'Review'];
 
 const EMPTY_FORM = {
   firmId: '',
@@ -230,13 +230,13 @@ export function NewDealWizardPage() {
               <Divider />
               {brokerLocked && (
                 <Alert severity="info" sx={{ py: 0.5 }}>
-                  You're scoped to a single firm and branch — they're pre-filled and locked.
+                  You're scoped to a single reporting entity and branch — they're pre-filled and locked.
                   Ask an administrator if you need to be moved.
                 </Alert>
               )}
               <FormControl fullWidth required disabled={brokerLocked}>
-                <InputLabel id="firm-label">Real-estate firm</InputLabel>
-                <Select labelId="firm-label" label="Real-estate firm"
+                <InputLabel id="firm-label">Reporting entity</InputLabel>
+                <Select labelId="firm-label" label="Reporting entity"
                         value={form.firmId}
                         onChange={(e) => setForm((f) => ({ ...f, firmId: e.target.value, firmBranchId: '' }))}>
                   {activeFirms.map((f) => <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>)}
@@ -355,8 +355,8 @@ export function NewDealWizardPage() {
             <Stack spacing={2}>
               <Typography variant="h6">Review</Typography>
               <Divider />
-              <ReviewBlock title="Firm & branch">
-                <ReviewRow label="Firm" value={activeFirms.find((f) => f.id === form.firmId)?.name} />
+              <ReviewBlock title="Entity & branch">
+                <ReviewRow label="Reporting entity" value={activeFirms.find((f) => f.id === form.firmId)?.name} />
                 <ReviewRow label="Branch" value={activeBranches.find((b) => b.id === form.firmBranchId)?.name} />
                 <ReviewRow label="Transaction" value={`${form.transactionType}${form.transactionValueNzd ? ` · NZD ${form.transactionValueNzd}` : ''}`} />
                 <ReviewRow label="POC" value={[form.pocName, form.pocRole, form.pocEmail].filter(Boolean).join(' · ')} />

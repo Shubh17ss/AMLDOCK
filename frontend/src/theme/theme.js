@@ -9,7 +9,7 @@ export const tokens = {
   tile:      '#FFFFFF',
   hairline:  '#E7ECF3',
   hairline2: '#D7DEEA',
-  ink:       '#111111',
+  ink:       '#242C3C',
   muted:     '#5A6576',
   blue:      '#1B5FE3',
   blueDark:  '#1648B0',
@@ -54,7 +54,7 @@ export const theme = createTheme({
   palette: {
     mode: 'light',
     primary:    { main: T.blue, dark: T.blueDark, light: '#4F86F0', contrastText: '#fff' },
-    secondary:  { main: T.ink, dark: '#111111', light: '#39414F', contrastText: '#fff' },
+    secondary:  { main: T.ink, dark: '#1A2130', light: '#3A4356', contrastText: '#fff' },
     background: { default: T.canvas, paper: T.tile },
     text:       { primary: T.ink, secondary: T.muted },
     divider:    T.hairline,
@@ -173,7 +173,7 @@ export const theme = createTheme({
         containedSecondary: {
           backgroundColor: T.ink,
           color: '#fff',
-          '&:hover': { backgroundColor: '#111111' },
+          '&:hover': { backgroundColor: '#1A2130' },
         },
         outlined: {
           backgroundColor: T.tile,

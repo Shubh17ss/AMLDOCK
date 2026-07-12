@@ -15,11 +15,16 @@ import {
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
+import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
+import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
+import { placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH } from '../navigation/moduleRegistry.jsx';
+import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
+import { DocumentsLandingPage } from '../pages/documents/DocumentsLandingPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
 import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
 import { MyDealsPage } from '../pages/MyDealsPage.jsx';
-import { QueuePage } from '../pages/QueuePage.jsx';
+import { DealsPage } from '../pages/DealsPage.jsx';
 import { FirmDealsPage } from '../pages/FirmDealsPage.jsx';
 import { NewDealWizardPage } from '../pages/NewDealWizardPage.jsx';
 import { DealDetailPage } from '../pages/DealDetailPage.jsx';
@@ -40,6 +45,50 @@ export function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
 
+        {/* CDD Register — the role-aware stats dashboard (the CDD group landing) */}
+        <Route path={CDD_REGISTER_PATH} element={<CddRegisterPage />} />
+
+        {/* Deals — the full deal list with filters (formerly the /queue compliance queue) */}
+        <Route path={DEALS_PATH} element={<DealsPage />} />
+
+        {/* Documents — landing cards + versioned compliance registers (upload + history) */}
+        <Route path="/documents" element={<DocumentsLandingPage />} />
+        {DOCUMENT_MODULES.map((m) => (
+          <Route
+            key={m.path}
+            path={m.path}
+            element={<DocumentModulePage category={m.category} title={m.title} />}
+          />
+        ))}
+
+        {/* Settings › Users — the platform user admin (formerly /admin/users) */}
+        <Route path="/settings/users" element={
+          <ProtectedRoute roles={['ROOT']}>
+            <UsersAdminPage />
+          </ProtectedRoute>
+        } />
+
+        {/* Settings › Reporting Entities — entity admin (formerly /admin/firms) */}
+        <Route path="/settings/reporting-entities" element={
+          <ProtectedRoute roles={['ROOT']}>
+            <FirmsAdminPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/settings/reporting-entities/:id" element={
+          <ProtectedRoute roles={['ROOT']}>
+            <FirmAdminDetailPage />
+          </ProtectedRoute>
+        } />
+
+        {/* Compliance modules + group landings — placeholders until each is built out */}
+        {placeholderRoutes().map((r) => (
+          <Route
+            key={r.to}
+            path={r.to}
+            element={<PlaceholderPage title={r.title} detail="Coming soon — this module will be built out." />}
+          />
+        ))}
+
         <Route path="/my-deals" element={
           <ProtectedRoute roles={DEAL_AUTHOR_ROLES}>
             <MyDealsPage />
@@ -57,11 +106,6 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        <Route path="/queue" element={
-          <ProtectedRoute roles={['ROOT', ...DEAL_REVIEWER_ROLES]}>
-            <QueuePage />
-          </ProtectedRoute>
-        } />
         <Route path="/firm/deals" element={
           <ProtectedRoute roles={['SALES_MANAGER', ...DEAL_REVIEWER_ROLES, 'ROOT']}>
             <FirmDealsPage />
@@ -84,21 +128,6 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        <Route path="/admin/users" element={
-          <ProtectedRoute roles={['ROOT']}>
-            <UsersAdminPage />
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/firms" element={
-          <ProtectedRoute roles={['ROOT']}>
-            <FirmsAdminPage />
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/firms/:id" element={
-          <ProtectedRoute roles={['ROOT']}>
-            <FirmAdminDetailPage />
-          </ProtectedRoute>
-        } />
         <Route path="/admin/audit" element={
           <ProtectedRoute roles={['ROOT']}>
             <AuditAdminPage />

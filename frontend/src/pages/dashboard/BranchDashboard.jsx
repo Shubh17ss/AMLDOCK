@@ -9,6 +9,7 @@ import {
   Bento, HeroTile, StatTile, ListTile, ActionTile, BentoTile, Eyebrow, SkeletonTiles, STATUS_META,
 } from '../../components/bento/Bento.jsx';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
+import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { roleLabel } from '../../auth/roles.js';
 import { formatNZDCompact } from '../../utils/formatters.js';
 import { tokens, fonts } from '../../theme/theme.js';
@@ -20,11 +21,10 @@ const withinDays = (iso, days) => iso && (Date.now() - new Date(iso)) / 86400000
 export function BranchDashboard() {
   const dealsQ = useQuery({ queryKey: ['deals', 'firm', 'ALL'], queryFn: () => listDeals() });
   const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
+  const deals = useScopedDeals(dealsQ.data);
 
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load your branch. Refresh to try again.</Alert>;
   if (dealsQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
-
-  const deals = dealsQ.data ?? [];
   const users = usersQ.data ?? [];
   const submitted = deals.filter((d) => d.status === 'SUBMITTED');
   const underReview = deals.filter((d) => d.status === 'UNDER_REVIEW');

@@ -137,7 +137,7 @@ export function DealDetailPage() {
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Firm & branch</Typography>
                 <Divider sx={{ mb: 1.5 }} />
-                <DetailRow label="Firm"    value={deal.firmName} />
+                <DetailRow label="Reporting entity" value={deal.firmName} />
                 <DetailRow label="Branch"  value={deal.branchName} />
                 <DetailRow label="Value"   value={deal.transactionValueNzd != null ? NZD.format(deal.transactionValueNzd) : null} />
                 <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontWeight: 700 }}>Point of contact</Typography>

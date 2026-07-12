@@ -84,7 +84,7 @@ export function DealReviewScreen() {
         severity: vars.mode === 'approve' ? 'success' : 'warning',
         message: `Deal ${vars.mode === 'approve' ? 'approved' : 'rejected'}`,
       });
-      navigate('/queue');
+      navigate('/cdd/deals');
     },
   });
 
@@ -134,11 +134,11 @@ export function DealReviewScreen() {
           onReject={() => setDecideMode('reject')}
           onApprove={() => setDecideMode('approve')}
           onOverride={() => setOverrideOpen(true)}
-          onBack={() => navigate('/queue')}
+          onBack={() => navigate('/cdd/deals')}
         />
       ) : (
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/queue')}>
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/cdd/deals')}>
             Back to queue
           </Button>
           <Box sx={{ flexGrow: 1 }} />

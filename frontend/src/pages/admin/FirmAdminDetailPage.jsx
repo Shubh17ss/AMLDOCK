@@ -14,11 +14,11 @@ export function FirmAdminDetailPage() {
   return (
     <Stack spacing={3}>
       <Box>
-        <Button component={RouterLink} to="/admin/firms" startIcon={<ArrowBackIcon />} size="small">
-          Back to firms
+        <Button component={RouterLink} to="/settings/reporting-entities" startIcon={<ArrowBackIcon />} size="small">
+          Back to reporting entities
         </Button>
       </Box>
-      <PageHeader eyebrow="firm · manage" title="Manage firm" />
+      <PageHeader eyebrow="reporting entity · manage" title="Manage reporting entity" />
       <FirmManageView firmId={firmId} currentUser={user} editableIdentity />
     </Stack>
   );

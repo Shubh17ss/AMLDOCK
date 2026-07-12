@@ -21,7 +21,14 @@ export function BentoTile({
   const interactive = Boolean(to || onClick);
 
   const surface = {
-    plain: { background: tokens.tile, color: tokens.ink, border: `1px solid ${tokens.hairline}` },
+    // Frosted glass over the ambient canvas wash — the premium surface.
+    plain: {
+      background: 'rgba(255,255,255,0.78)',
+      backdropFilter: 'blur(14px) saturate(160%)',
+      WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+      color: tokens.ink,
+      border: `1px solid ${tokens.hairline}`,
+    },
     accent: {
       background: `linear-gradient(140deg, ${tokens.blue} 0%, ${tokens.blueDark} 100%)`,
       color: '#fff',
