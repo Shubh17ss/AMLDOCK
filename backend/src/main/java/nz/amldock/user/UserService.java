@@ -268,7 +268,9 @@ public class UserService {
     /**
      * Who an actor may edit/delete:
      *   ROOT        → anyone, except another ROOT account.
-     *   firm-level  → users in their own firm, except senior-manager / compliance-officer peers.
+     *   firm-level  → users in their own firm, except firm-level peers (their own account is fine).
+     *                 The firm-scoped mirror of the ROOT rule: peers appoint each other but can't
+     *                 edit or remove one another, so no single officer can unseat the other.
      *   everyone else → no one.
      */
     private void assertCanManage(UserPrincipal actor, User target) {
@@ -283,7 +285,7 @@ public class UserService {
                     || !target.getRealEstateFirmId().equals(actor.realEstateFirmId())) {
                 throw new ForbiddenException("This user is not in your firm");
             }
-            if (target.getRole() == Role.SENIOR_MANAGER || target.getRole() == Role.AML_COMPLIANCE_OFFICER) {
+            if (target.getRole().isFirmLevel() && !actor.id().equals(target.getId())) {
                 throw new ForbiddenException(
                         "Senior managers and compliance officers can't be edited or deleted here");
             }
@@ -334,7 +336,8 @@ public class UserService {
             return; // ROOT assigns firm freely (validateFirmLinkage still checks the firm exists & is active)
         }
         if (creator.role().isFirmLevel()) {
-            // Creating a SALES_MANAGER inside the creator's firm.
+            // Creating a firm-level peer or a SALES_MANAGER — either way, inside the creator's
+            // own firm. This is the whole difference between them and ROOT.
             if (firmId == null || !firmId.equals(creator.realEstateFirmId())) {
                 throw new ForbiddenException("You can only create users within your own firm");
             }

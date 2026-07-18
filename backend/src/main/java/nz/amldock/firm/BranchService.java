@@ -43,10 +43,17 @@ public class BranchService {
 
     @Transactional
     public FirmBranch create(Long firmId, CreateBranchRequest req) {
-        if (!firms.existsById(firmId)) {
-            throw new NotFoundException("Firm " + firmId + " not found");
-        }
+        RealEstateFirm firm = firms.findById(firmId)
+                .orElseThrow(() -> new NotFoundException("Firm " + firmId + " not found"));
         firmService.assertVisible(firmId);
+        // The firm declares how many branches it operates; adding beyond that is a data error.
+        // Only active branches count, so deactivating one frees its slot.
+        Integer declared = firm.getNumberOfBranches();
+        if (declared != null && firmService.countActiveBranches(firmId) >= declared) {
+            throw new BadRequestException(
+                    "This firm declares " + declared + " branch(es); deactivate one or raise the "
+                            + "branch count in Firm details before adding another.");
+        }
         branches.findByRealEstateFirmIdAndNameIgnoreCase(firmId, req.name())
                 .ifPresent(b -> { throw new BadRequestException("Branch name already in use for this firm"); });
         FirmBranch b = new FirmBranch();

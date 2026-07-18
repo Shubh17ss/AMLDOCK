@@ -37,17 +37,23 @@ export const PRIVILEGE_RANK = {
   ADMIN: 1,
 };
 
-export function creatableRoles(role) {
-  const rank = PRIVILEGE_RANK[role] ?? 0;
-  return ROLES.filter((target) => rank > (PRIVILEGE_RANK[target] ?? 0));
-}
-
 // Tier helpers (match the backend firm/branch linkage rules).
 const FIRM_LEVEL = new Set(['AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER']);
 const BRANCH_LEVEL = new Set(['SALES_MANAGER', 'AGENT', 'AGENT_PA', 'ADMIN']);
 
 export const isFirmLevel = (role) => FIRM_LEVEL.has(role);
 export const isBranchLevel = (role) => BRANCH_LEVEL.has(role);
+
+// Mirrors Role.canCreate: strictly-lower rank, plus firm-level staff appointing firm-level
+// peers within their own reporting entity.
+export function canCreateRole(role, target) {
+  if (isFirmLevel(role) && isFirmLevel(target)) return true;
+  return (PRIVILEGE_RANK[role] ?? 0) > (PRIVILEGE_RANK[target] ?? 0);
+}
+
+export function creatableRoles(role) {
+  return ROLES.filter((target) => canCreateRole(role, target));
+}
 export const requiresFirm = (role) => FIRM_LEVEL.has(role) || BRANCH_LEVEL.has(role);
 export const requiresBranch = (role) => BRANCH_LEVEL.has(role);
 
@@ -56,6 +62,9 @@ export const DEAL_AUTHOR_ROLES = ['AGENT', 'AGENT_PA', 'ADMIN'];
 export const DEAL_REVIEWER_ROLES = ['AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 export const DELETE_ROLES = ['ROOT', 'SENIOR_MANAGER'];
 export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'SALES_MANAGER'];
+// Settings › Users and Settings › Reporting Entities. ROOT sees the platform; firm-level staff
+// see the same screens scoped by the API to their own reporting entity.
+export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 
 export const isDealAuthor = (role) => DEAL_AUTHOR_ROLES.includes(role);
 export const isDealReviewer = (role) => DEAL_REVIEWER_ROLES.includes(role);

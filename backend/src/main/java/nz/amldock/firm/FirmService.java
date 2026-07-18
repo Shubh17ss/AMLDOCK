@@ -148,8 +148,29 @@ public class FirmService {
         if (req.seniorManagerName() != null) f.setSeniorManagerName(req.seniorManagerName());
         if (req.seniorManagerEmail() != null) f.setSeniorManagerEmail(req.seniorManagerEmail());
         if (req.seniorManagerContactNumber() != null) f.setSeniorManagerContactNumber(req.seniorManagerContactNumber());
-        if (req.numberOfBranches() != null) f.setNumberOfBranches(req.numberOfBranches());
+        if (req.numberOfBranches() != null) {
+            // The declared count is the ceiling BranchService enforces, so it must not be set
+            // below the branches the firm already operates — that would strand existing rows
+            // above the limit. Deactivate them first.
+            long activeCount = countActiveBranches(f.getId());
+            if (req.numberOfBranches() < activeCount) {
+                throw new BadRequestException(
+                        "This firm has " + activeCount + " active branch(es); deactivate branches "
+                                + "before lowering the declared count to " + req.numberOfBranches() + ".");
+            }
+            f.setNumberOfBranches(req.numberOfBranches());
+        }
         return f;
+    }
+
+    /**
+     * Branches a firm currently operates. Deactivated branches don't count against its declared
+     * limit. Callers are already transactional, so this carries no annotation of its own.
+     */
+    public long countActiveBranches(Long firmId) {
+        return branches.findAllByRealEstateFirmIdOrderByNameAsc(firmId).stream()
+                .filter(FirmBranch::isActive)
+                .count();
     }
 
     /** Throws if a non-ROOT user tries to access a firm other than their own. */

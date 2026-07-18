@@ -14,8 +14,12 @@ const EMPTY_BRANCH = {
   phone: '', managerName: '', managerEmail: '',
 };
 
-/** Branches of a firm with add / edit, and (for ROOT / senior managers) deactivate. */
-export function FirmBranchesCard({ firmId, canDeactivate = false }) {
+/**
+ * Branches of a firm with add / edit, and (for ROOT / senior managers) deactivate.
+ * `maxBranches` is the count declared in Firm details — adding beyond it is blocked here
+ * and, authoritatively, by the API.
+ */
+export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = null }) {
   const qc = useQueryClient();
   const branchesQ = useQuery({
     queryKey: ['firms', firmId, 'branches'],
@@ -24,6 +28,9 @@ export function FirmBranchesCard({ firmId, canDeactivate = false }) {
   });
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
+
+  const activeCount = branchesQ.data?.filter((b) => b.active).length ?? 0;
+  const atLimit = maxBranches != null && activeCount >= maxBranches;
 
   const toggleActive = useMutation({
     mutationFn: ({ id, active }) => updateBranch(id, { active }),
@@ -39,8 +46,21 @@ export function FirmBranchesCard({ firmId, canDeactivate = false }) {
     <Card>
       <CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-          <Typography variant="h6">Branches</Typography>
-          <Button variant="contained" onClick={() => setCreateOpen(true)}>+ Add branch</Button>
+          <Stack direction="row" spacing={1} alignItems="baseline">
+            <Typography variant="h6">Branches</Typography>
+            {maxBranches != null && (
+              <Typography variant="body2" color="text.secondary">
+                {activeCount} of {maxBranches} declared
+              </Typography>
+            )}
+          </Stack>
+          <Tooltip title={atLimit ? `This firm declares ${maxBranches} branch(es). Deactivate one or raise the branch count in Firm details.` : ''}>
+            <span>
+              <Button variant="contained" disabled={atLimit} onClick={() => setCreateOpen(true)}>
+                + Add branch
+              </Button>
+            </span>
+          </Tooltip>
         </Stack>
         <Divider sx={{ mb: 2 }} />
 

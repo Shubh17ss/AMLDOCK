@@ -11,7 +11,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { deleteUser, listUsers, resetUserPassword, updateUser } from '../../api/users.js';
 import { listBranches, listFirms } from '../../api/firms.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { creatableRoles, roleLabel } from '../../auth/roles.js';
+import { creatableRoles, isFirmLevel, roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import AddIcon from '@mui/icons-material/PersonAddAlt1';
@@ -29,6 +29,13 @@ export function UsersAdminPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState(null);
 
+  // The API already scopes the list (ROOT: everyone, firm-level: their own entity). These
+  // mirror UserService.assertCanManage so we don't offer controls the API will reject.
+  const isRoot = currentUser?.role === 'ROOT';
+  const canManage = (u) => (isRoot
+    ? u.role !== 'ROOT'
+    : isFirmLevel(currentUser?.role) && !isFirmLevel(u.role));
+
   const updateMut = useMutation({
     mutationFn: ({ id, payload }) => updateUser(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
@@ -42,7 +49,7 @@ export function UsersAdminPage() {
   return (
     <Stack spacing={3}>
       <PageHeader
-        eyebrow={`${usersQ.data?.length ?? 0} users · all reporting entities`}
+        eyebrow={`${usersQ.data?.length ?? 0} users · ${isRoot ? 'all reporting entities' : 'your reporting entity'}`}
         title="Users"
         actions={creatableRoles(currentUser?.role).length > 0 && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
@@ -72,8 +79,9 @@ export function UsersAdminPage() {
               <UserRow
                 key={u.id}
                 user={u}
-                canResetPassword={currentUser?.role === 'ROOT' && u.role === 'ROOT'}
-                canDelete={currentUser?.role === 'ROOT' && u.role !== 'ROOT'}
+                canResetPassword={isRoot && u.role === 'ROOT'}
+                canDelete={canManage(u)}
+                canToggleActive={isRoot}
                 firmName={u.realEstateFirmId
                   ? (firmsById.get(u.realEstateFirmId)?.name ?? `#${u.realEstateFirmId}`)
                   : null}
@@ -102,7 +110,8 @@ export function UsersAdminPage() {
 }
 
 /** Single row, lazily fetches the user's branch name when they have one. */
-function UserRow({ user, firmName, canResetPassword, canDelete, onToggleActive, onResetPassword, onDelete }) {
+function UserRow({ user, firmName, canResetPassword, canDelete, canToggleActive,
+                   onToggleActive, onResetPassword, onDelete }) {
   // Only brokers carry a branch; lazy-load just for those rows.
   const branchesQ = useQuery({
     queryKey: ['firms', user.realEstateFirmId, 'branches'],
@@ -122,7 +131,10 @@ function UserRow({ user, firmName, canResetPassword, canDelete, onToggleActive, 
       <TableCell>{firmName ?? '—'}</TableCell>
       <TableCell>{branchName ?? '—'}</TableCell>
       <TableCell>
-        <Switch checked={user.active} onChange={(e) => onToggleActive(e.target.checked)} />
+        {/* Activating/suspending an account is platform-only — the API ignores `active` from
+            firm-level staff, so the switch is read-only for them rather than silently inert. */}
+        <Switch checked={user.active} disabled={!canToggleActive}
+                onChange={(e) => onToggleActive(e.target.checked)} />
       </TableCell>
       <TableCell align="right">
         {canResetPassword && (

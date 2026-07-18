@@ -3,7 +3,14 @@ package nz.amldock.audit;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.servlet.http.HttpServletRequest;
 import nz.amldock.audit.dto.AuditLogDto;
+import nz.amldock.common.exception.ForbiddenException;
+import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.common.web.PageResponse;
+import nz.amldock.deal.Deal;
+import nz.amldock.deal.DealLifecycleService;
+import nz.amldock.deal.DealRepository;
+import nz.amldock.firm.FirmBranch;
+import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.UserPrincipal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,9 +31,18 @@ import java.util.List;
 public class AuditService {
 
     private final AuditLogRepository repo;
+    private final DealRepository deals;
+    private final FirmBranchRepository branches;
+    private final DealLifecycleService lifecycle;
 
-    public AuditService(AuditLogRepository repo) {
+    public AuditService(AuditLogRepository repo,
+                        DealRepository deals,
+                        FirmBranchRepository branches,
+                        DealLifecycleService lifecycle) {
         this.repo = repo;
+        this.deals = deals;
+        this.branches = branches;
+        this.lifecycle = lifecycle;
     }
 
     @Transactional
@@ -101,10 +117,28 @@ public class AuditService {
         };
     }
 
+    /**
+     * A deal's audit trail. The controller gates which *roles* may ask; this gates which *deals*
+     * they may ask about — without it a firm-level user could read any firm's trail by walking
+     * deal ids. Scope is delegated to the same guard every other deal-read path uses.
+     */
     @Transactional(readOnly = true)
     public List<AuditLogDto> listForDeal(Long dealId) {
+        Deal deal = deals.findById(dealId)
+                .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
+        Long firmId = branches.findById(deal.getFirmBranchId())
+                .map(FirmBranch::getRealEstateFirmId).orElse(null);
+        lifecycle.assertCanRead(deal, currentPrincipal(), firmId);
         return repo.findAllByEntityTypeAndEntityIdOrderByCreatedAtDesc("Deal", dealId)
                 .stream().map(AuditLogDto::from).toList();
+    }
+
+    private UserPrincipal currentPrincipal() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof UserPrincipal up) {
+            return up;
+        }
+        throw new ForbiddenException("Not authenticated");
     }
 
     private String resolveIp(HttpServletRequest req) {

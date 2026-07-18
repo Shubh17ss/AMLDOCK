@@ -7,12 +7,17 @@ import {
   TableRow, TextField, Typography,
 } from '@mui/material';
 import { createFirm, listFirms, updateFirm } from '../../api/firms.js';
+import { useAuth } from '../../auth/AuthContext.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import AddBusinessIcon from '@mui/icons-material/AddBusiness';
 
 export function FirmsAdminPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
+  // The API returns every entity to ROOT and only their own to firm-level staff, so the table
+  // needs no filtering here — but creating entities and the active toggle stay platform-only.
+  const isRoot = currentUser?.role === 'ROOT';
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -24,13 +29,15 @@ export function FirmsAdminPage() {
   return (
     <Stack spacing={3}>
       <PageHeader
-        eyebrow={`${firmsQ.data?.length ?? 0} reporting entities · ${(firmsQ.data ?? []).filter((f) => f.active).length} active`}
+        eyebrow={isRoot
+          ? `${firmsQ.data?.length ?? 0} reporting entities · ${(firmsQ.data ?? []).filter((f) => f.active).length} active`
+          : 'Your reporting entity'}
         title="Reporting entities"
-        actions={
+        actions={isRoot && (
           <Button variant="contained" startIcon={<AddBusinessIcon />} onClick={() => setCreateOpen(true)}>
             New reporting entity
           </Button>
-        }
+        )}
       />
 
       {firmsQ.isError && <Alert severity="error">Failed to load reporting entities.</Alert>}
@@ -56,8 +63,11 @@ export function FirmsAdminPage() {
                 <TableCell>{firm.nzbn ? <Chip size="small" label={firm.nzbn} /> : '—'}</TableCell>
                 <TableCell>{firm.seniorManagerEmail ?? '—'}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
+                  {/* Suspending an entity is platform-only — the API ignores `active` from
+                      firm-level staff, so don't offer a switch that would silently do nothing. */}
                   <Switch
                     checked={firm.active}
+                    disabled={!isRoot}
                     onChange={(e) => toggleActive.mutate({ id: firm.id, active: e.target.checked })}
                   />
                 </TableCell>

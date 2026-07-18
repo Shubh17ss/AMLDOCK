@@ -30,7 +30,8 @@ export function FirmManageView({ firmId, currentUser, editableIdentity = false }
     <Stack spacing={3}>
       <FirmDetailsCard firm={firmQ.data} editableIdentity={editableIdentity} />
       <FirmUsersCard firmId={firmId} currentUser={currentUser} />
-      <FirmBranchesCard firmId={firmId} canDeactivate={canDeactivateBranch} />
+      <FirmBranchesCard firmId={firmId} canDeactivate={canDeactivateBranch}
+                        maxBranches={firmQ.data?.numberOfBranches ?? null} />
     </Stack>
   );
 }

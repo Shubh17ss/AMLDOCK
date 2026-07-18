@@ -11,7 +11,7 @@ import { MyFirmPage } from '../pages/MyFirmPage.jsx';
 import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
-  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES,
+  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
@@ -61,21 +61,22 @@ export function AppRoutes() {
           />
         ))}
 
-        {/* Settings › Users — the platform user admin (formerly /admin/users) */}
+        {/* Settings › Users — user admin. ROOT sees every firm; compliance officers and senior
+            managers see the same screen, scoped by the API to their own reporting entity. */}
         <Route path="/settings/users" element={
-          <ProtectedRoute roles={['ROOT']}>
+          <ProtectedRoute roles={SETTINGS_ROLES}>
             <UsersAdminPage />
           </ProtectedRoute>
         } />
 
-        {/* Settings › Reporting Entities — entity admin (formerly /admin/firms) */}
+        {/* Settings › Reporting Entities — entity admin, same firm scoping as above. */}
         <Route path="/settings/reporting-entities" element={
-          <ProtectedRoute roles={['ROOT']}>
+          <ProtectedRoute roles={SETTINGS_ROLES}>
             <FirmsAdminPage />
           </ProtectedRoute>
         } />
         <Route path="/settings/reporting-entities/:id" element={
-          <ProtectedRoute roles={['ROOT']}>
+          <ProtectedRoute roles={SETTINGS_ROLES}>
             <FirmAdminDetailPage />
           </ProtectedRoute>
         } />

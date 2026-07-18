@@ -6,12 +6,16 @@ import java.util.stream.Collectors;
 
 /**
  * Organisational hierarchy by privilege rank (a user may create any role with a strictly lower
- * rank — i.e. any user can create users with lower privileges, never an equal or higher peer):
+ * rank, never a higher one):
  *
  *   ROOT (4, platform)
  *     └─ AML_COMPLIANCE_OFFICER, SENIOR_MANAGER (3, firm level)
  *          └─ SALES_MANAGER (2, branch level)
  *               └─ AGENT, AGENT_PA, ADMIN (1, branch level)
+ *
+ * One exception to "strictly lower": firm-level staff may appoint firm-level peers, so a
+ * compliance officer or senior manager can stand up the other compliance roles for their own
+ * reporting entity without ROOT. UserService pins those appointments to the creator's firm.
  *
  * Firm/branch linkage per tier:
  *   ROOT                                  → no firm, no branch
@@ -37,14 +41,18 @@ public enum Role {
         };
     }
 
-    /** Every role with a strictly lower privilege rank. Empty = cannot create users. */
+    /** Every role this one may create. Empty = cannot create users. */
     public Set<Role> creatableRoles() {
         return Arrays.stream(values())
-                .filter(target -> this.privilegeRank() > target.privilegeRank())
+                .filter(this::canCreate)
                 .collect(Collectors.toUnmodifiableSet());
     }
 
     public boolean canCreate(Role target) {
+        // Firm-level peers may appoint each other within their own reporting entity.
+        if (isFirmLevel() && target.isFirmLevel()) {
+            return true;
+        }
         return this.privilegeRank() > target.privilegeRank();
     }
 
