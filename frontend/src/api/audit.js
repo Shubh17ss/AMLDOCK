@@ -8,13 +8,15 @@ export const AUDIT_ACTIONS = [
   'NODE_CREATED', 'NODE_UPDATED', 'NODE_DELETED',
   'EDGE_CREATED', 'EDGE_UPDATED', 'EDGE_DELETED',
   'DOCUMENT_UPLOADED', 'DOCUMENT_DOWNLOADED', 'DOCUMENT_DELETED',
+  'DOCUMENT_REVIEW_SET', 'DOCUMENT_REVIEW_COMPLETED',
   'OCR_COMPLETED', 'OCR_FAILED', 'VERIFICATION_TRIGGERED',
   'FIRM_CREATED', 'FIRM_UPDATED',
   'BRANCH_CREATED', 'BRANCH_UPDATED', 'BRANCH_DELETED',
 ];
 
 export const AUDIT_ENTITY_TYPES = [
-  'User', 'Deal', 'Document', 'OwnershipNode', 'OwnershipEdge', 'RealEstateFirm', 'FirmBranch',
+  'User', 'Deal', 'Document', 'ComplianceDocument', 'DocumentReview',
+  'OwnershipNode', 'OwnershipEdge', 'RealEstateFirm', 'FirmBranch',
 ];
 
 export async function searchAudit(params = {}) {

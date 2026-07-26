@@ -11,6 +11,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { deleteUser, listUsers, resetUserPassword, updateUser } from '../../api/users.js';
 import { listBranches, listFirms } from '../../api/firms.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
+import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { creatableRoles, isFirmLevel, roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
@@ -19,7 +20,12 @@ import AddIcon from '@mui/icons-material/PersonAddAlt1';
 export function UsersAdminPage() {
   const qc = useQueryClient();
   const { user: currentUser } = useAuth();
-  const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
+  // The Users list follows the firm/branch selected in the sidebar scope selector.
+  const { firm, branch } = useDashboardScope();
+  const usersQ = useQuery({
+    queryKey: ['users', firm?.id ?? null, branch?.id ?? null],
+    queryFn: () => listUsers({ firmId: firm?.id, branchId: branch?.id }),
+  });
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const firmsById = useMemo(() => {
     const map = new Map();
@@ -49,7 +55,11 @@ export function UsersAdminPage() {
   return (
     <Stack spacing={3}>
       <PageHeader
-        eyebrow={`${usersQ.data?.length ?? 0} users · ${isRoot ? 'all reporting entities' : 'your reporting entity'}`}
+        eyebrow={[
+          `${usersQ.data?.length ?? 0} users`,
+          firm?.name ?? (isRoot ? 'all reporting entities' : 'your reporting entity'),
+          branch?.name,
+        ].filter(Boolean).join(' · ')}
         title="Users"
         actions={creatableRoles(currentUser?.role).length > 0 && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
@@ -103,7 +113,8 @@ export function UsersAdminPage() {
         </Table>
       </TableContainer>
 
-      <CreateUserDialog open={createOpen} onClose={() => setCreateOpen(false)} currentUser={currentUser} />
+      <CreateUserDialog open={createOpen} onClose={() => setCreateOpen(false)} currentUser={currentUser}
+                        lockedFirm={firm} lockedBranch={branch} />
       <ResetPasswordDialog target={resetTarget} onClose={() => setResetTarget(null)} />
     </Stack>
   );

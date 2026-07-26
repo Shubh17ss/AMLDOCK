@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -39,8 +40,10 @@ public class UserController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
-    public List<UserDto> list(@AuthenticationPrincipal UserPrincipal principal) {
-        return users.findVisible(principal).stream().map(UserDto::from).toList();
+    public List<UserDto> list(@AuthenticationPrincipal UserPrincipal principal,
+                              @RequestParam(required = false) Long firmId,
+                              @RequestParam(required = false) Long branchId) {
+        return users.findVisible(principal, firmId, branchId).stream().map(UserDto::from).toList();
     }
 
     @GetMapping("/{id}")

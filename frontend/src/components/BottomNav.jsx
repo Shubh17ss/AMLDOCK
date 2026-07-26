@@ -25,7 +25,7 @@ function navItemsFor(role) {
     case 'firmReviewer': return [
       { label: 'Home',    to: '/dashboard', Icon: HomeIcon },
       { label: 'Deals',   to: '/cdd/deals', Icon: QueueIcon },
-      { label: 'Firm',    to: '/my-firm', Icon: DealsIcon },
+      { label: 'Firm',    to: '/settings/reporting-entities', Icon: DealsIcon },
       { label: 'Profile', to: '/profile', Icon: ProfileIcon },
     ];
     case 'root': return [

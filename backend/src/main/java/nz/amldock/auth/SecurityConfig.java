@@ -47,6 +47,12 @@ public class SecurityConfig {
                                 "/api/auth/admin/login", "/api/auth/admin/verify",
                                 "/api/auth/refresh").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        // Documents section (compliance registers + review schedules) lives outside
+                        // the CDD workspace — restricted to the full-workspace roles. Stricter
+                        // per-endpoint rules (e.g. delete) still apply on top via @PreAuthorize.
+                        .requestMatchers("/api/compliance-documents", "/api/compliance-documents/**",
+                                "/api/document-reviews", "/api/document-reviews/**")
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

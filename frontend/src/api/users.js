@@ -1,7 +1,9 @@
 import { apiClient } from './client.js';
 
-export async function listUsers() {
-  const { data } = await apiClient.get('/users');
+export async function listUsers({ firmId, branchId } = {}) {
+  const { data } = await apiClient.get('/users', {
+    params: { firmId: firmId ?? undefined, branchId: branchId ?? undefined },
+  });
   return data;
 }
 

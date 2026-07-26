@@ -3,6 +3,7 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import { tokens, fonts } from '../../theme/theme.js';
 import { BentoTile, Eyebrow } from '../bento/BentoTile.jsx';
+import { reviewMetaFor } from '../documents/reviewStatus.jsx';
 
 /**
  * A compliance-module card for the dashboard hub. Mirrors the reference layout:
@@ -10,7 +11,9 @@ import { BentoTile, Eyebrow } from '../bento/BentoTile.jsx';
  * Built on BentoTile so the staggered load, hover-lift, and focus ring come for free.
  *
  * Placeholder-friendly: every metric defaults to a neutral, all-clear state until the
- * module is wired to real data.
+ * module is wired to real data. When `reviewStatus` is supplied (UNSET / OVERDUE /
+ * ON_TRACK) the status icon becomes the three-state review indicator and the footer
+ * shows the review due date.
  */
 export function ModuleCard({
   label,
@@ -19,10 +22,13 @@ export function ModuleCard({
   issues = 0,
   warnings = 0,
   status = 'ok',           // 'ok' → green check, 'attention' → red alert
+  reviewStatus = null,     // when set, drives a green/orange/red review indicator
   reviewDate = '—',
 }) {
   const attention = status === 'attention';
-  const StatusIcon = attention ? ErrorRoundedIcon : CheckCircleRoundedIcon;
+  const reviewMeta = reviewStatus ? reviewMetaFor(reviewStatus) : null;
+  const StatusIcon = reviewMeta ? reviewMeta.Icon : (attention ? ErrorRoundedIcon : CheckCircleRoundedIcon);
+  const statusColor = reviewMeta ? reviewMeta.color : (attention ? tokens.rejected : tokens.approved);
 
   return (
     <BentoTile index={index} to={to} ariaLabel={label} sx={{ p: 2.25 }}>
@@ -31,7 +37,7 @@ export function ModuleCard({
         <Typography sx={{ fontWeight: 700, fontSize: '0.98rem', color: tokens.ink, lineHeight: 1.25, minWidth: 0 }}>
           {label}
         </Typography>
-        <StatusIcon sx={{ fontSize: 20, flexShrink: 0, color: attention ? tokens.rejected : tokens.approved }} />
+        <StatusIcon sx={{ fontSize: 20, flexShrink: 0, color: statusColor }} />
       </Box>
 
       {/* ISSUES / WARNINGS */}
@@ -44,7 +50,11 @@ export function ModuleCard({
       <Box sx={{ mt: 1.75, pt: 1.25, borderTop: `1px solid ${tokens.hairline}`,
                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         <Eyebrow>Review Date</Eyebrow>
-        <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.74rem', color: tokens.muted, whiteSpace: 'nowrap' }}>
+        <Typography sx={{
+          fontFamily: fonts.mono, fontSize: '0.74rem', whiteSpace: 'nowrap',
+          color: reviewMeta ? statusColor : tokens.muted,
+          fontWeight: reviewMeta ? 700 : 400,
+        }}>
           {reviewDate}
         </Typography>
       </Box>

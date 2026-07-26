@@ -7,17 +7,16 @@ import { ContactPage } from '../pages/ContactPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { AdminLoginPage } from '../pages/AdminLoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
-import { MyFirmPage } from '../pages/MyFirmPage.jsx';
 import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
-  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES,
+  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, FULL_WORKSPACE_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
 import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
 import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
-import { placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH } from '../navigation/moduleRegistry.jsx';
+import { placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS } from '../navigation/moduleRegistry.jsx';
 import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
 import { DocumentsLandingPage } from '../pages/documents/DocumentsLandingPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
@@ -51,13 +50,20 @@ export function AppRoutes() {
         {/* Deals — the full deal list with filters (formerly the /queue compliance queue) */}
         <Route path={DEALS_PATH} element={<DealsPage />} />
 
-        {/* Documents — landing cards + versioned compliance registers (upload + history) */}
-        <Route path="/documents" element={<DocumentsLandingPage />} />
+        {/* Documents — landing cards + versioned compliance registers (upload + history).
+            Outside the CDD section, so restricted to the full-workspace roles. */}
+        <Route path="/documents" element={
+          <ProtectedRoute roles={FULL_WORKSPACE_ROLES}><DocumentsLandingPage /></ProtectedRoute>
+        } />
         {DOCUMENT_MODULES.map((m) => (
           <Route
             key={m.path}
             path={m.path}
-            element={<DocumentModulePage category={m.category} title={m.title} />}
+            element={
+              <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
+                <DocumentModulePage category={m.category} title={m.title} />
+              </ProtectedRoute>
+            }
           />
         ))}
 
@@ -81,14 +87,20 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        {/* Compliance modules + group landings — placeholders until each is built out */}
-        {placeholderRoutes().map((r) => (
-          <Route
-            key={r.to}
-            path={r.to}
-            element={<PlaceholderPage title={r.title} detail="Coming soon — this module will be built out." />}
-          />
-        ))}
+        {/* Compliance modules + group landings — placeholders until each is built out.
+            Only the CDD section is open to everyone; other sections need the full-workspace roles. */}
+        {placeholderRoutes().map((r) => {
+          const page = <PlaceholderPage title={r.title} detail="Coming soon — this module will be built out." />;
+          return (
+            <Route
+              key={r.to}
+              path={r.to}
+              element={CDD_SECTION_PATHS.has(r.to)
+                ? page
+                : <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>{page}</ProtectedRoute>}
+            />
+          );
+        })}
 
         <Route path="/my-deals" element={
           <ProtectedRoute roles={DEAL_AUTHOR_ROLES}>
@@ -118,11 +130,6 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        <Route path="/my-firm" element={
-          <ProtectedRoute roles={DEAL_REVIEWER_ROLES}>
-            <MyFirmPage />
-          </ProtectedRoute>
-        } />
         <Route path="/branch-users" element={
           <ProtectedRoute roles={['SALES_MANAGER']}>
             <BranchUsersPage />

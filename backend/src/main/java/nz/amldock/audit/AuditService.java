@@ -133,6 +133,17 @@ public class AuditService {
                 .stream().map(AuditLogDto::from).toList();
     }
 
+    /**
+     * Audit trail for a set of entities of one type, newest first. Callers are responsible for
+     * scoping the id set (e.g. to the caller's own firm) before handing it here.
+     */
+    @Transactional(readOnly = true)
+    public List<AuditLogDto> listForEntities(String entityType, java.util.Collection<Long> entityIds) {
+        if (entityIds == null || entityIds.isEmpty()) return List.of();
+        return repo.findAllByEntityTypeAndEntityIdInOrderByCreatedAtDesc(entityType, entityIds)
+                .stream().map(AuditLogDto::from).toList();
+    }
+
     private UserPrincipal currentPrincipal() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof UserPrincipal up) {

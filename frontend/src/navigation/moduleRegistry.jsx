@@ -14,6 +14,9 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import InsightsIcon from '@mui/icons-material/Insights';
 import PeopleIcon from '@mui/icons-material/People';
 import BusinessIcon from '@mui/icons-material/Business';
+import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
+import PublicIcon from '@mui/icons-material/Public';
+import { canAccessAllModules } from '../auth/roles.js';
 
 // ── Compliance module registry ──────────────────────────────────────────────
 // Single source of truth for the workspace surface: the sidebar, the dashboard
@@ -41,18 +44,18 @@ export const MODULE_GROUPS = [
     // The CDD header opens the CDD Register — the role-aware stats dashboard.
     group: 'CDD', slug: 'cdd', to: CDD_REGISTER_PATH, title: 'CDD Register',
     items: [
-      { id: 'deals',             label: 'Deals',             to: DEALS_PATH,               icon: <BusinessCenterIcon /> },
+      { id: 'deals',             label: 'Listing Register',  to: DEALS_PATH,               icon: <BusinessCenterIcon /> },
       { id: 'beneficial-owners', label: 'Beneficial Owners', to: '/cdd/beneficial-owners', icon: <AccountTreeIcon /> },
-      { id: 'echecks',           label: 'eChecks',           to: '/cdd/echecks',           icon: <FactCheckIcon /> },
+      { id: 'cdd-exceptions',    label: 'CDD Exceptions',    to: '/cdd/cdd-exceptions',    icon: <RuleIcon /> },
+      { id: 'peps',              label: 'PEPs',              to: '/cdd/peps',              icon: <GavelIcon /> },
+      { id: 'overseas-residents', label: 'Overseas Residents', to: '/cdd/overseas-residents', icon: <PublicIcon /> },
     ],
   },
   {
-    group: 'Registers', slug: 'registers', to: '/registers', title: 'Registers',
+    group: 'AML Training', slug: 'aml-training', to: '/aml-training', title: 'AML Training',
     items: [
-      { id: 'cdd-exceptions',        label: 'CDD Exceptions',        to: '/registers/cdd-exceptions',        icon: <RuleIcon /> },
-      { id: 'peps',                  label: 'PEPs',                  to: '/registers/peps',                  icon: <GavelIcon /> },
-      { id: 'staff-training',        label: 'Staff Training',        to: '/registers/staff-training',        icon: <SchoolIcon /> },
-      { id: 'suspicious-activities', label: 'Suspicious Activities', to: '/registers/suspicious-activities', icon: <FlagIcon /> },
+      { id: 'echecks',        label: 'eChecks',        to: '/aml-training/echecks',        icon: <FactCheckIcon /> },
+      { id: 'staff-training', label: 'Staff Training', to: '/aml-training/staff-training', icon: <SchoolIcon /> },
     ],
   },
   {
@@ -65,7 +68,9 @@ export const MODULE_GROUPS = [
   {
     group: 'Monitoring', slug: 'monitoring', to: '/monitoring', title: 'Monitoring',
     items: [
-      { id: 'management-reports', label: 'Management Reports', to: '/monitoring/reports', icon: <InsightsIcon /> },
+      { id: 'management-reports',    label: 'Management Reports',                    to: '/monitoring/reports',                            icon: <InsightsIcon /> },
+      { id: 'suspicious-activities', label: 'Suspicious Activities',                to: '/monitoring/suspicious-activities',              icon: <FlagIcon /> },
+      { id: 'intl-fund-transfers',   label: 'International Fund Transaction Register', to: '/monitoring/international-fund-transaction-register', icon: <CurrencyExchangeIcon /> },
     ],
   },
   {
@@ -79,6 +84,23 @@ export const MODULE_GROUPS = [
 
 /** Flattened list of every module item, in group order. */
 export const MODULES = MODULE_GROUPS.flatMap((g) => g.items);
+
+/** The CDD section — the only group visible to non-privileged roles. */
+export const CDD_GROUP = MODULE_GROUPS.find((g) => g.slug === 'cdd');
+
+/**
+ * Groups a role may see in the sidebar / dashboard hub. Privileged roles (ROOT, AML CO,
+ * Senior Manager) get the whole workspace; everyone else is confined to the CDD section.
+ */
+export function visibleGroupsFor(role) {
+  return canAccessAllModules(role) ? MODULE_GROUPS : MODULE_GROUPS.filter((g) => g.slug === 'cdd');
+}
+
+/**
+ * Paths inside the CDD section (its landing + items). Used to keep those routes open to
+ * everyone while non-CDD module routes are gated to the full-workspace roles.
+ */
+export const CDD_SECTION_PATHS = new Set([CDD_GROUP.to, ...CDD_GROUP.items.map((i) => i.to)]);
 
 /** Module paths that render real pages — everything else gets a placeholder. */
 export const IMPLEMENTED_PATHS = [

@@ -32,6 +32,15 @@ export async function fetchComplianceDownloadUrl(id) {
   return data;
 }
 
+// Activity trail (uploads, downloads, deletions) for a category's register in the selected
+// scope — includes revisions that have since been deleted.
+export async function listComplianceActivity(category, { firmId, branchId } = {}) {
+  const { data } = await apiClient.get('/compliance-documents/activity', {
+    params: { category, firmId: firmId ?? undefined, branchId: branchId ?? undefined },
+  });
+  return data;
+}
+
 export async function deleteComplianceDoc(id) {
   await apiClient.delete(`/compliance-documents/${id}`);
 }

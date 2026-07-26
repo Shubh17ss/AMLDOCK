@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
@@ -7,15 +7,28 @@ import {
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/FileDownloadOutlined';
 import UploadIcon from '@mui/icons-material/FileUploadOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import {
-  listComplianceDocs, fetchComplianceDownloadUrl, uploadComplianceDoc,
+  listComplianceDocs, fetchComplianceDownloadUrl, uploadComplianceDoc, deleteComplianceDoc,
+  listComplianceActivity,
 } from '../../api/complianceDocs.js';
+import {
+  listDocumentReviews, setDocumentReviewDate, completeDocumentReview, reviewStatusOf,
+} from '../../api/documentReviews.js';
+import { reviewMetaFor } from '../../components/documents/reviewStatus.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
+import { useAuth } from '../../auth/AuthContext.jsx';
+import { canDelete, canManageReview } from '../../auth/roles.js';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { tokens, fonts } from '../../theme/theme.js';
+
+// Compliance documents are PDF-only — the upload accepts nothing else, matching the
+// server-side content-type guard.
+const PDF_MIME = 'application/pdf';
 
 /** The three Documents modules — shared config for routes and page rendering. */
 export const DOCUMENT_MODULES = [
@@ -27,15 +40,46 @@ export const DOCUMENT_MODULES = [
 const dateFmt = (iso) =>
   iso ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+const dateTimeFmt = (iso) =>
+  iso ? new Date(iso).toLocaleString('en-NZ', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }) : '—';
+
+// Per-action icon + accent for the activity feed. Keyed by AuditAction name.
+const ACTIVITY_STYLE = {
+  DOCUMENT_UPLOADED:         { icon: UploadIcon,          color: tokens.approved },
+  DOCUMENT_DOWNLOADED:       { icon: DownloadIcon,        color: tokens.blue },
+  DOCUMENT_DELETED:          { icon: DeleteOutlineIcon,   color: tokens.rejected },
+  DOCUMENT_REVIEW_SET:       { icon: EventAvailableIcon,  color: tokens.blue },
+  DOCUMENT_REVIEW_COMPLETED: { icon: CheckCircleRoundedIcon, color: tokens.approved },
+  default:                   { icon: CheckCircleRoundedIcon, color: tokens.muted },
+};
+
 /**
  * A versioned compliance-document register: upload revisions, download any past
  * version, and see who uploaded what and when. Used by all three Documents modules.
  */
 export function DocumentModulePage({ category, title }) {
+  const qc = useQueryClient();
   const { showToast } = useToast();
+  const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
   const [tab, setTab] = useState('versions');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [toDelete, setToDelete] = useState(null);
+
+  const mayDelete = canDelete(user?.role);
+  const mayReview = canManageReview(user?.role);
+
+  // Review schedule for this register in the current scope (one row across all categories).
+  const reviewsQ = useQuery({
+    queryKey: ['documentReviews', firm?.id ?? null, branch?.id ?? null],
+    queryFn: () => listDocumentReviews({ firmId: firm?.id, branchId: branch?.id }),
+  });
+  const review = (reviewsQ.data ?? []).find((r) => r.category === category) ?? null;
+  const reviewMeta = reviewMetaFor(reviewStatusOf(review));
+  const ReviewIcon = reviewMeta.Icon;
 
   // Scope-aware: the firm/branch selected in the sidebar drives which register loads.
   const docsQ = useQuery({
@@ -45,6 +89,14 @@ export function DocumentModulePage({ category, title }) {
   const docs = docsQ.data ?? [];
   const latest = docs[0] ?? null;
 
+  // Full activity trail — uploads, downloads and deletions (incl. of now-deleted versions).
+  const activityQ = useQuery({
+    queryKey: ['complianceActivity', category, firm?.id ?? null, branch?.id ?? null],
+    queryFn: () => listComplianceActivity(category, { firmId: firm?.id, branchId: branch?.id }),
+    enabled: tab === 'activity',
+  });
+  const activity = activityQ.data ?? [];
+
   const download = async (doc) => {
     try {
       const { downloadUrl } = await fetchComplianceDownloadUrl(doc.id);
@@ -53,6 +105,19 @@ export function DocumentModulePage({ category, title }) {
       showToast({ severity: 'error', message: 'Could not get a download link. Try again.' });
     }
   };
+
+  const deleteMut = useMutation({
+    mutationFn: (doc) => deleteComplianceDoc(doc.id),
+    onSuccess: (_data, doc) => {
+      qc.invalidateQueries({ queryKey: ['complianceDocs', category] });
+      qc.invalidateQueries({ queryKey: ['complianceActivity', category] });
+      showToast({ severity: 'success', message: `Deleted ${doc.name} (v${doc.versionNo})` });
+      setToDelete(null);
+    },
+    onError: (e) => {
+      showToast({ severity: 'error', message: e.response?.data?.message || 'Delete failed. Try again.' });
+    },
+  });
 
   return (
     <Stack spacing={2.5}>
@@ -71,7 +136,21 @@ export function DocumentModulePage({ category, title }) {
           <Tab label="Activity log" value="activity" />
         </Tabs>
 
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+          {mayReview && (
+            <Button
+              variant="contained"
+              startIcon={<ReviewIcon />}
+              onClick={() => setReviewOpen(true)}
+              sx={{
+                backgroundColor: reviewMeta.color,
+                color: '#fff',
+                '&:hover': { backgroundColor: reviewMeta.color, filter: 'brightness(0.94)' },
+              }}
+            >
+              Review
+            </Button>
+          )}
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
@@ -118,6 +197,13 @@ export function DocumentModulePage({ category, title }) {
                         <DownloadIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
+                    {mayDelete && (
+                      <Tooltip title="Delete this version">
+                        <IconButton size="small" onClick={() => setToDelete(d)}>
+                          <DeleteOutlineIcon fontSize="small" sx={{ color: tokens.rejected }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -135,26 +221,31 @@ export function DocumentModulePage({ category, title }) {
 
       {tab === 'activity' && (
         <Paper sx={{ p: 2.5 }}>
+          {activityQ.isError && <Alert severity="error" sx={{ mb: 1.5 }}>Failed to load activity. Refresh to try again.</Alert>}
           <Stack spacing={0}>
-            {docs.map((d) => (
-              <Box key={d.id} sx={{
-                display: 'flex', alignItems: 'center', gap: 1.5, py: 1.25,
-                borderBottom: `1px solid ${tokens.hairline}`, '&:last-child': { borderBottom: 'none' },
-              }}>
-                <CheckCircleRoundedIcon sx={{ fontSize: 18, color: tokens.approved }} />
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography sx={{ fontSize: '0.875rem', color: tokens.ink }}>
-                    <Box component="span" sx={{ fontFamily: fonts.mono, fontWeight: 700 }}>v{d.versionNo}</Box>
-                    {' '}uploaded{d.uploadedByEmail ? ` by ${d.uploadedByEmail}` : ''}
+            {activity.map((a) => {
+              const { icon: ActivityIcon, color } = ACTIVITY_STYLE[a.action] ?? ACTIVITY_STYLE.default;
+              return (
+                <Box key={a.id} sx={{
+                  display: 'flex', alignItems: 'center', gap: 1.5, py: 1.25,
+                  borderBottom: `1px solid ${tokens.hairline}`, '&:last-child': { borderBottom: 'none' },
+                }}>
+                  <ActivityIcon sx={{ fontSize: 18, color }} />
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography sx={{ fontSize: '0.875rem', color: tokens.ink }}>
+                      {a.summary}
+                    </Typography>
+                    <Typography noWrap sx={{ fontSize: '0.78rem', color: tokens.muted }}>
+                      {a.actorEmail ?? 'System'}
+                    </Typography>
+                  </Box>
+                  <Typography sx={{ flexShrink: 0, fontSize: '0.78rem', color: tokens.muted }}>
+                    {dateTimeFmt(a.createdAt)}
                   </Typography>
-                  <Typography noWrap sx={{ fontSize: '0.78rem', color: tokens.muted }}>{d.name}</Typography>
                 </Box>
-                <Typography sx={{ flexShrink: 0, fontSize: '0.78rem', color: tokens.muted }}>
-                  {dateFmt(d.createdAt)}
-                </Typography>
-              </Box>
-            ))}
-            {!docsQ.isLoading && docs.length === 0 && (
+              );
+            })}
+            {!activityQ.isLoading && activity.length === 0 && (
               <Typography sx={{ py: 3, textAlign: 'center', color: tokens.muted, fontSize: '0.85rem' }}>
                 No activity yet.
               </Typography>
@@ -169,6 +260,38 @@ export function DocumentModulePage({ category, title }) {
         category={category}
         title={title}
       />
+
+      <ReviewDialog
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        category={category}
+        title={title}
+        review={review}
+      />
+
+      <Dialog open={Boolean(toDelete)} onClose={() => !deleteMut.isPending && setToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete this version?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: '0.9rem', color: tokens.ink }}>
+            {toDelete && (
+              <>Delete <Box component="span" sx={{ fontWeight: 700 }}>{toDelete.name}</Box>{' '}
+              (v{toDelete.versionNo})? This removes the file and is recorded in the activity log. It can’t be undone.</>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setToDelete(null)} disabled={deleteMut.isPending}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            startIcon={<DeleteOutlineIcon />}
+            disabled={deleteMut.isPending}
+            onClick={() => deleteMut.mutate(toDelete)}
+          >
+            {deleteMut.isPending ? 'Deleting…' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
@@ -200,6 +323,7 @@ function UploadRevisionDialog({ open, onClose, category, title }) {
     }),
     onSuccess: (doc) => {
       qc.invalidateQueries({ queryKey: ['complianceDocs', category] });
+      qc.invalidateQueries({ queryKey: ['complianceActivity', category] });
       showToast({ severity: 'success', message: `Uploaded ${doc.name} (v${doc.versionNo})` });
       reset();
       onClose();
@@ -212,6 +336,12 @@ function UploadRevisionDialog({ open, onClose, category, title }) {
 
   const pickFile = (f) => {
     if (!f) return;
+    const isPdf = f.type === PDF_MIME || /\.pdf$/i.test(f.name);
+    if (!isPdf) {
+      setError('Only PDF files can be uploaded.');
+      return;
+    }
+    setError(null);
     setFile(f);
     if (!name.trim()) setName(f.name.replace(/\.[^.]+$/, ''));
   };
@@ -264,14 +394,15 @@ function UploadRevisionDialog({ open, onClose, category, title }) {
                 ref={fileInputRef}
                 type="file"
                 hidden
+                accept="application/pdf,.pdf"
                 onChange={(e) => { pickFile(e.target.files?.[0]); e.target.value = ''; }}
               />
               <UploadFileIcon sx={{ fontSize: 34, color: file ? tokens.approved : tokens.muted }} />
               <Typography sx={{ mt: 1, fontWeight: 600, fontSize: '0.9rem', color: tokens.ink }}>
-                {file ? file.name : 'Drag and drop a file here or click to browse'}
+                {file ? file.name : 'Drag and drop a PDF here or click to browse'}
               </Typography>
               <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, mt: 0.5 }}>
-                {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'PDF, Word, or any document up to 25 MB'}
+                {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'PDF only, up to 25 MB'}
               </Typography>
               {!file && (
                 <Button size="small" variant="contained" sx={{ mt: 1.5 }}
@@ -305,6 +436,99 @@ function UploadRevisionDialog({ open, onClose, category, title }) {
           </Button>
         </DialogActions>
       </Box>
+    </Dialog>
+  );
+}
+
+/**
+ * Set the next review date for this register, or mark the review complete (stamping today).
+ * Both write to the branch/firm scope currently selected in the sidebar.
+ */
+function ReviewDialog({ open, onClose, category, title, review }) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  const { firm, branch } = useDashboardScope();
+  const [date, setDate] = useState('');
+
+  // Seed the input from the current value each time the dialog opens.
+  useEffect(() => {
+    if (open) setDate(review?.nextReviewDate ?? '');
+  }, [open, review]);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['documentReviews'] });
+    qc.invalidateQueries({ queryKey: ['complianceActivity', category] });
+  };
+
+  const saveMut = useMutation({
+    mutationFn: () => setDocumentReviewDate({
+      category, nextReviewDate: date || null, firmId: firm?.id, branchId: branch?.id,
+    }),
+    onSuccess: () => {
+      invalidate();
+      showToast({ severity: 'success', message: date ? 'Review date saved' : 'Review date cleared' });
+      onClose();
+    },
+    onError: (e) => showToast({ severity: 'error', message: e.response?.data?.message || 'Could not save. Try again.' }),
+  });
+
+  const completeMut = useMutation({
+    mutationFn: () => completeDocumentReview({ category, firmId: firm?.id, branchId: branch?.id }),
+    onSuccess: () => {
+      invalidate();
+      showToast({ severity: 'success', message: 'Marked review complete' });
+    },
+    onError: (e) => showToast({ severity: 'error', message: e.response?.data?.message || 'Could not complete. Try again.' }),
+  });
+
+  const busy = saveMut.isPending || completeMut.isPending;
+  const lastReviewed = review?.lastCompletedAt;
+
+  return (
+    <Dialog open={open} onClose={() => !busy && onClose()} maxWidth="xs" fullWidth>
+      <DialogTitle>{title} review</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography sx={{ fontSize: '0.85rem', color: tokens.muted }}>
+            Set when this register is next due for review. The status shows on the register’s card.
+          </Typography>
+          <TextField
+            label="Next review date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+          />
+          <Box sx={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1,
+            p: 1.5, borderRadius: '10px', backgroundColor: '#FBFCFE', border: `1px solid ${tokens.hairline}`,
+          }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: tokens.ink }}>
+                Mark reviewed today
+              </Typography>
+              <Typography sx={{ fontSize: '0.74rem', color: tokens.muted }}>
+                {lastReviewed ? `Last reviewed ${dateFmt(lastReviewed)}` : 'Not yet reviewed'}
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              startIcon={<CheckCircleRoundedIcon />}
+              disabled={busy}
+              onClick={() => completeMut.mutate()}
+            >
+              {completeMut.isPending ? 'Saving…' : 'Mark complete'}
+            </Button>
+          </Box>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>Close</Button>
+        <Button variant="contained" startIcon={<EventAvailableIcon />} disabled={busy} onClick={() => saveMut.mutate()}>
+          {saveMut.isPending ? 'Saving…' : 'Save date'}
+        </Button>
+      </DialogActions>
     </Dialog>
   );
 }

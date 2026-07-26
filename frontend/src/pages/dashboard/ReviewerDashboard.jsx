@@ -75,7 +75,7 @@ export function ReviewerDashboard() {
         index={7}
         actions={[
           { to: '/cdd/deals', label: 'Review deals', icon: <InboxIcon fontSize="small" />, primary: true },
-          { to: '/my-firm', label: 'Your firm', icon: <BusinessIcon fontSize="small" /> },
+          { to: '/settings/reporting-entities', label: 'Your firm', icon: <BusinessIcon fontSize="small" /> },
         ]}
       />
     </Bento>

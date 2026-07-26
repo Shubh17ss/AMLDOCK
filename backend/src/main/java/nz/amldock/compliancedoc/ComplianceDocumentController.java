@@ -1,6 +1,7 @@
 package nz.amldock.compliancedoc;
 
 import jakarta.validation.Valid;
+import nz.amldock.audit.dto.AuditLogDto;
 import nz.amldock.compliancedoc.dto.ComplianceDocumentDto;
 import nz.amldock.compliancedoc.dto.ComplianceUploadUrlRequest;
 import nz.amldock.document.dto.ConfirmUploadRequest;
@@ -44,6 +45,13 @@ public class ComplianceDocumentController {
                                             @RequestParam(required = false) Long firmId,
                                             @RequestParam(required = false) Long branchId) {
         return documents.list(category, firmId, branchId);
+    }
+
+    @GetMapping("/activity")
+    public List<AuditLogDto> activity(@RequestParam ComplianceDocCategory category,
+                                      @RequestParam(required = false) Long firmId,
+                                      @RequestParam(required = false) Long branchId) {
+        return documents.activity(category, firmId, branchId);
     }
 
     @GetMapping("/{id}/download-url")

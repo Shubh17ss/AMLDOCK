@@ -19,7 +19,8 @@ export function FirmAdminDetailPage() {
         </Button>
       </Box>
       <PageHeader eyebrow="reporting entity · manage" title="Manage reporting entity" />
-      <FirmManageView firmId={firmId} currentUser={user} editableIdentity />
+      {/* Users are managed in the dedicated Settings › Users section, so they're omitted here. */}
+      <FirmManageView firmId={firmId} currentUser={user} editableIdentity showUsers={false} />
     </Stack>
   );
 }

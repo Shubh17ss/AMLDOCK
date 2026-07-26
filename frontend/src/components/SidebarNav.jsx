@@ -3,7 +3,8 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Box, Collapse, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
-import { MODULE_GROUPS, DASHBOARD_PATH } from '../navigation/moduleRegistry.jsx';
+import { visibleGroupsFor, DASHBOARD_PATH } from '../navigation/moduleRegistry.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 
@@ -19,7 +20,9 @@ const inGroup = (group, pathname) =>
  */
 export function SidebarNav() {
   const { pathname } = useLocation();
-  const activeGroupName = MODULE_GROUPS.find((g) => inGroup(g, pathname))?.group ?? null;
+  const { user } = useAuth();
+  const groups = visibleGroupsFor(user?.role);
+  const activeGroupName = groups.find((g) => inGroup(g, pathname))?.group ?? null;
   const [open, setOpen] = useState(activeGroupName);
 
   // Follow navigation: whatever group owns the current route is the open one.
@@ -46,7 +49,7 @@ export function SidebarNav() {
         pathname={pathname}
       />
 
-      {MODULE_GROUPS.map((group) => {
+      {groups.map((group) => {
         const isOpen = open === group.group;
         const groupActive = inGroup(group, pathname);
         return (

@@ -2,6 +2,7 @@ package nz.amldock.compliancedoc;
 
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
+import nz.amldock.audit.dto.AuditLogDto;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
@@ -35,7 +36,13 @@ import java.util.UUID;
 @Service
 public class ComplianceDocumentService {
 
+    /** Audit entityType for compliance-document rows. */
+    private static final String ENTITY_TYPE = "ComplianceDocument";
+    /** Audit entityType for the per-register review schedule. */
+    private static final String REVIEW_ENTITY_TYPE = "DocumentReview";
+
     private final ComplianceDocumentRepository docs;
+    private final DocumentReviewRepository reviews;
     private final UserRepository users;
     private final FirmBranchRepository branches;
     private final FileStorageService storage;
@@ -45,6 +52,7 @@ public class ComplianceDocumentService {
     private final Duration downloadTtl;
 
     public ComplianceDocumentService(ComplianceDocumentRepository docs,
+                                     DocumentReviewRepository reviews,
                                      UserRepository users,
                                      FirmBranchRepository branches,
                                      FileStorageService storage,
@@ -53,6 +61,7 @@ public class ComplianceDocumentService {
                                      @Value("${S3_UPLOAD_TTL_MINUTES:5}") long uploadTtlMinutes,
                                      @Value("${S3_DOWNLOAD_TTL_MINUTES:5}") long downloadTtlMinutes) {
         this.docs = docs;
+        this.reviews = reviews;
         this.users = users;
         this.branches = branches;
         this.storage = storage;
@@ -66,6 +75,12 @@ public class ComplianceDocumentService {
     public UploadUrlResponse presignUpload(ComplianceUploadUrlRequest req) {
         if (req.sizeBytes() > maxBytes) {
             throw new BadRequestException("File exceeds " + (maxBytes / 1024 / 1024) + " MB limit");
+        }
+        // Compliance documents are PDF-only.
+        boolean pdfContentType = "application/pdf".equalsIgnoreCase(req.contentType());
+        boolean pdfExtension = req.filename() != null && req.filename().toLowerCase().endsWith(".pdf");
+        if (!pdfContentType || !pdfExtension) {
+            throw new BadRequestException("Only PDF files can be uploaded");
         }
         UserPrincipal actor = currentPrincipal();
         Long firmId = resolveTargetFirm(actor, req.realEstateFirmId());
@@ -119,7 +134,7 @@ public class ComplianceDocumentService {
         }
         doc.setStatus(DocumentStatus.ACTIVE);
 
-        audit.record(AuditAction.DOCUMENT_UPLOADED, "ComplianceDocument", doc.getId(),
+        audit.record(AuditAction.DOCUMENT_UPLOADED, ENTITY_TYPE, doc.getId(),
                 "Uploaded " + doc.getName() + " (v" + doc.getVersionNo() + ", " + doc.getCategory() + ")");
 
         return toDto(doc);
@@ -151,7 +166,7 @@ public class ComplianceDocumentService {
         }
         assertSameScope(currentPrincipal(), d);
         String url = storage.presignDownload(d.getS3Key(), d.getOriginalFilename(), downloadTtl);
-        audit.record(AuditAction.DOCUMENT_DOWNLOADED, "ComplianceDocument", d.getId(),
+        audit.record(AuditAction.DOCUMENT_DOWNLOADED, ENTITY_TYPE, d.getId(),
                 "Download URL issued for " + d.getName() + " (v" + d.getVersionNo() + ")");
         return new DownloadUrlResponse(url, (int) downloadTtl.toSeconds());
     }
@@ -170,8 +185,35 @@ public class ComplianceDocumentService {
 
         storage.delete(d.getS3Key());
         d.setStatus(DocumentStatus.DELETED);
-        audit.record(AuditAction.DOCUMENT_DELETED, "ComplianceDocument", d.getId(),
+        audit.record(AuditAction.DOCUMENT_DELETED, ENTITY_TYPE, d.getId(),
                 "Deleted " + d.getName() + " (v" + d.getVersionNo() + ")");
+    }
+
+    /**
+     * Activity trail for a category's register in the selected scope — document uploads,
+     * downloads and deletions (across every revision, including deleted ones) plus the
+     * register's review actions (date set / marked complete), newest first. Firm resolves
+     * like {@link #list}: non-ROOT callers are pinned to their own firm, so the id sets
+     * handed to the audit lookup are already scope-safe.
+     */
+    @Transactional(readOnly = true)
+    public List<AuditLogDto> activity(ComplianceDocCategory category, Long requestedFirmId, Long branchId) {
+        Long firmId = resolveTargetFirm(currentPrincipal(), requestedFirmId);
+        List<ComplianceDocument> rows = firmId == null
+                ? docs.findAllByCategoryAndRealEstateFirmIdIsNull(category)
+                : docs.findAllByCategoryAndRealEstateFirmId(category, firmId);
+        List<Long> docIds = rows.stream()
+                .filter((d) -> branchId == null || branchId.equals(d.getFirmBranchId()))
+                .map(ComplianceDocument::getId)
+                .toList();
+        List<Long> reviewIds = reviews.findScoped(category, firmId, branchId)
+                .map((r) -> List.of(r.getId())).orElseGet(List::of);
+
+        return java.util.stream.Stream
+                .concat(audit.listForEntities(ENTITY_TYPE, docIds).stream(),
+                        audit.listForEntities(REVIEW_ENTITY_TYPE, reviewIds).stream())
+                .sorted(java.util.Comparator.comparing(AuditLogDto::createdAt).reversed())
+                .toList();
     }
 
     /* ---------- helpers ---------- */

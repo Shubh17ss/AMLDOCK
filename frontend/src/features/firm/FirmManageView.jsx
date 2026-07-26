@@ -9,9 +9,11 @@ import { FirmBranchesCard } from './FirmBranchesCard.jsx';
  * Full management surface for a single firm: details + users + branches.
  * Shared by the senior-manager / compliance "My firm" page and the ROOT per-firm page.
  *   - editableIdentity: ROOT may edit firm name / NZBN / active.
+ *   - showUsers: firm users are managed in the dedicated Settings › Users section, so the
+ *     reporting-entities view hides this card to avoid duplicating it.
  *   - branch deactivate is limited to ROOT and senior managers (the delete-capable roles).
  */
-export function FirmManageView({ firmId, currentUser, editableIdentity = false }) {
+export function FirmManageView({ firmId, currentUser, editableIdentity = false, showUsers = true }) {
   const firmQ = useQuery({
     queryKey: ['firm', firmId],
     queryFn: () => getFirm(firmId),
@@ -29,7 +31,7 @@ export function FirmManageView({ firmId, currentUser, editableIdentity = false }
   return (
     <Stack spacing={3}>
       <FirmDetailsCard firm={firmQ.data} editableIdentity={editableIdentity} />
-      <FirmUsersCard firmId={firmId} currentUser={currentUser} />
+      {showUsers && <FirmUsersCard firmId={firmId} currentUser={currentUser} />}
       <FirmBranchesCard firmId={firmId} canDeactivate={canDeactivateBranch}
                         maxBranches={firmQ.data?.numberOfBranches ?? null} />
     </Stack>

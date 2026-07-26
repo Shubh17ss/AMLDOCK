@@ -17,7 +17,7 @@ import { useToast } from './ToastProvider.jsx';
  *   - "Upload CSV" → bulk import (only when a firm context exists, i.e. lockedFirmId is set).
  * Same props/usage as before, so the call sites are unchanged.
  */
-export function CreateUserDialog({ open, onClose, currentUser, lockedFirmId }) {
+export function CreateUserDialog({ open, onClose, currentUser, lockedFirmId, lockedFirm, lockedBranch }) {
   const csvAvailable = lockedFirmId != null;
   const [mode, setMode] = useState('manual');
 
@@ -33,7 +33,8 @@ export function CreateUserDialog({ open, onClose, currentUser, lockedFirmId }) {
         </Tabs>
       )}
       {mode === 'manual'
-        ? <ManualUserForm open={open} onClose={onClose} currentUser={currentUser} lockedFirmId={lockedFirmId} />
+        ? <ManualUserForm open={open} onClose={onClose} currentUser={currentUser}
+                          lockedFirmId={lockedFirmId} lockedFirm={lockedFirm} lockedBranch={lockedBranch} />
         : <CsvUserImport onClose={onClose} currentUser={currentUser} firmId={lockedFirmId} />}
     </Dialog>
   );
@@ -45,14 +46,18 @@ export function CreateUserDialog({ open, onClose, currentUser, lockedFirmId }) {
  *   - ROOT picks the firm; firm-level creators are pinned to their own firm
  *   - branch picker appears for branch roles; a sales manager's new users inherit their branch
  */
-function ManualUserForm({ open, onClose, currentUser, lockedFirmId }) {
+function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, lockedBranch }) {
   const qc = useQueryClient();
   const creatorRole = currentUser?.role;
   const allowedRoles = creatableRoles(creatorRole);
   const isRoot = creatorRole === 'ROOT';
   const isSalesManager = creatorRole === 'SALES_MANAGER';
-  // When a firm is locked (e.g. ROOT managing a specific firm) we don't show the firm picker.
-  const firmPinned = lockedFirmId != null;
+  // Firm/branch come from the selected scope (Settings › Users follows the scope selector):
+  // when present they're shown as fixed, read-only fields instead of pickers.
+  const lockedFirmIdEff = lockedFirm?.id ?? lockedFirmId ?? null;
+  const branchPinned = Boolean(lockedBranch?.id);
+  // When a firm is locked (scope selection, or ROOT managing a specific firm) hide the firm picker.
+  const firmPinned = lockedFirmIdEff != null;
   const showFirmPicker = isRoot && !firmPinned;
 
   const emptyForm = () => ({
@@ -70,12 +75,12 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId }) {
   const needsFirm = requiresFirm(form.role);
   const needsBranch = requiresBranch(form.role);
 
-  const firmId = firmPinned ? lockedFirmId : (isRoot ? form.realEstateFirmId : currentUser?.realEstateFirmId);
+  const firmId = firmPinned ? lockedFirmIdEff : (isRoot ? form.realEstateFirmId : currentUser?.realEstateFirmId);
 
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms, enabled: showFirmPicker });
   const activeFirms = (firmsQ.data ?? []).filter((f) => f.active);
 
-  const showBranchPicker = needsBranch && !isSalesManager;
+  const showBranchPicker = needsBranch && !isSalesManager && !branchPinned;
   const branchesQ = useQuery({
     queryKey: ['firms', firmId, 'branches'],
     queryFn: () => listBranches(firmId),
@@ -90,6 +95,7 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId }) {
   const resolvedBranchId = () => {
     if (!needsBranch) return null;
     if (isSalesManager) return currentUser?.firmBranchId ?? null;
+    if (branchPinned) return lockedBranch.id;
     return form.firmBranchId ? Number(form.firmBranchId) : null;
   };
 
@@ -116,7 +122,7 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId }) {
   const submittable =
     form.email && form.fullName && form.role &&
     (!needsFirm || firmId) &&
-    (!needsBranch || isSalesManager || form.firmBranchId);
+    (!needsBranch || isSalesManager || branchPinned || form.firmBranchId);
 
   return (
     <Box component="form" onSubmit={submit}>
@@ -133,6 +139,16 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId }) {
               {allowedRoles.map((r) => <MenuItem key={r} value={r}>{roleLabel(r)}</MenuItem>)}
             </Select>
           </FormControl>
+
+          {/* Fixed firm/branch from the selected scope — read-only, not editable here. */}
+          {lockedFirm && needsFirm && (
+            <TextField label="Reporting entity" value={lockedFirm.name ?? ''} disabled fullWidth
+                       helperText="From the selected scope" />
+          )}
+          {branchPinned && needsBranch && !isSalesManager && (
+            <TextField label="Branch" value={lockedBranch.name ?? ''} disabled fullWidth
+                       helperText="From the selected scope" />
+          )}
 
           {showFirmPicker && needsFirm && (
             <FormControl fullWidth required>

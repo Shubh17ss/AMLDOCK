@@ -14,6 +14,12 @@ public interface ComplianceDocumentRepository extends JpaRepository<ComplianceDo
     List<ComplianceDocument> findAllByCategoryAndRealEstateFirmIdIsNullAndStatusOrderByVersionNoDesc(
             ComplianceDocCategory category, DocumentStatus status);
 
+    // Any status — used to gather every revision (incl. deleted) in a scope for the activity log.
+    List<ComplianceDocument> findAllByCategoryAndRealEstateFirmId(
+            ComplianceDocCategory category, Long realEstateFirmId);
+
+    List<ComplianceDocument> findAllByCategoryAndRealEstateFirmIdIsNull(ComplianceDocCategory category);
+
     Optional<ComplianceDocument> findTopByCategoryAndRealEstateFirmIdOrderByVersionNoDesc(
             ComplianceDocCategory category, Long realEstateFirmId);
 

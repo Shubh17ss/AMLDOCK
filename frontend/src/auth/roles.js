@@ -61,14 +61,22 @@ export const requiresBranch = (role) => BRANCH_LEVEL.has(role);
 export const DEAL_AUTHOR_ROLES = ['AGENT', 'AGENT_PA', 'ADMIN'];
 export const DEAL_REVIEWER_ROLES = ['AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 export const DELETE_ROLES = ['ROOT', 'SENIOR_MANAGER'];
+// Who may set a document register's review date / mark it complete.
+export const REVIEW_MANAGER_ROLES = ['ROOT', 'SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER'];
 export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'SALES_MANAGER'];
 // Settings › Users and Settings › Reporting Entities. ROOT sees the platform; firm-level staff
 // see the same screens scoped by the API to their own reporting entity.
 export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 
+// Roles with the full compliance workspace. Everyone else is confined to the CDD section:
+// only CDD modules are visible in the sidebar / dashboard hub and only those routes resolve.
+export const FULL_WORKSPACE_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+export const canAccessAllModules = (role) => FULL_WORKSPACE_ROLES.includes(role);
+
 export const isDealAuthor = (role) => DEAL_AUTHOR_ROLES.includes(role);
 export const isDealReviewer = (role) => DEAL_REVIEWER_ROLES.includes(role);
 export const canDelete = (role) => DELETE_ROLES.includes(role);
+export const canManageReview = (role) => REVIEW_MANAGER_ROLES.includes(role);
 export const canManageUsers = (role) => USER_MANAGER_ROLES.includes(role);
 export const canOverride = (role) => role === 'SENIOR_MANAGER';
 

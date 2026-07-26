@@ -68,6 +68,25 @@ public class UserService {
         return List.of();
     }
 
+    /**
+     * Tier-scoped visible users, further narrowed to the firm/branch selected in the UI.
+     * The tier scope from {@link #findVisible(UserPrincipal)} always applies first, so this
+     * can only ever shrink what the actor is already permitted to see.
+     *
+     * <p>A selected branch keeps that branch's users <em>and</em> the firm's branchless
+     * firm-level staff (AML compliance officers / senior managers), who oversee every branch
+     * and so should stay visible regardless of the branch filter.
+     */
+    @Transactional(readOnly = true)
+    public List<User> findVisible(UserPrincipal actor, Long firmId, Long branchId) {
+        return findVisible(actor).stream()
+                .filter((u) -> firmId == null || firmId.equals(u.getRealEstateFirmId()))
+                .filter((u) -> branchId == null
+                        || branchId.equals(u.getFirmBranchId())
+                        || u.getFirmBranchId() == null)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public User findById(Long id) {
         return users.findById(id).orElseThrow(() -> new NotFoundException("User " + id + " not found"));

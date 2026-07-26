@@ -3,10 +3,14 @@ package nz.amldock.audit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface AuditLogRepository
         extends JpaRepository<AuditLog, Long>, JpaSpecificationExecutor<AuditLog> {
 
     List<AuditLog> findAllByEntityTypeAndEntityIdOrderByCreatedAtDesc(String entityType, Long entityId);
+
+    List<AuditLog> findAllByEntityTypeAndEntityIdInOrderByCreatedAtDesc(
+            String entityType, Collection<Long> entityIds);
 }
