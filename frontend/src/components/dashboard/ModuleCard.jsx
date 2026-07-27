@@ -31,13 +31,38 @@ export function ModuleCard({
   const statusColor = reviewMeta ? reviewMeta.color : (attention ? tokens.rejected : tokens.approved);
 
   return (
-    <BentoTile index={index} to={to} ariaLabel={label} sx={{ p: 2.25 }}>
+    <BentoTile
+      index={index}
+      to={to}
+      ariaLabel={label}
+      sx={{
+        p: { xs: 2.5, md: 3 },
+        minHeight: { xs: 180, md: 210 },
+        // Status chip pops with the card lift. Motion-safe wrapper (rather than a
+        // reduce guard) so this key can't collide with BentoTile's own media block.
+        '@media (prefers-reduced-motion: no-preference)': {
+          '&:hover .card-status-chip': { transform: 'scale(1.1)' },
+        },
+      }}
+    >
       {/* Title + status */}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
         <Typography sx={{ fontWeight: 700, fontSize: '0.98rem', color: tokens.ink, lineHeight: 1.25, minWidth: 0 }}>
           {label}
         </Typography>
-        <StatusIcon sx={{ fontSize: 20, flexShrink: 0, color: statusColor }} />
+        {/* Tinted wash chip lifts the status icon off the glass for contrast. */}
+        <Box
+          className="card-status-chip"
+          sx={{
+            width: 30, height: 30, borderRadius: '10px', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: `${statusColor}1C`,
+            boxShadow: `inset 0 0 0 1px ${statusColor}26`,
+            transition: 'transform 0.3s cubic-bezier(0.22,1,0.36,1)',
+          }}
+        >
+          <StatusIcon sx={{ fontSize: 18, color: statusColor }} />
+        </Box>
       </Box>
 
       {/* ISSUES / WARNINGS */}
@@ -68,6 +93,7 @@ function Metric({ value, label, color }) {
       <Typography sx={{
         fontFamily: fonts.display, fontWeight: 800, lineHeight: 1,
         fontSize: 'clamp(1.6rem, 3vw, 2rem)', letterSpacing: '-0.03em', color,
+        fontVariantNumeric: 'tabular-nums',
       }}>
         {value}
       </Typography>

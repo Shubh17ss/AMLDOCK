@@ -174,13 +174,21 @@ export function AppShell() {
             pb: { xs: 'calc(80px + env(safe-area-inset-bottom, 0px))', md: 4 },
           }}
         >
-          {/* Ambient canvas wash — gives the frosted tiles something to blur. */}
+          {/* Ambient canvas wash — gives the frosted tiles something to blur. Oversized
+              and slowly drifting so the glass reads alive; static under reduced motion. */}
           <Box aria-hidden sx={{
-            position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
+            position: 'fixed', inset: '-6%', zIndex: 0, pointerEvents: 'none',
             background: `
-              radial-gradient(920px 480px at 88% -12%, rgba(27,95,227,0.075), transparent 62%),
-              radial-gradient(720px 460px at -8% 110%, rgba(27,95,227,0.05), transparent 58%)
+              radial-gradient(920px 480px at 88% -12%, rgba(27,95,227,0.10), transparent 62%),
+              radial-gradient(720px 460px at -8% 110%, rgba(27,95,227,0.065), transparent 58%),
+              radial-gradient(1100px 640px at 42% 34%, rgba(27,95,227,0.035), transparent 66%)
             `,
+            animation: 'ambientDrift 48s ease-in-out infinite alternate',
+            '@keyframes ambientDrift': {
+              from: { transform: 'translate3d(0, 0, 0) scale(1)' },
+              to:   { transform: 'translate3d(-1.5%, 1%, 0) scale(1.04)' },
+            },
+            '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
           }} />
           <Box sx={{ position: 'relative', zIndex: 1 }}>
             <Outlet />

@@ -49,17 +49,31 @@ export function DashboardPage() {
   let cardIndex = 0;
 
   return (
-    <Stack spacing={{ xs: 3, md: 4 }}>
+    <Stack spacing={{ xs: 4, md: 6 }}>
       <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-        <Box>
+        {/* Greeting leads the load choreography; cards follow with their own stagger. */}
+        <Box sx={{
+          opacity: 0,
+          animation: 'heroRise 0.6s cubic-bezier(0.22,1,0.36,1) forwards',
+          '@keyframes heroRise': {
+            from: { opacity: 0, transform: 'translateY(10px)' },
+            to: { opacity: 1, transform: 'translateY(0)' },
+          },
+          '@media (prefers-reduced-motion: reduce)': { opacity: 1, animation: 'none' },
+        }}>
           <Typography sx={{
             fontFamily: fonts.mono, fontSize: '0.68rem', letterSpacing: '0.16em',
             color: tokens.muted, textTransform: 'uppercase', mb: 0.75,
           }}>
             {stamp()} . {roleLabel(user?.role)}
           </Typography>
-          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.03em', color: tokens.ink }}>
-            {greeting()}{firstName ? `, ${firstName}` : ''}.
+          <Typography variant="h4" sx={{
+            fontFamily: fonts.display, fontWeight: 800, letterSpacing: '-0.035em',
+            color: tokens.ink, lineHeight: 1.12,
+          }}>
+            {greeting()}{firstName ? `, ${firstName}` : ''}
+            {/* The clearance stamp — one blue full stop. */}
+            <Box component="span" sx={{ color: tokens.blue }}>.</Box>
           </Typography>
         </Box>
         {/* Mobile only — on desktop the scope selector lives in the sidebar. */}
@@ -68,9 +82,17 @@ export function DashboardPage() {
         </Box>
       </Box>
 
-      {groups.map((group) => (
+      {groups.map((group, gi) => (
         <Box key={group.group}>
-          <Box sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1.25 }}>
+          {/* Header row fades in per section; the hairline draws itself left → right. */}
+          <Box sx={{
+            mb: 1.5, display: 'flex', alignItems: 'center', gap: 1.25,
+            opacity: 0,
+            animation: 'sectionIn 0.45s ease forwards',
+            animationDelay: `${120 + gi * 90}ms`,
+            '@keyframes sectionIn': { from: { opacity: 0 }, to: { opacity: 1 } },
+            '@media (prefers-reduced-motion: reduce)': { opacity: 1, animation: 'none' },
+          }}>
             <Typography
               component={RouterLink}
               to={group.to}
@@ -85,13 +107,27 @@ export function DashboardPage() {
               {group.group}
               <Box component="span" sx={{ fontSize: '0.9em', opacity: 0.6 }}>›</Box>
             </Typography>
-            <Box sx={{ flex: 1, height: '1px', backgroundColor: tokens.hairline }} />
+            {/* Ledger count — how many modules this section holds. */}
+            <Typography component="span" sx={{
+              fontFamily: fonts.mono, fontSize: '0.64rem', color: tokens.muted, opacity: 0.65, lineHeight: 1,
+            }}>
+              {String(group.items.length).padStart(2, '0')}
+            </Typography>
+            <Box sx={{
+              flex: 1, height: '1px', transformOrigin: 'left',
+              background: `linear-gradient(90deg, ${tokens.hairline2}, rgba(215,222,234,0))`,
+              transform: 'scaleX(0)',
+              animation: 'hairDraw 0.7s cubic-bezier(0.22,1,0.36,1) forwards',
+              animationDelay: `${220 + gi * 90}ms`,
+              '@keyframes hairDraw': { from: { transform: 'scaleX(0)' }, to: { transform: 'scaleX(1)' } },
+              '@media (prefers-reduced-motion: reduce)': { transform: 'scaleX(1)', animation: 'none' },
+            }} />
           </Box>
 
           <Box sx={{
             display: 'grid',
-            gap: { xs: 1.5, md: 2 },
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(260px, 1fr))' },
+            gap: { xs: 1.5, md: 2.5 },
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(320px, 1fr))' },
           }}>
             {group.items.map((item) => (
               <ModuleCard key={item.id} label={item.label} to={item.to} index={cardIndex++}

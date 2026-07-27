@@ -21,13 +21,15 @@ export function BentoTile({
   const interactive = Boolean(to || onClick);
 
   const surface = {
-    // Frosted glass over the ambient canvas wash — the premium surface.
+    // Frosted glass over the ambient canvas wash — the premium surface. Clearer glass
+    // + higher saturation lets the wash glow through; the specular edge lives in the
+    // shadows.glass inset highlight.
     plain: {
-      background: 'rgba(255,255,255,0.78)',
-      backdropFilter: 'blur(14px) saturate(160%)',
-      WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+      background: 'linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.62) 100%)',
+      backdropFilter: 'blur(18px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(18px) saturate(180%)',
       color: tokens.ink,
-      border: `1px solid ${tokens.hairline}`,
+      border: '1px solid rgba(215,222,234,0.7)',
     },
     accent: {
       background: `linear-gradient(140deg, ${tokens.blue} 0%, ${tokens.blueDark} 100%)`,
@@ -61,7 +63,7 @@ export function BentoTile({
         // surface
         ...surface,
         borderRadius: '20px',
-        boxShadow: variant === 'plain' ? shadows.md : shadows.lg,
+        boxShadow: variant === 'plain' ? shadows.glass : shadows.lg,
         p: 2.5,
         display: 'flex',
         flexDirection: 'column',
@@ -70,27 +72,44 @@ export function BentoTile({
         cursor: interactive ? 'pointer' : 'default',
         position: 'relative',
         overflow: 'hidden',
-        transition: 'box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease',
-        // orchestrated page-load
+        transition: 'box-shadow 0.3s cubic-bezier(0.22,1,0.36,1), transform 0.3s cubic-bezier(0.22,1,0.36,1), border-color 0.3s ease',
+        // orchestrated page-load: rise + settle from soft focus
         opacity: 0,
-        animation: 'bentoRise 0.5s cubic-bezier(0.22,1,0.36,1) forwards',
+        animation: 'bentoRise 0.55s cubic-bezier(0.22,1,0.36,1) forwards',
         animationDelay: `${Math.min(index, 12) * 55}ms`,
         '@keyframes bentoRise': {
-          from: { opacity: 0, transform: 'translateY(14px) scale(0.985)' },
-          to: { opacity: 1, transform: 'translateY(0) scale(1)' },
+          from: { opacity: 0, transform: 'translateY(16px) scale(0.98)', filter: 'blur(6px)' },
+          to: { opacity: 1, transform: 'translateY(0) scale(1)', filter: 'blur(0px)' },
         },
+        // Specular sheen — sweeps across on hover, parked off-canvas at rest.
         ...(interactive && {
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: 0, bottom: 0, left: 0, width: '55%',
+            background: 'linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+            transform: 'translateX(-180%) skewX(-16deg)',
+            pointerEvents: 'none',
+          },
           '&:hover': {
-            transform: 'translateY(-3px)',
-            boxShadow: variant === 'plain' ? shadows.lg : shadows.lg,
-            borderColor: variant === 'plain' ? tokens.hairline2 : 'transparent',
+            transform: 'translateY(-4px)',
+            boxShadow: variant === 'plain' ? shadows.glassHover : shadows.lg,
+            borderColor: variant === 'plain' ? 'rgba(27,95,227,0.3)' : 'transparent',
+          },
+          '&:hover::after': {
+            transform: 'translateX(320%) skewX(-16deg)',
+            transition: 'transform 0.9s cubic-bezier(0.22,1,0.36,1)',
           },
         }),
-        '&.Mui-focusVisible, &:focus-visible': { outline: 'none', boxShadow: shadows.focus },
+        '&.Mui-focusVisible, &:focus-visible': {
+          outline: 'none',
+          boxShadow: variant === 'plain' ? `${shadows.focus}, ${shadows.glass}` : `${shadows.focus}, ${shadows.lg}`,
+        },
         '@media (prefers-reduced-motion: reduce)': {
           opacity: 1,
           animation: 'none',
           '&:hover': { transform: 'none' },
+          '&::after': { display: 'none' },
         },
         ...sx,
       }}

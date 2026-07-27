@@ -53,25 +53,33 @@ export function SidebarNav() {
         const isOpen = open === group.group;
         const groupActive = inGroup(group, pathname);
         return (
-          <Box key={group.group} sx={{ mt: 1.25 }}>
+          <Box key={group.group} sx={{ mt: 1.75 }}>
             <Box
               component={RouterLink}
               to={group.to}
               onClick={() => setOpen(group.group)}
               sx={{
-                display: 'flex', alignItems: 'center', gap: 1,
-                px: 1.5, py: 0.9, borderRadius: 2.5, textDecoration: 'none',
+                display: 'flex', alignItems: 'center', gap: 1.25,
+                px: 1.75, py: 1.1, borderRadius: '7rem', textDecoration: 'none',
                 fontFamily: fonts.mono, fontSize: '0.64rem', fontWeight: 700,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
                 color: groupActive ? tokens.blue : tokens.muted,
-                // Depth: the open header reads as a raised control, not a printed label.
-                background: isOpen ? 'linear-gradient(180deg, #FFFFFF 0%, #F6F9FE 100%)' : 'transparent',
+                // Pill chip: light wash at rest; the open header reads as a raised control.
+                background: isOpen ? 'linear-gradient(180deg, #FFFFFF 0%, #F6F9FE 100%)' : '#F4F7FB',
                 border: `1px solid ${isOpen ? tokens.hairline : 'transparent'}`,
                 boxShadow: isOpen ? '0 2px 6px -2px rgba(16,24,40,0.10)' : 'none',
                 transition: 'color 0.15s ease, background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-                '&:hover': { color: tokens.blue, backgroundColor: isOpen ? undefined : '#F2F5FA' },
+                '&:hover': { color: tokens.blue, backgroundColor: isOpen ? undefined : '#EDF3FC' },
               }}
             >
+              {/* Section glyph — sized to sit with the mono label. */}
+              <Box component="span" sx={{
+                display: 'inline-flex', alignItems: 'center', flexShrink: 0,
+                color: groupActive ? tokens.blue : tokens.muted,
+                '& svg': { fontSize: 17 },
+              }}>
+                {group.icon}
+              </Box>
               <Box component="span" sx={{ flex: 1, minWidth: 0 }}>{group.group}</Box>
               <Box
                 component="span"

@@ -16,6 +16,12 @@ import PeopleIcon from '@mui/icons-material/People';
 import BusinessIcon from '@mui/icons-material/Business';
 import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
 import PublicIcon from '@mui/icons-material/Public';
+import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
+import VerifiedUserRoundedIcon from '@mui/icons-material/VerifiedUserRounded';
+import WorkspacePremiumRoundedIcon from '@mui/icons-material/WorkspacePremiumRounded';
+import GppMaybeRoundedIcon from '@mui/icons-material/GppMaybeRounded';
+import MonitorHeartRoundedIcon from '@mui/icons-material/MonitorHeartRounded';
+import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { canAccessAllModules } from '../auth/roles.js';
 
 // ── Compliance module registry ──────────────────────────────────────────────
@@ -34,6 +40,7 @@ export const DEALS_PATH = '/cdd/deals';
 export const MODULE_GROUPS = [
   {
     group: 'Documents', slug: 'documents', to: '/documents', title: 'Documents',
+    icon: <FolderRoundedIcon />,
     items: [
       { id: 'risk-assessment',      label: 'Risk Assessment',      to: '/documents/risk-assessment',      icon: <AssessmentIcon /> },
       { id: 'compliance-programme', label: 'Compliance Programme', to: '/documents/compliance-programme', icon: <PolicyIcon /> },
@@ -43,6 +50,7 @@ export const MODULE_GROUPS = [
   {
     // The CDD header opens the CDD Register — the role-aware stats dashboard.
     group: 'CDD', slug: 'cdd', to: CDD_REGISTER_PATH, title: 'CDD Register',
+    icon: <VerifiedUserRoundedIcon />,
     items: [
       { id: 'deals',             label: 'Listing Register',  to: DEALS_PATH,               icon: <BusinessCenterIcon /> },
       { id: 'beneficial-owners', label: 'Beneficial Owners', to: '/cdd/beneficial-owners', icon: <AccountTreeIcon /> },
@@ -53,6 +61,7 @@ export const MODULE_GROUPS = [
   },
   {
     group: 'AML Training', slug: 'aml-training', to: '/aml-training', title: 'AML Training',
+    icon: <WorkspacePremiumRoundedIcon />,
     items: [
       { id: 'echecks',        label: 'eChecks',        to: '/aml-training/echecks',        icon: <FactCheckIcon /> },
       { id: 'staff-training', label: 'Staff Training', to: '/aml-training/staff-training', icon: <SchoolIcon /> },
@@ -60,6 +69,7 @@ export const MODULE_GROUPS = [
   },
   {
     group: 'Client Risk', slug: 'client-risk', to: '/client-risk', title: 'Client Risk',
+    icon: <GppMaybeRoundedIcon />,
     items: [
       { id: 'client-risk',  label: 'Client Risk',  to: '/client-risk',              icon: <PersonSearchIcon /> },
       { id: 'transactions', label: 'Transactions', to: '/client-risk/transactions', icon: <ReceiptLongIcon /> },
@@ -67,6 +77,7 @@ export const MODULE_GROUPS = [
   },
   {
     group: 'Monitoring', slug: 'monitoring', to: '/monitoring', title: 'Monitoring',
+    icon: <MonitorHeartRoundedIcon />,
     items: [
       { id: 'management-reports',    label: 'Management Reports',                    to: '/monitoring/reports',                            icon: <InsightsIcon /> },
       { id: 'suspicious-activities', label: 'Suspicious Activities',                to: '/monitoring/suspicious-activities',              icon: <FlagIcon /> },
@@ -75,6 +86,7 @@ export const MODULE_GROUPS = [
   },
   {
     group: 'Settings', slug: 'settings', to: '/settings', title: 'Settings',
+    icon: <SettingsRoundedIcon />,
     items: [
       { id: 'users',              label: 'Users',              to: '/settings/users',              icon: <PeopleIcon /> },
       { id: 'reporting-entities', label: 'Reporting Entities', to: '/settings/reporting-entities', icon: <BusinessIcon /> },
