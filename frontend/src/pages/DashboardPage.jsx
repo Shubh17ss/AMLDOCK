@@ -1,19 +1,17 @@
+import { useState } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { roleLabel, canAccessAllModules } from '../auth/roles.js';
-import { visibleGroupsFor } from '../navigation/moduleRegistry.jsx';
+import { roleLabel, canAccessAllModules, canManageReview } from '../auth/roles.js';
+import { visibleGroupsFor, isReviewableModule } from '../navigation/moduleRegistry.jsx';
 import { ModuleCard } from '../components/dashboard/ModuleCard.jsx';
 import { ScopeSelector } from '../components/dashboard/ScopeSelector.jsx';
-import { DOCUMENT_MODULES } from './documents/DocumentModulePage.jsx';
+import { ReviewDialog } from '../components/documents/ReviewDialog.jsx';
 import { listDocumentReviews, reviewStatusOf } from '../api/documentReviews.js';
 import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
 import { greeting, stamp } from './dashboard/greeting.js';
 import { tokens, fonts } from '../theme/theme.js';
-
-// Document module cards carry a review indicator; map each card's route to its category.
-const REVIEW_PATH_TO_CATEGORY = Object.fromEntries(DOCUMENT_MODULES.map((m) => [m.path, m.category]));
 
 const cardDateFmt = (iso) =>
   iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -27,22 +25,28 @@ export function DashboardPage() {
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
   const firstName = (user?.fullName || '').trim().split(/\s+/)[0] || null;
+  const [reviewing, setReviewing] = useState(null);
 
-  // Review schedules for the current scope, keyed by category, to light up the Documents cards.
-  // Only the full-workspace roles see those cards (and may call the API), so skip it otherwise.
+  // Review schedules for the current scope, keyed by module, to light up every compliance
+  // card. Only the full-workspace roles may call the API, so skip it otherwise.
   const reviewsQ = useQuery({
     queryKey: ['documentReviews', firm?.id ?? null, branch?.id ?? null],
     queryFn: () => listDocumentReviews({ firmId: firm?.id, branchId: branch?.id }),
     enabled: canAccessAllModules(user?.role),
   });
-  const reviewByCategory = Object.fromEntries((reviewsQ.data ?? []).map((r) => [r.category, r]));
+  const reviewByModule = Object.fromEntries((reviewsQ.data ?? []).map((r) => [r.moduleKey, r]));
 
-  // Extra props for a module card if it maps to a document register with a review schedule.
+  const mayReview = canManageReview(user?.role);
+
+  // Extra props for a module card that carries a review schedule (everything but Settings).
   const reviewPropsFor = (item) => {
-    const category = REVIEW_PATH_TO_CATEGORY[item.to];
-    if (!category) return null;
-    const review = reviewByCategory[category] ?? null;
-    return { reviewStatus: reviewStatusOf(review), reviewDate: cardDateFmt(review?.nextReviewDate) };
+    if (!isReviewableModule(item.id)) return null;
+    const review = reviewByModule[item.id] ?? null;
+    return {
+      reviewStatus: reviewStatusOf(review),
+      reviewDate: cardDateFmt(review?.nextReviewDate),
+      onReview: mayReview ? () => setReviewing(item) : null,
+    };
   };
 
   const groups = visibleGroupsFor(user?.role);
@@ -136,6 +140,14 @@ export function DashboardPage() {
           </Box>
         </Box>
       ))}
+
+      <ReviewDialog
+        open={Boolean(reviewing)}
+        onClose={() => setReviewing(null)}
+        moduleKey={reviewing?.id}
+        title={reviewing?.label ?? ''}
+        review={reviewing ? reviewByModule[reviewing.id] ?? null : null}
+      />
     </Stack>
   );
 }

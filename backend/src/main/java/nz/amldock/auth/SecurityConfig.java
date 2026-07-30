@@ -53,6 +53,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/compliance-documents", "/api/compliance-documents/**",
                                 "/api/document-reviews", "/api/document-reviews/**")
                         .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
+                        // Monitoring > International Fund Transaction Register — same
+                        // full-workspace roles as the Documents section.
+                        .requestMatchers("/api/international-fund-transactions",
+                                "/api/international-fund-transactions/**")
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

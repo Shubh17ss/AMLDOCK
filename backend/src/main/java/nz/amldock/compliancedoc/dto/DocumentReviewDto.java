@@ -1,18 +1,17 @@
 package nz.amldock.compliancedoc.dto;
 
-import nz.amldock.compliancedoc.ComplianceDocCategory;
 import nz.amldock.compliancedoc.DocumentReview;
 
 import java.time.Instant;
 import java.time.LocalDate;
 
 /**
- * A register's review schedule for the selected scope. {@code status} is derived from
+ * A compliance module's review schedule for the selected scope. {@code status} is derived from
  * {@code nextReviewDate} so every surface renders the same three-state indicator:
  * UNSET (no date), OVERDUE (past due), or ON_TRACK (due in the future).
  */
 public record DocumentReviewDto(
-        ComplianceDocCategory category,
+        String moduleKey,
         LocalDate nextReviewDate,
         Instant lastCompletedAt,
         String lastCompletedByEmail,
@@ -29,15 +28,15 @@ public record DocumentReviewDto(
 
     public static DocumentReviewDto from(DocumentReview r, LocalDate today, String completedByEmail) {
         return new DocumentReviewDto(
-                r.getCategory(),
+                r.getModuleKey(),
                 r.getNextReviewDate(),
                 r.getLastCompletedAt(),
                 completedByEmail,
                 statusFor(r.getNextReviewDate(), today));
     }
 
-    /** An empty (never-configured) register still reports a concrete UNSET status. */
-    public static DocumentReviewDto empty(ComplianceDocCategory category) {
-        return new DocumentReviewDto(category, null, null, null, UNSET);
+    /** A never-configured module still reports a concrete UNSET status. */
+    public static DocumentReviewDto empty(String moduleKey) {
+        return new DocumentReviewDto(moduleKey, null, null, null, UNSET);
     }
 }

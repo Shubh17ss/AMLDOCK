@@ -206,7 +206,7 @@ public class ComplianceDocumentService {
                 .filter((d) -> branchId == null || branchId.equals(d.getFirmBranchId()))
                 .map(ComplianceDocument::getId)
                 .toList();
-        List<Long> reviewIds = reviews.findScoped(category, firmId, branchId)
+        List<Long> reviewIds = reviews.findScoped(ReviewableModules.forCategory(category), firmId, branchId)
                 .map((r) -> List.of(r.getId())).orElseGet(List::of);
 
         return java.util.stream.Stream

@@ -1,7 +1,8 @@
-import { Box, Typography } from '@mui/material';
+import { Box, Tooltip, Typography } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
-import { tokens, fonts } from '../../theme/theme.js';
+import EditCalendarRoundedIcon from '@mui/icons-material/EditCalendarRounded';
+import { tokens, fonts, shadows } from '../../theme/theme.js';
 import { BentoTile, Eyebrow } from '../bento/BentoTile.jsx';
 import { reviewMetaFor } from '../documents/reviewStatus.jsx';
 
@@ -24,6 +25,7 @@ export function ModuleCard({
   status = 'ok',           // 'ok' → green check, 'attention' → red alert
   reviewStatus = null,     // when set, drives a green/orange/red review indicator
   reviewDate = '—',
+  onReview = null,         // when set, a Review action appears in the footer
 }) {
   const attention = status === 'attention';
   const reviewMeta = reviewStatus ? reviewMetaFor(reviewStatus) : null;
@@ -75,13 +77,44 @@ export function ModuleCard({
       <Box sx={{ mt: 1.75, pt: 1.25, borderTop: `1px solid ${tokens.hairline}`,
                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         <Eyebrow>Review Date</Eyebrow>
-        <Typography sx={{
-          fontFamily: fonts.mono, fontSize: '0.74rem', whiteSpace: 'nowrap',
-          color: reviewMeta ? statusColor : tokens.muted,
-          fontWeight: reviewMeta ? 700 : 400,
-        }}>
-          {reviewDate}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+          <Typography sx={{
+            fontFamily: fonts.mono, fontSize: '0.74rem', whiteSpace: 'nowrap',
+            color: reviewMeta ? statusColor : tokens.muted,
+            fontWeight: reviewMeta ? 700 : 400,
+          }}>
+            {reviewDate}
+          </Typography>
+          {onReview && (
+            <Tooltip title={`Set ${label} review date`}>
+              {/* The whole card is a link, so this must swallow the click rather than
+                  navigate. Rendered as a span (not a button) to avoid nesting a button
+                  inside an anchor, with explicit keyboard handling to stay operable. */}
+              <Box
+                component="span"
+                role="button"
+                tabIndex={0}
+                aria-label={`Set ${label} review date`}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReview(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault(); e.stopPropagation(); onReview();
+                  }
+                }}
+                sx={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 24, height: 24, borderRadius: '7px', flexShrink: 0, cursor: 'pointer',
+                  color: tokens.muted, backgroundColor: 'transparent',
+                  transition: 'background-color 0.15s ease, color 0.15s ease',
+                  '&:hover': { backgroundColor: tokens.blueWash, color: tokens.blue },
+                  '&:focus-visible': { outline: 'none', boxShadow: shadows.focus },
+                }}
+              >
+                <EditCalendarRoundedIcon sx={{ fontSize: 15 }} />
+              </Box>
+            </Tooltip>
+          )}
+        </Box>
       </Box>
     </BentoTile>
   );

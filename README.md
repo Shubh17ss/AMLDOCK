@@ -55,6 +55,8 @@ APP_BASE_URL=http://localhost:5173         # used in email links
 
 Defaults: `MAIL_ENABLED=false`, `MAIL_PORT=587`, `MAIL_SMTP_AUTH=true`, `MAIL_SMTP_STARTTLS=true`.
 
+**Local dev (`dev` profile):** mail goes to the Mailpit container in `docker-compose.yml`, not to a public relay — most ISPs block outbound port 25, so external test relays time out. Start it with `docker compose up -d mailpit` and read captured mail at **http://localhost:8025**. The `dev` profile already points at `localhost:1025`; override with `MAIL_HOST`/`MAIL_PORT` if needed.
+
 Then:
 ```
 cd backend

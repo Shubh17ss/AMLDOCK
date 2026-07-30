@@ -1,7 +1,9 @@
 import { apiClient } from './client.js';
 
-// Per-register review schedule (next review date + last completion), scoped to the
-// firm/branch selected in the sidebar. Drives the review-status indicator on the cards.
+// Per-module review schedule (next review date + last completion), scoped to the firm/branch
+// selected in the sidebar. Drives the review-status indicator on every module card.
+//
+// `moduleKey` is the module id from navigation/moduleRegistry.jsx (e.g. 'peps').
 
 export async function listDocumentReviews({ firmId, branchId } = {}) {
   const { data } = await apiClient.get('/document-reviews', {
@@ -10,9 +12,9 @@ export async function listDocumentReviews({ firmId, branchId } = {}) {
   return data;
 }
 
-export async function setDocumentReviewDate({ category, nextReviewDate, firmId, branchId }) {
+export async function setDocumentReviewDate({ moduleKey, nextReviewDate, firmId, branchId }) {
   const { data } = await apiClient.put('/document-reviews', {
-    category,
+    moduleKey,
     nextReviewDate: nextReviewDate || null,
     realEstateFirmId: firmId ?? null,
     firmBranchId: branchId ?? null,
@@ -20,9 +22,9 @@ export async function setDocumentReviewDate({ category, nextReviewDate, firmId, 
   return data;
 }
 
-export async function completeDocumentReview({ category, firmId, branchId }) {
+export async function completeDocumentReview({ moduleKey, firmId, branchId }) {
   const { data } = await apiClient.post('/document-reviews/complete', {
-    category,
+    moduleKey,
     realEstateFirmId: firmId ?? null,
     firmBranchId: branchId ?? null,
   });

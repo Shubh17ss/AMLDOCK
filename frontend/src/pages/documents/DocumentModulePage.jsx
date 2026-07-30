@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
@@ -15,10 +15,9 @@ import {
   listComplianceDocs, fetchComplianceDownloadUrl, uploadComplianceDoc, deleteComplianceDoc,
   listComplianceActivity,
 } from '../../api/complianceDocs.js';
-import {
-  listDocumentReviews, setDocumentReviewDate, completeDocumentReview, reviewStatusOf,
-} from '../../api/documentReviews.js';
+import { listDocumentReviews, reviewStatusOf } from '../../api/documentReviews.js';
 import { reviewMetaFor } from '../../components/documents/reviewStatus.jsx';
+import { ReviewDialog } from '../../components/documents/ReviewDialog.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
@@ -30,11 +29,14 @@ import { tokens, fonts } from '../../theme/theme.js';
 // server-side content-type guard.
 const PDF_MIME = 'application/pdf';
 
-/** The three Documents modules — shared config for routes and page rendering. */
+/**
+ * The three Documents modules — shared config for routes and page rendering. `id` is the
+ * module-registry id, which doubles as the review key (document_review.module_key).
+ */
 export const DOCUMENT_MODULES = [
-  { category: 'RISK_ASSESSMENT',      title: 'Risk Assessment',      path: '/documents/risk-assessment' },
-  { category: 'COMPLIANCE_PROGRAMME', title: 'Compliance Programme', path: '/documents/compliance-programme' },
-  { category: 'ANNUAL_REPORT',        title: 'Annual Report',        path: '/documents/annual-report' },
+  { id: 'risk-assessment',      category: 'RISK_ASSESSMENT',      title: 'Risk Assessment',      path: '/documents/risk-assessment' },
+  { id: 'compliance-programme', category: 'COMPLIANCE_PROGRAMME', title: 'Compliance Programme', path: '/documents/compliance-programme' },
+  { id: 'annual-report',        category: 'ANNUAL_REPORT',        title: 'Annual Report',        path: '/documents/annual-report' },
 ];
 
 const dateFmt = (iso) =>
@@ -59,7 +61,7 @@ const ACTIVITY_STYLE = {
  * A versioned compliance-document register: upload revisions, download any past
  * version, and see who uploaded what and when. Used by all three Documents modules.
  */
-export function DocumentModulePage({ category, title }) {
+export function DocumentModulePage({ category, title, moduleKey }) {
   const qc = useQueryClient();
   const { showToast } = useToast();
   const { user } = useAuth();
@@ -72,12 +74,12 @@ export function DocumentModulePage({ category, title }) {
   const mayDelete = canDelete(user?.role);
   const mayReview = canManageReview(user?.role);
 
-  // Review schedule for this register in the current scope (one row across all categories).
+  // Review schedule for this module in the current scope (one row per module + scope).
   const reviewsQ = useQuery({
     queryKey: ['documentReviews', firm?.id ?? null, branch?.id ?? null],
     queryFn: () => listDocumentReviews({ firmId: firm?.id, branchId: branch?.id }),
   });
-  const review = (reviewsQ.data ?? []).find((r) => r.category === category) ?? null;
+  const review = (reviewsQ.data ?? []).find((r) => r.moduleKey === moduleKey) ?? null;
   const reviewMeta = reviewMetaFor(reviewStatusOf(review));
   const ReviewIcon = reviewMeta.Icon;
 
@@ -264,7 +266,7 @@ export function DocumentModulePage({ category, title }) {
       <ReviewDialog
         open={reviewOpen}
         onClose={() => setReviewOpen(false)}
-        category={category}
+        moduleKey={moduleKey}
         title={title}
         review={review}
       />
@@ -436,99 +438,6 @@ function UploadRevisionDialog({ open, onClose, category, title }) {
           </Button>
         </DialogActions>
       </Box>
-    </Dialog>
-  );
-}
-
-/**
- * Set the next review date for this register, or mark the review complete (stamping today).
- * Both write to the branch/firm scope currently selected in the sidebar.
- */
-function ReviewDialog({ open, onClose, category, title, review }) {
-  const qc = useQueryClient();
-  const { showToast } = useToast();
-  const { firm, branch } = useDashboardScope();
-  const [date, setDate] = useState('');
-
-  // Seed the input from the current value each time the dialog opens.
-  useEffect(() => {
-    if (open) setDate(review?.nextReviewDate ?? '');
-  }, [open, review]);
-
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['documentReviews'] });
-    qc.invalidateQueries({ queryKey: ['complianceActivity', category] });
-  };
-
-  const saveMut = useMutation({
-    mutationFn: () => setDocumentReviewDate({
-      category, nextReviewDate: date || null, firmId: firm?.id, branchId: branch?.id,
-    }),
-    onSuccess: () => {
-      invalidate();
-      showToast({ severity: 'success', message: date ? 'Review date saved' : 'Review date cleared' });
-      onClose();
-    },
-    onError: (e) => showToast({ severity: 'error', message: e.response?.data?.message || 'Could not save. Try again.' }),
-  });
-
-  const completeMut = useMutation({
-    mutationFn: () => completeDocumentReview({ category, firmId: firm?.id, branchId: branch?.id }),
-    onSuccess: () => {
-      invalidate();
-      showToast({ severity: 'success', message: 'Marked review complete' });
-    },
-    onError: (e) => showToast({ severity: 'error', message: e.response?.data?.message || 'Could not complete. Try again.' }),
-  });
-
-  const busy = saveMut.isPending || completeMut.isPending;
-  const lastReviewed = review?.lastCompletedAt;
-
-  return (
-    <Dialog open={open} onClose={() => !busy && onClose()} maxWidth="xs" fullWidth>
-      <DialogTitle>{title} review</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography sx={{ fontSize: '0.85rem', color: tokens.muted }}>
-            Set when this register is next due for review. The status shows on the register’s card.
-          </Typography>
-          <TextField
-            label="Next review date"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
-          />
-          <Box sx={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1,
-            p: 1.5, borderRadius: '10px', backgroundColor: '#FBFCFE', border: `1px solid ${tokens.hairline}`,
-          }}>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: tokens.ink }}>
-                Mark reviewed today
-              </Typography>
-              <Typography sx={{ fontSize: '0.74rem', color: tokens.muted }}>
-                {lastReviewed ? `Last reviewed ${dateFmt(lastReviewed)}` : 'Not yet reviewed'}
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              startIcon={<CheckCircleRoundedIcon />}
-              disabled={busy}
-              onClick={() => completeMut.mutate()}
-            >
-              {completeMut.isPending ? 'Saving…' : 'Mark complete'}
-            </Button>
-          </Box>
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={busy}>Close</Button>
-        <Button variant="contained" startIcon={<EventAvailableIcon />} disabled={busy} onClick={() => saveMut.mutate()}>
-          {saveMut.isPending ? 'Saving…' : 'Save date'}
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }

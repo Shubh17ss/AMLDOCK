@@ -3,10 +3,11 @@ spring:
     properties:
       hibernate:
         format_sql: true
-  # Local-dev SMTP: free, no-auth test relay. Catches outbound mail without real credentials.
+  # Local-dev SMTP: Mailpit container from docker-compose. Nothing leaves the machine
+  # (ISPs block outbound 25), and captured mail is readable at http://localhost:8025
   mail:
-    host: smtp.freesmtpservers.com
-    port: 25
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
     properties:
       mail:
         smtp:

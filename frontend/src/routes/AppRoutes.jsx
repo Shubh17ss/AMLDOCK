@@ -16,9 +16,13 @@ import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
 import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
 import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
-import { placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS } from '../navigation/moduleRegistry.jsx';
+import {
+  placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
+  SECTION_LANDING_GROUPS,
+} from '../navigation/moduleRegistry.jsx';
 import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
-import { DocumentsLandingPage } from '../pages/documents/DocumentsLandingPage.jsx';
+import { SectionLandingPage } from '../pages/SectionLandingPage.jsx';
+import { InternationalFundTransactionRegisterPage } from '../pages/monitoring/InternationalFundTransactionRegisterPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
 import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
@@ -50,22 +54,43 @@ export function AppRoutes() {
         {/* Deals — the full deal list with filters (formerly the /queue compliance queue) */}
         <Route path={DEALS_PATH} element={<DealsPage />} />
 
-        {/* Documents — landing cards + versioned compliance registers (upload + history).
-            Outside the CDD section, so restricted to the full-workspace roles. */}
-        <Route path="/documents" element={
-          <ProtectedRoute roles={FULL_WORKSPACE_ROLES}><DocumentsLandingPage /></ProtectedRoute>
-        } />
+        {/* Section landings — clicking a menu section header shows a card per module in it,
+            each with its review status. The CDD landing is the stats dashboard instead, so
+            it isn't in SECTION_LANDING_GROUPS. Only CDD is open to everyone. */}
+        {SECTION_LANDING_GROUPS.map((g) => {
+          const page = <SectionLandingPage group={g} />;
+          return (
+            <Route
+              key={g.to}
+              path={g.to}
+              element={CDD_SECTION_PATHS.has(g.to)
+                ? page
+                : <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>{page}</ProtectedRoute>}
+            />
+          );
+        })}
+
+        {/* Versioned compliance document registers (upload + history). Outside the CDD
+            section, so restricted to the full-workspace roles. */}
         {DOCUMENT_MODULES.map((m) => (
           <Route
             key={m.path}
             path={m.path}
             element={
               <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
-                <DocumentModulePage category={m.category} title={m.title} />
+                <DocumentModulePage category={m.category} title={m.title} moduleKey={m.id} />
               </ProtectedRoute>
             }
           />
         ))}
+
+        {/* Monitoring › International Fund Transaction Register. Outside the CDD section, so
+            restricted to the full-workspace roles like the Documents registers. */}
+        <Route path={INTL_FUND_TRANSACTIONS_PATH} element={
+          <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
+            <InternationalFundTransactionRegisterPage />
+          </ProtectedRoute>
+        } />
 
         {/* Settings › Users — user admin. ROOT sees every firm; compliance officers and senior
             managers see the same screen, scoped by the API to their own reporting entity. */}

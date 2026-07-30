@@ -16,5 +16,17 @@ services:
       timeout: 3s
       retries: 10
 
+  # Local SMTP sink. Outbound port 25 is blocked on most ISPs, so dev mail is
+  # captured here instead of relayed. Web inbox at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: amldock-mailpit
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
 volumes:
   amldock_pgdata:

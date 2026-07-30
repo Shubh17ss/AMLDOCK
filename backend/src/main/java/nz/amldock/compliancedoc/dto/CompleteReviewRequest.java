@@ -1,11 +1,10 @@
 package nz.amldock.compliancedoc.dto;
 
-import jakarta.validation.constraints.NotNull;
-import nz.amldock.compliancedoc.ComplianceDocCategory;
+import jakarta.validation.constraints.NotBlank;
 
-/** Mark a scoped register as reviewed as of now (stamps the completion date). */
+/** Mark a scoped module as reviewed as of now (stamps the completion date). */
 public record CompleteReviewRequest(
-        @NotNull ComplianceDocCategory category,
+        @NotBlank String moduleKey,
         Long realEstateFirmId,
         Long firmBranchId
 ) {}

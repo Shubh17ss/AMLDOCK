@@ -13,11 +13,11 @@ public interface DocumentReviewRepository extends JpaRepository<DocumentReview, 
     // also null (the platform / firm-wide register), not "= null".
     @Query("""
             SELECT r FROM DocumentReview r
-            WHERE r.category = :category
+            WHERE r.moduleKey = :moduleKey
               AND ((:firmId IS NULL AND r.realEstateFirmId IS NULL) OR r.realEstateFirmId = :firmId)
               AND ((:branchId IS NULL AND r.firmBranchId IS NULL) OR r.firmBranchId = :branchId)
             """)
-    Optional<DocumentReview> findScoped(@Param("category") ComplianceDocCategory category,
+    Optional<DocumentReview> findScoped(@Param("moduleKey") String moduleKey,
                                         @Param("firmId") Long firmId,
                                         @Param("branchId") Long branchId);
 

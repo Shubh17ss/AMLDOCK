@@ -2,8 +2,6 @@ package nz.amldock.compliancedoc;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -14,9 +12,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 /**
- * The review schedule for one compliance-document register (category) in a given scope
- * (firm + optional branch). Holds the next review due date and the last "mark complete"
- * stamp. There is at most one row per scope + category.
+ * The review schedule for one compliance module in a given scope (firm + optional branch).
+ * Holds the next review due date and the last "mark complete" stamp. There is at most one
+ * row per scope + module.
+ *
+ * {@code moduleKey} is a module id from the frontend module registry — see
+ * {@link ReviewableModules} for the permitted values.
  */
 @Entity
 @Table(name = "document_review")
@@ -26,9 +27,8 @@ public class DocumentReview extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 64)
-    private ComplianceDocCategory category;
+    @Column(name = "module_key", nullable = false, length = 64)
+    private String moduleKey;
 
     @Column(name = "real_estate_firm_id")
     private Long realEstateFirmId;
@@ -46,8 +46,8 @@ public class DocumentReview extends BaseEntity {
     private Long lastCompletedByUserId;
 
     public Long getId() { return id; }
-    public ComplianceDocCategory getCategory() { return category; }
-    public void setCategory(ComplianceDocCategory v) { this.category = v; }
+    public String getModuleKey() { return moduleKey; }
+    public void setModuleKey(String v) { this.moduleKey = v; }
     public Long getRealEstateFirmId() { return realEstateFirmId; }
     public void setRealEstateFirmId(Long v) { this.realEstateFirmId = v; }
     public Long getFirmBranchId() { return firmBranchId; }

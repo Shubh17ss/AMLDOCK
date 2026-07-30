@@ -49,7 +49,7 @@ public class DocumentReviewService {
         this.audit = audit;
     }
 
-    /** Every category's review status in the selected scope, filling UNSET for unconfigured ones. */
+    /** Every reviewable module's status in the selected scope, filling UNSET for unconfigured ones. */
     @Transactional(readOnly = true)
     public List<DocumentReviewDto> list(Long requestedFirmId, Long branchId) {
         UserPrincipal actor = currentPrincipal();
@@ -57,14 +57,14 @@ public class DocumentReviewService {
         Long resolvedBranch = resolveBranch(branchId, firmId);
         LocalDate today = LocalDate.now();
 
-        Map<ComplianceDocCategory, DocumentReview> byCategory = new HashMap<>();
+        Map<String, DocumentReview> byModule = new HashMap<>();
         for (DocumentReview r : reviews.findAllScoped(firmId, resolvedBranch)) {
-            byCategory.put(r.getCategory(), r);
+            byModule.put(r.getModuleKey(), r);
         }
-        return java.util.Arrays.stream(ComplianceDocCategory.values())
-                .map((c) -> {
-                    DocumentReview r = byCategory.get(c);
-                    return r == null ? DocumentReviewDto.empty(c) : toDto(r, today);
+        return ReviewableModules.KEYS.stream()
+                .map((key) -> {
+                    DocumentReview r = byModule.get(key);
+                    return r == null ? DocumentReviewDto.empty(key) : toDto(r, today);
                 })
                 .toList();
     }
@@ -75,10 +75,12 @@ public class DocumentReviewService {
         Long firmId = resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
 
-        DocumentReview r = reviews.findScoped(req.category(), firmId, branchId)
+        String moduleKey = ReviewableModules.require(req.moduleKey());
+
+        DocumentReview r = reviews.findScoped(moduleKey, firmId, branchId)
                 .orElseGet(() -> {
                     DocumentReview fresh = new DocumentReview();
-                    fresh.setCategory(req.category());
+                    fresh.setModuleKey(moduleKey);
                     fresh.setRealEstateFirmId(firmId);
                     fresh.setFirmBranchId(branchId);
                     return fresh;
@@ -87,7 +89,7 @@ public class DocumentReviewService {
         DocumentReview saved = reviews.save(r);
 
         audit.record(AuditAction.DOCUMENT_REVIEW_SET, ENTITY_TYPE, saved.getId(),
-                "Set " + req.category() + " review date to "
+                "Set " + moduleKey + " review date to "
                         + (req.nextReviewDate() == null ? "none" : req.nextReviewDate()));
         return toDto(saved, LocalDate.now());
     }
@@ -98,10 +100,12 @@ public class DocumentReviewService {
         Long firmId = resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
 
-        DocumentReview r = reviews.findScoped(req.category(), firmId, branchId)
+        String moduleKey = ReviewableModules.require(req.moduleKey());
+
+        DocumentReview r = reviews.findScoped(moduleKey, firmId, branchId)
                 .orElseGet(() -> {
                     DocumentReview fresh = new DocumentReview();
-                    fresh.setCategory(req.category());
+                    fresh.setModuleKey(moduleKey);
                     fresh.setRealEstateFirmId(firmId);
                     fresh.setFirmBranchId(branchId);
                     return fresh;
@@ -111,7 +115,7 @@ public class DocumentReviewService {
         DocumentReview saved = reviews.save(r);
 
         audit.record(AuditAction.DOCUMENT_REVIEW_COMPLETED, ENTITY_TYPE, saved.getId(),
-                "Marked " + req.category() + " review complete");
+                "Marked " + moduleKey + " review complete");
         return toDto(saved, LocalDate.now());
     }
 
