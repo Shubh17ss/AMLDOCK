@@ -18,11 +18,12 @@ import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
 import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
 import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
-  SECTION_LANDING_GROUPS,
+  SUSPICIOUS_ACTIVITIES_PATH, SECTION_LANDING_GROUPS,
 } from '../navigation/moduleRegistry.jsx';
 import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
 import { SectionLandingPage } from '../pages/SectionLandingPage.jsx';
 import { InternationalFundTransactionRegisterPage } from '../pages/monitoring/InternationalFundTransactionRegisterPage.jsx';
+import { SuspiciousActivityRegisterPage } from '../pages/monitoring/SuspiciousActivityRegisterPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
 import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
@@ -89,6 +90,13 @@ export function AppRoutes() {
         <Route path={INTL_FUND_TRANSACTIONS_PATH} element={
           <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
             <InternationalFundTransactionRegisterPage />
+          </ProtectedRoute>
+        } />
+
+        {/* Monitoring › Suspicious Activity Register — same gating as the register above. */}
+        <Route path={SUSPICIOUS_ACTIVITIES_PATH} element={
+          <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
+            <SuspiciousActivityRegisterPage />
           </ProtectedRoute>
         } />
 

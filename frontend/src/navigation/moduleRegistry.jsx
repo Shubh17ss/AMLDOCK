@@ -33,6 +33,7 @@ export const DASHBOARD_PATH = '/dashboard';
 export const CDD_REGISTER_PATH = '/cdd';
 export const DEALS_PATH = '/cdd/deals';
 export const INTL_FUND_TRANSACTIONS_PATH = '/monitoring/international-fund-transaction-register';
+export const SUSPICIOUS_ACTIVITIES_PATH = '/monitoring/suspicious-activities';
 
 export const MODULE_GROUPS = [
   {
@@ -78,7 +79,7 @@ export const MODULE_GROUPS = [
     items: [
       { id: 'management-reports',    label: 'Management Reports',                    to: '/monitoring/reports',                            icon: <InsightsIcon />,
         blurb: 'Board-level AML reporting on obligations, breaches and remediation.' },
-      { id: 'suspicious-activities', label: 'Suspicious Activities',                to: '/monitoring/suspicious-activities',              icon: <FlagIcon />,
+      { id: 'suspicious-activities', label: 'Suspicious Activities',                to: SUSPICIOUS_ACTIVITIES_PATH,                       icon: <FlagIcon />,
         blurb: 'Record suspicious activity reports and their submission to the FIU.' },
       { id: 'intl-fund-transfers',   label: 'International Fund Transaction Register', to: INTL_FUND_TRANSACTIONS_PATH,                      icon: <CurrencyExchangeIcon />,
         blurb: 'Log international fund transfers tied to a listing, with supporting evidence.' },
@@ -147,6 +148,7 @@ export const IMPLEMENTED_PATHS = [
   '/settings/users',
   '/settings/reporting-entities',
   INTL_FUND_TRANSACTIONS_PATH,
+  SUSPICIOUS_ACTIVITIES_PATH,
   // Group landings — all handled by SectionLandingPage.
   ...SECTION_LANDING_GROUPS.map((g) => g.to),
 ];

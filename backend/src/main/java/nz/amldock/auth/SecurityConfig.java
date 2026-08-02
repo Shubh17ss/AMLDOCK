@@ -58,6 +58,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/international-fund-transactions",
                                 "/api/international-fund-transactions/**")
                         .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
+                        // Monitoring > Suspicious Activity Register — same again.
+                        .requestMatchers("/api/suspicious-activities",
+                                "/api/suspicious-activities/**")
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

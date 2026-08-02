@@ -77,6 +77,8 @@ export function InternationalFundTransactionRegisterPage() {
   const [toDelete, setToDelete] = useState(null);
 
   const mayDelete = canDelete(user?.role);
+  // The delete action gets its own column at the far right so it never sits under "File".
+  const colCount = mayDelete ? 9 : 8;
 
   const txQ = useQuery({
     queryKey: ['fundTransactions', firm?.id ?? null, branch?.id ?? null],
@@ -164,6 +166,7 @@ export function InternationalFundTransactionRegisterPage() {
               <TableCell>Overseas jurisdiction</TableCell>
               <TableCell>Submission ref.</TableCell>
               <TableCell align="right">File</TableCell>
+              {mayDelete && <TableCell align="right" />}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -211,32 +214,32 @@ export function InternationalFundTransactionRegisterPage() {
                   <TableCell sx={{ fontFamily: fonts.mono, fontSize: '0.78rem', color: tokens.muted }}>
                     {tx.submissionReference || '—'}
                   </TableCell>
+                  {/* Nothing at all when there's no attachment — the column is just the
+                      download affordance. */}
                   <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                    {tx.hasDocument ? (
+                    {tx.hasDocument && (
                       <Tooltip title={`Download ${tx.originalFilename}`}>
                         <IconButton size="small" onClick={() => download(tx)}>
                           <DownloadIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                    ) : (
-                      <Typography component="span" sx={{ fontSize: '0.78rem', color: tokens.muted }}>
-                        —
-                      </Typography>
                     )}
-                    {mayDelete && (
+                  </TableCell>
+                  {mayDelete && (
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', width: 56 }}>
                       <Tooltip title="Delete this entry">
                         <IconButton size="small" onClick={() => setToDelete(tx)}>
                           <DeleteOutlineIcon fontSize="small" sx={{ color: tokens.rejected }} />
                         </IconButton>
                       </Tooltip>
-                    )}
-                  </TableCell>
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
             {!txQ.isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
                   No transactions yet — add the first international fund transaction to start the register.
                 </TableCell>
               </TableRow>
