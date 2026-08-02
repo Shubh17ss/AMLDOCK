@@ -11,7 +11,9 @@ import nz.amldock.document.dto.UploadUrlResponse;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.training.dto.CourseAttemptResultDto;
 import nz.amldock.training.dto.CreateTrainingCourseRequest;
+import nz.amldock.training.dto.SubmitCourseAttemptRequest;
 import nz.amldock.training.dto.TrainingAttendeeDto;
 import nz.amldock.training.dto.TrainingCourseDto;
 import nz.amldock.training.dto.TrainingCourseFileDto;
@@ -26,10 +28,14 @@ import nz.amldock.user.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -62,6 +68,7 @@ public class TrainingCourseService {
     private final FirmBranchRepository branches;
     private final FileStorageService storage;
     private final AuditService audit;
+    private final TrainingNotifier notifier;
     private final long maxBytes;
     private final Duration uploadTtl;
     private final Duration downloadTtl;
@@ -75,6 +82,7 @@ public class TrainingCourseService {
                                  FirmBranchRepository branches,
                                  FileStorageService storage,
                                  AuditService audit,
+                                 TrainingNotifier notifier,
                                  @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
                                  @Value("${S3_UPLOAD_TTL_MINUTES:5}") long uploadTtlMinutes,
                                  @Value("${S3_DOWNLOAD_TTL_MINUTES:5}") long downloadTtlMinutes) {
@@ -87,6 +95,7 @@ public class TrainingCourseService {
         this.branches = branches;
         this.storage = storage;
         this.audit = audit;
+        this.notifier = notifier;
         this.maxBytes = maxBytes;
         this.uploadTtl = Duration.ofMinutes(uploadTtlMinutes);
         this.downloadTtl = Duration.ofMinutes(downloadTtlMinutes);
@@ -129,10 +138,12 @@ public class TrainingCourseService {
         TrainingCourse saved = courses.save(c);
 
         replaceQuestions(saved, req.questions());
-        int assigned = replaceRoster(saved, req.assigneeUserIds());
+        // A brand-new course has no existing roster, so everyone added is newly assigned.
+        List<Long> newlyAssigned = replaceRoster(saved, req.assigneeUserIds());
+        notifyNewlyAssigned(saved, newlyAssigned);
 
         audit.record(AuditAction.TRAINING_COURSE_CREATED, ENTITY_TYPE, saved.getId(),
-                "Created course " + saved.getName() + " for " + assigned + " staff");
+                "Created course " + saved.getName() + " for " + newlyAssigned.size() + " staff");
         return toDtos(List.of(saved), actor).get(0);
     }
 
@@ -154,8 +165,9 @@ public class TrainingCourseService {
             validateQuestions(req.questions());
             replaceQuestions(c, req.questions());
         }
+        // Only the people this adds get an email — anyone already on the course is left alone.
         if (req.assigneeUserIds() != null) {
-            replaceRoster(c, req.assigneeUserIds());
+            notifyNewlyAssigned(c, replaceRoster(c, req.assigneeUserIds()));
         }
 
         audit.record(AuditAction.TRAINING_COURSE_UPDATED, ENTITY_TYPE, c.getId(),
@@ -187,6 +199,85 @@ public class TrainingCourseService {
 
         audit.record(AuditAction.TRAINING_COURSE_DELETED, ENTITY_TYPE, id,
                 "Deleted course " + c.getName());
+    }
+
+    /* ---------- sitting the assessment ---------- */
+
+    /**
+     * Score one attempt. The client only ever sends which options it picked — it never receives
+     * the answer key (see {@link #toDtos}) — so the marking happens here and nowhere else.
+     *
+     * Retakes are unlimited; the row holds the latest attempt. A pass is never un-set, so
+     * someone who passed and later retook out of interest stays done.
+     */
+    @Transactional
+    public CourseAttemptResultDto submitAttempt(Long courseId, SubmitCourseAttemptRequest req) {
+        TrainingCourse c = mustLoad(courseId);
+        UserPrincipal actor = TrainingScope.currentPrincipal();
+        TrainingScope.assertSameFirm(actor, c.getRealEstateFirmId(), "course");
+
+        TrainingCourseAssignee row = assignees
+                .findByTrainingCourseIdAndUserId(c.getId(), actor.id())
+                .orElseThrow(() -> new ForbiddenException("You are not assigned to this course"));
+
+        List<TrainingCourseQuestion> qs = questions.findAllByTrainingCourseIdOrderByPositionAsc(c.getId());
+        int total = qs.size();
+        int correct;
+
+        if (total == 0) {
+            // Material-only course: there is nothing to mark, so reading it is the completion.
+            correct = 0;
+        } else {
+            Map<Long, Set<Long>> submitted = new HashMap<>();
+            for (SubmitCourseAttemptRequest.AnswerInput a : (req.answers() == null ? List.<SubmitCourseAttemptRequest.AnswerInput>of() : req.answers())) {
+                if (a == null || a.questionId() == null) continue;
+                submitted.put(a.questionId(), a.selectedOptionIds() == null
+                        ? Set.of()
+                        : a.selectedOptionIds().stream().filter(Objects::nonNull).collect(Collectors.toSet()));
+            }
+
+            Map<Long, List<TrainingCourseQuestionOption>> optionsByQuestion = options
+                    .findAllByQuestionIdInOrderByPositionAsc(qs.stream().map(TrainingCourseQuestion::getId).toList())
+                    .stream().collect(Collectors.groupingBy(TrainingCourseQuestionOption::getQuestionId));
+
+            int scored = 0;
+            for (TrainingCourseQuestion q : qs) {
+                List<TrainingCourseQuestionOption> opts = optionsByQuestion.getOrDefault(q.getId(), List.of());
+                Set<Long> valid = opts.stream()
+                        .map(TrainingCourseQuestionOption::getId).collect(Collectors.toSet());
+                Set<Long> expected = opts.stream().filter(TrainingCourseQuestionOption::isCorrect)
+                        .map(TrainingCourseQuestionOption::getId).collect(Collectors.toSet());
+
+                // Narrow to ids that actually belong to this question, so a stray or foreign
+                // option id can't manufacture a mark.
+                Set<Long> picked = new HashSet<>(submitted.getOrDefault(q.getId(), Set.of()));
+                picked.retainAll(valid);
+
+                // Set equality: a multi-choice answer has to be exactly right. No partial credit,
+                // which is what keeps the pass mark meaningful over a handful of questions.
+                if (picked.equals(expected)) scored++;
+            }
+            correct = scored;
+        }
+
+        int scorePercent = total == 0 ? 100 : (int) Math.round(correct * 100.0 / total);
+        boolean passed = scorePercent >= c.getPassMarkPercent();
+
+        row.setScorePercent(scorePercent);
+        row.setPassed(passed);
+        row.setAttemptCount(row.getAttemptCount() + 1);
+        row.setLastAttemptAt(Instant.now());
+        if (passed && row.getCompletedAt() == null) {
+            row.setCompletedAt(Instant.now());
+            audit.record(AuditAction.TRAINING_COURSE_COMPLETED, ENTITY_TYPE, c.getId(),
+                    actor.email() + " passed " + c.getName() + " with " + scorePercent + "%");
+        }
+        audit.record(AuditAction.TRAINING_COURSE_ATTEMPTED, ENTITY_TYPE, c.getId(),
+                actor.email() + " scored " + scorePercent + "% on " + c.getName()
+                        + " (attempt " + row.getAttemptCount() + ")");
+
+        return new CourseAttemptResultDto(scorePercent, passed, c.getPassMarkPercent(),
+                correct, total, row.getAttemptCount(), row.getCompletedAt());
     }
 
     /* ---------- content files ---------- */
@@ -364,7 +455,7 @@ public class TrainingCourseService {
      * Replace the roster, preserving completion for anyone who stays assigned. The eligibility
      * rule lives in {@link TrainingScope#assertAssignable} so courses and sessions can't drift.
      */
-    private int replaceRoster(TrainingCourse course, List<Long> requestedUserIds) {
+    private List<Long> replaceRoster(TrainingCourse course, List<Long> requestedUserIds) {
         Set<Long> wanted = requestedUserIds == null
                 ? Set.of()
                 : new LinkedHashSet<>(requestedUserIds.stream().filter(Objects::nonNull).toList());
@@ -390,7 +481,34 @@ public class TrainingCourseService {
         }
         if (!added.isEmpty()) assignees.saveAll(added);
 
-        return wanted.size();
+        // The newly-inserted user ids, which is exactly who should be emailed: on create that's
+        // everyone, and on edit it's only the people who weren't already on the roster.
+        return added.stream().map(TrainingCourseAssignee::getUserId).toList();
+    }
+
+    /**
+     * Email the people just added to this course — after the transaction commits.
+     *
+     * The send is @Async, so dispatching inline would let mail escape a rollback and tell staff
+     * about a course that no longer exists. Recipients and the question count are resolved here,
+     * while the persistence context is still open.
+     */
+    private void notifyNewlyAssigned(TrainingCourse course, List<Long> newUserIds) {
+        if (newUserIds.isEmpty()) return;
+        List<User> recipients = users.findAllById(newUserIds);
+        if (recipients.isEmpty()) return;
+        int questionCount = questions.findAllByTrainingCourseIdOrderByPositionAsc(course.getId()).size();
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            notifier.notifyCourseAssigned(course, questionCount, recipients);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notifier.notifyCourseAssigned(course, questionCount, recipients);
+            }
+        });
     }
 
     /** A branch tag must belong to the target firm; null means firm-wide. */
@@ -470,7 +588,7 @@ public class TrainingCourseService {
                                 u == null ? null : u.getFullName(),
                                 u == null ? null : u.getEmail(),
                                 u == null ? null : u.getRole(),
-                                a.getCompletedAt());
+                                a.getCompletedAt(), a.getScorePercent(), a.getPassed());
                     })
                     .sorted(Comparator.comparing(
                             (TrainingAttendeeDto d) -> d.fullName() == null ? "" : d.fullName(),
@@ -505,7 +623,11 @@ public class TrainingCourseService {
                     b == null ? null : b.getName(),
                     creator == null ? null : creator.getEmail(),
                     fileDtos, questionDtos, assigneeDtos, assigned, completed,
-                    mine.isPresent(), mine.map(TrainingCourseAssignee::getCompletedAt).orElse(null)));
+                    mine.isPresent(),
+                    mine.map(TrainingCourseAssignee::getCompletedAt).orElse(null),
+                    mine.map(TrainingCourseAssignee::getScorePercent).orElse(null),
+                    mine.map(TrainingCourseAssignee::getPassed).orElse(null),
+                    mine.map(TrainingCourseAssignee::getAttemptCount).orElse(0)));
         }
         return out;
     }

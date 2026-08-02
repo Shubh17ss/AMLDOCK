@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
-  InputLabel, MenuItem, Select, Stack, TextField, Typography,
+  Alert, Badge, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
+  InputLabel, MenuItem, Select, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/SaveOutlined';
 import {
   createTrainingSession, updateTrainingSession, listTrainingProviders,
 } from '../../api/training.js';
-import { UserMultiSelect } from '../../components/UserMultiSelect.jsx';
+import { AssigneePicker } from '../../components/AssigneePicker.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
@@ -26,9 +26,14 @@ const emptyForm = () => ({
 });
 
 /**
- * Create or edit a training session — one component, two modes, mounted twice by the parent
- * (the same shape as BranchDialog in features/firm/FirmBranchesCard.jsx). In edit mode `open`
- * is derived from the target row.
+ * Panels all stay mounted with the inactive one hidden, so switching tabs never loses what's
+ * been typed — the same arrangement as CourseDialog.
+ */
+const panelSx = (active) => (active ? {} : { display: 'none' });
+
+/**
+ * Create or edit a training session across two tabs: Details and Users.
+ * One component, two modes, mounted twice by the parent.
  */
 export function SessionDialog({ mode, open: openProp, target, onClose }) {
   const isEdit = mode === 'edit';
@@ -37,6 +42,7 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
   const qc = useQueryClient();
   const { showToast } = useToast();
   const { firm, branch } = useDashboardScope();
+  const [tab, setTab] = useState('details');
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState(null);
 
@@ -61,10 +67,12 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
         certifiedMinutes: target.certifiedMinutes ?? '',
         assigneeUserIds: (target.attendees ?? []).map((a) => a.userId),
       });
+      setTab('details');
       setError(null);
     }
     if (!isEdit && open) {
       setForm(emptyForm());
+      setTab('details');
       setError(null);
     }
   }, [isEdit, isEdit ? target?.id : open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -110,107 +118,137 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
     && form.certifiedMinutes !== '' && certified >= 0
     && !minutesInvalid;
 
-  const submit = (e) => { e.preventDefault(); if (submittable) mut.mutate(); };
+  const submit = (e) => {
+    e.preventDefault();
+    if (submittable) { mut.mutate(); return; }
+    // Everything that can be missing lives on Details — show it rather than leaving the user
+    // staring at an inert button on Users.
+    setTab('details');
+  };
 
   return (
-    <Dialog open={open} onClose={close} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={close} maxWidth="md" fullWidth>
+      {/* noValidate: the inactive panel stays mounted, and the browser refuses to submit a form
+          containing a hidden required control. `submittable` is the real gate. */}
       <Box component="form" noValidate onSubmit={submit}>
-        <DialogTitle>{isEdit ? 'Edit session' : 'New training session'}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Session name"
-              value={form.name}
-              onChange={ch('name')}
-              required
-              fullWidth
-            />
-            <TextField
-              label="Location"
-              value={form.location}
-              onChange={ch('location')}
-              placeholder="Venue, or 'Online'"
-              required
-              fullWidth
-            />
-            <TextField
-              label="URL"
-              value={form.url}
-              onChange={ch('url')}
-              placeholder="Optional — link to the course or meeting"
-              fullWidth
-            />
+        <DialogTitle sx={{ pb: 1 }}>{isEdit ? 'Edit session' : 'New training session'}</DialogTitle>
 
-            <FormControl fullWidth required disabled={noProviders}>
-              <InputLabel id="provider-label">Provider</InputLabel>
-              <Select
-                labelId="provider-label"
-                label="Provider"
-                value={form.trainingProviderId}
-                onChange={ch('trainingProviderId')}
-              >
-                {providers.map((p) => (
-                  <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                ))}
-              </Select>
-              {noProviders && (
-                <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
-                  This branch has no providers yet — add one on the <strong>Providers</strong> tab first.
+        <Box sx={{ px: 3 }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+            <Tab label="Details" value="details" />
+            <Tab
+              value="users"
+              label={(
+                <Badge color="primary" badgeContent={form.assigneeUserIds.length}
+                       sx={{ '& .MuiBadge-badge': { right: -12, top: 2 } }}>
+                  Users
+                </Badge>
+              )}
+            />
+          </Tabs>
+        </Box>
+
+        <DialogContent sx={{ minHeight: 380 }}>
+          <Box sx={panelSx(tab === 'details')}>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                label="Session name"
+                value={form.name}
+                onChange={ch('name')}
+                required
+                fullWidth
+                autoFocus
+              />
+              <TextField
+                label="Location"
+                value={form.location}
+                onChange={ch('location')}
+                placeholder="Venue, or 'Online'"
+                required
+                fullWidth
+              />
+              <TextField
+                label="URL"
+                value={form.url}
+                onChange={ch('url')}
+                placeholder="Optional — link to the course or meeting"
+                fullWidth
+              />
+
+              <FormControl fullWidth required disabled={noProviders}>
+                <InputLabel id="provider-label">Provider</InputLabel>
+                <Select
+                  labelId="provider-label"
+                  label="Provider"
+                  value={form.trainingProviderId}
+                  onChange={ch('trainingProviderId')}
+                >
+                  {providers.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                  ))}
+                </Select>
+                {noProviders && (
+                  <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
+                    This branch has no providers yet — add one on the <strong>Providers</strong> tab first.
+                  </Typography>
+                )}
+              </FormControl>
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <TextField
+                  label="Due"
+                  type="date"
+                  value={form.dueDate}
+                  onChange={ch('dueDate')}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Optional"
+                  fullWidth
+                />
+                <TextField
+                  label="Total minutes"
+                  type="number"
+                  value={form.totalMinutes}
+                  onChange={ch('totalMinutes')}
+                  inputProps={{ min: 0, step: 1 }}
+                  helperText=" "
+                  required
+                  fullWidth
+                />
+                <TextField
+                  label="Certified minutes"
+                  type="number"
+                  value={form.certifiedMinutes}
+                  onChange={ch('certifiedMinutes')}
+                  inputProps={{ min: 0, step: 1 }}
+                  error={minutesInvalid}
+                  helperText={minutesInvalid ? 'Cannot exceed total minutes' : ' '}
+                  required
+                  fullWidth
+                />
+              </Stack>
+            </Stack>
+          </Box>
+
+          <Box sx={panelSx(tab === 'users')}>
+            <Box sx={{ mt: 1 }}>
+              <AssigneePicker
+                value={form.assigneeUserIds}
+                onChange={(ids) => setForm((f) => ({ ...f, assigneeUserIds: ids }))}
+                firmId={firm?.id}
+                branchId={branch?.id}
+              />
+              {isEdit && (
+                <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, mt: 1.5 }}>
+                  Unticking someone clears their assignment. Anyone who stays keeps the completion
+                  already recorded against them.
                 </Typography>
               )}
-            </FormControl>
+            </Box>
+          </Box>
 
-            <TextField
-              label="Due"
-              type="date"
-              value={form.dueDate}
-              onChange={ch('dueDate')}
-              InputLabelProps={{ shrink: true }}
-              helperText="Optional"
-              fullWidth
-            />
-
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField
-                label="Total minutes"
-                type="number"
-                value={form.totalMinutes}
-                onChange={ch('totalMinutes')}
-                inputProps={{ min: 0, step: 1 }}
-                required
-                fullWidth
-              />
-              <TextField
-                label="Certified minutes"
-                type="number"
-                value={form.certifiedMinutes}
-                onChange={ch('certifiedMinutes')}
-                inputProps={{ min: 0, step: 1 }}
-                error={minutesInvalid}
-                helperText={minutesInvalid ? 'Cannot exceed total minutes' : ' '}
-                required
-                fullWidth
-              />
-            </Stack>
-
-            <UserMultiSelect
-              value={form.assigneeUserIds}
-              onChange={(ids) => setForm((f) => ({ ...f, assigneeUserIds: ids }))}
-              firmId={firm?.id}
-              branchId={branch?.id}
-              helperText="Branch staff only — compliance officers and senior managers run training rather than attend it."
-            />
-
-            {isEdit && (
-              <Typography sx={{ fontSize: '0.75rem', color: tokens.muted }}>
-                Removing someone clears their assignment. Anyone who stays keeps the completion
-                already recorded against them.
-              </Typography>
-            )}
-
-            {error && <Alert severity="error">{error}</Alert>}
-          </Stack>
+          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
         </DialogContent>
+
         <DialogActions>
           <Button onClick={close} disabled={mut.isPending}>Cancel</Button>
           <Button

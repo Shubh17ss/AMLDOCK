@@ -1,37 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, Paper, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Button, Stack, Tab, Tabs } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import CoPresentIcon from '@mui/icons-material/CoPresentOutlined';
+import MenuBookIcon from '@mui/icons-material/MenuBookOutlined';
+import BusinessIcon from '@mui/icons-material/BusinessOutlined';
+import PeopleAltIcon from '@mui/icons-material/PeopleAltOutlined';
 import { SessionsTab } from './SessionsTab.jsx';
 import { CoursesTab } from './CoursesTab.jsx';
 import { ProvidersTab } from './ProvidersTab.jsx';
+import { UsersTab } from './UsersTab.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { ScopeGate } from '../../dashboard/ScopeGate.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { TRAINING_MANAGER_ROLES, canManageTraining } from '../../auth/roles.js';
-import { tokens } from '../../theme/theme.js';
 
 // Tabs as data so role restrictions are a filter rather than a thicket of conditionals.
 // Providers and Users are for the people who run training; Sessions and Courses are general.
 const TABS = [
-  { value: 'sessions',  label: 'Sessions'  },
-  { value: 'courses',   label: 'Courses'   },
-  { value: 'providers', label: 'Providers', roles: TRAINING_MANAGER_ROLES },
-  { value: 'users',     label: 'Users',     roles: TRAINING_MANAGER_ROLES },
+  { value: 'sessions',  label: 'Sessions',  icon: <CoPresentIcon /> },
+  { value: 'courses',   label: 'Courses',   icon: <MenuBookIcon /> },
+  { value: 'providers', label: 'Providers', icon: <BusinessIcon />,  roles: TRAINING_MANAGER_ROLES },
+  { value: 'users',     label: 'Users',     icon: <PeopleAltIcon />, roles: TRAINING_MANAGER_ROLES },
 ];
-
-function ComingSoon({ what }) {
-  return (
-    <Paper sx={{ p: 5, textAlign: 'center' }}>
-      <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: tokens.ink }}>
-        {what}
-      </Typography>
-      <Typography sx={{ fontSize: '0.875rem', color: tokens.muted, mt: 0.5 }}>
-        Coming soon — this tab will be built out.
-      </Typography>
-    </Paper>
-  );
-}
 
 /**
  * AML Training › Staff Training. Four tabs over one branch's training record.
@@ -72,8 +63,16 @@ export function StaffTrainingPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: 2, flexWrap: 'wrap',
           }}>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 40 }}>
-              {visibleTabs.map((t) => <Tab key={t.value} label={t.label} value={t.value} />)}
+            <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+              {visibleTabs.map((t) => (
+                <Tab
+                  key={t.value}
+                  value={t.value}
+                  label={t.label}
+                  icon={t.icon}
+                  iconPosition="start"
+                />
+              ))}
             </Tabs>
 
             {mayManage && tab === 'sessions' && (
@@ -102,7 +101,7 @@ export function StaffTrainingPage() {
           {tab === 'providers' && (
             <ProvidersTab addOpen={providerOpen} onCloseAdd={() => setProviderOpen(false)} />
           )}
-          {tab === 'users' && <ComingSoon what="Users" />}
+          {tab === 'users' && <UsersTab />}
         </Stack>
       </ScopeGate>
     </Stack>

@@ -358,25 +358,37 @@ export const theme = createTheme({
       },
     },
 
-    // ── Tabs — clean segmented control ─────────────────────────────────────────
+    // ── Tabs — segmented control, active pill in brand blue ───────────────────
     MuiTabs: {
       styleOverrides: {
         root: {
           backgroundColor: '#F1F4F9',
           borderRadius: 999,
-          padding: 4,
-          minHeight: 40,
+          padding: 5,
+          minHeight: 48,
         },
-        indicator: { height: '100%', borderRadius: 999, backgroundColor: T.tile, boxShadow: shadows.sm, zIndex: 0 },
+        // The "indicator" is the pill sitting behind the active tab.
+        indicator: {
+          height: '100%',
+          borderRadius: 999,
+          backgroundColor: T.blue,
+          boxShadow: shadows.sm,
+          zIndex: 0,
+        },
       },
     },
     MuiTab: {
       styleOverrides: {
         root: {
-          textTransform: 'none', fontWeight: 600, minHeight: 32,
+          textTransform: 'none', fontWeight: 600, fontSize: '0.9rem',
+          minHeight: 38, padding: '0 18px',
           borderRadius: 999, zIndex: 1, color: T.muted,
           transition: 'color 0.2s ease',
-          '&.Mui-selected': { color: T.ink },
+          '&.Mui-selected': { color: '#FFFFFF' },
+          // MUI bumps a tab carrying both an icon and a label to minHeight 72; hold the pill
+          // height and size the glyph to sit on the label's baseline.
+          '&.MuiTab-labelIcon': { minHeight: 38, paddingTop: 0, paddingBottom: 0 },
+          '& .MuiTab-iconWrapper': { fontSize: 18 },
         },
       },
     },

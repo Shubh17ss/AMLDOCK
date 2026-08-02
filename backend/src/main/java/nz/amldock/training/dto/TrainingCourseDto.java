@@ -30,7 +30,10 @@ public record TrainingCourseDto(
         int assignedCount,
         int completedCount,
         boolean assignedToMe,
-        Instant myCompletedAt
+        Instant myCompletedAt,
+        Integer myScorePercent,
+        Boolean myPassed,
+        int myAttemptCount
 ) {
     public static TrainingCourseDto from(TrainingCourse c,
                                          String branchName,
@@ -41,11 +44,15 @@ public record TrainingCourseDto(
                                          int assignedCount,
                                          int completedCount,
                                          boolean assignedToMe,
-                                         Instant myCompletedAt) {
+                                         Instant myCompletedAt,
+                                         Integer myScorePercent,
+                                         Boolean myPassed,
+                                         int myAttemptCount) {
         return new TrainingCourseDto(
                 c.getId(), c.getName(), c.getDescription(), c.getDueDate(), c.getPassMarkPercent(),
                 c.getRealEstateFirmId(), c.getFirmBranchId(), branchName, createdByEmail,
                 c.getCreatedAt(), files, questions, assignees,
-                assignedCount, completedCount, assignedToMe, myCompletedAt);
+                assignedCount, completedCount, assignedToMe, myCompletedAt,
+                myScorePercent, myPassed, myAttemptCount);
     }
 }

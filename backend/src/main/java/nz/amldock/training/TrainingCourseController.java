@@ -3,7 +3,9 @@ package nz.amldock.training;
 import jakarta.validation.Valid;
 import nz.amldock.document.dto.DownloadUrlResponse;
 import nz.amldock.document.dto.UploadUrlResponse;
+import nz.amldock.training.dto.CourseAttemptResultDto;
 import nz.amldock.training.dto.CreateTrainingCourseRequest;
+import nz.amldock.training.dto.SubmitCourseAttemptRequest;
 import nz.amldock.training.dto.TrainingCourseDto;
 import nz.amldock.training.dto.TrainingCourseFileDto;
 import nz.amldock.training.dto.TrainingCourseFileUploadUrlRequest;
@@ -64,6 +66,18 @@ public class TrainingCourseController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         courses.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * The signed-in user sits (or re-sits) the assessment.
+     *
+     * No @PreAuthorize, matching POST /api/training-sessions/{id}/complete — the caller has to be
+     * an assignee, which the service checks, and training managers are never assignees.
+     */
+    @PostMapping("/{id}/attempt")
+    public CourseAttemptResultDto submitAttempt(@PathVariable Long id,
+                                                @Valid @RequestBody SubmitCourseAttemptRequest req) {
+        return courses.submitAttempt(id, req);
     }
 
     /* ---------- content files ---------- */

@@ -133,7 +133,7 @@ export function DocumentModulePage({ category, title, moduleKey }) {
       />
 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 40 }}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
           <Tab label="Version history" value="versions" />
           <Tab label="Activity log" value="activity" />
         </Tabs>

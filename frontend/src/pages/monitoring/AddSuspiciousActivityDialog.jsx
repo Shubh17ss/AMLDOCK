@@ -136,7 +136,7 @@ export function AddSuspiciousActivityDialog({ open, onClose }) {
         <DialogTitle sx={{ pb: 1 }}>Potential Suspicion</DialogTitle>
 
         <Box sx={{ px: 3 }}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 40 }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
             <Tab label="Details" value="details" />
             <Tab
               value="documents"

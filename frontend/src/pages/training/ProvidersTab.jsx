@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper,
@@ -7,6 +7,7 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { listTrainingProviders, deleteTrainingProvider } from '../../api/training.js';
 import { AddProviderDialog } from './AddProviderDialog.jsx';
+import { SearchField, matchesSearch } from '../../components/SearchField.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
@@ -23,6 +24,7 @@ export function ProvidersTab({ addOpen, onCloseAdd }) {
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
   const [toDelete, setToDelete] = useState(null);
+  const [search, setSearch] = useState('');
 
   const mayDelete = canDelete(user?.role);
   const colCount = mayDelete ? 4 : 3;
@@ -31,7 +33,11 @@ export function ProvidersTab({ addOpen, onCloseAdd }) {
     queryKey: ['trainingProviders', firm?.id ?? null, branch?.id ?? null],
     queryFn: () => listTrainingProviders({ firmId: firm?.id, branchId: branch?.id }),
   });
-  const rows = providersQ.data ?? [];
+  const all = providersQ.data ?? [];
+  const rows = useMemo(
+    () => all.filter((p) => matchesSearch(search, p.name)),
+    [all, search],
+  );
 
   const deleteMut = useMutation({
     mutationFn: (p) => deleteTrainingProvider(p.id),
@@ -48,6 +54,8 @@ export function ProvidersTab({ addOpen, onCloseAdd }) {
   return (
     <Stack spacing={2}>
       {providersQ.isError && <Alert severity="error">Failed to load providers. Refresh to try again.</Alert>}
+
+      <SearchField value={search} onChange={setSearch} placeholder="Search providers…" />
 
       <TableContainer component={Paper}>
         <Table size="small">
@@ -83,7 +91,9 @@ export function ProvidersTab({ addOpen, onCloseAdd }) {
             {!providersQ.isLoading && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                  No providers yet — add the first one to start scheduling sessions.
+                  {search
+                    ? `No providers match “${search}”.`
+                    : 'No providers yet — add the first one to start scheduling sessions.'}
                 </TableCell>
               </TableRow>
             )}

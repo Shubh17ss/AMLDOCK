@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
@@ -12,6 +12,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import { listTrainingSessions, deleteTrainingSession } from '../../api/training.js';
 import { SessionDialog } from './SessionDialog.jsx';
 import { CompletionProgress } from '../../components/CompletionProgress.jsx';
+import { SearchField, matchesSearch } from '../../components/SearchField.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
@@ -35,6 +36,7 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
   const [editTarget, setEditTarget] = useState(null);
   const [toDelete, setToDelete] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [search, setSearch] = useState('');
 
   // The route already restricts this page to training managers, but gate the row controls on
   // the role too so the table stays correct wherever it gets mounted.
@@ -46,7 +48,11 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
     queryKey: ['trainingSessions', firm?.id ?? null, branch?.id ?? null],
     queryFn: () => listTrainingSessions({ firmId: firm?.id, branchId: branch?.id }),
   });
-  const rows = sessionsQ.data ?? [];
+  const all = sessionsQ.data ?? [];
+  const rows = useMemo(
+    () => all.filter((s) => matchesSearch(search, s.name)),
+    [all, search],
+  );
 
   const deleteMut = useMutation({
     mutationFn: (s) => deleteTrainingSession(s.id),
@@ -63,6 +69,8 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
   return (
     <Stack spacing={2}>
       {sessionsQ.isError && <Alert severity="error">Failed to load sessions. Refresh to try again.</Alert>}
+
+      <SearchField value={search} onChange={setSearch} placeholder="Search sessions…" />
 
       <TableContainer component={Paper}>
         <Table size="small">
@@ -134,7 +142,9 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
             {!sessionsQ.isLoading && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                  No sessions yet — create the first one to start the training record.
+                  {search
+                    ? `No sessions match “${search}”.`
+                    : 'No sessions yet — create the first one to start the training record.'}
                 </TableCell>
               </TableRow>
             )}

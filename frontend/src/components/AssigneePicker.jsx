@@ -3,17 +3,17 @@ import {
   Box, Button, Checkbox, Divider, InputAdornment, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/SearchOutlined';
-import { useAssignableUsers } from '../../hooks/useAssignableUsers.js';
-import { roleLabel } from '../../auth/roles.js';
-import { tokens, fonts } from '../../theme/theme.js';
+import { useAssignableUsers } from '../hooks/useAssignableUsers.js';
+import { roleLabel } from '../auth/roles.js';
+import { tokens, fonts } from '../theme/theme.js';
 
 /**
- * Tick the staff who have to take this course.
+ * Tick the staff to assign a piece of training to. Shared by the session and course dialogs.
  *
  * The list is only ever this branch's branch-level staff — compliance officers and senior
  * managers run training rather than take it, and the server rejects them outright.
  */
-export function CourseUsersPicker({ value = [], onChange, firmId, branchId }) {
+export function AssigneePicker({ value = [], onChange, firmId, branchId }) {
   const { users, isLoading, empty } = useAssignableUsers(firmId, branchId);
   const [search, setSearch] = useState('');
 

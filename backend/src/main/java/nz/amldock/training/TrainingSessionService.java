@@ -17,6 +17,8 @@ import nz.amldock.user.UserPrincipal;
 import nz.amldock.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -49,19 +51,22 @@ public class TrainingSessionService {
     private final UserRepository users;
     private final FirmBranchRepository branches;
     private final AuditService audit;
+    private final TrainingNotifier notifier;
 
     public TrainingSessionService(TrainingSessionRepository sessions,
                                   TrainingSessionAttendeeRepository attendees,
                                   TrainingProviderRepository providers,
                                   UserRepository users,
                                   FirmBranchRepository branches,
-                                  AuditService audit) {
+                                  AuditService audit,
+                                  TrainingNotifier notifier) {
         this.sessions = sessions;
         this.attendees = attendees;
         this.providers = providers;
         this.users = users;
         this.branches = branches;
         this.audit = audit;
+        this.notifier = notifier;
     }
 
     /** Training managers get the scope's whole register; everyone else gets their own assignments. */
@@ -103,10 +108,12 @@ public class TrainingSessionService {
         s.setCreatedByUserId(actor.id());
         TrainingSession saved = sessions.save(s);
 
-        int assigned = replaceRoster(saved, req.assigneeUserIds());
+        // A brand-new session has no existing roster, so everyone added is newly assigned.
+        List<Long> newlyAssigned = replaceRoster(saved, req.assigneeUserIds());
+        notifyNewlyAssigned(saved, newlyAssigned);
 
         audit.record(AuditAction.TRAINING_SESSION_CREATED, ENTITY_TYPE, saved.getId(),
-                "Created training session " + saved.getName() + " for " + assigned + " staff");
+                "Created training session " + saved.getName() + " for " + newlyAssigned.size() + " staff");
         return toDtos(List.of(saved), actor).get(0);
     }
 
@@ -130,8 +137,9 @@ public class TrainingSessionService {
         assertMinutes(s.getTotalMinutes(), s.getCertifiedMinutes());
 
         // A supplied roster replaces the old one; omitting it leaves assignments untouched.
+        // Only the people this adds get an email — anyone already on the session is left alone.
         if (req.assigneeUserIds() != null) {
-            replaceRoster(s, req.assigneeUserIds());
+            notifyNewlyAssigned(s, replaceRoster(s, req.assigneeUserIds()));
         }
 
         audit.record(AuditAction.TRAINING_SESSION_UPDATED, ENTITY_TYPE, s.getId(),
@@ -217,7 +225,7 @@ public class TrainingSessionService {
      * and {@code GET /api/users?branchId=} deliberately returns them, so filtering in the UI
      * alone would not be a boundary.
      */
-    private int replaceRoster(TrainingSession session, List<Long> requestedUserIds) {
+    private List<Long> replaceRoster(TrainingSession session, List<Long> requestedUserIds) {
         Set<Long> wanted = requestedUserIds == null
                 ? Set.of()
                 : new LinkedHashSet<>(requestedUserIds.stream().filter(java.util.Objects::nonNull).toList());
@@ -245,7 +253,36 @@ public class TrainingSessionService {
         }
         if (!added.isEmpty()) attendees.saveAll(added);
 
-        return wanted.size();
+        // The newly-inserted user ids, which is exactly who should be emailed: on create that's
+        // everyone, and on edit it's only the people who weren't already on the roster.
+        return added.stream().map(TrainingSessionAttendee::getUserId).toList();
+    }
+
+    /**
+     * Email the people just added to this session — after the transaction commits.
+     *
+     * The send is @Async, so dispatching inline would let mail escape a rollback and tell staff
+     * about a session that no longer exists. The recipients and provider name are resolved here,
+     * while the persistence context is still open.
+     */
+    private void notifyNewlyAssigned(TrainingSession session, List<Long> newUserIds) {
+        if (newUserIds.isEmpty()) return;
+        List<User> recipients = users.findAllById(newUserIds);
+        if (recipients.isEmpty()) return;
+        String providerName = session.getTrainingProviderId() == null ? null
+                : providers.findById(session.getTrainingProviderId())
+                        .map(TrainingProvider::getName).orElse(null);
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            notifier.notifySessionAssigned(session, providerName, recipients);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notifier.notifySessionAssigned(session, providerName, recipients);
+            }
+        });
     }
 
     /** A branch tag must belong to the target firm; null means firm-wide. */
@@ -307,7 +344,7 @@ public class TrainingSessionService {
             List<TrainingAttendeeDto> attendeeDtos = visible.stream()
                     .map((a) -> {
                         User u = userById.get(a.getUserId());
-                        return new TrainingAttendeeDto(a.getUserId(),
+                        return TrainingAttendeeDto.attendance(a.getUserId(),
                                 u == null ? null : u.getFullName(),
                                 u == null ? null : u.getEmail(),
                                 u == null ? null : u.getRole(),

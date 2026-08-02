@@ -130,6 +130,18 @@ export async function deleteTrainingCourse(id) {
   await apiClient.delete(`/training-courses/${id}`);
 }
 
+/**
+ * Sit (or re-sit) a course assessment.
+ *
+ * Only the picked option ids go up — the answer key never comes down, so the server does the
+ * marking and returns a score with no per-question detail. A material-only course is submitted
+ * with an empty list; that is the "mark as done" path.
+ */
+export async function submitCourseAttempt(courseId, answers = []) {
+  const { data } = await apiClient.post(`/training-courses/${courseId}/attempt`, { answers });
+  return data;
+}
+
 /* ---------- course content files ---------- */
 
 export async function requestCourseFileUploadUrl(courseId, { filename, contentType, sizeBytes }) {

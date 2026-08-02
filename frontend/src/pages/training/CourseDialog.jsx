@@ -9,7 +9,7 @@ import SaveIcon from '@mui/icons-material/SaveOutlined';
 import { createTrainingCourseWithFiles, updateTrainingCourse } from '../../api/training.js';
 import { QuestionnaireEditor, questionnaireValid, questionProblem } from './QuestionnaireEditor.jsx';
 import { CourseContentUploader } from './CourseContentUploader.jsx';
-import { CourseUsersPicker } from './CourseUsersPicker.jsx';
+import { AssigneePicker } from '../../components/AssigneePicker.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
@@ -153,7 +153,7 @@ export function CourseDialog({ mode, open: openProp, target, onClose }) {
         <DialogTitle sx={{ pb: 1 }}>{isEdit ? 'Edit course' : 'New course'}</DialogTitle>
 
         <Box sx={{ px: 3 }}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 40 }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
             <Tab label="Details" value="details" />
             <Tab value="content"
                  label={countBadge('Content', isEdit ? (target?.files?.length ?? 0) : stagedFiles.length)} />
@@ -217,7 +217,7 @@ export function CourseDialog({ mode, open: openProp, target, onClose }) {
 
           <Box sx={panelSx(tab === 'users')}>
             <Box sx={{ mt: 1 }}>
-              <CourseUsersPicker
+              <AssigneePicker
                 value={form.assigneeUserIds}
                 onChange={(ids) => setForm((f) => ({ ...f, assigneeUserIds: ids }))}
                 firmId={firm?.id}

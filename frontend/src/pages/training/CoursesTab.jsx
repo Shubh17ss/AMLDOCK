@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
@@ -16,6 +16,7 @@ import {
 import { CourseDialog } from './CourseDialog.jsx';
 import { formatBytes } from './CourseContentUploader.jsx';
 import { CompletionProgress } from '../../components/CompletionProgress.jsx';
+import { SearchField, matchesSearch } from '../../components/SearchField.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
@@ -41,6 +42,7 @@ export function CoursesTab({ createOpen, onCloseCreate }) {
   const [editTarget, setEditTarget] = useState(null);
   const [toDelete, setToDelete] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [search, setSearch] = useState('');
 
   const mayManage = canManageTraining(user?.role);
   const mayDelete = canDelete(user?.role);
@@ -50,10 +52,15 @@ export function CoursesTab({ createOpen, onCloseCreate }) {
     queryKey: ['trainingCourses', firm?.id ?? null, branch?.id ?? null],
     queryFn: () => listTrainingCourses({ firmId: firm?.id, branchId: branch?.id }),
   });
-  const rows = coursesQ.data ?? [];
+  const all = coursesQ.data ?? [];
+  const rows = useMemo(
+    () => all.filter((c) => matchesSearch(search, c.name)),
+    [all, search],
+  );
 
   // The dialog and the detail view both need the freshest row, not the one captured on click.
-  const liveRow = (row) => rows.find((r) => r.id === row?.id) ?? row;
+  // Resolved against the unfiltered list so an open dialog survives a change to the search.
+  const liveRow = (row) => all.find((r) => r.id === row?.id) ?? row;
 
   const deleteMut = useMutation({
     mutationFn: (c) => deleteTrainingCourse(c.id),
@@ -81,6 +88,8 @@ export function CoursesTab({ createOpen, onCloseCreate }) {
   return (
     <Stack spacing={2}>
       {coursesQ.isError && <Alert severity="error">Failed to load courses. Refresh to try again.</Alert>}
+
+      <SearchField value={search} onChange={setSearch} placeholder="Search courses…" />
 
       <TableContainer component={Paper}>
         <Table size="small">
@@ -148,7 +157,9 @@ export function CoursesTab({ createOpen, onCloseCreate }) {
             {!coursesQ.isLoading && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                  No courses yet — create the first one to start the training catalogue.
+                  {search
+                    ? `No courses match “${search}”.`
+                    : 'No courses yet — create the first one to start the training catalogue.'}
                 </TableCell>
               </TableRow>
             )}
@@ -259,9 +270,19 @@ export function CoursesTab({ createOpen, onCloseCreate }) {
                                 {roleLabel(a.role)}
                               </Typography>
                             </Box>
-                            <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, whiteSpace: 'nowrap' }}>
-                              {a.completedAt ? dateFmt(a.completedAt) : 'Not yet'}
-                            </Typography>
+                            <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                              <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, whiteSpace: 'nowrap' }}>
+                                {a.completedAt ? dateFmt(a.completedAt) : 'Not yet'}
+                              </Typography>
+                              {a.scorePercent != null && (
+                                <Typography sx={{
+                                  fontFamily: fonts.mono, fontSize: '0.7rem', whiteSpace: 'nowrap',
+                                  color: a.passed ? tokens.approved : tokens.rejected,
+                                }}>
+                                  {a.scorePercent}% · {a.passed ? 'passed' : 'failed'}
+                                </Typography>
+                              )}
+                            </Box>
                           </Stack>
                         ))}
                       </Stack>
