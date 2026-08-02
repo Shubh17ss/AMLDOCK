@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SchoolIcon from '@mui/icons-material/School';
 import { Box, Collapse, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
-import { visibleGroupsFor, DASHBOARD_PATH } from '../navigation/moduleRegistry.jsx';
+import { visibleGroupsFor, DASHBOARD_PATH, MY_TRAINING_PATH } from '../navigation/moduleRegistry.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { isBranchLevel } from '../auth/roles.js';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 
@@ -44,8 +46,15 @@ export function SidebarNav() {
         <ScopeSelector stacked />
       </Box>
 
+      {/* Branch staff attend training rather than run it, so they get the personal view here
+          instead of the privileged AML Training section. */}
       <NavList
-        items={[{ id: 'dashboard', label: 'Dashboard', to: DASHBOARD_PATH, icon: <DashboardIcon /> }]}
+        items={[
+          { id: 'dashboard', label: 'Dashboard', to: DASHBOARD_PATH, icon: <DashboardIcon /> },
+          ...(isBranchLevel(user?.role)
+            ? [{ id: 'my-training', label: 'My Training', to: MY_TRAINING_PATH, icon: <SchoolIcon /> }]
+            : []),
+        ]}
         pathname={pathname}
       />
 

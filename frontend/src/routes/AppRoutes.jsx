@@ -11,6 +11,7 @@ import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
   DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, FULL_WORKSPACE_ROLES,
+  BRANCH_LEVEL_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
@@ -18,12 +19,14 @@ import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
 import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
 import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
-  SUSPICIOUS_ACTIVITIES_PATH, SECTION_LANDING_GROUPS,
+  SUSPICIOUS_ACTIVITIES_PATH, STAFF_TRAINING_PATH, MY_TRAINING_PATH, SECTION_LANDING_GROUPS,
 } from '../navigation/moduleRegistry.jsx';
 import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
 import { SectionLandingPage } from '../pages/SectionLandingPage.jsx';
 import { InternationalFundTransactionRegisterPage } from '../pages/monitoring/InternationalFundTransactionRegisterPage.jsx';
 import { SuspiciousActivityRegisterPage } from '../pages/monitoring/SuspiciousActivityRegisterPage.jsx';
+import { StaffTrainingPage } from '../pages/training/StaffTrainingPage.jsx';
+import { MyTrainingPage } from '../pages/training/MyTrainingPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
 import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
@@ -97,6 +100,21 @@ export function AppRoutes() {
         <Route path={SUSPICIOUS_ACTIVITIES_PATH} element={
           <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
             <SuspiciousActivityRegisterPage />
+          </ProtectedRoute>
+        } />
+
+        {/* AML Training › Staff Training — the workspace for whoever runs training. */}
+        <Route path={STAFF_TRAINING_PATH} element={
+          <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
+            <StaffTrainingPage />
+          </ProtectedRoute>
+        } />
+
+        {/* My Training — the personal view. Only branch-level staff can hold an assignment,
+            so for anyone else this page would always be empty. */}
+        <Route path={MY_TRAINING_PATH} element={
+          <ProtectedRoute roles={BRANCH_LEVEL_ROLES}>
+            <MyTrainingPage />
           </ProtectedRoute>
         } />
 

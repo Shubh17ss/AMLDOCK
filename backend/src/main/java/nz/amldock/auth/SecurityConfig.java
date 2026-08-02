@@ -62,6 +62,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/suspicious-activities",
                                 "/api/suspicious-activities/**")
                         .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
+                        // AML Training > Providers. Sessions are deliberately NOT listed here:
+                        // branch staff need to read their own assignments and mark them
+                        // complete, so those endpoints are gated per method instead.
+                        .requestMatchers("/api/training-providers",
+                                "/api/training-providers/**")
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

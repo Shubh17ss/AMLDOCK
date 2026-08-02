@@ -34,6 +34,10 @@ export const CDD_REGISTER_PATH = '/cdd';
 export const DEALS_PATH = '/cdd/deals';
 export const INTL_FUND_TRANSACTIONS_PATH = '/monitoring/international-fund-transaction-register';
 export const SUSPICIOUS_ACTIVITIES_PATH = '/monitoring/suspicious-activities';
+export const STAFF_TRAINING_PATH = '/aml-training/staff-training';
+// The personal training view for branch staff. Not a module — it sits beside Dashboard in the
+// sidebar rather than inside the AML Training section, which stays privileged.
+export const MY_TRAINING_PATH = '/my-training';
 
 export const MODULE_GROUPS = [
   {
@@ -69,7 +73,7 @@ export const MODULE_GROUPS = [
     group: 'AML Training', slug: 'aml-training', to: '/aml-training', title: 'AML Training',
     icon: <WorkspacePremiumRoundedIcon />,
     items: [
-      { id: 'staff-training', label: 'Staff Training', to: '/aml-training/staff-training', icon: <SchoolIcon />,
+      { id: 'staff-training', label: 'Staff Training', to: STAFF_TRAINING_PATH, icon: <SchoolIcon />,
         blurb: 'AML training records for every staff member, with completion dates.' },
     ],
   },
@@ -149,6 +153,7 @@ export const IMPLEMENTED_PATHS = [
   '/settings/reporting-entities',
   INTL_FUND_TRANSACTIONS_PATH,
   SUSPICIOUS_ACTIVITIES_PATH,
+  STAFF_TRAINING_PATH,
   // Group landings — all handled by SectionLandingPage.
   ...SECTION_LANDING_GROUPS.map((g) => g.to),
 ];
