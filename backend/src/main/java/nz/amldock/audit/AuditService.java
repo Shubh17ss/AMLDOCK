@@ -11,7 +11,9 @@ import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
+import nz.amldock.user.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -34,15 +36,18 @@ public class AuditService {
     private final DealRepository deals;
     private final FirmBranchRepository branches;
     private final DealLifecycleService lifecycle;
+    private final UserRepository users;
 
     public AuditService(AuditLogRepository repo,
                         DealRepository deals,
                         FirmBranchRepository branches,
-                        DealLifecycleService lifecycle) {
+                        DealLifecycleService lifecycle,
+                        UserRepository users) {
         this.repo = repo;
         this.deals = deals;
         this.branches = branches;
         this.lifecycle = lifecycle;
+        this.users = users;
     }
 
     @Transactional
@@ -92,15 +97,48 @@ public class AuditService {
         repo.save(log);
     }
 
+    /**
+     * The trail, newest first, narrowed to what the caller may see.
+     *
+     * audit_log carries no firm column — only the actor — so a firm-level caller is scoped by
+     * restricting the actor to the users in their own reporting entity. That is the honest
+     * reading of "my firm's activity", with one limitation worth knowing: an action a platform
+     * administrator took on this firm's records was performed by a firm-less actor and so does
+     * not appear. Only ROOT and AUDIT see those.
+     */
     @Transactional(readOnly = true)
     public PageResponse<AuditLogDto> search(Long actorUserId, AuditAction action, String entityType,
                                             Long entityId, Instant from, Instant to,
                                             int page, int size) {
         int safeSize = Math.min(Math.max(size, 1), 200);
-        Specification<AuditLog> spec = buildSpec(actorUserId, action, entityType, entityId, from, to);
+        Specification<AuditLog> spec = buildSpec(actorUserId, action, entityType, entityId, from, to)
+                .and(visibleActorScope());
         Page<AuditLog> result = repo.findAll(spec,
                 PageRequest.of(Math.max(page, 0), safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
         return PageResponse.of(result, AuditLogDto::from);
+    }
+
+    /**
+     * Restricts the trail to actors the caller is allowed to see.
+     *
+     * ROOT and AUDIT see the platform. A firm-level caller sees only entries recorded by users
+     * of their own reporting entity; if that firm somehow has no users, the disjunction is
+     * deliberately impossible rather than absent, so an empty set can never widen the result.
+     */
+    private Specification<AuditLog> visibleActorScope() {
+        UserPrincipal actor = currentPrincipal();
+        if (actor == null) {
+            return (root, query, cb) -> cb.disjunction();
+        }
+        if (actor.role().seesAllFirms()) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        List<Long> firmUserIds = users.findByRealEstateFirmIdOrderByIdAsc(actor.realEstateFirmId())
+                .stream().map(User::getId).toList();
+        if (firmUserIds.isEmpty()) {
+            return (root, query, cb) -> cb.disjunction();
+        }
+        return (root, query, cb) -> root.get("actorUserId").in(firmUserIds);
     }
 
     private static Specification<AuditLog> buildSpec(Long actorUserId, AuditAction action, String entityType,

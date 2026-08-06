@@ -8,6 +8,7 @@ import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.Role;
 import nz.amldock.user.UserPrincipal;
+import nz.amldock.user.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,9 @@ class AuditServiceScopeTest {
     @Mock AuditLogRepository repo;
     @Mock DealRepository deals;
     @Mock FirmBranchRepository branches;
+    // Only the paged search() uses this — to resolve a firm-level caller's own users and scope
+    // the trail by actor. listForDeal never touches it, so it stays an unstubbed mock here.
+    @Mock UserRepository users;
 
     AuditService service;
 
@@ -47,7 +51,7 @@ class AuditServiceScopeTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuditService(repo, deals, branches, new DealLifecycleService());
+        service = new AuditService(repo, deals, branches, new DealLifecycleService(), users);
     }
 
     @AfterEach

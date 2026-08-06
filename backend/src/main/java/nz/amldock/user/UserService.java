@@ -74,14 +74,22 @@ public class UserService {
      * The tier scope from {@link #findVisible(UserPrincipal)} always applies first, so this
      * can only ever shrink what the actor is already permitted to see.
      *
-     * <p>A selected branch keeps that branch's users <em>and</em> the firm's branchless
-     * firm-level staff (AML compliance officers / senior managers), who oversee every branch
-     * and so should stay visible regardless of the branch filter.
+     * <p>Each level of the filter keeps the tier above it, because those people oversee the
+     * narrower scope without sitting inside it:
+     * <ul>
+     *   <li>a selected <b>branch</b> keeps that branch's users <em>and</em> the firm's branchless
+     *       firm-level staff (compliance officers / senior managers);</li>
+     *   <li>a selected <b>firm</b> keeps that firm's users <em>and</em> the firm-less platform
+     *       accounts (ROOT, AUDIT). Without this an auditor — who belongs to no reporting
+     *       entity by design — vanished from Settings › Users the moment an entity was picked.</li>
+     * </ul>
      */
     @Transactional(readOnly = true)
     public List<User> findVisible(UserPrincipal actor, Long firmId, Long branchId) {
         return findVisible(actor).stream()
-                .filter((u) -> firmId == null || firmId.equals(u.getRealEstateFirmId()))
+                .filter((u) -> firmId == null
+                        || firmId.equals(u.getRealEstateFirmId())
+                        || u.getRealEstateFirmId() == null)
                 .filter((u) -> branchId == null
                         || branchId.equals(u.getFirmBranchId())
                         || u.getFirmBranchId() == null)

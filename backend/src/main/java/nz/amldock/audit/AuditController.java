@@ -23,8 +23,13 @@ public class AuditController {
         this.audit = audit;
     }
 
+    /**
+     * The trail. ROOT sees the platform; a compliance officer or senior manager sees their own
+     * reporting entity's activity — AuditService.search narrows by actor, since audit_log has
+     * no firm of its own.
+     */
     @GetMapping
-    @PreAuthorize("hasRole('ROOT')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public PageResponse<AuditLogDto> search(
             @RequestParam(required = false) Long actorUserId,
             @RequestParam(required = false) AuditAction action,

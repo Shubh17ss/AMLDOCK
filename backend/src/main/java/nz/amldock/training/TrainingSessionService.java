@@ -79,7 +79,7 @@ public class TrainingSessionService {
     @Transactional(readOnly = true)
     public List<TrainingSessionDto> list(Long requestedFirmId, Long branchId, boolean mine) {
         UserPrincipal actor = TrainingScope.currentPrincipal();
-        boolean privileged = isTrainingManager(actor.role()) && !mine;
+        boolean privileged = canViewWholeRegister(actor.role()) && !mine;
 
         List<TrainingSession> rows;
         if (privileged) {
@@ -213,8 +213,22 @@ public class TrainingSessionService {
 
     /* ---------- helpers ---------- */
 
+    /** May write training records: create and edit sessions and courses, record attendance. */
     static boolean isTrainingManager(Role role) {
         return role == Role.ROOT || role == Role.AML_COMPLIANCE_OFFICER || role == Role.SENIOR_MANAGER;
+    }
+
+    /**
+     * May read the whole register rather than only their own assignments.
+     *
+     * The managers, plus the auditor — who reads every section and writes nothing (enforced by
+     * {@link nz.amldock.auth.AuditReadOnlyFilter}). Kept separate from
+     * {@link #isTrainingManager} because conflating the two is what made an auditor's register
+     * come back empty: they were falling through to the assignee lookup, and an auditor is never
+     * an assignee.
+     */
+    static boolean canViewWholeRegister(Role role) {
+        return isTrainingManager(role) || role.isReadOnly();
     }
 
     /** The provider must exist in the same firm and branch the session is being filed under. */

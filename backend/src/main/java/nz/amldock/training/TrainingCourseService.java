@@ -115,7 +115,10 @@ public class TrainingCourseService {
     @Transactional(readOnly = true)
     public List<TrainingCourseDto> list(Long requestedFirmId, Long branchId, boolean mine) {
         UserPrincipal actor = TrainingScope.currentPrincipal();
-        boolean privileged = TrainingSessionService.isTrainingManager(actor.role()) && !mine;
+        // Includes AUDIT: an auditor reviewing whether the assessments are adequate needs the
+        // questions and their answer key, and can never sit a course — assertAssignable admits
+        // only branch- and firm-level staff, so there is no integrity concern in showing it.
+        boolean privileged = TrainingSessionService.canViewWholeRegister(actor.role()) && !mine;
 
         List<TrainingCourse> rows;
         if (privileged) {
