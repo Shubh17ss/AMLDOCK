@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 public record CreateDealRequest(
         @NotNull Long firmBranchId,
         @NotNull TransactionType transactionType,
-        BigDecimal transactionValueNzd,
+        BigDecimal transactionValue,
         String pocName,
         String pocRole,
         String pocPhone,

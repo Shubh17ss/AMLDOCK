@@ -30,26 +30,35 @@ export async function deleteTrainingProvider(id) {
 
 /* ---------- sessions ---------- */
 
-/** Role-aware server-side: managers get the whole scope, staff get their own assignments. */
-export async function listTrainingSessions({ firmId, branchId } = {}) {
+/**
+ * Role-aware server-side: managers get the whole scope, staff get their own assignments.
+ *
+ * `mine` is the My Training view — the caller's own assignments whatever their role, spanning
+ * every branch, because firm-level staff sit in none and can be assigned training in several.
+ */
+export async function listTrainingSessions({ firmId, branchId, mine } = {}) {
   const { data } = await apiClient.get('/training-sessions', {
-    params: { firmId: firmId ?? undefined, branchId: branchId ?? undefined },
+    params: {
+      firmId: firmId ?? undefined,
+      branchId: branchId ?? undefined,
+      mine: mine ? true : undefined,
+    },
   });
   return data;
 }
 
 export async function createTrainingSession({
-  name, location, url, trainingProviderId, dueDate, totalMinutes, certifiedMinutes,
+  name, description, location, url, trainingProviderId, sessionDate, totalMinutes,
   assigneeUserIds, realEstateFirmId, firmBranchId,
 }) {
   const { data } = await apiClient.post('/training-sessions', {
     name,
+    description: description || null,
     location,
     url: url || null,
     trainingProviderId,
-    dueDate: dueDate || null,
+    sessionDate,
     totalMinutes: Number(totalMinutes),
-    certifiedMinutes: Number(certifiedMinutes),
     assigneeUserIds: assigneeUserIds ?? [],
     realEstateFirmId: realEstateFirmId ?? null,
     firmBranchId: firmBranchId ?? null,
@@ -59,16 +68,16 @@ export async function createTrainingSession({
 
 /** Partial edit — omitted fields are left alone. A supplied roster replaces the old one. */
 export async function updateTrainingSession(id, {
-  name, location, url, trainingProviderId, dueDate, totalMinutes, certifiedMinutes, assigneeUserIds,
+  name, description, location, url, trainingProviderId, sessionDate, totalMinutes, assigneeUserIds,
 }) {
   const { data } = await apiClient.patch(`/training-sessions/${id}`, {
     name,
+    description: description ?? '',
     location,
     url: url ?? '',
     trainingProviderId,
-    dueDate: dueDate || null,
+    sessionDate: sessionDate || null,
     totalMinutes: totalMinutes == null ? null : Number(totalMinutes),
-    certifiedMinutes: certifiedMinutes == null ? null : Number(certifiedMinutes),
     assigneeUserIds,
   });
   return data;
@@ -78,18 +87,31 @@ export async function deleteTrainingSession(id) {
   await apiClient.delete(`/training-sessions/${id}`);
 }
 
-/** The signed-in user marks their own attendance complete. */
-export async function completeTrainingSession(id) {
-  const { data } = await apiClient.post(`/training-sessions/${id}/complete`);
+/**
+ * A training manager records whether someone on the roster attended.
+ *
+ * Not self-service: attendance is observed by whoever ran the session, so staff have no write on
+ * their own row. Passing `completed: false` clears it again, for fixing a mis-click.
+ */
+export async function setSessionAttendeeCompletion(sessionId, userId, completed) {
+  const { data } = await apiClient.post(
+    `/training-sessions/${sessionId}/attendees/${userId}/completion`,
+    null,
+    { params: { completed } },
+  );
   return data;
 }
 
 /* ---------- courses ---------- */
 
-/** Role-aware server-side, same as sessions. */
-export async function listTrainingCourses({ firmId, branchId } = {}) {
+/** Role-aware server-side, same as sessions — including `mine` for the My Training view. */
+export async function listTrainingCourses({ firmId, branchId, mine } = {}) {
   const { data } = await apiClient.get('/training-courses', {
-    params: { firmId: firmId ?? undefined, branchId: branchId ?? undefined },
+    params: {
+      firmId: firmId ?? undefined,
+      branchId: branchId ?? undefined,
+      mine: mine ? true : undefined,
+    },
   });
   return data;
 }
@@ -139,6 +161,21 @@ export async function deleteTrainingCourse(id) {
  */
 export async function submitCourseAttempt(courseId, answers = []) {
   const { data } = await apiClient.post(`/training-courses/${courseId}/attempt`, { answers });
+  return data;
+}
+
+/**
+ * Mark one question mid-assessment and get the right answer back.
+ *
+ * The only call that returns any of the key, and only for a question already answered — the
+ * course payload still arrives with every `correct` flag nulled. Returns
+ * `{ correct, correctOptionIds }`.
+ */
+export async function checkCourseAnswer(courseId, questionId, selectedOptionIds = []) {
+  const { data } = await apiClient.post(
+    `/training-courses/${courseId}/questions/${questionId}/check`,
+    { selectedOptionIds },
+  );
   return data;
 }
 

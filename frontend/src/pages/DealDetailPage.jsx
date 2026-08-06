@@ -15,8 +15,7 @@ import { DocumentUploader } from '../components/DocumentUploader.jsx';
 import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
 import { OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
-
-const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
+import { useCurrency } from '../dashboard/useCurrency.js';
 
 export function DealDetailPage() {
   const { id } = useParams();
@@ -24,6 +23,7 @@ export function DealDetailPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const money = useCurrency();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [actionError, setActionError] = useState(null);
@@ -139,7 +139,7 @@ export function DealDetailPage() {
                 <Divider sx={{ mb: 1.5 }} />
                 <DetailRow label="Reporting entity" value={deal.firmName} />
                 <DetailRow label="Branch"  value={deal.branchName} />
-                <DetailRow label="Value"   value={deal.transactionValueNzd != null ? NZD.format(deal.transactionValueNzd) : null} />
+                <DetailRow label="Value"   value={deal.transactionValue != null ? money.formatWithCode(deal.transactionValue) : null} />
                 <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontWeight: 700 }}>Point of contact</Typography>
                 <DetailRow label="Name"    value={deal.pocName} />
                 <DetailRow label="Role"    value={deal.pocRole} />

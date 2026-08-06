@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 public record UpdateDealRequest(
         Long firmBranchId,
         TransactionType transactionType,
-        BigDecimal transactionValueNzd,
+        BigDecimal transactionValue,
         String pocName,
         String pocRole,
         String pocPhone,

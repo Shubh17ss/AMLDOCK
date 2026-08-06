@@ -73,14 +73,21 @@ export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER
 export const FULL_WORKSPACE_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 export const canAccessAllModules = (role) => FULL_WORKSPACE_ROLES.includes(role);
 
-// Branch-level staff, as a route-guard list. These are the only roles that can be assigned to
-// a training session — and so the only audience for the personal My Training page.
+// Branch-level staff, as a route-guard list.
 export const BRANCH_LEVEL_ROLES = ['SALES_MANAGER', 'AGENT', 'AGENT_PA', 'ADMIN'];
 
 // AML Training › Staff Training: who runs training (creates sessions, manages providers).
-// Everyone else attends it.
 export const TRAINING_MANAGER_ROLES = FULL_WORKSPACE_ROLES;
 export const canManageTraining = (role) => TRAINING_MANAGER_ROLES.includes(role);
+
+// Who can be *assigned* training, and so who the personal My Training page is for: a branch's
+// own staff, plus the firm's compliance officers and senior managers — they run training and
+// still have their own obligations to meet. ROOT is a platform account with no firm and never
+// holds an assignment. Mirrored server-side in TrainingScope.assertAssignable.
+export const TRAINING_ASSIGNABLE_ROLES = [
+  ...BRANCH_LEVEL_ROLES, 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER',
+];
+export const canBeAssignedTraining = (role) => TRAINING_ASSIGNABLE_ROLES.includes(role);
 
 export const isDealAuthor = (role) => DEAL_AUTHOR_ROLES.includes(role);
 export const isDealReviewer = (role) => DEAL_REVIEWER_ROLES.includes(role);

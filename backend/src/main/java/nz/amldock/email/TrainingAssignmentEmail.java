@@ -34,9 +34,8 @@ public class TrainingAssignmentEmail {
                                       TrainingSession session, String providerName) {
         String link = appBaseUrl + "/my-training?tab=sessions";
         String subject = "You've been assigned AML training: " + session.getName();
-        String due = formatDue(session.getDueDate());
-        String minutes = session.getTotalMinutes() + " minutes ("
-                + session.getCertifiedMinutes() + " certified)";
+        String date = formatDate(session.getSessionDate());
+        String minutes = session.getTotalMinutes() + " minutes";
 
         String text = """
                 Hi %s,
@@ -46,9 +45,9 @@ public class TrainingAssignmentEmail {
                 Session:  %s
                 Provider: %s
                 Location: %s
-                Due:      %s
+                Date:     %s
                 Length:   %s
-                %s
+                %s%s
                 Open My Training to see it and mark it complete once you've attended:
                 %s
 
@@ -58,9 +57,10 @@ public class TrainingAssignmentEmail {
                 session.getName(),
                 providerName == null ? "—" : providerName,
                 session.getLocation(),
-                due,
+                date,
                 minutes,
                 session.getUrl() == null ? "" : "Link:     " + session.getUrl() + "\n",
+                session.getDescription() == null ? "" : "\n" + session.getDescription() + "\n",
                 link);
 
         String html = """
@@ -74,11 +74,11 @@ public class TrainingAssignmentEmail {
                     <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Session</td><td><strong>%s</strong></td></tr>
                     <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Provider</td><td>%s</td></tr>
                     <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Location</td><td>%s</td></tr>
-                    <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Due</td><td>%s</td></tr>
+                    <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Date</td><td>%s</td></tr>
                     <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Length</td><td>%s</td></tr>
                     %s
                   </table>
-
+                  %s
                   <p style="margin: 20px 0;">
                     <a href="%s" style="display:inline-block; background:#1f4b7a; color:#ffffff; padding: 10px 18px; border-radius: 6px; text-decoration: none;">View my training</a>
                   </p>
@@ -93,11 +93,14 @@ public class TrainingAssignmentEmail {
                 escape(session.getName()),
                 escape(providerName == null ? "—" : providerName),
                 escape(session.getLocation()),
-                escape(due),
+                escape(date),
                 escape(minutes),
                 session.getUrl() == null ? "" : ("""
                     <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Link</td><td><a href="%s">%s</a></td></tr>"""
                         .formatted(escape(session.getUrl()), escape(session.getUrl()))),
+                session.getDescription() == null ? "" : ("""
+                  <p style="color:#374151; white-space: pre-wrap;">%s</p>"""
+                        .formatted(escape(session.getDescription()))),
                 link);
 
         return EmailMessage.of(recipientEmail, subject, html, text);
@@ -167,6 +170,11 @@ public class TrainingAssignmentEmail {
                 link);
 
         return EmailMessage.of(recipientEmail, subject, html, text);
+    }
+
+    /** A session always has a date; a course's due date is optional. */
+    private static String formatDate(LocalDate date) {
+        return DATE.format(date);
     }
 
     private static String formatDue(LocalDate dueDate) {

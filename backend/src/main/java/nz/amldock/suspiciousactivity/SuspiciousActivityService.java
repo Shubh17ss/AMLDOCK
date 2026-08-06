@@ -85,7 +85,7 @@ public class SuspiciousActivityService {
 
         SuspiciousActivity s = new SuspiciousActivity();
         s.setSuspicionType(req.suspicionType());
-        s.setAmountNzd(resolveAmount(req.suspicionType(), req.amountNzd()));
+        s.setAmount(resolveAmount(req.suspicionType(), req.amount()));
         s.setName(req.name().trim());
         s.setDateOfSuspicion(req.dateOfSuspicion());
         s.setRedFlag(req.redFlag());

@@ -11,23 +11,24 @@ import { tokens, fonts } from '../theme/theme.js';
  * Branch-level staff have both pinned for them by ScopeSelector, so they never meet the gate;
  * ROOT and firm-level staff have to choose.
  */
-export function useScopeReady() {
+export function useScopeReady(requireBranch = true) {
   const { firm, branch } = useDashboardScope();
-  return {
-    ready: Boolean(firm?.id && branch?.id),
-    firm,
-    branch,
-    missing: !firm?.id ? 'firm' : (!branch?.id ? 'branch' : null),
-  };
+  const missing = !firm?.id ? 'firm' : ((requireBranch && !branch?.id) ? 'branch' : null);
+  return { ready: missing === null, firm, branch, missing };
 }
 
-/** Renders `children` only when the scope is complete, otherwise an explanatory empty state. */
-export function ScopeGate({ children, what = 'this section' }) {
-  const { ready, missing } = useScopeReady();
+/**
+ * Renders `children` only when the scope is complete, otherwise an explanatory empty state.
+ *
+ * `requireBranch={false}` relaxes it to firm-only, for the rare page whose records genuinely
+ * span branches — My Training, where a firm-level user's assignments can come from several.
+ */
+export function ScopeGate({ children, what = 'this section', requireBranch = true }) {
+  const { ready, missing } = useScopeReady(requireBranch);
   if (ready) return children;
 
   const need = missing === 'firm'
-    ? 'a reporting entity and a branch'
+    ? (requireBranch ? 'a reporting entity and a branch' : 'a reporting entity')
     : 'a branch';
 
   return (
@@ -55,7 +56,9 @@ export function ScopeGate({ children, what = 'this section' }) {
         </Typography>
         <Typography sx={{ fontSize: '0.875rem', color: tokens.muted, maxWidth: 420 }}>
           Use the <strong>Scope</strong> selector at the top of the sidebar. {what} is recorded
-          per branch, so both have to be set before anything can be shown or changed.
+          per {requireBranch ? 'branch' : 'reporting entity'}, so
+          {requireBranch ? ' both have' : ' it has'} to be set before anything can be shown or
+          changed.
         </Typography>
       </Stack>
     </Paper>

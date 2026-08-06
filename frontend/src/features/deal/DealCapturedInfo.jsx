@@ -4,8 +4,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { tokens, fonts } from '../../theme/theme.js';
-
-const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
+import { useCurrency } from '../../dashboard/useCurrency.js';
 
 const TXN_LABEL = { PURCHASE: 'Purchase', SALE: 'Sale' };
 const CLIENT_TYPE_LABEL = { INDIVIDUAL: 'Individual', ENTITY: 'Entity' };
@@ -18,6 +17,7 @@ const CLIENT_TYPE_LABEL = { INDIVIDUAL: 'Individual', ENTITY: 'Entity' };
  */
 export function DealCapturedInfo({ deal, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
+  const money = useCurrency();
   const p = deal.property ?? {};
   const c = deal.client ?? {};
 
@@ -65,7 +65,7 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
               <Row label="Reporting entity" value={deal.firmName} />
               <Row label="Branch"      value={deal.branchName} />
               <Row label="Transaction" value={TXN_LABEL[deal.transactionType] ?? deal.transactionType} />
-              <Row label="Value"       value={deal.transactionValueNzd != null ? NZD.format(deal.transactionValueNzd) : null} />
+              <Row label="Value"       value={deal.transactionValue != null ? money.formatWithCode(deal.transactionValue) : null} />
             </Group>
 
             <Group title="Point of contact">

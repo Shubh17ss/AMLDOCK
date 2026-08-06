@@ -1,26 +1,71 @@
-// Shared display formatters. Centralises the NZD + relative-time helpers that were
+// Shared display formatters. Centralises the money + relative-time helpers that were
 // previously copy-pasted across DealCard / DealsTable / review screens.
+//
+// Money is denominated in the currency of the reporting entity in scope — a firm's country
+// (V25 on real_estate_firm) decides whether its amounts are NZD or AUD. Components get this
+// through useCurrency(); these functions are the primitives underneath.
 
-const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
+/**
+ * The currency each supported jurisdiction reports in. Keyed by the ISO country code stored on
+ * the firm, which FirmService restricts to exactly these two.
+ */
+export const CURRENCY_BY_COUNTRY = {
+  NZ: { code: 'NZD', locale: 'en-NZ' },
+  AU: { code: 'AUD', locale: 'en-AU' },
+};
 
-/** Full NZD currency, e.g. $1,250,000. Returns '—' for null/undefined. */
-export function formatNZD(value) {
-  if (value == null) return '—';
-  return NZD.format(value);
+/**
+ * Currency for a firm's country, defaulting to NZD.
+ *
+ * The default covers two real cases: ROOT viewing "All entities", where there is no single
+ * currency to use, and a scope selection persisted before V25 that has no country on it.
+ */
+export function currencyFor(country) {
+  return CURRENCY_BY_COUNTRY[country] ?? CURRENCY_BY_COUNTRY.NZ;
+}
+
+const FORMATTERS = new Map();
+
+function formatterFor(country) {
+  const { code, locale } = currencyFor(country);
+  if (!FORMATTERS.has(code)) {
+    FORMATTERS.set(code, new Intl.NumberFormat(locale, {
+      style: 'currency', currency: code, maximumFractionDigits: 0,
+    }));
+  }
+  return FORMATTERS.get(code);
 }
 
 /**
- * Compact NZD for dense tiles, e.g. $4.2M, $850K, $1,250.
+ * Money with the symbol only, e.g. $1,250,000. Returns '—' for null/undefined.
+ *
+ * NZD and AUD both render as a bare "$", so use this only where a column header or field label
+ * already names the currency; otherwise use formatMoneyWithCode.
+ */
+export function formatMoney(value, country) {
+  if (value == null) return '—';
+  return formatterFor(country).format(value);
+}
+
+/** Money carrying its code, e.g. "NZD $1,250,000" — for standalone chips, pills and tiles. */
+export function formatMoneyWithCode(value, country) {
+  if (value == null) return '—';
+  return `${currencyFor(country).code} ${formatterFor(country).format(value)}`;
+}
+
+/**
+ * Compact money for dense tiles, e.g. $4.2M, $850K, $1,250.
  * Keeps one decimal for millions/thousands, drops trailing .0.
  */
-export function formatNZDCompact(value) {
+export function formatMoneyCompact(value, country) {
   if (value == null) return '—';
+  const { locale } = currencyFor(country);
   const n = Number(value);
   const sign = n < 0 ? '-' : '';
   const abs = Math.abs(n);
   if (abs >= 1_000_000) return `${sign}$${trim(abs / 1_000_000)}M`;
   if (abs >= 1_000)     return `${sign}$${trim(abs / 1_000)}K`;
-  return `${sign}$${abs.toLocaleString('en-NZ')}`;
+  return `${sign}$${abs.toLocaleString(locale)}`;
 }
 
 function trim(n) {

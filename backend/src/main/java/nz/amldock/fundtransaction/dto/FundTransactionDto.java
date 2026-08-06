@@ -14,7 +14,7 @@ public record FundTransactionDto(
         String listingAddress,
         TransactionFlow transactionFlow,
         LocalDate transactionDate,
-        BigDecimal amountNzd,
+        BigDecimal amount,
         String overseasJurisdiction,
         String submissionReference,
         boolean hasDocument,
@@ -29,7 +29,7 @@ public record FundTransactionDto(
     public static FundTransactionDto from(InternationalFundTransaction t, String branchName, String createdByEmail) {
         return new FundTransactionDto(
                 t.getId(), t.getDealReference(), t.getListingAddress(), t.getTransactionFlow(),
-                t.getTransactionDate(), t.getAmountNzd(), t.getOverseasJurisdiction(),
+                t.getTransactionDate(), t.getAmount(), t.getOverseasJurisdiction(),
                 t.getSubmissionReference(),
                 t.getDocumentStatus() == DocumentStatus.ACTIVE,
                 t.getOriginalFilename(), t.getSizeBytes(),

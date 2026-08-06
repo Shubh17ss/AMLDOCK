@@ -13,14 +13,14 @@ export async function listSuspiciousActivities({ firmId, branchId } = {}) {
 }
 
 export async function createSuspiciousActivity({
-  suspicionType, amountNzd, name, dateOfSuspicion, redFlag, reference, description,
+  suspicionType, amount, name, dateOfSuspicion, redFlag, reference, description,
   actionTaken, realEstateFirmId, firmBranchId,
 }) {
   const { data } = await apiClient.post('/suspicious-activities', {
     suspicionType,
     // An amount only belongs to a transaction — the server rejects one without it and
     // discards one sent for an activity.
-    amountNzd: suspicionType === 'TRANSACTION' ? amountNzd : null,
+    amount: suspicionType === 'TRANSACTION' ? amount : null,
     name,
     dateOfSuspicion,
     redFlag,

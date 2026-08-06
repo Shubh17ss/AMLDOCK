@@ -117,11 +117,11 @@ export function UserTrainingDetailDialog({ record, branchName, onClose }) {
                     <ItemRow
                       key={session.id}
                       title={session.name}
-                      overdue={!done && pastDue(session.dueDate)}
+                      overdue={!done && pastDue(session.sessionDate)}
                       meta={[
                         session.providerName,
                         session.location,
-                        session.dueDate ? `Due ${dateFmt(session.dueDate)}` : null,
+                        dateFmt(session.sessionDate),
                       ].filter(Boolean).join(' · ')}
                       status={done ? (
                         <Status

@@ -33,8 +33,9 @@ public class SuspiciousActivity extends BaseEntity {
     private SuspicionType suspicionType;
 
     /** Only meaningful for a TRANSACTION — nulled out for an ACTIVITY. */
-    @Column(name = "amount_nzd", precision = 18, scale = 2)
-    private BigDecimal amountNzd;
+    /** In the reporting entity's own currency — see RealEstateFirm.country. */
+    @Column(name = "amount", precision = 18, scale = 2)
+    private BigDecimal amount;
 
     /** The person or entity the suspicion concerns. */
     @Column(name = "name", nullable = false, length = 512)
@@ -84,8 +85,8 @@ public class SuspiciousActivity extends BaseEntity {
     public Long getId() { return id; }
     public SuspicionType getSuspicionType() { return suspicionType; }
     public void setSuspicionType(SuspicionType v) { this.suspicionType = v; }
-    public BigDecimal getAmountNzd() { return amountNzd; }
-    public void setAmountNzd(BigDecimal v) { this.amountNzd = v; }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal v) { this.amount = v; }
     public String getName() { return name; }
     public void setName(String v) { this.name = v; }
     public LocalDate getDateOfSuspicion() { return dateOfSuspicion; }

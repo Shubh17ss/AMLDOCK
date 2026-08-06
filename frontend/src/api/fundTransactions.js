@@ -13,7 +13,7 @@ export async function listFundTransactions({ firmId, branchId } = {}) {
 }
 
 export async function createFundTransaction({
-  dealReference, listingAddress, transactionFlow, transactionDate, amountNzd,
+  dealReference, listingAddress, transactionFlow, transactionDate, amount,
   overseasJurisdiction, submissionReference, realEstateFirmId, firmBranchId,
 }) {
   const { data } = await apiClient.post('/international-fund-transactions', {
@@ -21,7 +21,7 @@ export async function createFundTransaction({
     listingAddress,
     transactionFlow,
     transactionDate,
-    amountNzd,
+    amount,
     overseasJurisdiction,
     submissionReference: submissionReference || null,
     realEstateFirmId: realEstateFirmId ?? null,

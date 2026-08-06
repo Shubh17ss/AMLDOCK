@@ -18,6 +18,7 @@ import { AddFundTransactionDialog } from './AddFundTransactionDialog.jsx';
 import { countryName, flagClass } from '../../data/countries.js';
 import { buildCsv } from '../../utils/csv.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
+import { useCurrency } from '../../dashboard/useCurrency.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { canDelete } from '../../auth/roles.js';
@@ -37,8 +38,11 @@ const FLOW_META = {
 
 // CSV export columns. Amounts and dates stay machine-readable (plain 2dp decimal, ISO date) so
 // the file drops straight into a spreadsheet; the jurisdiction is split into code + name.
-const CSV_HEADERS = [
-  'Deal', 'Listing address', 'Transaction flow', 'Date', 'Amount NZD',
+//
+// The amount column names the entity's own currency, so a downloaded file is unambiguous once
+// it's away from the screen that produced it.
+const csvHeaders = (currencyCode) => [
+  'Deal', 'Listing address', 'Transaction flow', 'Date', `Amount ${currencyCode}`,
   'Overseas jurisdiction code', 'Overseas jurisdiction', 'Submission reference',
   'Branch', 'Attachment', 'Recorded by', 'Recorded at',
 ];
@@ -49,7 +53,7 @@ const csvRowFor = (tx) => [
   FLOW_META[tx.transactionFlow]?.label ?? tx.transactionFlow ?? '',
   tx.transactionDate ?? '',
   // Fixed 2dp, no thousands separator — reads as currency but still parses as a number.
-  tx.amountNzd == null ? '' : Number(tx.amountNzd).toFixed(2),
+  tx.amount == null ? '' : Number(tx.amount).toFixed(2),
   tx.overseasJurisdiction ?? '',
   countryName(tx.overseasJurisdiction),
   tx.submissionReference ?? '',
@@ -73,6 +77,7 @@ export function InternationalFundTransactionRegisterPage() {
   const { showToast } = useToast();
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
+  const money = useCurrency();
   const [addOpen, setAddOpen] = useState(false);
   const [toDelete, setToDelete] = useState(null);
 
@@ -100,7 +105,7 @@ export function InternationalFundTransactionRegisterPage() {
    * so what you download is what you see. Built client-side from the loaded query data.
    */
   const exportCsv = () => {
-    const csv = buildCsv(CSV_HEADERS, rows.map(csvRowFor));
+    const csv = buildCsv(csvHeaders(money.code), rows.map(csvRowFor));
     const name = ['international-fund-transactions', slug(firm?.name), slug(branch?.name),
       new Date().toISOString().slice(0, 10)].filter(Boolean).join('-');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -162,7 +167,7 @@ export function InternationalFundTransactionRegisterPage() {
               <TableCell>Listing address</TableCell>
               <TableCell>Flow</TableCell>
               <TableCell>Date</TableCell>
-              <TableCell align="right">Amount (NZD&nbsp;$)</TableCell>
+              <TableCell align="right">Amount ({money.code}&nbsp;$)</TableCell>
               <TableCell>Overseas jurisdiction</TableCell>
               <TableCell>Submission ref.</TableCell>
               <TableCell align="right">File</TableCell>
@@ -200,7 +205,7 @@ export function InternationalFundTransactionRegisterPage() {
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{dateFmt(tx.transactionDate)}</TableCell>
                   <TableCell align="right"
                              sx={{ fontFamily: fonts.mono, whiteSpace: 'nowrap', color: tokens.ink }}>
-                    {amountFmt(tx.amountNzd)}
+                    {amountFmt(tx.amount)}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={1} alignItems="center">
@@ -257,7 +262,7 @@ export function InternationalFundTransactionRegisterPage() {
           <Typography sx={{ fontSize: '0.9rem', color: tokens.ink }}>
             {toDelete && (
               <>Delete the {FLOW_META[toDelete.transactionFlow]?.label.toLowerCase()} transfer of{' '}
-              <Box component="span" sx={{ fontWeight: 700 }}>NZD ${amountFmt(toDelete.amountNzd)}</Box>{' '}
+              <Box component="span" sx={{ fontWeight: 700 }}>{money.code} ${amountFmt(toDelete.amount)}</Box>{' '}
               for {toDelete.listingAddress}? This also removes any attached PDF and is recorded in the
               audit log. It can’t be undone.</>
             )}

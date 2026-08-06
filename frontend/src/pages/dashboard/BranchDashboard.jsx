@@ -11,17 +11,18 @@ import {
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { roleLabel } from '../../auth/roles.js';
-import { formatNZDCompact } from '../../utils/formatters.js';
+import { useCurrency } from '../../dashboard/useCurrency.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
 const byUpdated = (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt);
-const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValueNzd || 0), 0);
+const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValue || 0), 0);
 const withinDays = (iso, days) => iso && (Date.now() - new Date(iso)) / 86400000 <= days;
 
 export function BranchDashboard() {
   const dealsQ = useQuery({ queryKey: ['deals', 'firm', 'ALL'], queryFn: () => listDeals() });
   const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const deals = useScopedDeals(dealsQ.data);
+  const money = useCurrency();
 
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load your branch. Refresh to try again.</Alert>;
   if (dealsQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
@@ -44,7 +45,7 @@ export function BranchDashboard() {
         eyebrow="BRANCH · LIVE"
         value={inMotion}
         label={inMotion === 1 ? 'deal in motion' : 'deals in motion'}
-        caption={`${formatNZDCompact(sum([...submitted, ...underReview]))} moving through review`}
+        caption={`${money.formatCompact(sum([...submitted, ...underReview]))} moving through review`}
         action={
           <Box component={RouterLink} to="/firm/deals"
                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, bgcolor: '#fff', color: tokens.blue,

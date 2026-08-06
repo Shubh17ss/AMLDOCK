@@ -3,12 +3,14 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
 import { fonts } from '../theme/theme.js';
-import { formatNZD, timeAgo } from '../utils/formatters.js';
+import { timeAgo } from '../utils/formatters.js';
+import { useCurrency } from '../dashboard/useCurrency.js';
 
 const mono = { fontFamily: fonts.mono, fontSize: '0.8rem' };
 
 export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No deals yet.' }) {
   const navigate = useNavigate();
+  const money = useCurrency();
 
   if (deals.length === 0) {
     return (
@@ -26,7 +28,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
             <TableCell>Reference</TableCell>
             <TableCell>Status</TableCell>
             <TableCell>Type</TableCell>
-            <TableCell>Value (NZD)</TableCell>
+            <TableCell>Value ({money.code})</TableCell>
             {showFirm && <TableCell>Reporting entity</TableCell>}
             <TableCell>Branch</TableCell>
             <TableCell>Client</TableCell>
@@ -42,7 +44,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
               <TableCell sx={mono}>{d.reference ?? `#${d.id}`}</TableCell>
               <TableCell><DealStatusChip status={d.status} /></TableCell>
               <TableCell>{d.transactionType}</TableCell>
-              <TableCell sx={mono}>{formatNZD(d.transactionValueNzd)}</TableCell>
+              <TableCell sx={mono}>{money.format(d.transactionValue)}</TableCell>
               {showFirm && <TableCell>{d.firmName ?? '—'}</TableCell>}
               <TableCell>{d.branchName ?? '—'}</TableCell>
               <TableCell>{d.clientDisplayName ?? '—'}</TableCell>

@@ -1,19 +1,19 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Box, Button, Chip, Link, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Chip, Link, Paper, Stack, Typography } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutlined';
-import DoneIcon from '@mui/icons-material/DoneRounded';
+import PendingIcon from '@mui/icons-material/PendingOutlined';
 import PlaceIcon from '@mui/icons-material/PlaceOutlined';
 import EventIcon from '@mui/icons-material/EventOutlined';
 import SchoolIcon from '@mui/icons-material/SchoolOutlined';
-import { completeTrainingSession } from '../../api/training.js';
-import { useToast } from '../../components/ToastProvider.jsx';
+import BusinessIcon from '@mui/icons-material/BusinessOutlined';
 import { tokens, fonts } from '../../theme/theme.js';
 
 const dateFmt = (iso) =>
   iso ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
 
+// The session date has passed and it still hasn't been marked off.
 const isOverdue = (s) =>
-  Boolean(s.dueDate) && !s.myCompletedAt && new Date(s.dueDate) < new Date(new Date().toDateString());
+  Boolean(s.sessionDate) && !s.myCompletedAt
+  && new Date(s.sessionDate) < new Date(new Date().toDateString());
 
 /** One line of session metadata with a leading glyph. */
 function Meta({ icon, children }) {
@@ -27,24 +27,14 @@ function Meta({ icon, children }) {
 }
 
 /**
- * My Training › Sessions — instructor-led training the user attends and self-declares complete.
- * The sessions endpoint is role-aware, so this only ever receives their own assignments.
+ * My Training › Sessions — instructor-led training the user attends.
+ *
+ * Read-only by design: attendance is recorded by whoever ran the session, from Staff Training ›
+ * Sessions, so there is nothing to self-declare here. The page fetches with `mine`, so this only
+ * ever receives their own assignments, and for firm-level staff those can come from more than one
+ * branch — hence the branch on each card.
  */
 export function MySessionsTab({ sessions, isLoading, isError }) {
-  const qc = useQueryClient();
-  const { showToast } = useToast();
-
-  const completeMut = useMutation({
-    mutationFn: (s) => completeTrainingSession(s.id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['trainingSessions'] });
-      showToast({ severity: 'success', message: 'Training marked complete' });
-    },
-    onError: (e) => {
-      showToast({ severity: 'error', message: e.response?.data?.message || 'Could not save. Try again.' });
-    },
-  });
-
   return (
     <Stack spacing={2}>
       {isError && <Alert severity="error">Failed to load your sessions. Refresh to try again.</Alert>}
@@ -81,15 +71,22 @@ export function MySessionsTab({ sessions, isLoading, isError }) {
                 <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                   <Meta icon={<SchoolIcon />}>{s.providerName}</Meta>
                   <Meta icon={<PlaceIcon />}>{s.location}</Meta>
-                  <Meta icon={<EventIcon />}>
-                    {s.dueDate ? `Due ${dateFmt(s.dueDate)}` : null}
-                  </Meta>
+                  <Meta icon={<EventIcon />}>{dateFmt(s.sessionDate)}</Meta>
+                  <Meta icon={<BusinessIcon />}>{s.branchName}</Meta>
                 </Stack>
+
+                {s.description && (
+                  <Typography sx={{
+                    fontSize: '0.85rem', color: tokens.ink, whiteSpace: 'pre-wrap', mt: 1,
+                  }}>
+                    {s.description}
+                  </Typography>
+                )}
 
                 <Typography sx={{
                   fontFamily: fonts.mono, fontSize: '0.75rem', color: tokens.muted, mt: 1,
                 }}>
-                  {s.totalMinutes} min · {s.certifiedMinutes} certified
+                  {s.totalMinutes} min
                 </Typography>
 
                 {s.url && (
@@ -100,25 +97,26 @@ export function MySessionsTab({ sessions, isLoading, isError }) {
                 )}
               </Box>
 
+              {/* Status only — your compliance team records attendance, you don't. */}
               <Box sx={{ flexShrink: 0 }}>
                 {done ? (
                   <Chip
                     icon={<CheckCircleIcon sx={{ fontSize: 16, color: `${tokens.approved} !important` }} />}
-                    label={`Completed ${dateFmt(s.myCompletedAt)}`}
+                    label={`Attended ${dateFmt(s.myCompletedAt)}`}
                     sx={{
                       color: tokens.approved, backgroundColor: `${tokens.approved}14`,
                       fontWeight: 600, fontSize: '0.75rem',
                     }}
                   />
                 ) : (
-                  <Button
-                    variant="contained"
-                    startIcon={<DoneIcon />}
-                    disabled={completeMut.isPending}
-                    onClick={() => completeMut.mutate(s)}
-                  >
-                    Mark complete
-                  </Button>
+                  <Chip
+                    icon={<PendingIcon sx={{ fontSize: 16, color: `${tokens.review} !important` }} />}
+                    label="Attendance not recorded"
+                    sx={{
+                      color: tokens.review, backgroundColor: `${tokens.review}14`,
+                      fontWeight: 600, fontSize: '0.75rem',
+                    }}
+                  />
                 )}
               </Box>
             </Stack>

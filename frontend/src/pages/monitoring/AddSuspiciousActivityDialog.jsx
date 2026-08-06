@@ -10,6 +10,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { createSuspiciousActivityWithDocument } from '../../api/suspiciousActivities.js';
 import { RED_FLAGS } from '../../data/redFlags.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
+import { useCurrency } from '../../dashboard/useCurrency.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
 
@@ -18,7 +19,7 @@ const PDF_MIME = 'application/pdf';
 
 const emptyForm = () => ({
   suspicionType: 'ACTIVITY',
-  amountNzd: '',
+  amount: '',
   name: '',
   dateOfSuspicion: '',
   redFlag: '',
@@ -45,6 +46,7 @@ export function AddSuspiciousActivityDialog({ open, onClose }) {
   const qc = useQueryClient();
   const { showToast } = useToast();
   const { firm, branch } = useDashboardScope();
+  const money = useCurrency();
   const fileInputRef = useRef(null);
   const slideRef = useRef(null);
   const [tab, setTab] = useState('details');
@@ -74,7 +76,7 @@ export function AddSuspiciousActivityDialog({ open, onClose }) {
     // tags it branch-specific, otherwise it's firm-wide.
     mutationFn: () => createSuspiciousActivityWithDocument({
       suspicionType: form.suspicionType,
-      amountNzd: isTransaction ? form.amountNzd : null,
+      amount: isTransaction ? form.amount : null,
       name: form.name.trim(),
       dateOfSuspicion: form.dateOfSuspicion,
       redFlag: form.redFlag,
@@ -115,7 +117,7 @@ export function AddSuspiciousActivityDialog({ open, onClose }) {
     && form.dateOfSuspicion
     && form.redFlag
     && form.description.trim()
-    && (!isTransaction || (form.amountNzd !== '' && Number(form.amountNzd) >= 0));
+    && (!isTransaction || (form.amount !== '' && Number(form.amount) >= 0));
 
   const submit = (e) => {
     e.preventDefault();
@@ -180,10 +182,10 @@ export function AddSuspiciousActivityDialog({ open, onClose }) {
                   {/* An amount only makes sense for a transaction. */}
                   <Collapse in={isTransaction} unmountOnExit>
                     <TextField
-                      label="Amount (NZD $)"
+                      label={`Amount (${money.label})`}
                       type="number"
-                      value={form.amountNzd}
-                      onChange={ch('amountNzd')}
+                      value={form.amount}
+                      onChange={ch('amount')}
                       inputProps={{ min: 0, step: '0.01' }}
                       required
                       fullWidth

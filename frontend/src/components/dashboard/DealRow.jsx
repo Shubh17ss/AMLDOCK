@@ -2,10 +2,11 @@ import { Box, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { tokens, fonts } from '../../theme/theme.js';
 import { DealStatusChip } from '../DealStatusChip.jsx';
-import { formatNZDCompact } from '../../utils/formatters.js';
+import { useCurrency } from '../../dashboard/useCurrency.js';
 
 /** Compact deal row for dashboard list tiles: mono reference + address, status + value. */
 export function DealRow({ deal, to }) {
+  const money = useCurrency();
   return (
     <Box
       component={RouterLink}
@@ -30,7 +31,7 @@ export function DealRow({ deal, to }) {
       <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
         <DealStatusChip status={deal.status} />
         <Typography sx={{ mt: 0.4, fontFamily: fonts.mono, fontSize: '0.72rem', color: tokens.muted }}>
-          {formatNZDCompact(deal.transactionValueNzd)}
+          {money.formatCompact(deal.transactionValue)}
         </Typography>
       </Box>
     </Box>

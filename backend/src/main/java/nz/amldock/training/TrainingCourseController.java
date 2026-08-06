@@ -3,6 +3,8 @@ package nz.amldock.training;
 import jakarta.validation.Valid;
 import nz.amldock.document.dto.DownloadUrlResponse;
 import nz.amldock.document.dto.UploadUrlResponse;
+import nz.amldock.training.dto.AnswerFeedbackDto;
+import nz.amldock.training.dto.CheckAnswerRequest;
 import nz.amldock.training.dto.CourseAttemptResultDto;
 import nz.amldock.training.dto.CreateTrainingCourseRequest;
 import nz.amldock.training.dto.SubmitCourseAttemptRequest;
@@ -41,11 +43,17 @@ public class TrainingCourseController {
         this.courses = courses;
     }
 
-    /** Role-aware: managers get the catalogue, staff get their own assignments. */
+    /**
+     * Role-aware: managers get the catalogue, staff get their own assignments.
+     *
+     * {@code mine=true} is the My Training view — the caller's own assignments whatever their
+     * role, across every branch, and without the answer key.
+     */
     @GetMapping
     public List<TrainingCourseDto> list(@RequestParam(required = false) Long firmId,
-                                        @RequestParam(required = false) Long branchId) {
-        return courses.list(firmId, branchId);
+                                        @RequestParam(required = false) Long branchId,
+                                        @RequestParam(defaultValue = "false") boolean mine) {
+        return courses.list(firmId, branchId, mine);
     }
 
     @PostMapping
@@ -78,6 +86,20 @@ public class TrainingCourseController {
     public CourseAttemptResultDto submitAttempt(@PathVariable Long id,
                                                 @Valid @RequestBody SubmitCourseAttemptRequest req) {
         return courses.submitAttempt(id, req);
+    }
+
+    /**
+     * Mark one question as the taker works through it, and show them the right answer.
+     *
+     * Same gate as the attempt: the service requires the caller to be an assignee. This is the
+     * only route that returns any part of the answer key, and only for a question already
+     * answered — the course payload still nulls every {@code correct} flag.
+     */
+    @PostMapping("/{id}/questions/{questionId}/check")
+    public AnswerFeedbackDto checkAnswer(@PathVariable Long id,
+                                         @PathVariable Long questionId,
+                                         @RequestBody CheckAnswerRequest req) {
+        return courses.checkAnswer(id, questionId, req);
     }
 
     /* ---------- content files ---------- */

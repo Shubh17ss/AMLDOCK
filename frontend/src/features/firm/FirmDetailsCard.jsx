@@ -5,10 +5,12 @@ import {
   Stack, Switch, TextField, Typography,
 } from '@mui/material';
 import { updateFirm } from '../../api/firms.js';
+import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
 
 /**
- * Firm metadata form. `editableIdentity` (ROOT) unlocks firm name, NZBN/ABN and the active flag;
- * otherwise those are read-only and only the contact blocks + branch count are editable.
+ * Firm metadata form. `editableIdentity` (ROOT) unlocks firm name, NZBN/ABN, country and the
+ * active flag; otherwise those are read-only and only the contact blocks + branch count are
+ * editable.
  */
 export function FirmDetailsCard({ firm, editableIdentity = false }) {
   const qc = useQueryClient();
@@ -24,15 +26,16 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
         liaisonName: form.liaisonName,
         liaisonEmail: form.liaisonEmail,
         liaisonContactNumber: form.liaisonContactNumber,
-        seniorManagerName: form.seniorManagerName,
-        seniorManagerEmail: form.seniorManagerEmail,
-        seniorManagerContactNumber: form.seniorManagerContactNumber,
+        complianceOfficerName: form.complianceOfficerName,
+        complianceOfficerEmail: form.complianceOfficerEmail,
+        complianceOfficerContactNumber: form.complianceOfficerContactNumber,
         numberOfBranches: form.numberOfBranches === '' || form.numberOfBranches == null
           ? null : Number(form.numberOfBranches),
       };
       if (editableIdentity) {
         payload.name = form.name;
         payload.nzbn = form.nzbn;
+        payload.country = form.country;
         payload.active = form.active;
       }
       return updateFirm(firm.id, payload);
@@ -59,6 +62,12 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
             <TextField label="Firm name" value={form.name ?? ''} onChange={ch('name')}
                        InputProps={{ readOnly: !editableIdentity }} disabled={!editableIdentity}
                        helperText={editableIdentity ? undefined : "Firm name can't be changed."} />
+            <FirmCountrySelect
+              value={form.country ?? ''}
+              onChange={(code) => { setSaved(false); setForm((f) => ({ ...f, country: code })); }}
+              disabled={!editableIdentity}
+              helperText={editableIdentity ? undefined : "Country can't be changed."}
+            />
             <TextField label="NZBN/ABN" value={form.nzbn ?? ''} onChange={ch('nzbn')}
                        InputProps={{ readOnly: !editableIdentity }} disabled={!editableIdentity}
                        helperText={editableIdentity ? undefined : "NZBN/ABN can't be changed."} />
@@ -75,10 +84,10 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
             <TextField label="Liaison email" type="email" value={form.liaisonEmail ?? ''} onChange={ch('liaisonEmail')} />
             <TextField label="Liaison contact number" value={form.liaisonContactNumber ?? ''} onChange={ch('liaisonContactNumber')} />
 
-            <Typography variant="subtitle2" color="text.secondary">Senior manager</Typography>
-            <TextField label="Senior manager name" value={form.seniorManagerName ?? ''} onChange={ch('seniorManagerName')} />
-            <TextField label="Senior manager email" type="email" value={form.seniorManagerEmail ?? ''} onChange={ch('seniorManagerEmail')} />
-            <TextField label="Senior manager contact number" value={form.seniorManagerContactNumber ?? ''} onChange={ch('seniorManagerContactNumber')} />
+            <Typography variant="subtitle2" color="text.secondary">Compliance officer</Typography>
+            <TextField label="Compliance officer name" value={form.complianceOfficerName ?? ''} onChange={ch('complianceOfficerName')} />
+            <TextField label="Compliance officer email" type="email" value={form.complianceOfficerEmail ?? ''} onChange={ch('complianceOfficerEmail')} />
+            <TextField label="Compliance officer contact number" value={form.complianceOfficerContactNumber ?? ''} onChange={ch('complianceOfficerContactNumber')} />
 
             <TextField label="Number of branches" type="number" value={form.numberOfBranches ?? ''}
                        onChange={ch('numberOfBranches')} inputProps={{ min: 0, max: 100 }} />

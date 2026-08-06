@@ -8,14 +8,18 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForwardRounded';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleRounded';
 import CancelIcon from '@mui/icons-material/CancelRounded';
-import { submitCourseAttempt } from '../../api/training.js';
+import { submitCourseAttempt, checkCourseAnswer } from '../../api/training.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
 /**
- * Sit a course assessment, one question per slide.
+ * Sit a course assessment, one question per slide, with the answer shown after each one.
  *
- * The options arrive with their `correct` flag nulled out — the answer key never reaches the
- * browser — so submitting posts the picked ids and the server returns the mark.
+ * The options arrive with their `correct` flag nulled out — the key is never in the payload — so
+ * every question is marked by the server: `checkCourseAnswer` for the feedback shown here, and
+ * `submitCourseAttempt` at the end for the score that actually counts.
+ *
+ * Checking locks the question. Without that, being shown the answer and then being allowed to
+ * change the selection would make the final score meaningless.
  */
 export function CoursePlayerDialog({ course, onClose }) {
   const qc = useQueryClient();
@@ -25,6 +29,8 @@ export function CoursePlayerDialog({ course, onClose }) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState('next');
   const [answers, setAnswers] = useState({});
+  // { [questionId]: { correct, correctOptionIds } } — a question is locked once it has an entry.
+  const [feedback, setFeedback] = useState({});
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const slideRef = useRef(null);
@@ -35,12 +41,27 @@ export function CoursePlayerDialog({ course, onClose }) {
       setIndex(0);
       setDirection('next');
       setAnswers({});
+      setFeedback({});
       setResult(null);
       setError(null);
     }
   }, [open, course?.id]);
 
-  const mut = useMutation({
+  const question = questions[index];
+  const picked = answers[question?.id] ?? [];
+  const verdict = feedback[question?.id];
+  const locked = Boolean(verdict);
+
+  const checkMut = useMutation({
+    mutationFn: () => checkCourseAnswer(course.id, question.id, picked),
+    onSuccess: (data) => {
+      setError(null);
+      setFeedback((f) => ({ ...f, [question.id]: data }));
+    },
+    onError: (e) => setError(e.response?.data?.message || 'Could not check that answer. Try again.'),
+  });
+
+  const submitMut = useMutation({
     mutationFn: () => submitCourseAttempt(course.id, questions.map((q) => ({
       questionId: q.id,
       selectedOptionIds: answers[q.id] ?? [],
@@ -49,21 +70,24 @@ export function CoursePlayerDialog({ course, onClose }) {
     onError: (e) => setError(e.response?.data?.message || 'Could not submit. Try again.'),
   });
 
+  const busy = checkMut.isPending || submitMut.isPending;
+
   const finish = () => {
-    // Only refresh the list once we're done — mid-quiz the card behind shouldn't move.
-    if (result) qc.invalidateQueries({ queryKey: ['trainingCourses'] });
+    // Only refresh the lists once we're done — mid-quiz the card behind shouldn't move.
+    if (result) {
+      qc.invalidateQueries({ queryKey: ['myTrainingCourses'] });
+      qc.invalidateQueries({ queryKey: ['trainingCourses'] });
+    }
     onClose();
   };
 
   if (!open) return null;
 
-  const question = questions[index];
-  const picked = answers[question?.id] ?? [];
   const single = question?.questionType === 'SINGLE_CHOICE';
   const last = index === questions.length - 1;
   // Scoring a skipped question as wrong without saying so would be a trap, so an answer is
-  // required before moving on.
-  const canAdvance = picked.length > 0;
+  // required before it can be checked.
+  const canCheck = picked.length > 0;
 
   const setPicked = (optionId, checked) => setAnswers((a) => ({
     ...a,
@@ -75,8 +99,31 @@ export function CoursePlayerDialog({ course, onClose }) {
   }));
 
   const go = (delta) => {
+    setError(null);
     setDirection(delta > 0 ? 'next' : 'prev');
     setIndex((i) => i + delta);
+  };
+
+  // Before checking: just selected or not. After: right, wrongly picked, or neither — an option
+  // the taker missed still shows as correct, which is the whole point of the feedback.
+  const stateOf = (o) => {
+    if (!verdict) return picked.includes(o.id) ? 'selected' : 'idle';
+    if (verdict.correctOptionIds.includes(o.id)) return 'correct';
+    if (picked.includes(o.id)) return 'wrong';
+    return 'idle';
+  };
+
+  const optionLabel = (o) => {
+    const state = stateOf(o);
+    if (state !== 'correct' && state !== 'wrong') return o.label;
+    return (
+      <Stack direction="row" spacing={0.75} alignItems="center">
+        <span>{o.label}</span>
+        {state === 'correct'
+          ? <CheckCircleIcon sx={{ fontSize: 16, color: tokens.approved }} />
+          : <CancelIcon sx={{ fontSize: 16, color: tokens.rejected }} />}
+      </Stack>
+    );
   };
 
   return (
@@ -171,9 +218,10 @@ export function CoursePlayerDialog({ course, onClose }) {
                       <FormControlLabel
                         key={o.id}
                         value={o.id}
+                        disabled={locked}
                         control={<Radio />}
-                        label={o.label}
-                        sx={optionSx(picked.includes(o.id))}
+                        label={optionLabel(o)}
+                        sx={optionSx(stateOf(o))}
                       />
                     ))}
                   </RadioGroup>
@@ -182,16 +230,42 @@ export function CoursePlayerDialog({ course, onClose }) {
                     {question.options.map((o) => (
                       <FormControlLabel
                         key={o.id}
+                        disabled={locked}
                         control={(
                           <Checkbox
                             checked={picked.includes(o.id)}
                             onChange={(e) => setPicked(o.id, e.target.checked)}
                           />
                         )}
-                        label={o.label}
-                        sx={optionSx(picked.includes(o.id))}
+                        label={optionLabel(o)}
+                        sx={optionSx(stateOf(o))}
                       />
                     ))}
+                  </Stack>
+                )}
+
+                {verdict && (
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="flex-start"
+                    sx={{
+                      mt: 1.5, px: 1.75, py: 1.25, borderRadius: '12px',
+                      backgroundColor: `${verdict.correct ? tokens.approved : tokens.rejected}12`,
+                    }}
+                  >
+                    {verdict.correct
+                      ? <CheckCircleIcon sx={{ fontSize: 18, color: tokens.approved }} />
+                      : <CancelIcon sx={{ fontSize: 18, color: tokens.rejected }} />}
+                    <Typography sx={{
+                      fontSize: '0.85rem', fontWeight: 600,
+                      color: verdict.correct ? tokens.approved : tokens.rejected,
+                    }}>
+                      {verdict.correct
+                        ? 'Correct.'
+                        : `Not quite — the correct ${verdict.correctOptionIds.length === 1
+                          ? 'answer is' : 'answers are'} highlighted above.`}
+                    </Typography>
                   </Stack>
                 )}
               </Box>
@@ -201,27 +275,36 @@ export function CoursePlayerDialog({ course, onClose }) {
           </DialogContent>
 
           <DialogActions>
-            <Button onClick={finish} disabled={mut.isPending} sx={{ mr: 'auto' }}>Exit</Button>
+            <Button onClick={finish} disabled={busy} sx={{ mr: 'auto' }}>Exit</Button>
             <Button
               startIcon={<ArrowBackIcon />}
-              disabled={index === 0 || mut.isPending}
+              disabled={index === 0 || busy}
               onClick={() => go(-1)}
             >
               Back
             </Button>
-            {last ? (
+            {/* Check first, then move on — the answer has to be committed before it's revealed. */}
+            {!locked ? (
               <Button
                 variant="contained"
-                disabled={!canAdvance || mut.isPending}
-                onClick={() => mut.mutate()}
+                disabled={!canCheck || busy}
+                onClick={() => checkMut.mutate()}
               >
-                {mut.isPending ? 'Submitting…' : 'Submit'}
+                {checkMut.isPending ? 'Checking…' : 'Check answer'}
+              </Button>
+            ) : last ? (
+              <Button
+                variant="contained"
+                disabled={busy}
+                onClick={() => submitMut.mutate()}
+              >
+                {submitMut.isPending ? 'Submitting…' : 'Submit'}
               </Button>
             ) : (
               <Button
                 variant="contained"
                 endIcon={<ArrowForwardIcon />}
-                disabled={!canAdvance}
+                disabled={busy}
                 onClick={() => go(1)}
               >
                 Next
@@ -234,14 +317,27 @@ export function CoursePlayerDialog({ course, onClose }) {
   );
 }
 
-const optionSx = (selected) => ({
-  m: 0,
-  mb: 1,
-  px: 1.5,
-  py: 0.75,
-  borderRadius: '12px',
-  border: `1px solid ${selected ? tokens.blue : tokens.hairline}`,
-  backgroundColor: selected ? tokens.blueWash : 'transparent',
-  transition: 'background-color 0.15s ease, border-color 0.15s ease',
-  '&:hover': { backgroundColor: selected ? tokens.blueWash : '#F5F8FC' },
-});
+const OPTION_COLOURS = {
+  selected: { border: tokens.blue, background: tokens.blueWash },
+  correct: { border: tokens.approved, background: `${tokens.approved}14` },
+  wrong: { border: tokens.rejected, background: `${tokens.rejected}14` },
+  idle: { border: tokens.hairline, background: 'transparent' },
+};
+
+const optionSx = (state) => {
+  const { border, background } = OPTION_COLOURS[state] ?? OPTION_COLOURS.idle;
+  return {
+    m: 0,
+    mb: 1,
+    px: 1.5,
+    py: 0.75,
+    borderRadius: '12px',
+    border: `1px solid ${border}`,
+    backgroundColor: background,
+    transition: 'background-color 0.15s ease, border-color 0.15s ease',
+    '&:hover': { backgroundColor: state === 'idle' ? '#F5F8FC' : background },
+    // A locked question is still readable — the point is to look at the answer.
+    '&.Mui-disabled': { opacity: 1 },
+    '& .MuiFormControlLabel-label.Mui-disabled': { color: tokens.ink },
+  };
+};

@@ -18,6 +18,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor } from '../auth/roles.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
+import { currencyFor } from '../utils/formatters.js';
 
 // Deal-status notifications sit top-centre so they read as a prominent, page-level result
 // rather than an incidental corner toast.
@@ -33,7 +34,7 @@ const EMPTY_FORM = {
   firmId: '',
   firmBranchId: '',
   transactionType: 'PURCHASE',
-  transactionValueNzd: '',
+  transactionValue: '',
   pocName: '',
   pocRole: '',
   pocPhone: '',
@@ -65,6 +66,13 @@ export function NewDealWizardPage() {
 
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const activeFirms = useMemo(() => (firmsQ.data ?? []).filter((f) => f.active), [firmsQ.data]);
+
+  // The wizard picks its own reporting entity, so the currency follows that choice rather than
+  // the sidebar scope — the deal is filed against this firm, whatever is selected elsewhere.
+  const currencyCode = useMemo(
+    () => currencyFor(activeFirms.find((f) => f.id === form.firmId)?.country).code,
+    [activeFirms, form.firmId],
+  );
 
   const branchesQ = useQuery({
     queryKey: ['firms', form.firmId, 'branches'],
@@ -116,7 +124,7 @@ export function NewDealWizardPage() {
   const buildPayload = () => ({
     firmBranchId: form.firmBranchId,
     transactionType: form.transactionType,
-    transactionValueNzd: form.transactionValueNzd ? Number(form.transactionValueNzd) : null,
+    transactionValue: form.transactionValue ? Number(form.transactionValue) : null,
     pocName: form.pocName || null,
     pocRole: form.pocRole || null,
     pocPhone: form.pocPhone || null,
@@ -261,8 +269,8 @@ export function NewDealWizardPage() {
                     <MenuItem value="SALE">Sale</MenuItem>
                   </Select>
                 </FormControl>
-                <TextField label="Transaction value (NZD)" type="number"
-                           value={form.transactionValueNzd} onChange={setField('transactionValueNzd')} fullWidth />
+                <TextField label={`Transaction value (${currencyCode})`} type="number"
+                           value={form.transactionValue} onChange={setField('transactionValue')} fullWidth />
               </Stack>
 
               <Typography variant="subtitle1" sx={{ mt: 1 }}>Point of contact</Typography>
@@ -358,7 +366,7 @@ export function NewDealWizardPage() {
               <ReviewBlock title="Entity & branch">
                 <ReviewRow label="Reporting entity" value={activeFirms.find((f) => f.id === form.firmId)?.name} />
                 <ReviewRow label="Branch" value={activeBranches.find((b) => b.id === form.firmBranchId)?.name} />
-                <ReviewRow label="Transaction" value={`${form.transactionType}${form.transactionValueNzd ? ` · NZD ${form.transactionValueNzd}` : ''}`} />
+                <ReviewRow label="Transaction" value={`${form.transactionType}${form.transactionValue ? ` · ${currencyCode} ${form.transactionValue}` : ''}`} />
                 <ReviewRow label="POC" value={[form.pocName, form.pocRole, form.pocEmail].filter(Boolean).join(' · ')} />
               </ReviewBlock>
               <ReviewBlock title="Property">

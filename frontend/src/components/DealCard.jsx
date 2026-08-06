@@ -2,7 +2,8 @@ import { Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
 import { tokens, shadows } from '../theme/theme.js';
-import { formatNZD, timeAgo } from '../utils/formatters.js';
+import { timeAgo } from '../utils/formatters.js';
+import { useCurrency } from '../dashboard/useCurrency.js';
 
 const NEU_BASE   = tokens.tile;
 const NEU_FG     = tokens.ink;
@@ -11,10 +12,9 @@ const NEU_ACCENT = tokens.blue;
 const EXT        = shadows.md;
 const EXT_SM     = shadows.sm;
 
-const NZD = { format: formatNZD };
-
 export function DealCard({ deal, onClaim, onReview, claimPending }) {
   const navigate = useNavigate();
+  const money = useCurrency();
 
   const handleCardClick = () => {
     if (deal.status === 'UNDER_REVIEW' && onReview) {
@@ -80,8 +80,9 @@ export function DealCard({ deal, onClaim, onReview, claimPending }) {
 
       {/* Row 4: meta chips */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: onClaim || onReview ? 2 : 0 }}>
-        {deal.transactionValueNzd != null && (
-          <MetaPill>{NZD.format(deal.transactionValueNzd)}</MetaPill>
+        {/* Standalone pill with no header to name the currency, so it carries the code. */}
+        {deal.transactionValue != null && (
+          <MetaPill>{money.formatWithCode(deal.transactionValue)}</MetaPill>
         )}
         {deal.transactionType && (
           <MetaPill>{deal.transactionType}</MetaPill>

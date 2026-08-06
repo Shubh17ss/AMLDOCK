@@ -14,7 +14,7 @@ public record CreateFundTransactionRequest(
         @NotBlank String listingAddress,
         @NotNull TransactionFlow transactionFlow,
         @NotNull LocalDate transactionDate,
-        @NotNull @PositiveOrZero BigDecimal amountNzd,
+        @NotNull @PositiveOrZero BigDecimal amount,
         @NotBlank @Size(min = 2, max = 2) String overseasJurisdiction,
         String submissionReference,
         Long realEstateFirmId,

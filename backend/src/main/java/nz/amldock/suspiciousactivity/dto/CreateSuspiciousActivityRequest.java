@@ -12,13 +12,13 @@ import java.time.LocalDate;
 /**
  * A new Suspicious Activity Register entry.
  *
- * {@code amountNzd} is only meaningful when {@code suspicionType} is TRANSACTION — the service
+ * {@code amount} is only meaningful when {@code suspicionType} is TRANSACTION — the service
  * requires it there and nulls it out for an ACTIVITY, a cross-field rule Bean Validation can't
  * express on its own.
  */
 public record CreateSuspiciousActivityRequest(
         @NotNull SuspicionType suspicionType,
-        @PositiveOrZero BigDecimal amountNzd,
+        @PositiveOrZero BigDecimal amount,
         @NotBlank String name,
         @NotNull LocalDate dateOfSuspicion,
         @NotNull RedFlag redFlag,

@@ -16,13 +16,13 @@ import java.util.List;
 public record TrainingSessionDto(
         Long id,
         String name,
+        String description,
         String location,
         String url,
         Long trainingProviderId,
         String providerName,
-        LocalDate dueDate,
+        LocalDate sessionDate,
         Integer totalMinutes,
-        Integer certifiedMinutes,
         Long realEstateFirmId,
         Long firmBranchId,
         String branchName,
@@ -44,9 +44,9 @@ public record TrainingSessionDto(
                                           boolean assignedToMe,
                                           Instant myCompletedAt) {
         return new TrainingSessionDto(
-                s.getId(), s.getName(), s.getLocation(), s.getUrl(),
-                s.getTrainingProviderId(), providerName, s.getDueDate(),
-                s.getTotalMinutes(), s.getCertifiedMinutes(),
+                s.getId(), s.getName(), s.getDescription(), s.getLocation(), s.getUrl(),
+                s.getTrainingProviderId(), providerName, s.getSessionDate(),
+                s.getTotalMinutes(),
                 s.getRealEstateFirmId(), s.getFirmBranchId(), branchName,
                 createdByEmail, s.getCreatedAt(),
                 attendees, assignedCount, completedCount, assignedToMe, myCompletedAt);

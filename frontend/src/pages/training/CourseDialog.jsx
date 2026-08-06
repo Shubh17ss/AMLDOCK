@@ -222,6 +222,7 @@ export function CourseDialog({ mode, open: openProp, target, onClose }) {
                 onChange={(ids) => setForm((f) => ({ ...f, assigneeUserIds: ids }))}
                 firmId={firm?.id}
                 branchId={branch?.id}
+                branchName={branch?.name}
               />
               {isEdit && (
                 <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, mt: 1.5 }}>

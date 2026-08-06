@@ -48,7 +48,7 @@ export function ScopeSelector({ stacked = false }) {
     if (initialized || !user) return;
     if (isRoot) { setInitialized(true); return; }              // default: all firms / all branches
     if (!firmQ.data) return;                                    // wait for the firm name
-    const firmObj = { id: firmQ.data.id, name: firmQ.data.name };
+    const firmObj = { id: firmQ.data.id, name: firmQ.data.name, country: firmQ.data.country };
     if (branchLevel) {
       const b = (branchesQ.data ?? []).find((x) => x.id === user.firmBranchId);
       if (user.firmBranchId && !b) return;                      // wait for branch name
@@ -61,9 +61,11 @@ export function ScopeSelector({ stacked = false }) {
     setInitialized(true);
   }, [initialized, user, isRoot, branchLevel, firmQ.data, branchesQ.data, setFirm, setBranch, setInitialized]);
 
+  // `country` rides along because it decides the currency every amount in the app is shown in
+  // (useCurrency). Without it the scope object couldn't answer "NZD or AUD?".
   const onFirmChange = (e) => {
     const f = activeFirms.find((x) => x.id === e.target.value);
-    setFirm(f ? { id: f.id, name: f.name } : null);
+    setFirm(f ? { id: f.id, name: f.name, country: f.country } : null);
     setBranch(null);
   };
   const onBranchChange = (e) => {

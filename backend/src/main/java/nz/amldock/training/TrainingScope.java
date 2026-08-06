@@ -45,13 +45,17 @@ final class TrainingScope {
     }
 
     /**
-     * Who may be assigned training: branch-level staff (sales manager, agent, agent PA, branch
-     * admin) sitting in this record's own branch. Firm-level compliance staff run training and
-     * are never assigned to it.
+     * Who may be assigned training, across two tiers of the same firm:
+     *   branch-level staff (sales manager, agent, agent PA, branch admin) sitting in this
+     *     record's own branch;
+     *   firm-level staff (compliance officer, senior manager), who are branchless and oversee
+     *     every branch — they run training and also have their own obligations to meet.
+     *
+     * ROOT is a platform account with no firm, so it never holds an assignment.
      *
      * Shared by sessions and courses so the rule can't drift between them. Never trust the
-     * client's list — {@code GET /api/users?branchId=} deliberately also returns branchless
-     * firm-level staff, which is exactly what must be rejected here.
+     * client's list: {@code GET /api/users?branchId=} returns branch staff *and* the firm's
+     * branchless firm-level staff, and neither tier is checked anywhere else.
      */
     static void assertAssignable(UserRepository users, Long firmId, Long branchId,
                                  Collection<Long> userIds) {
@@ -64,13 +68,17 @@ final class TrainingScope {
             if (u == null) {
                 throw new BadRequestException("User " + userId + " not found");
             }
-            if (!u.getRole().isBranchLevel()) {
+            Role role = u.getRole();
+            if (!role.isBranchLevel() && !role.isFirmLevel()) {
                 throw new BadRequestException(
-                        u.getEmail() + " cannot be assigned — training is for branch staff only");
+                        u.getEmail() + " cannot be assigned training");
             }
             boolean sameFirm = firmId != null && firmId.equals(u.getRealEstateFirmId());
-            boolean sameBranch = branchId != null && branchId.equals(u.getFirmBranchId());
-            if (!sameFirm || !sameBranch) {
+            if (!sameFirm) {
+                throw new BadRequestException(u.getEmail() + " is not in this reporting entity");
+            }
+            // Only branch staff are pinned to a branch; firm-level staff have none by design.
+            if (role.isBranchLevel() && !(branchId != null && branchId.equals(u.getFirmBranchId()))) {
                 throw new BadRequestException(u.getEmail() + " is not in this branch");
             }
         }

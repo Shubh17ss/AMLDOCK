@@ -16,12 +16,12 @@ import { tokens } from '../../theme/theme.js';
 
 const emptyForm = () => ({
   name: '',
+  description: '',
   location: '',
   url: '',
   trainingProviderId: '',
-  dueDate: '',
+  sessionDate: '',
   totalMinutes: '',
-  certifiedMinutes: '',
   assigneeUserIds: [],
 });
 
@@ -59,12 +59,12 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
     if (isEdit && target) {
       setForm({
         name: target.name ?? '',
+        description: target.description ?? '',
         location: target.location ?? '',
         url: target.url ?? '',
         trainingProviderId: target.trainingProviderId ?? '',
-        dueDate: target.dueDate ?? '',
+        sessionDate: target.sessionDate ?? '',
         totalMinutes: target.totalMinutes ?? '',
-        certifiedMinutes: target.certifiedMinutes ?? '',
         assigneeUserIds: (target.attendees ?? []).map((a) => a.userId),
       });
       setTab('details');
@@ -83,12 +83,12 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
     mutationFn: () => {
       const payload = {
         name: form.name.trim(),
+        description: form.description.trim(),
         location: form.location.trim(),
         url: form.url.trim(),
         trainingProviderId: form.trainingProviderId,
-        dueDate: form.dueDate,
+        sessionDate: form.sessionDate,
         totalMinutes: form.totalMinutes,
-        certifiedMinutes: form.certifiedMinutes,
         assigneeUserIds: form.assigneeUserIds,
       };
       return isEdit
@@ -106,17 +106,12 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
   const close = () => { if (!mut.isPending) onClose(); };
 
   const total = Number(form.totalMinutes);
-  const certified = Number(form.certifiedMinutes);
-  // Certified minutes are the share of the total that counts towards certification, so they
-  // can never exceed it. The server enforces the same rule.
-  const minutesInvalid = form.totalMinutes !== '' && form.certifiedMinutes !== '' && certified > total;
 
   const submittable = form.name.trim()
     && form.location.trim()
     && form.trainingProviderId
-    && form.totalMinutes !== '' && total >= 0
-    && form.certifiedMinutes !== '' && certified >= 0
-    && !minutesInvalid;
+    && form.sessionDate
+    && form.totalMinutes !== '' && total >= 0;
 
   const submit = (e) => {
     e.preventDefault();
@@ -160,6 +155,15 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
                 autoFocus
               />
               <TextField
+                label="Description"
+                value={form.description}
+                onChange={ch('description')}
+                placeholder="Optional — what the session covers"
+                multiline
+                minRows={3}
+                fullWidth
+              />
+              <TextField
                 label="Location"
                 value={form.location}
                 onChange={ch('location')}
@@ -196,12 +200,13 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
-                  label="Due"
+                  label="Date"
                   type="date"
-                  value={form.dueDate}
-                  onChange={ch('dueDate')}
+                  value={form.sessionDate}
+                  onChange={ch('sessionDate')}
                   InputLabelProps={{ shrink: true }}
-                  helperText="Optional"
+                  helperText="The day the session runs"
+                  required
                   fullWidth
                 />
                 <TextField
@@ -211,17 +216,6 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
                   onChange={ch('totalMinutes')}
                   inputProps={{ min: 0, step: 1 }}
                   helperText=" "
-                  required
-                  fullWidth
-                />
-                <TextField
-                  label="Certified minutes"
-                  type="number"
-                  value={form.certifiedMinutes}
-                  onChange={ch('certifiedMinutes')}
-                  inputProps={{ min: 0, step: 1 }}
-                  error={minutesInvalid}
-                  helperText={minutesInvalid ? 'Cannot exceed total minutes' : ' '}
                   required
                   fullWidth
                 />
@@ -236,6 +230,7 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
                 onChange={(ids) => setForm((f) => ({ ...f, assigneeUserIds: ids }))}
                 firmId={firm?.id}
                 branchId={branch?.id}
+                branchName={branch?.name}
               />
               {isEdit && (
                 <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, mt: 1.5 }}>

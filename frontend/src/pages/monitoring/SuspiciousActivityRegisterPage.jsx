@@ -18,6 +18,7 @@ import { AddSuspiciousActivityDialog } from './AddSuspiciousActivityDialog.jsx';
 import { redFlagLabel } from '../../data/redFlags.js';
 import { buildCsv } from '../../utils/csv.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
+import { useCurrency } from '../../dashboard/useCurrency.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { canDelete } from '../../auth/roles.js';
@@ -37,8 +38,11 @@ const TYPE_META = {
 
 // CSV export columns. Dates stay ISO and amounts plain 2dp so the file drops straight into a
 // spreadsheet; the red flag is exported as both the stored code and its label.
-const CSV_HEADERS = [
-  'Type', 'Name', 'Date of suspicion', 'Red flag code', 'Red flag', 'Amount NZD',
+//
+// The amount column names the entity's own currency, so a downloaded file is unambiguous once
+// it's away from the screen that produced it.
+const csvHeaders = (currencyCode) => [
+  'Type', 'Name', 'Date of suspicion', 'Red flag code', 'Red flag', `Amount ${currencyCode}`,
   'Reference', 'Description', 'Action taken', 'Branch', 'Attachment', 'Recorded by', 'Recorded at',
 ];
 
@@ -48,7 +52,7 @@ const csvRowFor = (sa) => [
   sa.dateOfSuspicion ?? '',
   sa.redFlag ?? '',
   redFlagLabel(sa.redFlag),
-  sa.amountNzd == null ? '' : Number(sa.amountNzd).toFixed(2),
+  sa.amount == null ? '' : Number(sa.amount).toFixed(2),
   sa.reference ?? '',
   sa.description ?? '',
   sa.actionTaken ?? '',
@@ -113,6 +117,7 @@ export function SuspiciousActivityRegisterPage() {
   const { showToast } = useToast();
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
+  const money = useCurrency();
   const [addOpen, setAddOpen] = useState(false);
   const [toDelete, setToDelete] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -141,7 +146,7 @@ export function SuspiciousActivityRegisterPage() {
    * so what you download is what you see. Built client-side from the loaded query data.
    */
   const exportCsv = () => {
-    const csv = buildCsv(CSV_HEADERS, rows.map(csvRowFor));
+    const csv = buildCsv(csvHeaders(money.code), rows.map(csvRowFor));
     const name = ['suspicious-activities', slug(firm?.name), slug(branch?.name),
       new Date().toISOString().slice(0, 10)].filter(Boolean).join('-');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -204,7 +209,7 @@ export function SuspiciousActivityRegisterPage() {
               <TableCell>Date</TableCell>
               <TableCell>Red flag</TableCell>
               <TableCell>Reference</TableCell>
-              <TableCell align="right">Amount (NZD&nbsp;$)</TableCell>
+              <TableCell align="right">Amount ({money.code}&nbsp;$)</TableCell>
               <TableCell align="right">File</TableCell>
               {mayDelete && <TableCell align="right" />}
             </TableRow>
@@ -246,7 +251,7 @@ export function SuspiciousActivityRegisterPage() {
                   </TableCell>
                       <TableCell align="right"
                              sx={{ fontFamily: fonts.mono, whiteSpace: 'nowrap', color: tokens.ink }}>
-                    {amountFmt(sa.amountNzd)}
+                    {amountFmt(sa.amount)}
                   </TableCell>
                   {/* Nothing at all when there's no attachment — an empty cell reads cleaner
                       than a dash once the row itself is clickable. */}
@@ -312,7 +317,7 @@ export function SuspiciousActivityRegisterPage() {
                     {[
                       dateFmt(detail.dateOfSuspicion),
                       redFlagLabel(detail.redFlag),
-                      detail.amountNzd == null ? null : `NZD $${amountFmt(detail.amountNzd)}`,
+                      detail.amount == null ? null : `${money.code} $${amountFmt(detail.amount)}`,
                       detail.reference || null,
                     ].filter(Boolean).join(' · ')}
                   </Typography>

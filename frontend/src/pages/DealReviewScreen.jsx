@@ -26,8 +26,7 @@ import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { DealCapturedInfo } from '../features/deal/DealCapturedInfo.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { tokens, shadows } from '../theme/theme.js';
-
-const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
+import { useCurrency } from '../dashboard/useCurrency.js';
 
 const NEU_BASE   = tokens.tile;
 const NEU_ACCENT = tokens.blue;
@@ -42,6 +41,7 @@ export function DealReviewScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const money = useCurrency();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -145,8 +145,8 @@ export function DealReviewScreen() {
           <Typography variant="h6">{deal.reference ?? `Deal #${deal.id}`}</Typography>
           <DealStatusChip status={deal.status} />
           <Chip label={deal.transactionType} size="small" variant="outlined" />
-          {deal.transactionValueNzd != null && (
-            <Chip label={NZD.format(deal.transactionValueNzd)} size="small" variant="outlined" />
+          {deal.transactionValue != null && (
+            <Chip label={money.formatWithCode(deal.transactionValue)} size="small" variant="outlined" />
           )}
           {canClaim && (
             <Button variant="contained" onClick={() => claimMut.mutate()} disabled={claimMut.isPending}>
@@ -405,8 +405,8 @@ function MobileHeader({ deal, canClaim, canDecide, canOverride, claimMut, onReje
       <Stack direction="row" spacing={1} flexWrap="wrap">
         <DealStatusChip status={deal.status} />
         <Chip label={deal.transactionType} size="small" />
-        {deal.transactionValueNzd != null && (
-          <Chip label={NZD.format(deal.transactionValueNzd)} size="small" />
+        {deal.transactionValue != null && (
+          <Chip label={money.formatWithCode(deal.transactionValue)} size="small" />
         )}
       </Stack>
 

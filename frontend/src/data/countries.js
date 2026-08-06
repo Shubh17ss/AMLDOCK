@@ -278,3 +278,10 @@ export function countryName(code) {
 export function flagClass(code) {
   return code ? `fi fi-${String(code).trim().toLowerCase()}` : 'fi';
 }
+
+/**
+ * The jurisdictions a reporting entity can be registered in. Mirrors the chk_ref_country
+ * constraint on real_estate_firm and the SUPPORTED_COUNTRIES set in FirmService — the server
+ * rejects anything else, so keep the three in step.
+ */
+export const FIRM_COUNTRIES = ['NZ', 'AU'].map(countryByCode);

@@ -12,7 +12,7 @@ import java.time.LocalDate;
 public record SuspiciousActivityDto(
         Long id,
         SuspicionType suspicionType,
-        BigDecimal amountNzd,
+        BigDecimal amount,
         String name,
         LocalDate dateOfSuspicion,
         RedFlag redFlag,
@@ -30,7 +30,7 @@ public record SuspiciousActivityDto(
 ) {
     public static SuspiciousActivityDto from(SuspiciousActivity s, String branchName, String createdByEmail) {
         return new SuspiciousActivityDto(
-                s.getId(), s.getSuspicionType(), s.getAmountNzd(), s.getName(),
+                s.getId(), s.getSuspicionType(), s.getAmount(), s.getName(),
                 s.getDateOfSuspicion(), s.getRedFlag(), s.getReference(),
                 s.getDescription(), s.getActionTaken(),
                 s.getDocumentStatus() == DocumentStatus.ACTIVE,

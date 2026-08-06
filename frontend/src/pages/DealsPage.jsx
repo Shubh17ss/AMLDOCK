@@ -12,6 +12,7 @@ import { assignDeal, listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { DEAL_REVIEWER_ROLES } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
+import { useCurrency } from '../dashboard/useCurrency.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
@@ -22,7 +23,6 @@ import { tokens } from '../theme/theme.js';
 
 const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
 const DEFAULT_STATUS = 'ALL';
-const NZD = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 });
 
 /**
  * Deals — the full deal list with a status filter (formerly the compliance queue
@@ -36,6 +36,7 @@ export function DealsPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const { firm, branch } = useDashboardScope();
+  const money = useCurrency();
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [actionError, setActionError] = useState(null);
 
@@ -131,7 +132,7 @@ export function DealsPage() {
                   <TableCell>Reference</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Type</TableCell>
-                  <TableCell>Value (NZD)</TableCell>
+                  <TableCell>Value ({money.code})</TableCell>
                   <TableCell>Reporting entity</TableCell>
                   <TableCell>Branch</TableCell>
                   <TableCell>Client</TableCell>
@@ -146,7 +147,7 @@ export function DealsPage() {
                     <TableCell>{d.reference ?? `#${d.id}`}</TableCell>
                     <TableCell><DealStatusChip status={d.status} /></TableCell>
                     <TableCell>{d.transactionType}</TableCell>
-                    <TableCell>{d.transactionValueNzd != null ? NZD.format(d.transactionValueNzd) : '—'}</TableCell>
+                    <TableCell>{money.format(d.transactionValue)}</TableCell>
                     <TableCell>{d.firmName ?? '—'}</TableCell>
                     <TableCell>{d.branchName ?? '—'}</TableCell>
                     <TableCell>{d.clientDisplayName ?? '—'}</TableCell>

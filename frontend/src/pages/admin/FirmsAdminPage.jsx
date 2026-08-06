@@ -9,6 +9,8 @@ import {
 import { createFirm, listFirms, updateFirm } from '../../api/firms.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
+import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
+import { flagClass } from '../../data/countries.js';
 import AddBusinessIcon from '@mui/icons-material/AddBusiness';
 
 export function FirmsAdminPage() {
@@ -51,7 +53,7 @@ export function FirmsAdminPage() {
             <TableRow>
               <TableCell>Entity name</TableCell>
               <TableCell>NZBN/ABN</TableCell>
-              <TableCell>Senior manager</TableCell>
+              <TableCell>Compliance officer</TableCell>
               <TableCell>Active</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -59,9 +61,16 @@ export function FirmsAdminPage() {
           <TableBody>
             {firmsQ.data?.map((firm) => (
               <TableRow key={firm.id} hover>
-                <TableCell>{firm.name}</TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box component="span" className={flagClass(firm.country)}
+                         title={firm.country}
+                         sx={{ fontSize: '1.05rem', borderRadius: '2px', flexShrink: 0 }} />
+                    <span>{firm.name}</span>
+                  </Box>
+                </TableCell>
                 <TableCell>{firm.nzbn ? <Chip size="small" label={firm.nzbn} /> : '—'}</TableCell>
-                <TableCell>{firm.seniorManagerEmail ?? '—'}</TableCell>
+                <TableCell>{firm.complianceOfficerEmail ?? '—'}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {/* Suspending an entity is platform-only — the API ignores `active` from
                       firm-level staff, so don't offer a switch that would silently do nothing. */}
@@ -89,9 +98,10 @@ export function FirmsAdminPage() {
 }
 
 const EMPTY_FIRM = {
-  name: '', nzbn: '',
+  // Most entities are New Zealand ones, so that's the default rather than an empty select.
+  name: '', nzbn: '', country: 'NZ',
   liaisonName: '', liaisonEmail: '', liaisonContactNumber: '',
-  seniorManagerName: '', seniorManagerEmail: '', seniorManagerContactNumber: '',
+  complianceOfficerName: '', complianceOfficerEmail: '', complianceOfficerContactNumber: '',
   numberOfBranches: '',
 };
 
@@ -115,7 +125,7 @@ function CreateFirmDialog({ open, onClose }) {
   const submit = (e) => { e.preventDefault(); mut.mutate(); };
   const ch = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const submittable = form.name && form.liaisonEmail && form.seniorManagerEmail;
+  const submittable = form.name && form.country && form.liaisonEmail && form.complianceOfficerEmail;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -124,6 +134,11 @@ function CreateFirmDialog({ open, onClose }) {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField label="Entity name" value={form.name} onChange={ch('name')} required />
+            <FirmCountrySelect
+              value={form.country}
+              onChange={(code) => setForm((f) => ({ ...f, country: code }))}
+              required
+            />
             <TextField label="NZBN/ABN" value={form.nzbn} onChange={ch('nzbn')} />
 
             <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Liaison</Typography>
@@ -133,14 +148,14 @@ function CreateFirmDialog({ open, onClose }) {
             <TextField label="Liaison contact number" value={form.liaisonContactNumber}
                        onChange={ch('liaisonContactNumber')} />
 
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Senior manager</Typography>
-            <TextField label="Senior manager name" value={form.seniorManagerName}
-                       onChange={ch('seniorManagerName')} />
-            <TextField label="Senior manager email" type="email" value={form.seniorManagerEmail}
-                       onChange={ch('seniorManagerEmail')} required
-                       helperText="A passwordless SENIOR_MANAGER login is created with this email." />
-            <TextField label="Senior manager contact number" value={form.seniorManagerContactNumber}
-                       onChange={ch('seniorManagerContactNumber')} />
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Compliance officer</Typography>
+            <TextField label="Compliance officer name" value={form.complianceOfficerName}
+                       onChange={ch('complianceOfficerName')} />
+            <TextField label="Compliance officer email" type="email" value={form.complianceOfficerEmail}
+                       onChange={ch('complianceOfficerEmail')} required
+                       helperText="A passwordless AML Compliance Officer login is created with this email." />
+            <TextField label="Compliance officer contact number" value={form.complianceOfficerContactNumber}
+                       onChange={ch('complianceOfficerContactNumber')} />
 
             <TextField label="Number of branches" type="number" value={form.numberOfBranches}
                        onChange={ch('numberOfBranches')} inputProps={{ min: 0, max: 100 }}

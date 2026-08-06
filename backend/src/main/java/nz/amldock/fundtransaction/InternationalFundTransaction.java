@@ -41,8 +41,9 @@ public class InternationalFundTransaction extends BaseEntity {
     @Column(name = "transaction_date", nullable = false)
     private LocalDate transactionDate;
 
-    @Column(name = "amount_nzd", nullable = false, precision = 18, scale = 2)
-    private BigDecimal amountNzd;
+    /** In the reporting entity's own currency — see RealEstateFirm.country. */
+    @Column(name = "amount", nullable = false, precision = 18, scale = 2)
+    private BigDecimal amount;
 
     /** ISO 3166-1 alpha-2 country code. */
     @Column(name = "overseas_jurisdiction", nullable = false, length = 2)
@@ -85,8 +86,8 @@ public class InternationalFundTransaction extends BaseEntity {
     public void setTransactionFlow(TransactionFlow v) { this.transactionFlow = v; }
     public LocalDate getTransactionDate() { return transactionDate; }
     public void setTransactionDate(LocalDate v) { this.transactionDate = v; }
-    public BigDecimal getAmountNzd() { return amountNzd; }
-    public void setAmountNzd(BigDecimal v) { this.amountNzd = v; }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal v) { this.amount = v; }
     public String getOverseasJurisdiction() { return overseasJurisdiction; }
     public void setOverseasJurisdiction(String v) { this.overseasJurisdiction = v; }
     public String getSubmissionReference() { return submissionReference; }

@@ -7,15 +7,16 @@ import { listDeals } from '../../api/deals.js';
 import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles, STATUS_META } from '../../components/bento/Bento.jsx';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
-import { formatNZDCompact } from '../../utils/formatters.js';
+import { useCurrency } from '../../dashboard/useCurrency.js';
 import { tokens } from '../../theme/theme.js';
 
 const byUpdated = (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt);
-const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValueNzd || 0), 0);
+const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValue || 0), 0);
 
 export function AgentDashboard() {
   const q = useQuery({ queryKey: ['deals', 'mine', 'ALL'], queryFn: () => listDeals() });
   const deals = useScopedDeals(q.data);
+  const money = useCurrency();
 
   if (q.isError) return <Alert severity="error">We couldn’t load your deals. Refresh to try again.</Alert>;
   if (q.isLoading) return <Bento><SkeletonTiles /></Bento>;
@@ -32,7 +33,7 @@ export function AgentDashboard() {
         eyebrow="YOUR DESK · LIVE"
         value={open}
         label={open === 1 ? 'deal open' : 'deals open'}
-        caption={`${approved.length} cleared to date · ${formatNZDCompact(sum(inReview))} in flight`}
+        caption={`${approved.length} cleared to date · ${money.formatCompact(sum(inReview))} in flight`}
         action={
           <Button component={RouterLink} to="/deals/new" startIcon={<AddIcon />}
                   sx={{ bgcolor: '#fff', color: tokens.blue, fontWeight: 700, '&:hover': { bgcolor: '#EEF3FF' } }}>
@@ -45,7 +46,7 @@ export function AgentDashboard() {
                 label="In progress" to="/my-deals" />
       <StatTile index={2} eyebrow="IN REVIEW" dot={STATUS_META.UNDER_REVIEW.c} value={inReview.length}
                 label="With compliance" color={inReview.length ? tokens.review : undefined} to="/my-deals" />
-      <StatTile index={3} eyebrow="NZD · IN FLIGHT" cols={2} mono value={formatNZDCompact(sum(inReview))}
+      <StatTile index={3} eyebrow={`${money.code} · IN FLIGHT`} cols={2} mono value={money.formatCompact(sum(inReview))}
                 label="Value awaiting clearance" />
 
       <ListTile

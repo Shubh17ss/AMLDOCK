@@ -9,7 +9,9 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutlined';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
-import { listTrainingSessions, deleteTrainingSession } from '../../api/training.js';
+import {
+  listTrainingSessions, deleteTrainingSession, setSessionAttendeeCompletion,
+} from '../../api/training.js';
 import { SessionDialog } from './SessionDialog.jsx';
 import { CompletionProgress } from '../../components/CompletionProgress.jsx';
 import { SearchField, matchesSearch } from '../../components/SearchField.jsx';
@@ -22,10 +24,11 @@ import { tokens, fonts } from '../../theme/theme.js';
 const dateFmt = (iso) =>
   iso ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+// The session has been and gone and somebody on the roster still hasn't marked it off.
 const isOverdue = (session) =>
-  Boolean(session.dueDate)
+  Boolean(session.sessionDate)
   && session.completedCount < session.assignedCount
-  && new Date(session.dueDate) < new Date(new Date().toDateString());
+  && new Date(session.sessionDate) < new Date(new Date().toDateString());
 
 /** AML Training › Sessions — the branch's training schedule and who has completed what. */
 export function SessionsTab({ createOpen, onCloseCreate }) {
@@ -54,6 +57,25 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
     [all, search],
   );
 
+  // Attendance is recorded here rather than by the attendee — whoever ran the session is the one
+  // who knows who turned up. The response is the refreshed session, so the open roster dialog is
+  // re-seeded from it instead of holding a stale snapshot until the refetch lands.
+  const attendanceMut = useMutation({
+    mutationFn: ({ session, userId, completed }) =>
+      setSessionAttendeeCompletion(session.id, userId, completed),
+    onSuccess: (updated) => {
+      setDetail(updated);
+      qc.invalidateQueries({ queryKey: ['trainingSessions'] });
+      qc.invalidateQueries({ queryKey: ['myTrainingSessions'] });
+    },
+    onError: (e) => {
+      showToast({
+        severity: 'error',
+        message: e.response?.data?.message || 'Could not record attendance. Try again.',
+      });
+    },
+  });
+
   const deleteMut = useMutation({
     mutationFn: (s) => deleteTrainingSession(s.id),
     onSuccess: () => {
@@ -79,7 +101,7 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
               <TableCell>Session</TableCell>
               <TableCell>Provider</TableCell>
               <TableCell>Location</TableCell>
-              <TableCell>Due</TableCell>
+              <TableCell>Date</TableCell>
               <TableCell align="right">Minutes</TableCell>
               <TableCell>Completed</TableCell>
               {mayManage && <TableCell align="right" />}
@@ -94,7 +116,7 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
                 <TableCell sx={{ color: tokens.ink }}>{s.location}</TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   <Stack direction="row" spacing={0.75} alignItems="center">
-                    <span>{dateFmt(s.dueDate)}</span>
+                    <span>{dateFmt(s.sessionDate)}</span>
                     {isOverdue(s) && (
                       <Chip size="small" label="Overdue" sx={{
                         color: tokens.rejected, backgroundColor: `${tokens.rejected}14`,
@@ -106,9 +128,7 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
                 <TableCell align="right"
                            sx={{ fontFamily: fonts.mono, fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
                   <Box component="span" sx={{ color: tokens.ink }}>{s.totalMinutes}</Box>
-                  <Box component="span" sx={{ color: tokens.muted }}>
-                    {' '}/ {s.certifiedMinutes} cert.
-                  </Box>
+                  <Box component="span" sx={{ color: tokens.muted }}> min</Box>
                 </TableCell>
                 <TableCell>
                   <CompletionProgress done={s.completedCount} total={s.assignedCount} />
@@ -166,10 +186,18 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
                   {[
                     detail.providerName,
                     detail.location,
-                    detail.dueDate ? `Due ${dateFmt(detail.dueDate)}` : null,
-                    `${detail.totalMinutes} min (${detail.certifiedMinutes} certified)`,
+                    dateFmt(detail.sessionDate),
+                    `${detail.totalMinutes} min`,
                   ].filter(Boolean).join(' · ')}
                 </Typography>
+
+                {detail.description && (
+                  <Typography sx={{
+                    fontSize: '0.875rem', color: tokens.ink, whiteSpace: 'pre-wrap',
+                  }}>
+                    {detail.description}
+                  </Typography>
+                )}
 
                 {detail.url && (
                   <Link href={detail.url} target="_blank" rel="noopener"
@@ -183,27 +211,51 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
                     fontFamily: fonts.mono, fontSize: '0.68rem', letterSpacing: '0.08em',
                     textTransform: 'uppercase', color: tokens.muted, mb: 1,
                   }}>
-                    Assigned — {detail.completedCount} of {detail.assignedCount} completed
+                    Assigned — {detail.completedCount} of {detail.assignedCount} attended
                   </Typography>
+                  {mayManage && (
+                    <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, mb: 1 }}>
+                      Tick someone off once they&apos;ve attended. Staff can see their own status
+                      but can&apos;t set it.
+                    </Typography>
+                  )}
                   <Stack spacing={1}>
-                    {detail.attendees.map((a) => (
-                      <Stack key={a.userId} direction="row" spacing={1.25} alignItems="center">
-                        {a.completedAt
-                          ? <CheckCircleIcon sx={{ fontSize: 18, color: tokens.approved }} />
-                          : <RadioButtonUncheckedIcon sx={{ fontSize: 18, color: tokens.muted }} />}
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography sx={{ fontSize: '0.875rem', color: tokens.ink }}>
-                            {a.fullName || a.email}
+                    {detail.attendees.map((a) => {
+                      const done = Boolean(a.completedAt);
+                      const icon = done
+                        ? <CheckCircleIcon sx={{ fontSize: 18, color: tokens.approved }} />
+                        : <RadioButtonUncheckedIcon sx={{ fontSize: 18, color: tokens.muted }} />;
+                      return (
+                        <Stack key={a.userId} direction="row" spacing={1.25} alignItems="center">
+                          {mayManage ? (
+                            <Tooltip title={done ? 'Clear attendance' : 'Mark as attended'}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  disabled={attendanceMut.isPending}
+                                  onClick={() => attendanceMut.mutate({
+                                    session: detail, userId: a.userId, completed: !done,
+                                  })}
+                                >
+                                  {icon}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          ) : icon}
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontSize: '0.875rem', color: tokens.ink }}>
+                              {a.fullName || a.email}
+                            </Typography>
+                            <Typography sx={{ fontSize: '0.72rem', color: tokens.muted }}>
+                              {roleLabel(a.role)}
+                            </Typography>
+                          </Box>
+                          <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, whiteSpace: 'nowrap' }}>
+                            {done ? dateFmt(a.completedAt) : 'Not yet'}
                           </Typography>
-                          <Typography sx={{ fontSize: '0.72rem', color: tokens.muted }}>
-                            {roleLabel(a.role)}
-                          </Typography>
-                        </Box>
-                        <Typography sx={{ fontSize: '0.75rem', color: tokens.muted, whiteSpace: 'nowrap' }}>
-                          {a.completedAt ? dateFmt(a.completedAt) : 'Not yet'}
-                        </Typography>
-                      </Stack>
-                    ))}
+                        </Stack>
+                      );
+                    })}
                     {detail.attendees.length === 0 && (
                       <Typography sx={{ fontSize: '0.85rem', color: tokens.muted }}>
                         Nobody is assigned to this session yet.

@@ -26,6 +26,9 @@ public class TrainingSession extends BaseEntity {
     @Column(name = "name", nullable = false, length = 512)
     private String name;
 
+    @Column(name = "description", columnDefinition = "text")
+    private String description;
+
     @Column(name = "location", nullable = false, length = 512)
     private String location;
 
@@ -35,15 +38,12 @@ public class TrainingSession extends BaseEntity {
     @Column(name = "training_provider_id", nullable = false)
     private Long trainingProviderId;
 
-    @Column(name = "due_date")
-    private LocalDate dueDate;
+    /** The day the session runs. Required — a session without a date can't be attended. */
+    @Column(name = "session_date", nullable = false)
+    private LocalDate sessionDate;
 
     @Column(name = "total_minutes", nullable = false)
     private Integer totalMinutes;
-
-    /** The portion of the total that counts towards certification; never exceeds the total. */
-    @Column(name = "certified_minutes", nullable = false)
-    private Integer certifiedMinutes;
 
     @Column(name = "real_estate_firm_id")
     private Long realEstateFirmId;
@@ -57,18 +57,18 @@ public class TrainingSession extends BaseEntity {
     public Long getId() { return id; }
     public String getName() { return name; }
     public void setName(String v) { this.name = v; }
+    public String getDescription() { return description; }
+    public void setDescription(String v) { this.description = v; }
     public String getLocation() { return location; }
     public void setLocation(String v) { this.location = v; }
     public String getUrl() { return url; }
     public void setUrl(String v) { this.url = v; }
     public Long getTrainingProviderId() { return trainingProviderId; }
     public void setTrainingProviderId(Long v) { this.trainingProviderId = v; }
-    public LocalDate getDueDate() { return dueDate; }
-    public void setDueDate(LocalDate v) { this.dueDate = v; }
+    public LocalDate getSessionDate() { return sessionDate; }
+    public void setSessionDate(LocalDate v) { this.sessionDate = v; }
     public Integer getTotalMinutes() { return totalMinutes; }
     public void setTotalMinutes(Integer v) { this.totalMinutes = v; }
-    public Integer getCertifiedMinutes() { return certifiedMinutes; }
-    public void setCertifiedMinutes(Integer v) { this.certifiedMinutes = v; }
     public Long getRealEstateFirmId() { return realEstateFirmId; }
     public void setRealEstateFirmId(Long v) { this.realEstateFirmId = v; }
     public Long getFirmBranchId() { return firmBranchId; }

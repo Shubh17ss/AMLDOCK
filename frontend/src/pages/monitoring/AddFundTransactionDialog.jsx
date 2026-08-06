@@ -9,6 +9,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { createFundTransactionWithDocument } from '../../api/fundTransactions.js';
 import { CountrySelect } from '../../components/CountrySelect.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
+import { useCurrency } from '../../dashboard/useCurrency.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
 
@@ -20,7 +21,7 @@ const emptyForm = () => ({
   listingAddress: '',
   transactionFlow: 'INWARDS',
   transactionDate: '',
-  amountNzd: '',
+  amount: '',
   overseasJurisdiction: null,
   submissionReference: '',
 });
@@ -34,6 +35,7 @@ export function AddFundTransactionDialog({ open, onClose }) {
   const qc = useQueryClient();
   const { showToast } = useToast();
   const { firm, branch } = useDashboardScope();
+  const money = useCurrency();
   const fileInputRef = useRef(null);
   const [form, setForm] = useState(emptyForm);
   const [file, setFile] = useState(null);
@@ -61,7 +63,7 @@ export function AddFundTransactionDialog({ open, onClose }) {
       listingAddress: form.listingAddress.trim(),
       transactionFlow: form.transactionFlow,
       transactionDate: form.transactionDate,
-      amountNzd: form.amountNzd,
+      amount: form.amount,
       overseasJurisdiction: form.overseasJurisdiction,
       submissionReference: form.submissionReference.trim(),
       realEstateFirmId: firm?.id,
@@ -95,8 +97,8 @@ export function AddFundTransactionDialog({ open, onClose }) {
 
   const submittable = form.listingAddress.trim()
     && form.transactionDate
-    && form.amountNzd !== ''
-    && Number(form.amountNzd) >= 0
+    && form.amount !== ''
+    && Number(form.amount) >= 0
     && form.overseasJurisdiction;
 
   const submit = (e) => { e.preventDefault(); if (submittable) mut.mutate(); };
@@ -147,10 +149,10 @@ export function AddFundTransactionDialog({ open, onClose }) {
             </Stack>
 
             <TextField
-              label="Amount (NZD $)"
+              label={`Amount (${money.label})`}
               type="number"
-              value={form.amountNzd}
-              onChange={ch('amountNzd')}
+              value={form.amount}
+              onChange={ch('amount')}
               inputProps={{ min: 0, step: '0.01' }}
               required
               fullWidth

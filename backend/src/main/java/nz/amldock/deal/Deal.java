@@ -41,8 +41,9 @@ public class Deal extends BaseEntity {
     @Column(name = "transaction_type", nullable = false, length = 32)
     private TransactionType transactionType;
 
-    @Column(name = "transaction_value_nzd")
-    private BigDecimal transactionValueNzd;
+    /** In the reporting entity's own currency — see RealEstateFirm.country. */
+    @Column(name = "transaction_value")
+    private BigDecimal transactionValue;
 
     @Column(name = "poc_name") private String pocName;
     @Column(name = "poc_role") private String pocRole;
@@ -81,8 +82,8 @@ public class Deal extends BaseEntity {
     public void setStatus(DealStatus v) { this.status = v; }
     public TransactionType getTransactionType() { return transactionType; }
     public void setTransactionType(TransactionType v) { this.transactionType = v; }
-    public BigDecimal getTransactionValueNzd() { return transactionValueNzd; }
-    public void setTransactionValueNzd(BigDecimal v) { this.transactionValueNzd = v; }
+    public BigDecimal getTransactionValue() { return transactionValue; }
+    public void setTransactionValue(BigDecimal v) { this.transactionValue = v; }
     public String getPocName() { return pocName; }
     public void setPocName(String v) { this.pocName = v; }
     public String getPocRole() { return pocRole; }

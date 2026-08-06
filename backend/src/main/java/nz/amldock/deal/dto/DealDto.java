@@ -14,7 +14,7 @@ public record DealDto(
         String reference,
         DealStatus status,
         TransactionType transactionType,
-        BigDecimal transactionValueNzd,
+        BigDecimal transactionValue,
         Long firmBranchId,
         String firmName,
         String branchName,
@@ -39,7 +39,7 @@ public record DealDto(
                                String createdByEmail) {
         return new DealDto(
                 d.getId(), d.getReference(), d.getStatus(), d.getTransactionType(),
-                d.getTransactionValueNzd(), d.getFirmBranchId(), firmName, branchName,
+                d.getTransactionValue(), d.getFirmBranchId(), firmName, branchName,
                 d.getPocName(), d.getPocRole(), d.getPocPhone(), d.getPocEmail(),
                 property, client, d.getNotes(),
                 d.getCreatedByUserId(), createdByEmail,

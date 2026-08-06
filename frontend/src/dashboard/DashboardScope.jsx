@@ -3,8 +3,11 @@ import { useAuth } from '../auth/AuthContext.jsx';
 
 // ── Dashboard scope ─────────────────────────────────────────────────────────
 // A firm + branch selection shared across the whole app shell (sidebar selector,
-// dashboard hub, CDD Register stats). `firm` / `branch` are `{ id, name } | null`;
-// null means "all". Persisted per user in localStorage so it survives refresh.
+// dashboard hub, CDD Register stats). `branch` is `{ id, name } | null` and `firm` is
+// `{ id, name, country } | null`; null means "all". The firm's country is carried because it
+// decides the currency amounts are shown in — see useCurrency.
+// Persisted per user in localStorage so it survives refresh; a selection saved before country
+// existed simply has none, and falls back to NZD until the selector is touched.
 // `initialized` guards one-time default seeding (from the signed-in user); a
 // saved selection counts as initialized so seeding never overwrites it.
 

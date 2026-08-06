@@ -12,7 +12,7 @@ public record DealListItemDto(
         String reference,
         DealStatus status,
         TransactionType transactionType,
-        BigDecimal transactionValueNzd,
+        BigDecimal transactionValue,
         Long firmBranchId,
         String firmName,
         String branchName,
@@ -28,7 +28,7 @@ public record DealListItemDto(
                                        String clientName, String propertyAddress,
                                        String createdByEmail) {
         return new DealListItemDto(d.getId(), d.getReference(), d.getStatus(), d.getTransactionType(),
-                d.getTransactionValueNzd(), d.getFirmBranchId(), firmName, branchName,
+                d.getTransactionValue(), d.getFirmBranchId(), firmName, branchName,
                 clientName, propertyAddress, d.getCreatedByUserId(), createdByEmail,
                 d.getCreatedAt(), d.getUpdatedAt());
     }

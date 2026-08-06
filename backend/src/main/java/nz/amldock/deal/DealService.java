@@ -162,7 +162,7 @@ public class DealService {
         d.setClientId(savedClient.getId());
         d.setStatus(DealStatus.DRAFT);
         d.setTransactionType(req.transactionType());
-        d.setTransactionValueNzd(req.transactionValueNzd());
+        d.setTransactionValue(req.transactionValue());
         d.setPocName(orFallback(req.pocName(), branch.getManagerName()));
         d.setPocRole(req.pocRole());
         d.setPocPhone(orFallback(req.pocPhone(), branch.getPhone()));
@@ -189,7 +189,7 @@ public class DealService {
             d.setFirmBranchId(newBranch.getId());
         }
         if (req.transactionType() != null) d.setTransactionType(req.transactionType());
-        if (req.transactionValueNzd() != null) d.setTransactionValueNzd(req.transactionValueNzd());
+        if (req.transactionValue() != null) d.setTransactionValue(req.transactionValue());
         if (req.pocName() != null) d.setPocName(req.pocName());
         if (req.pocRole() != null) d.setPocRole(req.pocRole());
         if (req.pocPhone() != null) d.setPocPhone(req.pocPhone());

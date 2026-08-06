@@ -11,7 +11,7 @@ import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
   DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, FULL_WORKSPACE_ROLES,
-  BRANCH_LEVEL_ROLES,
+  TRAINING_ASSIGNABLE_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
@@ -110,10 +110,10 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        {/* My Training — the personal view. Only branch-level staff can hold an assignment,
-            so for anyone else this page would always be empty. */}
+        {/* My Training — the personal view, for everyone who can hold an assignment: branch
+            staff plus the firm's compliance officers and senior managers. */}
         <Route path={MY_TRAINING_PATH} element={
-          <ProtectedRoute roles={BRANCH_LEVEL_ROLES}>
+          <ProtectedRoute roles={TRAINING_ASSIGNABLE_ROLES}>
             <MyTrainingPage />
           </ProtectedRoute>
         } />

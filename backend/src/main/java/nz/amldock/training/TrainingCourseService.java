@@ -11,6 +11,8 @@ import nz.amldock.document.dto.UploadUrlResponse;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.training.dto.AnswerFeedbackDto;
+import nz.amldock.training.dto.CheckAnswerRequest;
 import nz.amldock.training.dto.CourseAttemptResultDto;
 import nz.amldock.training.dto.CreateTrainingCourseRequest;
 import nz.amldock.training.dto.SubmitCourseAttemptRequest;
@@ -34,6 +36,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -101,23 +104,32 @@ public class TrainingCourseService {
         this.downloadTtl = Duration.ofMinutes(downloadTtlMinutes);
     }
 
-    /** Training managers get the scope's whole catalogue; everyone else gets their assignments. */
+    /**
+     * Training managers get the scope's whole catalogue; everyone else gets their assignments.
+     *
+     * {@code mine} forces the personal view whatever the caller's role — see
+     * {@link TrainingSessionService#list}. It matters more here than for sessions: it is also
+     * what keeps the answer key out of the payload for a compliance officer who has been
+     * assigned a course themselves.
+     */
     @Transactional(readOnly = true)
-    public List<TrainingCourseDto> list(Long requestedFirmId, Long branchId) {
+    public List<TrainingCourseDto> list(Long requestedFirmId, Long branchId, boolean mine) {
         UserPrincipal actor = TrainingScope.currentPrincipal();
+        boolean privileged = TrainingSessionService.isTrainingManager(actor.role()) && !mine;
 
         List<TrainingCourse> rows;
-        if (TrainingSessionService.isTrainingManager(actor.role())) {
+        if (privileged) {
             Long firmId = TrainingScope.resolveTargetFirm(actor, requestedFirmId);
             Long resolvedBranch = resolveBranch(branchId, firmId);
             rows = courses.findAllScoped(firmId, resolvedBranch);
         } else {
-            Set<Long> mine = assignees.findAllByUserId(actor.id()).stream()
+            // Keyed on the caller's own id, so this can only ever return courses they are on.
+            Set<Long> assigned = assignees.findAllByUserId(actor.id()).stream()
                     .map(TrainingCourseAssignee::getTrainingCourseId)
                     .collect(Collectors.toSet());
-            rows = mine.isEmpty() ? List.of() : courses.findAllByIdInOrdered(mine);
+            rows = assigned.isEmpty() ? List.of() : courses.findAllByIdInOrdered(assigned);
         }
-        return toDtos(rows, actor);
+        return toDtos(rows, actor, privileged);
     }
 
     @Transactional
@@ -144,7 +156,7 @@ public class TrainingCourseService {
 
         audit.record(AuditAction.TRAINING_COURSE_CREATED, ENTITY_TYPE, saved.getId(),
                 "Created course " + saved.getName() + " for " + newlyAssigned.size() + " staff");
-        return toDtos(List.of(saved), actor).get(0);
+        return toDtos(List.of(saved), actor, true).get(0);
     }
 
     @Transactional
@@ -172,7 +184,7 @@ public class TrainingCourseService {
 
         audit.record(AuditAction.TRAINING_COURSE_UPDATED, ENTITY_TYPE, c.getId(),
                 "Updated course " + c.getName());
-        return toDtos(List.of(c), actor).get(0);
+        return toDtos(List.of(c), actor, true).get(0);
     }
 
     /** Deletes are restricted to ROOT and SENIOR_MANAGER (also gated by @PreAuthorize). */
@@ -242,20 +254,10 @@ public class TrainingCourseService {
 
             int scored = 0;
             for (TrainingCourseQuestion q : qs) {
-                List<TrainingCourseQuestionOption> opts = optionsByQuestion.getOrDefault(q.getId(), List.of());
-                Set<Long> valid = opts.stream()
-                        .map(TrainingCourseQuestionOption::getId).collect(Collectors.toSet());
-                Set<Long> expected = opts.stream().filter(TrainingCourseQuestionOption::isCorrect)
-                        .map(TrainingCourseQuestionOption::getId).collect(Collectors.toSet());
-
-                // Narrow to ids that actually belong to this question, so a stray or foreign
-                // option id can't manufacture a mark.
-                Set<Long> picked = new HashSet<>(submitted.getOrDefault(q.getId(), Set.of()));
-                picked.retainAll(valid);
-
-                // Set equality: a multi-choice answer has to be exactly right. No partial credit,
-                // which is what keeps the pass mark meaningful over a handful of questions.
-                if (picked.equals(expected)) scored++;
+                if (isAnswerCorrect(optionsByQuestion.getOrDefault(q.getId(), List.of()),
+                        submitted.get(q.getId()))) {
+                    scored++;
+                }
             }
             correct = scored;
         }
@@ -278,6 +280,63 @@ public class TrainingCourseService {
 
         return new CourseAttemptResultDto(scorePercent, passed, c.getPassMarkPercent(),
                 correct, total, row.getAttemptCount(), row.getCompletedAt());
+    }
+
+    /**
+     * Mark one question as the taker works through it, and hand back the right answer.
+     *
+     * This is the only path that gives up part of the key, and only for a question the caller has
+     * already answered — {@link #toDtos} still nulls every {@code correct} flag, so the browser
+     * cannot know an answer before committing to it. The player locks a question once checked;
+     * the score still comes from {@link #submitAttempt}, which re-marks everything server-side and
+     * is not told what feedback was shown.
+     *
+     * Read-only: checking an answer is not an attempt and touches no counter.
+     */
+    @Transactional(readOnly = true)
+    public AnswerFeedbackDto checkAnswer(Long courseId, Long questionId, CheckAnswerRequest req) {
+        TrainingCourse c = mustLoad(courseId);
+        UserPrincipal actor = TrainingScope.currentPrincipal();
+        TrainingScope.assertSameFirm(actor, c.getRealEstateFirmId(), "course");
+
+        // Same gate as sitting the assessment: only the people it was assigned to.
+        assignees.findByTrainingCourseIdAndUserId(c.getId(), actor.id())
+                .orElseThrow(() -> new ForbiddenException("You are not assigned to this course"));
+
+        TrainingCourseQuestion q = questions.findById(questionId)
+                .orElseThrow(() -> new BadRequestException("Question " + questionId + " not found"));
+        if (!c.getId().equals(q.getTrainingCourseId())) {
+            throw new BadRequestException("That question does not belong to this course");
+        }
+
+        List<TrainingCourseQuestionOption> opts = options
+                .findAllByQuestionIdInOrderByPositionAsc(List.of(q.getId()));
+
+        return new AnswerFeedbackDto(
+                isAnswerCorrect(opts, req == null ? null : req.selectedOptionIds()),
+                opts.stream().filter(TrainingCourseQuestionOption::isCorrect)
+                        .map(TrainingCourseQuestionOption::getId).toList());
+    }
+
+    /**
+     * The one marking rule, shared by the per-question check and the final score so they can
+     * never disagree.
+     *
+     * Ids that don't belong to this question are dropped, so a stray or foreign option can't
+     * manufacture a mark. Then set equality: a multi-choice answer has to be exactly right, with
+     * no partial credit, which is what keeps the pass mark meaningful over a handful of questions.
+     */
+    private static boolean isAnswerCorrect(List<TrainingCourseQuestionOption> opts,
+                                           Collection<Long> submitted) {
+        Set<Long> valid = opts.stream()
+                .map(TrainingCourseQuestionOption::getId).collect(Collectors.toSet());
+        Set<Long> expected = opts.stream().filter(TrainingCourseQuestionOption::isCorrect)
+                .map(TrainingCourseQuestionOption::getId).collect(Collectors.toSet());
+
+        Set<Long> picked = submitted == null ? new HashSet<>()
+                : submitted.stream().filter(Objects::nonNull).collect(Collectors.toCollection(HashSet::new));
+        picked.retainAll(valid);
+        return picked.equals(expected);
     }
 
     /* ---------- content files ---------- */
@@ -532,9 +591,9 @@ public class TrainingCourseService {
      * Assemble DTOs for a page of courses with a fixed number of queries — one each for files,
      * questions, options, rosters, users and branches.
      */
-    private List<TrainingCourseDto> toDtos(List<TrainingCourse> rows, UserPrincipal actor) {
+    private List<TrainingCourseDto> toDtos(List<TrainingCourse> rows, UserPrincipal actor,
+                                           boolean privileged) {
         if (rows.isEmpty()) return List.of();
-        boolean manager = TrainingSessionService.isTrainingManager(actor.role());
 
         List<Long> courseIds = rows.stream().map(TrainingCourse::getId).toList();
 
@@ -580,7 +639,7 @@ public class TrainingCourseService {
                     .filter((a) -> a.getUserId().equals(actor.id())).findFirst();
 
             // Staff see only their own row — the roster is a manager's view.
-            List<TrainingCourseAssignee> visible = manager ? roster : mine.map(List::of).orElse(List.of());
+            List<TrainingCourseAssignee> visible = privileged ? roster : mine.map(List::of).orElse(List.of());
             List<TrainingAttendeeDto> assigneeDtos = visible.stream()
                     .map((a) -> {
                         User u = userById.get(a.getUserId());
@@ -611,8 +670,10 @@ public class TrainingCourseService {
                                             .map((o) -> new TrainingCourseOptionDto(
                                                     o.getId(), o.getPosition(), o.getLabel(),
                                                     // The answer key never leaves the building
-                                                    // for anyone who might be sitting the course.
-                                                    manager ? o.isCorrect() : null))
+                                                    // for anyone who might be sitting the course —
+                                                    // including a compliance officer, whose own
+                                                    // My Training request asks for mine=true.
+                                                    privileged ? o.isCorrect() : null))
                                             .toList()))
                             .toList();
 

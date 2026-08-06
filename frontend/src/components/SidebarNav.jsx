@@ -6,7 +6,7 @@ import { Box, Collapse, List, ListItem, ListItemButton, ListItemIcon, ListItemTe
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { visibleGroupsFor, DASHBOARD_PATH, MY_TRAINING_PATH } from '../navigation/moduleRegistry.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { isBranchLevel } from '../auth/roles.js';
+import { canBeAssignedTraining } from '../auth/roles.js';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 
@@ -46,12 +46,13 @@ export function SidebarNav() {
         <ScopeSelector stacked />
       </Box>
 
-      {/* Branch staff attend training rather than run it, so they get the personal view here
-          instead of the privileged AML Training section. */}
+      {/* Anyone who can hold a training assignment gets the personal view here. For branch staff
+          it's instead of the privileged AML Training section; firm-level staff have both, since
+          they run training and also have their own to do. */}
       <NavList
         items={[
           { id: 'dashboard', label: 'Dashboard', to: DASHBOARD_PATH, icon: <DashboardIcon /> },
-          ...(isBranchLevel(user?.role)
+          ...(canBeAssignedTraining(user?.role)
             ? [{ id: 'my-training', label: 'My Training', to: MY_TRAINING_PATH, icon: <SchoolIcon /> }]
             : []),
         ]}

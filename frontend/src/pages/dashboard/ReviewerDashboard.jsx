@@ -7,10 +7,10 @@ import { listDeals } from '../../api/deals.js';
 import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles, STATUS_META } from '../../components/bento/Bento.jsx';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
-import { formatNZDCompact } from '../../utils/formatters.js';
+import { useCurrency } from '../../dashboard/useCurrency.js';
 import { tokens } from '../../theme/theme.js';
 
-const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValueNzd || 0), 0);
+const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValue || 0), 0);
 
 function oldestWait(deals) {
   if (!deals.length) return '—';
@@ -26,6 +26,7 @@ export function ReviewerDashboard() {
   const reviewQ = useQuery({ queryKey: ['deals', 'queue', 'UNDER_REVIEW', null], queryFn: () => listDeals({ status: 'UNDER_REVIEW' }) });
   const submitted = useScopedDeals(submittedQ.data);
   const underReview = useScopedDeals(reviewQ.data);
+  const money = useCurrency();
 
   if (submittedQ.isError) return <Alert severity="error">We couldn’t load the review queue. Refresh to try again.</Alert>;
   if (submittedQ.isLoading || reviewQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
@@ -41,7 +42,7 @@ export function ReviewerDashboard() {
         eyebrow="DEALS · LIVE"
         value={submitted.length}
         label={submitted.length === 1 ? 'deal awaiting review' : 'deals awaiting review'}
-        caption={`${underReview.length} under way · ${formatNZDCompact(sum(submitted))} awaiting clearance`}
+        caption={`${underReview.length} under way · ${money.formatCompact(sum(submitted))} awaiting clearance`}
         action={
           <Button component={RouterLink} to="/cdd/deals" startIcon={<InboxIcon />}
                   sx={{ bgcolor: '#fff', color: tokens.blue, fontWeight: 700, '&:hover': { bgcolor: '#EEF3FF' } }}>
@@ -54,7 +55,7 @@ export function ReviewerDashboard() {
                 label="To be claimed" to="/cdd/deals" />
       <StatTile index={2} eyebrow="UNDER REVIEW" dot={STATUS_META.UNDER_REVIEW.c} value={underReview.length}
                 label="In progress" color={underReview.length ? tokens.review : undefined} to="/cdd/deals" />
-      <StatTile index={3} eyebrow="NZD · AWAITING" cols={2} mono value={formatNZDCompact(sum(submitted))}
+      <StatTile index={3} eyebrow={`${money.code} · AWAITING`} cols={2} mono value={money.formatCompact(sum(submitted))}
                 label="Transaction value in the queue" />
 
       <ListTile

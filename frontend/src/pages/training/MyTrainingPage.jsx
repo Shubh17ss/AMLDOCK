@@ -9,14 +9,17 @@ import { ScopeGate } from '../../dashboard/ScopeGate.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 
 /**
- * My Training — the personal view for branch staff, split into the two kinds of training:
- * sessions they attend and courses they work through.
+ * My Training — the personal view, split into the two kinds of training: sessions they attend
+ * and courses they work through.
  *
- * Both endpoints are role-aware, so these only ever return the signed-in user's own assignments.
- * The tab badges carry the outstanding count so it's obvious where the work is.
+ * Both queries pass `mine`, which returns the signed-in user's own assignments whatever their
+ * role and **across every branch**: compliance officers and senior managers sit in no branch and
+ * can be assigned training in several, so this page is scoped to the firm, not a branch. Each
+ * card names its own branch instead. The tab badges carry the outstanding count so it's obvious
+ * where the work is.
  */
 export function MyTrainingPage() {
-  const { firm, branch } = useDashboardScope();
+  const { firm } = useDashboardScope();
 
   // The tab lives in the URL so assignment emails can link straight to the right one —
   // /my-training?tab=courses. Anything unrecognised falls back to Sessions.
@@ -25,13 +28,15 @@ export function MyTrainingPage() {
   // replace, so flipping tabs doesn't stack up history entries to click back through.
   const setTab = (next) => setSearchParams({ tab: next }, { replace: true });
 
+  // Distinct keys from the manager tabs: no branch, and a different shape of payload (own row
+  // only, no answer key). The mutations on both tabs invalidate these as well as the manager keys.
   const sessionsQ = useQuery({
-    queryKey: ['trainingSessions', firm?.id ?? null, branch?.id ?? null],
-    queryFn: () => listTrainingSessions({ firmId: firm?.id, branchId: branch?.id }),
+    queryKey: ['myTrainingSessions', firm?.id ?? null],
+    queryFn: () => listTrainingSessions({ firmId: firm?.id, mine: true }),
   });
   const coursesQ = useQuery({
-    queryKey: ['trainingCourses', firm?.id ?? null, branch?.id ?? null],
-    queryFn: () => listTrainingCourses({ firmId: firm?.id, branchId: branch?.id }),
+    queryKey: ['myTrainingCourses', firm?.id ?? null],
+    queryFn: () => listTrainingCourses({ firmId: firm?.id, mine: true }),
   });
 
   const sessions = sessionsQ.data ?? [];
@@ -54,12 +59,12 @@ export function MyTrainingPage() {
       <PageHeader
         eyebrow={[
           assigned === 0 ? 'Nothing assigned' : `${outstanding} outstanding of ${assigned}`,
-          branch?.name,
+          firm?.name,
         ].filter(Boolean).join(' · ')}
         title="My Training"
       />
 
-      <ScopeGate what="Training">
+      <ScopeGate what="Training" requireBranch={false}>
         <Stack spacing={2.5}>
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ alignSelf: 'flex-start' }}>
             <Tab value="sessions" label={countBadge('Sessions', sessionsOutstanding)} />

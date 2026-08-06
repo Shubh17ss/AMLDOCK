@@ -87,7 +87,7 @@ public class InternationalFundTransactionService {
         t.setListingAddress(req.listingAddress().trim());
         t.setTransactionFlow(req.transactionFlow());
         t.setTransactionDate(req.transactionDate());
-        t.setAmountNzd(req.amountNzd());
+        t.setAmount(req.amount());
         t.setOverseasJurisdiction(req.overseasJurisdiction().trim().toUpperCase());
         t.setSubmissionReference(trimToNull(req.submissionReference()));
         t.setRealEstateFirmId(firmId);
@@ -96,7 +96,10 @@ public class InternationalFundTransactionService {
         InternationalFundTransaction saved = transactions.save(t);
 
         audit.record(AuditAction.FUND_TRANSACTION_CREATED, ENTITY_TYPE, saved.getId(),
-                "Logged " + saved.getTransactionFlow() + " transfer of NZD " + saved.getAmountNzd()
+                // No currency word: the amount is in the entity's own currency, which this
+                // service doesn't resolve. Naming the wrong one in an audit record is worse
+                // than naming none.
+                "Logged " + saved.getTransactionFlow() + " transfer of " + saved.getAmount()
                         + " with " + saved.getOverseasJurisdiction() + " for " + saved.getListingAddress());
         return toDto(saved);
     }
@@ -192,7 +195,7 @@ public class InternationalFundTransactionService {
         // The register row is removed outright — the audit trail is the durable record.
         transactions.delete(t);
         audit.record(AuditAction.FUND_TRANSACTION_DELETED, ENTITY_TYPE, id,
-                "Deleted " + t.getTransactionFlow() + " transfer of NZD " + t.getAmountNzd()
+                "Deleted " + t.getTransactionFlow() + " transfer of " + t.getAmount()
                         + " for " + t.getListingAddress());
     }
 

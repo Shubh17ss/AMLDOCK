@@ -69,23 +69,31 @@ public class TrainingSessionService {
         this.notifier = notifier;
     }
 
-    /** Training managers get the scope's whole register; everyone else gets their own assignments. */
+    /**
+     * Training managers get the scope's whole register; everyone else gets their own assignments.
+     *
+     * {@code mine} forces the personal view whatever the caller's role, which is what My Training
+     * asks for. It deliberately ignores {@code branchId}: firm-level staff are branchless and can
+     * be assigned training in several branches at once, so their own list has to span them all.
+     */
     @Transactional(readOnly = true)
-    public List<TrainingSessionDto> list(Long requestedFirmId, Long branchId) {
+    public List<TrainingSessionDto> list(Long requestedFirmId, Long branchId, boolean mine) {
         UserPrincipal actor = TrainingScope.currentPrincipal();
+        boolean privileged = isTrainingManager(actor.role()) && !mine;
 
         List<TrainingSession> rows;
-        if (isTrainingManager(actor.role())) {
+        if (privileged) {
             Long firmId = TrainingScope.resolveTargetFirm(actor, requestedFirmId);
             Long resolvedBranch = resolveBranch(branchId, firmId);
             rows = sessions.findAllScoped(firmId, resolvedBranch);
         } else {
-            Set<Long> mine = attendees.findAllByUserId(actor.id()).stream()
+            // Keyed on the caller's own id, so this can only ever return sessions they are on.
+            Set<Long> assigned = attendees.findAllByUserId(actor.id()).stream()
                     .map(TrainingSessionAttendee::getTrainingSessionId)
                     .collect(Collectors.toSet());
-            rows = mine.isEmpty() ? List.of() : sessions.findAllByIdInOrdered(mine);
+            rows = assigned.isEmpty() ? List.of() : sessions.findAllByIdInOrdered(assigned);
         }
-        return toDtos(rows, actor);
+        return toDtos(rows, actor, privileged);
     }
 
     @Transactional
@@ -93,16 +101,15 @@ public class TrainingSessionService {
         UserPrincipal actor = TrainingScope.currentPrincipal();
         Long firmId = TrainingScope.resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
-        assertMinutes(req.totalMinutes(), req.certifiedMinutes());
 
         TrainingSession s = new TrainingSession();
         s.setName(req.name().trim());
+        s.setDescription(trimToNull(req.description()));
         s.setLocation(req.location().trim());
         s.setUrl(trimToNull(req.url()));
         s.setTrainingProviderId(resolveProvider(req.trainingProviderId(), firmId, branchId));
-        s.setDueDate(req.dueDate());
+        s.setSessionDate(req.sessionDate());
         s.setTotalMinutes(req.totalMinutes());
-        s.setCertifiedMinutes(req.certifiedMinutes());
         s.setRealEstateFirmId(firmId);
         s.setFirmBranchId(branchId);
         s.setCreatedByUserId(actor.id());
@@ -114,7 +121,7 @@ public class TrainingSessionService {
 
         audit.record(AuditAction.TRAINING_SESSION_CREATED, ENTITY_TYPE, saved.getId(),
                 "Created training session " + saved.getName() + " for " + newlyAssigned.size() + " staff");
-        return toDtos(List.of(saved), actor).get(0);
+        return toDtos(List.of(saved), actor, true).get(0);
     }
 
     @Transactional
@@ -125,16 +132,17 @@ public class TrainingSessionService {
         TrainingScope.assertSameFirm(actor, s.getRealEstateFirmId(), "session");
 
         if (req.name() != null && !req.name().isBlank()) s.setName(req.name().trim());
+        // Replace semantics: an empty description means the author cleared it, not "unchanged".
+        if (req.description() != null) s.setDescription(trimToNull(req.description()));
         if (req.location() != null && !req.location().isBlank()) s.setLocation(req.location().trim());
         if (req.url() != null) s.setUrl(trimToNull(req.url()));
-        if (req.dueDate() != null) s.setDueDate(req.dueDate());
+        // The date is required on the session, so a null here can only mean "leave it".
+        if (req.sessionDate() != null) s.setSessionDate(req.sessionDate());
         if (req.trainingProviderId() != null) {
             s.setTrainingProviderId(resolveProvider(
                     req.trainingProviderId(), s.getRealEstateFirmId(), s.getFirmBranchId()));
         }
         if (req.totalMinutes() != null) s.setTotalMinutes(req.totalMinutes());
-        if (req.certifiedMinutes() != null) s.setCertifiedMinutes(req.certifiedMinutes());
-        assertMinutes(s.getTotalMinutes(), s.getCertifiedMinutes());
 
         // A supplied roster replaces the old one; omitting it leaves assignments untouched.
         // Only the people this adds get an email — anyone already on the session is left alone.
@@ -144,7 +152,7 @@ public class TrainingSessionService {
 
         audit.record(AuditAction.TRAINING_SESSION_UPDATED, ENTITY_TYPE, s.getId(),
                 "Updated training session " + s.getName());
-        return toDtos(List.of(s), actor).get(0);
+        return toDtos(List.of(s), actor, true).get(0);
     }
 
     /** Deletes are restricted to ROOT and SENIOR_MANAGER (also gated by @PreAuthorize). */
@@ -166,38 +174,47 @@ public class TrainingSessionService {
                 "Deleted training session " + s.getName());
     }
 
-    /** The caller marks their own attendance complete. Idempotent. */
+    /**
+     * A training manager records whether someone on the roster attended. Idempotent.
+     *
+     * Attendance is a fact the person running the session observes, so it is theirs to record —
+     * staff do not mark their own. Clearing it is allowed because the alternative to fixing a
+     * mis-click would be deleting the assignment and losing the rest of the row.
+     *
+     * Also gated by {@code @PreAuthorize} on the controller; the firm check here is what stops a
+     * manager reaching into another firm's session.
+     */
     @Transactional
-    public TrainingSessionDto complete(Long id) {
+    public TrainingSessionDto setAttendeeCompletion(Long id, Long userId, boolean completed) {
         TrainingSession s = sessions.findById(id)
                 .orElseThrow(() -> new NotFoundException("Session " + id + " not found"));
         UserPrincipal actor = TrainingScope.currentPrincipal();
+        if (!isTrainingManager(actor.role())) {
+            throw new ForbiddenException("Only training managers may record attendance");
+        }
+        TrainingScope.assertSameFirm(actor, s.getRealEstateFirmId(), "session");
 
         TrainingSessionAttendee row = attendees
-                .findByTrainingSessionIdAndUserId(s.getId(), actor.id())
-                .orElseThrow(() -> new ForbiddenException("You are not assigned to this session"));
+                .findByTrainingSessionIdAndUserId(s.getId(), userId)
+                .orElseThrow(() -> new BadRequestException("That user is not assigned to this session"));
 
-        if (row.getCompletedAt() == null) {
+        boolean wasCompleted = row.getCompletedAt() != null;
+        if (completed && !wasCompleted) {
             row.setCompletedAt(Instant.now());
             audit.record(AuditAction.TRAINING_SESSION_COMPLETED, ENTITY_TYPE, s.getId(),
-                    actor.email() + " completed training session " + s.getName());
+                    "Marked user " + userId + " as having attended " + s.getName());
+        } else if (!completed && wasCompleted) {
+            row.setCompletedAt(null);
+            audit.record(AuditAction.TRAINING_SESSION_COMPLETION_CLEARED, ENTITY_TYPE, s.getId(),
+                    "Cleared attendance for user " + userId + " on " + s.getName());
         }
-        return toDtos(List.of(s), actor).get(0);
+        return toDtos(List.of(s), actor, true).get(0);
     }
 
     /* ---------- helpers ---------- */
 
     static boolean isTrainingManager(Role role) {
         return role == Role.ROOT || role == Role.AML_COMPLIANCE_OFFICER || role == Role.SENIOR_MANAGER;
-    }
-
-    private static void assertMinutes(Integer total, Integer certified) {
-        if (total == null || certified == null) {
-            throw new BadRequestException("Total and certified minutes are both required");
-        }
-        if (certified > total) {
-            throw new BadRequestException("Certified minutes cannot exceed total minutes");
-        }
     }
 
     /** The provider must exist in the same firm and branch the session is being filed under. */
@@ -301,9 +318,9 @@ public class TrainingSessionService {
      * Assemble DTOs for a page of sessions with a fixed number of queries — one for every
      * roster, one for the users in them, one for the providers, one for the branches.
      */
-    private List<TrainingSessionDto> toDtos(List<TrainingSession> rows, UserPrincipal actor) {
+    private List<TrainingSessionDto> toDtos(List<TrainingSession> rows, UserPrincipal actor,
+                                            boolean privileged) {
         if (rows.isEmpty()) return List.of();
-        boolean manager = isTrainingManager(actor.role());
 
         List<Long> sessionIds = rows.stream().map(TrainingSession::getId).toList();
         Map<Long, List<TrainingSessionAttendee>> rosters = attendees
@@ -340,7 +357,7 @@ public class TrainingSessionService {
                     .filter((a) -> a.getUserId().equals(actor.id())).findFirst();
 
             // Staff see only their own row — the roster is a manager's view.
-            List<TrainingSessionAttendee> visible = manager ? roster : mine.map(List::of).orElse(List.of());
+            List<TrainingSessionAttendee> visible = privileged ? roster : mine.map(List::of).orElse(List.of());
             List<TrainingAttendeeDto> attendeeDtos = visible.stream()
                     .map((a) -> {
                         User u = userById.get(a.getUserId());

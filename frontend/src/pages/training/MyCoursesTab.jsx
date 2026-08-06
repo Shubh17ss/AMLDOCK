@@ -8,6 +8,7 @@ import DownloadIcon from '@mui/icons-material/FileDownloadOutlined';
 import QuizIcon from '@mui/icons-material/QuizOutlined';
 import DoneIcon from '@mui/icons-material/DoneRounded';
 import EventIcon from '@mui/icons-material/EventOutlined';
+import BusinessIcon from '@mui/icons-material/BusinessOutlined';
 import { fetchCourseFileDownloadUrl, submitCourseAttempt } from '../../api/training.js';
 import { CoursePlayerDialog } from './CoursePlayerDialog.jsx';
 import { formatBytes } from './CourseContentUploader.jsx';
@@ -20,6 +21,17 @@ const dateFmt = (iso) =>
 const isOverdue = (c) =>
   Boolean(c.dueDate) && c.myPassed !== true
   && new Date(c.dueDate) < new Date(new Date().toDateString());
+
+/** One line of course metadata with a leading glyph — the same shape as MySessionsTab's. */
+function Meta({ icon, children }) {
+  if (!children) return null;
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center">
+      <Box sx={{ display: 'inline-flex', color: tokens.muted, '& svg': { fontSize: 16 } }}>{icon}</Box>
+      <Typography sx={{ fontSize: '0.82rem', color: tokens.muted }}>{children}</Typography>
+    </Stack>
+  );
+}
 
 /**
  * My Training › Courses — self-paced material plus the assessment.
@@ -38,6 +50,8 @@ export function MyCoursesTab({ courses, isLoading, isError }) {
   const markDoneMut = useMutation({
     mutationFn: (c) => submitCourseAttempt(c.id, []),
     onSuccess: () => {
+      // Both keys: this page's own list, and the manager catalogue behind it.
+      qc.invalidateQueries({ queryKey: ['myTrainingCourses'] });
       qc.invalidateQueries({ queryKey: ['trainingCourses'] });
       showToast({ severity: 'success', message: 'Course marked done' });
     },
@@ -103,16 +117,12 @@ export function MyCoursesTab({ courses, isLoading, isError }) {
                   )}
                 </Stack>
 
-                {c.dueDate && (
-                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1 }}>
-                    <Box sx={{ display: 'inline-flex', color: tokens.muted, '& svg': { fontSize: 16 } }}>
-                      <EventIcon />
-                    </Box>
-                    <Typography sx={{ fontSize: '0.82rem', color: tokens.muted }}>
-                      Due {dateFmt(c.dueDate)}
-                    </Typography>
-                  </Stack>
-                )}
+                <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                  <Meta icon={<EventIcon />}>
+                    {c.dueDate ? `Due ${dateFmt(c.dueDate)}` : null}
+                  </Meta>
+                  <Meta icon={<BusinessIcon />}>{c.branchName}</Meta>
+                </Stack>
 
                 {c.description && (
                   <Typography sx={{

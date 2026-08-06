@@ -35,11 +35,17 @@ public class TrainingSessionController {
         this.sessions = sessions;
     }
 
-    /** Role-aware: managers get the scope's register, staff get their own assignments. */
+    /**
+     * Role-aware: managers get the scope's register, staff get their own assignments.
+     *
+     * {@code mine=true} is the My Training view — the caller's own assignments whatever their
+     * role, across every branch, since firm-level staff can be assigned training in more than one.
+     */
     @GetMapping
     public List<TrainingSessionDto> list(@RequestParam(required = false) Long firmId,
-                                         @RequestParam(required = false) Long branchId) {
-        return sessions.list(firmId, branchId);
+                                         @RequestParam(required = false) Long branchId,
+                                         @RequestParam(defaultValue = "false") boolean mine) {
+        return sessions.list(firmId, branchId, mine);
     }
 
     @PostMapping
@@ -62,9 +68,15 @@ public class TrainingSessionController {
         return ResponseEntity.noContent().build();
     }
 
-    /** The signed-in user marks their own attendance complete. */
-    @PostMapping("/{id}/complete")
-    public TrainingSessionDto complete(@PathVariable Long id) {
-        return sessions.complete(id);
+    /**
+     * A training manager records whether someone attended. Attendance is observed by whoever ran
+     * the session, so it is not self-declared — staff have no write on their own row.
+     */
+    @PostMapping("/{id}/attendees/{userId}/completion")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
+    public TrainingSessionDto setAttendeeCompletion(@PathVariable Long id,
+                                                    @PathVariable Long userId,
+                                                    @RequestParam boolean completed) {
+        return sessions.setAttendeeCompletion(id, userId, completed);
     }
 }
