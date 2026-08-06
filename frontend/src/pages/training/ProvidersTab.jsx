@@ -90,7 +90,7 @@ export function ProvidersTab({ addOpen, onCloseAdd }) {
             ))}
             {!providersQ.isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: tokens.muted }}>
                   {search
                     ? `No providers match “${search}”.`
                     : 'No providers yet — add the first one to start scheduling sessions.'}

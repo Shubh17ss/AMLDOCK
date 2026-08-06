@@ -10,6 +10,7 @@ import { listBranches, listFirms } from '../api/firms.js';
 import { creatableRoles, requiresFirm, requiresBranch, roleLabel } from '../auth/roles.js';
 import { buildCsv, parseUsersCsv } from '../utils/csv.js';
 import { useToast } from './ToastProvider.jsx';
+import { tokens } from '../theme/theme.js';
 
 /**
  * Add-user dialog with two modes:
@@ -128,7 +129,7 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, 
     <Box component="form" onSubmit={submit}>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: tokens.muted }}>
             New users sign in with their email and a one-time code — no password is set.
           </Typography>
           <TextField label="Full name" value={form.fullName} onChange={ch('fullName')} required />
@@ -188,7 +189,7 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, 
           )}
 
           {needsBranch && isSalesManager && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: tokens.muted }}>
               This user will be created in your branch.
             </Typography>
           )}
@@ -293,7 +294,7 @@ function CsvUserImport({ onClose, currentUser, firmId }) {
     <Box component="form" onSubmit={submit}>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: tokens.muted }}>
             Columns: <strong>fullName, email, role, branch</strong>. Allowed roles:{' '}
             {allowedRoles.map(roleLabel).join(', ')}.
             {isSalesManager

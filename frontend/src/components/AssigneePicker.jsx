@@ -16,7 +16,7 @@ function GroupLabel({ children }) {
     <Typography sx={{
       fontFamily: fonts.mono, fontSize: '0.62rem', letterSpacing: '0.1em',
       textTransform: 'uppercase', color: tokens.muted,
-      px: 1.5, py: 0.75, backgroundColor: '#FAFBFD',
+      px: 1.5, py: 0.75, backgroundColor: tokens.tileRaised,
     }}>
       {children}
     </Typography>
@@ -31,7 +31,7 @@ function UserRow({ user, checked, onToggle }) {
         display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1,
         cursor: 'pointer',
         backgroundColor: checked ? tokens.blueWash : 'transparent',
-        '&:hover': { backgroundColor: checked ? tokens.blueWash : '#F5F8FC' },
+        '&:hover': { backgroundColor: checked ? tokens.blueWash : tokens.hover },
       }}
     >
       <Checkbox checked={checked} size="small" tabIndex={-1} disableRipple />

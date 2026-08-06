@@ -15,6 +15,7 @@ import {
   listNodeDocuments, uploadToS3,
 } from '../api/documents.js';
 import { CameraCaptureDialog } from './CameraCaptureDialog.jsx';
+import { tokens } from '../theme/theme.js';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -175,7 +176,7 @@ export function DocumentUploader({
           <Stack spacing={1}>
             <Stack direction="row" justifyContent="space-between">
               <Typography variant="body2"><strong>{progress.name}</strong></Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: tokens.muted }}>
                 {progress.phase === 'presign' && 'Preparing…'}
                 {progress.phase === 'upload' && `Uploading ${progress.percent}%`}
                 {progress.phase === 'confirm' && 'Confirming…'}
@@ -241,7 +242,7 @@ export function DocumentUploader({
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                <TableCell colSpan={6} align="center" sx={{ py: 3, color: tokens.muted }}>
                   No documents yet.
                 </TableCell>
               </TableRow>

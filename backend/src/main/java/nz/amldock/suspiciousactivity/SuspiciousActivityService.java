@@ -219,7 +219,7 @@ public class SuspiciousActivityService {
 
     /** ROOT may target any firm (or the platform register when null); everyone else is pinned to their own. */
     private static Long resolveTargetFirm(UserPrincipal actor, Long requestedFirmId) {
-        if (actor.role() == Role.ROOT) return requestedFirmId;
+        if (actor.role().seesAllFirms()) return requestedFirmId;
         return actor.realEstateFirmId();
     }
 
@@ -240,7 +240,7 @@ public class SuspiciousActivityService {
         boolean sameFirm = actor.realEstateFirmId() == null
                 ? s.getRealEstateFirmId() == null
                 : actor.realEstateFirmId().equals(s.getRealEstateFirmId());
-        if (!sameFirm && actor.role() != Role.ROOT) {
+        if (!sameFirm && !actor.role().seesAllFirms()) {
             throw new ForbiddenException("This entry belongs to another firm");
         }
     }

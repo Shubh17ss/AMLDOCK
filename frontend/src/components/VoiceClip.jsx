@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import { fetchDownloadUrl } from '../api/documents.js';
+import { tokens } from '../theme/theme.js';
 
 /**
  * Renders a single VOICE_NOTE document as an inline audio player. Lazy-fetches the
@@ -29,7 +30,7 @@ export function VoiceClip({ doc }) {
     <Box sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
         <GraphicEqIcon fontSize="small" color="primary" />
-        <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }}>
+        <Typography variant="caption" sx={{ color: tokens.muted, flexGrow: 1 }}>
           {doc.originalFilename} · {new Date(doc.createdAt).toLocaleString()}
           {doc.uploadedByEmail ? ` · ${doc.uploadedByEmail}` : ''}
         </Typography>

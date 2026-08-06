@@ -140,7 +140,7 @@ export function ActionTile({ eyebrow = 'Quick actions', actions, index, cols = 2
               display: 'flex', alignItems: 'center', gap: 1.25,
               px: 1, py: 0.6, borderRadius: '12px', textDecoration: 'none',
               color: tokens.ink, transition: 'background-color 0.15s ease',
-              '&:hover': { backgroundColor: '#F2F5FA' },
+              '&:hover': { backgroundColor: tokens.hover },
             }}
           >
             <Box sx={{

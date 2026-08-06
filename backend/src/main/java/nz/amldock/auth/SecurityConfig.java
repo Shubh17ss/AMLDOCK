@@ -27,12 +27,14 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+    private final AuditReadOnlyFilter auditReadOnlyFilter;
 
     @Value("${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://amldock.vercel.app}")
     private String allowedOrigins;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter, AuditReadOnlyFilter auditReadOnlyFilter) {
         this.jwtFilter = jwtFilter;
+        this.auditReadOnlyFilter = auditReadOnlyFilter;
     }
 
     @Bean
@@ -50,27 +52,31 @@ public class SecurityConfig {
                         // Documents section (compliance registers + review schedules) lives outside
                         // the CDD workspace — restricted to the full-workspace roles. Stricter
                         // per-endpoint rules (e.g. delete) still apply on top via @PreAuthorize.
+                        // AUDIT appears on every section below: it reads all of them, and
+                        // AuditReadOnlyFilter — not these matchers — is what stops it writing.
                         .requestMatchers("/api/compliance-documents", "/api/compliance-documents/**",
                                 "/api/document-reviews", "/api/document-reviews/**")
-                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
-                        // Monitoring > International Fund Transaction Register — same
-                        // full-workspace roles as the Documents section.
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER", "AUDIT")
+                        // Monitoring > International Fund Transaction Register — the one section
+                        // FINANCE works in, alongside the (unbuilt) Management Reports module.
                         .requestMatchers("/api/international-fund-transactions",
                                 "/api/international-fund-transactions/**")
-                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
-                        // Monitoring > Suspicious Activity Register — same again.
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER", "AUDIT", "FINANCE")
+                        // Monitoring > Suspicious Activity Register — deliberately no FINANCE.
                         .requestMatchers("/api/suspicious-activities",
                                 "/api/suspicious-activities/**")
-                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER", "AUDIT")
                         // AML Training > Providers. Sessions are deliberately NOT listed here:
                         // branch staff need to read their own assignments and mark them
                         // complete, so those endpoints are gated per method instead.
                         .requestMatchers("/api/training-providers",
                                 "/api/training-providers/**")
-                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER")
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER", "AUDIT")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                // After the JWT filter, so the principal's role is resolved by the time it runs.
+                .addFilterAfter(auditReadOnlyFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 

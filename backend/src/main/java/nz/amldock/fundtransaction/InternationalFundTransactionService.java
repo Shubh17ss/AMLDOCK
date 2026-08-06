@@ -203,7 +203,7 @@ public class InternationalFundTransactionService {
 
     /** ROOT may target any firm (or the platform register when null); everyone else is pinned to their own. */
     private static Long resolveTargetFirm(UserPrincipal actor, Long requestedFirmId) {
-        if (actor.role() == Role.ROOT) return requestedFirmId;
+        if (actor.role().seesAllFirms()) return requestedFirmId;
         return actor.realEstateFirmId();
     }
 
@@ -224,7 +224,7 @@ public class InternationalFundTransactionService {
         boolean sameFirm = actor.realEstateFirmId() == null
                 ? t.getRealEstateFirmId() == null
                 : actor.realEstateFirmId().equals(t.getRealEstateFirmId());
-        if (!sameFirm && actor.role() != Role.ROOT) {
+        if (!sameFirm && !actor.role().seesAllFirms()) {
             throw new ForbiddenException("This transaction belongs to another firm");
         }
     }

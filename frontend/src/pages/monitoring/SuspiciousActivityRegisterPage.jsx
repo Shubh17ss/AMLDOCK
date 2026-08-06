@@ -21,7 +21,7 @@ import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { canDelete } from '../../auth/roles.js';
+import { canDelete, canWrite } from '../../auth/roles.js';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { tokens, fonts } from '../../theme/theme.js';
 
@@ -123,6 +123,8 @@ export function SuspiciousActivityRegisterPage() {
   const [detail, setDetail] = useState(null);
 
   const mayDelete = canDelete(user?.role);
+  // AUDIT reads this register but files nothing into it.
+  const mayWrite = canWrite(user?.role);
   // The delete action gets its own column at the far right so it never sits under "File".
   const colCount = mayDelete ? 8 : 7;
 
@@ -191,9 +193,11 @@ export function SuspiciousActivityRegisterPage() {
             >
               Download CSV
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+            {mayWrite && (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
               Potential Suspicion
-            </Button>
+              </Button>
+            )}
           </>
         }
       />
@@ -232,7 +236,7 @@ export function SuspiciousActivityRegisterPage() {
                       label={type.label}
                       sx={{
                         color: type.color,
-                        backgroundColor: `${type.color}14`,
+                        backgroundColor: `color-mix(in srgb, ${type.color} 8%, transparent)`,
                         fontWeight: 600,
                         fontSize: '0.72rem',
                       }}
@@ -284,7 +288,7 @@ export function SuspiciousActivityRegisterPage() {
             })}
             {!saQ.isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: tokens.muted }}>
                   No entries yet — record the first potential suspicion to start the register.
                 </TableCell>
               </TableRow>
@@ -308,7 +312,7 @@ export function SuspiciousActivityRegisterPage() {
                     label={TYPE_META[detail.suspicionType]?.label ?? detail.suspicionType}
                     sx={{
                       color: (TYPE_META[detail.suspicionType] ?? TYPE_META.ACTIVITY).color,
-                      backgroundColor: `${(TYPE_META[detail.suspicionType] ?? TYPE_META.ACTIVITY).color}14`,
+                      backgroundColor: `color-mix(in srgb, ${(TYPE_META[detail.suspicionType] ?? TYPE_META.ACTIVITY).color} 8%, transparent)`,
                       fontWeight: 600,
                       fontSize: '0.72rem',
                     }}

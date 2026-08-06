@@ -173,7 +173,7 @@ function HomeIcon({ color = '#6B7280', size = 22, filled = false }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <path
         d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1H15v-5a1 1 0 00-1-1h-4a1 1 0 00-1 1v5H4a1 1 0 01-1-1V10.5z"
-        fill={filled ? `${color}22` : 'none'}
+        fill={filled ? `color-mix(in srgb, ${color} 13%, transparent)` : 'none'}
         stroke={color}
         strokeWidth="1.75"
         strokeLinejoin="round"
@@ -187,7 +187,7 @@ function DealsIcon({ color = '#6B7280', size = 22, filled = false }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <rect
         x="4" y="4" width="12" height="15" rx="2"
-        fill={filled ? `${color}22` : 'none'}
+        fill={filled ? `color-mix(in srgb, ${color} 13%, transparent)` : 'none'}
         stroke={color} strokeWidth="1.75"
       />
       <path d="M8 9h6M8 12h6M8 15h4" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
@@ -213,7 +213,7 @@ function QueueIcon({ color = '#6B7280', size = 22, filled = false }) {
       />
       <path
         d="M5.5 5.1L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.5-6.9A2 2 0 0016.76 4H7.24A2 2 0 005.5 5.1z"
-        fill={filled ? `${color}22` : 'none'}
+        fill={filled ? `color-mix(in srgb, ${color} 13%, transparent)` : 'none'}
         stroke={color} strokeWidth="1.75" strokeLinejoin="round"
       />
     </svg>
@@ -225,7 +225,7 @@ function ProfileIcon({ color = '#6B7280', size = 22, filled = false }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <circle
         cx="12" cy="8" r="4"
-        fill={filled ? `${color}22` : 'none'}
+        fill={filled ? `color-mix(in srgb, ${color} 13%, transparent)` : 'none'}
         stroke={color} strokeWidth="1.75"
       />
       <path

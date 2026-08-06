@@ -1,39 +1,51 @@
 import { createTheme } from '@mui/material';
 
 // ── "Clearance" design tokens — Apple-flat, white canvas / blue primary / ink ──
-// Replaces the previous purple neumorphic system. White surfaces, soft single-source
-// shadows, 1px hairlines, a confident blue primary, near-black ink, and FK Grotesk
-// (display + mono "ledger" voice). Tokens are re-exported for components that need them.
+// Every token is a CSS custom property reference into styles/theme-vars.css, which
+// defines the light values on :root and the dark values under [data-theme="dark"].
+// That attribute is owned by theme/ColorMode.jsx and only ever set inside the
+// dashboard shell — so the same tokens read light on the static site and flip to
+// dark in the workspace, without any component changing.
 export const tokens = {
-  canvas:    '#FFFFFF',
-  tile:      '#FFFFFF',
-  hairline:  '#E7ECF3',
-  hairline2: '#D7DEEA',
-  ink:       '#242C3C',
-  muted:     '#5A6576',
-  blue:      '#1B5FE3',
-  blueDark:  '#1648B0',
-  blueWash:  '#EAF1FE',
+  canvas:    'var(--cl-canvas)',
+  tile:      'var(--cl-tile)',
+  tileRaised:'var(--cl-tile-raised)',
+  hover:     'var(--cl-hover)',
+  hairline:  'var(--cl-hairline)',
+  hairline2: 'var(--cl-hairline2)',
+  ink:       'var(--cl-ink)',
+  muted:     'var(--cl-muted)',
+  blue:      'var(--cl-blue)',
+  blueDark:  'var(--cl-blue-dark)',
+  blueWash:  'var(--cl-blue-wash)',
+  // Composite surfaces the shell shares (whole gradient values, not colours).
+  appbarBg:     'var(--cl-appbar-bg)',
+  scopeBg:      'var(--cl-scope-bg)',
+  scopeBgOff:   'var(--cl-scope-bg-off)',
+  sidebarHeadBg:'var(--cl-sidebarhead-bg)',
+  glassBg:      'var(--cl-glass-bg)',
+  panelBg:      'var(--cl-panel-bg)',
+  glassBorder:  'var(--cl-glass-border)',
+  iconHover:    'var(--cl-icon-hover)',
   // Deal-status semantics (used only where a status is actually shown).
-  draft:     '#64748B',
-  submitted: '#1B5FE3',
-  review:    '#B45309',
-  approved:  '#15803D',
-  rejected:  '#DC2626',
+  draft:     'var(--cl-draft)',
+  submitted: 'var(--cl-submitted)',
+  review:    'var(--cl-review)',
+  approved:  'var(--cl-approved)',
+  rejected:  'var(--cl-rejected)',
 };
 
 const T = tokens;
 
-// Apple-style soft elevation (single light source — no neumorphic dual shadow).
+// Elevation, also variable-backed: light carries white inset speculars that would
+// read as hard lines on a dark tile, so the dark set swaps them for deeper ambient.
 export const shadows = {
-  sm:   '0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10)',
-  md:   '0 1px 3px rgba(16,24,40,0.07), 0 8px 24px rgba(16,24,40,0.09)',
-  lg:   '0 4px 10px rgba(16,24,40,0.09), 0 20px 48px rgba(16,24,40,0.15)',
-  focus:'0 0 0 3px rgba(27,95,227,0.22)',
-  // Frosted-glass elevation: inset specular top edge + contact shadow + deep soft
-  // ambient with a faint blue bloom. Rest → hover is the lift choreography.
-  glass:      'inset 0 1px 0 rgba(255,255,255,0.85), 0 1px 2px rgba(16,24,40,0.05), 0 10px 30px -6px rgba(16,24,40,0.12), 0 24px 60px -18px rgba(27,95,227,0.10)',
-  glassHover: 'inset 0 1px 0 rgba(255,255,255,0.95), 0 2px 6px rgba(16,24,40,0.06), 0 18px 44px -8px rgba(16,24,40,0.16), 0 30px 70px -16px rgba(27,95,227,0.18)',
+  sm:   'var(--cl-shadow-sm)',
+  md:   'var(--cl-shadow-md)',
+  lg:   'var(--cl-shadow-lg)',
+  focus:'var(--cl-shadow-focus)',
+  glass:      'var(--cl-shadow-glass)',
+  glassHover: 'var(--cl-shadow-glass-hover)',
 };
 
 // Typography roles.
@@ -55,17 +67,23 @@ const ink = {
 };
 
 export const theme = createTheme({
+  // The palette keeps REAL hex values on purpose — every entry, including text and
+  // divider. MUI runs colour math on them (augmentColor on the mains, and e.g.
+  // Skeleton computes alpha(text.primary)) and THROWS on var() strings, killing the
+  // whole route. Nothing visible depends on the palette: every surface is styled by
+  // the overrides below, which use the variable-backed tokens and flip with the
+  // theme. Never point a palette entry at `tokens`.
   palette: {
     mode: 'light',
-    primary:    { main: T.blue, dark: T.blueDark, light: '#4F86F0', contrastText: '#fff' },
-    secondary:  { main: T.ink, dark: '#1A2130', light: '#3A4356', contrastText: '#fff' },
-    background: { default: T.canvas, paper: T.tile },
-    text:       { primary: T.ink, secondary: T.muted },
-    divider:    T.hairline,
-    error:      { main: T.rejected, contrastText: '#fff' },
-    warning:    { main: T.review, contrastText: '#fff' },
-    success:    { main: T.approved, contrastText: '#fff' },
-    info:       { main: T.blue, contrastText: '#fff' },
+    primary:    { main: '#1B5FE3', dark: '#1648B0', light: '#4F86F0', contrastText: '#fff' },
+    secondary:  { main: '#242C3C', dark: '#1A2130', light: '#3A4356', contrastText: '#fff' },
+    background: { default: '#FFFFFF', paper: '#FFFFFF' },
+    text:       { primary: '#242C3C', secondary: '#5A6576' },
+    divider:    '#E7ECF3',
+    error:      { main: '#DC2626', contrastText: '#fff' },
+    warning:    { main: '#B45309', contrastText: '#fff' },
+    success:    { main: '#15803D', contrastText: '#fff' },
+    info:       { main: '#1B5FE3', contrastText: '#fff' },
   },
 
   shape: { borderRadius: 12 },
@@ -128,7 +146,7 @@ export const theme = createTheme({
       defaultProps: { elevation: 0, color: 'inherit' },
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(255,255,255,0.85)',
+          backgroundColor: T.appbarBg,
           backdropFilter: 'saturate(180%) blur(12px)',
           backgroundImage: 'none',
           boxShadow: 'none',
@@ -172,11 +190,13 @@ export const theme = createTheme({
           color: '#fff',
           boxShadow: shadows.sm,
           '&:hover': { backgroundColor: T.blueDark, boxShadow: shadows.md },
-          '&.Mui-disabled': { backgroundColor: '#C5D2EC', color: '#fff' },
+          '&.Mui-disabled': { backgroundColor: 'var(--cl-disabled-blue)', color: '#fff' },
         },
         containedSecondary: {
           backgroundColor: T.ink,
-          color: '#fff',
+          // Canvas, not #fff: in dark mode the ink surface flips light, and the
+          // canvas token flips dark with it, so the label stays readable.
+          color: T.canvas,
           '&:hover': { backgroundColor: '#1A2130' },
         },
         outlined: {
@@ -199,7 +219,7 @@ export const theme = createTheme({
           borderRadius: 10,
           color: T.muted,
           transition: 'background-color 0.2s ease, color 0.2s ease',
-          '&:hover': { backgroundColor: 'rgba(14,19,32,0.05)', color: T.ink },
+          '&:hover': { backgroundColor: T.iconHover, color: T.ink },
           '&.Mui-focusVisible': { boxShadow: shadows.focus },
         },
       },
@@ -213,7 +233,7 @@ export const theme = createTheme({
           borderRadius: 12,
           transition: 'box-shadow 0.2s ease',
           '& .MuiOutlinedInput-notchedOutline': { borderColor: T.hairline2 },
-          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B7C2D6' },
+          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--cl-input-hover-border)' },
           '&.Mui-focused': { boxShadow: shadows.focus },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: T.blue, borderWidth: 1.5 },
           '&.Mui-error .MuiOutlinedInput-notchedOutline': { borderColor: T.rejected },
@@ -241,12 +261,12 @@ export const theme = createTheme({
       styleOverrides: {
         root: { fontWeight: 700, borderRadius: 8, fontSize: '0.7rem', border: 'none', letterSpacing: '0.01em' },
         sizeSmall: { height: 22 },
-        colorDefault: { backgroundColor: '#EEF1F6', color: T.muted },
-        colorInfo:    { backgroundColor: T.blueWash, color: T.blueDark },
-        colorPrimary: { backgroundColor: T.blueWash, color: T.blueDark },
-        colorWarning: { backgroundColor: '#FEF3E2', color: T.review },
-        colorSuccess: { backgroundColor: '#E6F4EC', color: T.approved },
-        colorError:   { backgroundColor: '#FCEAEA', color: T.rejected },
+        colorDefault: { backgroundColor: 'var(--cl-chip-neutral)', color: T.muted },
+        colorInfo:    { backgroundColor: T.blueWash, color: T.blue },
+        colorPrimary: { backgroundColor: T.blueWash, color: T.blue },
+        colorWarning: { backgroundColor: 'var(--cl-warn-wash)', color: T.review },
+        colorSuccess: { backgroundColor: 'var(--cl-ok-wash)', color: T.approved },
+        colorError:   { backgroundColor: 'var(--cl-err-wash)', color: T.rejected },
       },
     },
 
@@ -256,7 +276,7 @@ export const theme = createTheme({
         root: {
           borderRadius: 10,
           transition: 'background-color 0.2s ease, color 0.2s ease',
-          '&:hover': { backgroundColor: '#F2F5FA' },
+          '&:hover': { backgroundColor: T.hover },
           '&.Mui-selected': {
             backgroundColor: T.blueWash,
             color: T.blue,
@@ -288,7 +308,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiTableCell-root': {
-            backgroundColor: '#FBFCFE',
+            backgroundColor: T.tileRaised,
             color: T.muted,
             fontWeight: 700,
             textTransform: 'uppercase',
@@ -316,7 +336,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           transition: 'background-color 0.15s ease',
-          '&.MuiTableRow-hover:hover': { backgroundColor: '#F5F8FD' },
+          '&.MuiTableRow-hover:hover': { backgroundColor: T.hover },
           '&:last-child .MuiTableCell-root': { borderBottom: 'none' },
         },
       },
@@ -341,7 +361,7 @@ export const theme = createTheme({
           borderRadius: 8,
           margin: '2px 6px',
           transition: 'background-color 0.15s ease',
-          '&:hover': { backgroundColor: '#F2F5FA' },
+          '&:hover': { backgroundColor: T.hover },
           '&.Mui-selected': { backgroundColor: T.blueWash, color: T.blue },
         },
       },
@@ -351,10 +371,10 @@ export const theme = createTheme({
     MuiAlert: {
       styleOverrides: {
         root: { borderRadius: 12, border: '1px solid transparent', boxShadow: 'none' },
-        standardError:   { backgroundColor: '#FCEAEA', color: '#9B1C1C', borderColor: '#F6D2D2' },
-        standardSuccess: { backgroundColor: '#E6F4EC', color: '#106233', borderColor: '#CDE9D8' },
-        standardInfo:    { backgroundColor: T.blueWash, color: T.blueDark, borderColor: '#D4E4FD' },
-        standardWarning: { backgroundColor: '#FEF3E2', color: '#92400E', borderColor: '#FBE3C0' },
+        standardError:   { backgroundColor: 'var(--cl-err-wash)', color: 'var(--cl-err-text)', borderColor: 'var(--cl-err-border)' },
+        standardSuccess: { backgroundColor: 'var(--cl-ok-wash)', color: 'var(--cl-ok-text)', borderColor: 'var(--cl-ok-border)' },
+        standardInfo:    { backgroundColor: T.blueWash, color: T.blue, borderColor: 'var(--cl-info-border)' },
+        standardWarning: { backgroundColor: 'var(--cl-warn-wash)', color: 'var(--cl-warn-text)', borderColor: 'var(--cl-warn-border)' },
       },
     },
 
@@ -362,7 +382,7 @@ export const theme = createTheme({
     MuiTabs: {
       styleOverrides: {
         root: {
-          backgroundColor: '#F1F4F9',
+          backgroundColor: 'var(--cl-tab-track)',
           borderRadius: 999,
           padding: 5,
           minHeight: 48,
@@ -404,12 +424,12 @@ export const theme = createTheme({
     },
     MuiTooltip: {
       styleOverrides: {
-        tooltip: { backgroundColor: T.ink, color: '#fff', fontSize: '0.72rem', borderRadius: 8, fontWeight: 500 },
+        tooltip: { backgroundColor: T.ink, color: T.canvas, fontSize: '0.72rem', borderRadius: 8, fontWeight: 500 },
         arrow: { color: T.ink },
       },
     },
     MuiSkeleton: {
-      styleOverrides: { root: { backgroundColor: '#EAEEF4', borderRadius: 10 } },
+      styleOverrides: { root: { backgroundColor: 'var(--cl-skeleton)', borderRadius: 10 } },
     },
     MuiBadge: {
       styleOverrides: { badge: { backgroundColor: T.blue, color: '#fff' } },
@@ -422,7 +442,7 @@ export const theme = createTheme({
     MuiSwitch: {
       styleOverrides: {
         root: { padding: 8 },
-        track: { borderRadius: 22 / 2, backgroundColor: '#C7D0DE', opacity: 1 },
+        track: { borderRadius: 22 / 2, backgroundColor: 'var(--cl-switch-track)', opacity: 1 },
         thumb: { color: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,0.3)' },
         switchBase: {
           color: '#fff',
@@ -452,7 +472,7 @@ export const theme = createTheme({
         root: {
           color: T.ink,
           borderRadius: 10,
-          '&:hover': { backgroundColor: '#F2F5FA' },
+          '&:hover': { backgroundColor: T.hover },
           '&.Mui-selected': {
             backgroundColor: T.blue, color: '#fff',
             '&:hover': { backgroundColor: T.blueDark },

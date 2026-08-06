@@ -16,6 +16,7 @@ import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
 import { OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
+import { tokens } from '../theme/theme.js';
 
 export function DealDetailPage() {
   const { id } = useParams();
@@ -259,7 +260,7 @@ function DecisionCard({ deal }) {
         <Typography variant="subtitle1">
           {isApproved ? 'Approved' : 'Rejected'}{isOverride ? ' (via override)' : ''}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{ color: tokens.muted }}>
           {deal.decidedAt && new Date(deal.decidedAt).toLocaleString()}
           {deal.decidedByUserId && ` · by user #${deal.decidedByUserId}`}
         </Typography>
@@ -283,8 +284,7 @@ function DetailRow({ label, value }) {
     >
       <Typography
         variant="body2"
-        color="text.secondary"
-        sx={{ minWidth: 110, fontWeight: 600, flexShrink: 0 }}
+        sx={{ color: tokens.muted, minWidth: 110, fontWeight: 600, flexShrink: 0 }}
       >
         {label}
       </Typography>

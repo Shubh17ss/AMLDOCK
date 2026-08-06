@@ -1,4 +1,5 @@
 import { Card, CardContent, Stack, Typography } from '@mui/material';
+import { tokens } from '../theme/theme.js';
 
 export function PlaceholderPage({ title, detail }) {
   return (
@@ -6,7 +7,7 @@ export function PlaceholderPage({ title, detail }) {
       <Typography variant="h4">{title}</Typography>
       <Card>
         <CardContent>
-          <Typography color="text.secondary">{detail}</Typography>
+          <Typography sx={{ color: tokens.muted }}>{detail}</Typography>
         </CardContent>
       </Card>
     </Stack>

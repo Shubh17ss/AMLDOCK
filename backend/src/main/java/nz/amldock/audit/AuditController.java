@@ -38,7 +38,7 @@ public class AuditController {
     }
 
     @GetMapping("/deal/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','AUDIT')")
     public List<AuditLogDto> listForDeal(@PathVariable Long id) {
         return audit.listForDeal(id);
     }

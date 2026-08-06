@@ -6,6 +6,9 @@ import {
 } from '@mui/material';
 import { updateFirm } from '../../api/firms.js';
 import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
+import { useAuth } from '../../auth/AuthContext.jsx';
+import { canWrite } from '../../auth/roles.js';
+import { tokens } from '../../theme/theme.js';
 
 /**
  * Firm metadata form. `editableIdentity` (ROOT) unlocks firm name, NZBN/ABN, country and the
@@ -14,6 +17,8 @@ import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
  */
 export function FirmDetailsCard({ firm, editableIdentity = false }) {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const mayWrite = canWrite(user?.role);
   const [form, setForm] = useState(firm);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -79,12 +84,12 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
               />
             )}
 
-            <Typography variant="subtitle2" color="text.secondary">Liaison</Typography>
+            <Typography variant="subtitle2" sx={{ color: tokens.muted }}>Liaison</Typography>
             <TextField label="Liaison name" value={form.liaisonName ?? ''} onChange={ch('liaisonName')} />
             <TextField label="Liaison email" type="email" value={form.liaisonEmail ?? ''} onChange={ch('liaisonEmail')} />
             <TextField label="Liaison contact number" value={form.liaisonContactNumber ?? ''} onChange={ch('liaisonContactNumber')} />
 
-            <Typography variant="subtitle2" color="text.secondary">Compliance officer</Typography>
+            <Typography variant="subtitle2" sx={{ color: tokens.muted }}>Compliance officer</Typography>
             <TextField label="Compliance officer name" value={form.complianceOfficerName ?? ''} onChange={ch('complianceOfficerName')} />
             <TextField label="Compliance officer email" type="email" value={form.complianceOfficerEmail ?? ''} onChange={ch('complianceOfficerEmail')} />
             <TextField label="Compliance officer contact number" value={form.complianceOfficerContactNumber ?? ''} onChange={ch('complianceOfficerContactNumber')} />
@@ -95,7 +100,7 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
             {error && <Alert severity="error">{error}</Alert>}
             {saved && <Alert severity="success">Saved.</Alert>}
             <Box>
-              <Button type="submit" variant="contained" disabled={mut.isPending}>
+              <Button type="submit" variant="contained" disabled={mut.isPending || !mayWrite}>
                 {mut.isPending ? 'Saving…' : 'Save changes'}
               </Button>
             </Box>

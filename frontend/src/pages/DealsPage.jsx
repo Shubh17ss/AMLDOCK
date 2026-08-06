@@ -175,7 +175,7 @@ export function DealsPage() {
                 ))}
                 {deals.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                    <TableCell colSpan={10} align="center" sx={{ py: 4, color: tokens.muted }}>
                       No deals match these filters.
                     </TableCell>
                   </TableRow>

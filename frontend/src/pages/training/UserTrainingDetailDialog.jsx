@@ -37,7 +37,7 @@ function ItemRow({ title, meta, status, overdue }) {
           </Typography>
           {overdue && (
             <Chip size="small" label="Overdue" sx={{
-              color: tokens.rejected, backgroundColor: `${tokens.rejected}14`,
+              color: tokens.rejected, backgroundColor: `color-mix(in srgb, ${tokens.rejected} 8%, transparent)`,
               fontWeight: 700, fontSize: '0.66rem',
             }} />
           )}

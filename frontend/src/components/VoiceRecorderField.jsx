@@ -91,7 +91,7 @@ export function VoiceRecorderField({
           </Tooltip>
         )}
       </Stack>
-      <Typography variant="caption" color="text.secondary">{helper}</Typography>
+      <Typography variant="caption" sx={{ color: tokens.muted }}>{helper}</Typography>
 
       <Box
         sx={{
@@ -130,7 +130,7 @@ export function VoiceRecorderField({
               <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 42, fontVariantNumeric: 'tabular-nums' }}>
                 {formatTime(recordingTime)}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: tokens.muted }}>
                 {isPaused ? 'Paused' : 'Recording…'}
               </Typography>
             </Stack>
@@ -163,7 +163,7 @@ export function VoiceRecorderField({
         {isSaved && objectUrl && (
           <Stack spacing={0.5} sx={{ width: '100%', minWidth: 0 }}>
             <Box component="audio" controls src={objectUrl} sx={{ width: '100%', maxWidth: '100%' }} />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: tokens.muted }}>
               {(value.size / 1024).toFixed(1)} KB · saved — uploads on submit
             </Typography>
           </Stack>

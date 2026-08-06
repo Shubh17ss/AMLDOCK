@@ -10,6 +10,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { deleteUser, listUsers, updateUser } from '../../api/users.js';
 import { roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
+import { tokens } from '../../theme/theme.js';
 
 // Firm-level peers can't be edited or deleted from a firm view (matches the backend rule).
 const PROTECTED_ROLES = new Set(['SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER']);
@@ -73,7 +74,7 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
                     <TableCell><Chip size="small" label={roleLabel(u.role)} /></TableCell>
                     <TableCell align="right">
                       {protectedRow ? (
-                        <Typography variant="caption" color="text.secondary">—</Typography>
+                        <Typography variant="caption" sx={{ color: tokens.muted }}>—</Typography>
                       ) : (
                         <>
                           <Tooltip title="Edit name / email">
@@ -97,7 +98,7 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
               })}
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                  <TableCell colSpan={4} align="center" sx={{ py: 3, color: tokens.muted }}>
                     No users yet.
                   </TableCell>
                 </TableRow>

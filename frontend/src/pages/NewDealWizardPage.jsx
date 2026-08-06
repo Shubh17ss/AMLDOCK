@@ -383,7 +383,7 @@ export function NewDealWizardPage() {
 
               <Divider />
               <Typography variant="h6">Notes & voice message</Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: tokens.muted }}>
                 Anything compliance should know before reviewing — a quick context line, a flag,
                 or a short voice memo. Voice notes stay local until you Save Draft or Submit.
               </Typography>
@@ -497,7 +497,7 @@ function MobileStepIndicator({ step, total, label }) {
 function ReviewBlock({ title, children }) {
   return (
     <Box>
-      <Typography variant="subtitle2" color="text.secondary">{title}</Typography>
+      <Typography variant="subtitle2" sx={{ color: tokens.muted }}>{title}</Typography>
       <Stack sx={{ mt: 0.5 }}>{children}</Stack>
     </Box>
   );
@@ -506,7 +506,7 @@ function ReviewBlock({ title, children }) {
 function ReviewRow({ label, value }) {
   return (
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 1 }} sx={{ py: 0.3 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110, fontWeight: 600 }}>{label}</Typography>
+      <Typography variant="body2" sx={{ color: tokens.muted, minWidth: 110, fontWeight: 600 }}>{label}</Typography>
       <Typography variant="body2">{value || '—'}</Typography>
     </Stack>
   );

@@ -140,7 +140,7 @@ function MetaPill({ children, muted }) {
         fontSize: '0.72rem',
         fontWeight: 600,
         color: muted ? NEU_MUTED : NEU_FG,
-        backgroundColor: '#F2F5FA',
+        backgroundColor: tokens.hover,
         letterSpacing: '0.02em',
       }}
     >
@@ -174,7 +174,7 @@ function ActionButton({ children, onClick, disabled, accent }) {
         boxShadow: EXT_SM,
         transition: 'box-shadow 0.2s ease, background-color 0.2s ease',
         flex: accent ? 1 : 'none',
-        '&:hover:not(:disabled)': { backgroundColor: accent ? tokens.blueDark : '#F2F5FA' },
+        '&:hover:not(:disabled)': { backgroundColor: accent ? tokens.blueDark : tokens.hover },
       }}
     >
       {children}

@@ -319,8 +319,8 @@ export function CoursePlayerDialog({ course, onClose }) {
 
 const OPTION_COLOURS = {
   selected: { border: tokens.blue, background: tokens.blueWash },
-  correct: { border: tokens.approved, background: `${tokens.approved}14` },
-  wrong: { border: tokens.rejected, background: `${tokens.rejected}14` },
+  correct: { border: tokens.approved, background: `color-mix(in srgb, ${tokens.approved} 8%, transparent)` },
+  wrong: { border: tokens.rejected, background: `color-mix(in srgb, ${tokens.rejected} 8%, transparent)` },
   idle: { border: tokens.hairline, background: 'transparent' },
 };
 
@@ -335,7 +335,7 @@ const optionSx = (state) => {
     border: `1px solid ${border}`,
     backgroundColor: background,
     transition: 'background-color 0.15s ease, border-color 0.15s ease',
-    '&:hover': { backgroundColor: state === 'idle' ? '#F5F8FC' : background },
+    '&:hover': { backgroundColor: state === 'idle' ? tokens.hover : background },
     // A locked question is still readable — the point is to look at the answer.
     '&.Mui-disabled': { opacity: 1 },
     '& .MuiFormControlLabel-label.Mui-disabled': { color: tokens.ink },

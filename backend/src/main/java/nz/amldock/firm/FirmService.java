@@ -50,8 +50,8 @@ public class FirmService {
     @Transactional(readOnly = true)
     public List<RealEstateFirm> listVisible() {
         UserPrincipal principal = currentPrincipal();
-        // Everyone except ROOT is scoped to their own firm.
-        if (principal != null && principal.role() != Role.ROOT && principal.realEstateFirmId() != null) {
+        // Everyone except ROOT and AUDIT is scoped to their own firm.
+        if (principal != null && !principal.role().seesAllFirms() && principal.realEstateFirmId() != null) {
             return firms.findById(principal.realEstateFirmId())
                     .map(List::of)
                     .orElseGet(List::of);
@@ -195,11 +195,11 @@ public class FirmService {
                 .count();
     }
 
-    /** Throws if a non-ROOT user tries to access a firm other than their own. */
+    /** Throws if a firm-scoped user tries to access a firm other than their own. */
     public void assertVisible(Long firmId) {
         UserPrincipal principal = currentPrincipal();
         if (principal != null
-                && principal.role() != Role.ROOT
+                && !principal.role().seesAllFirms()
                 && principal.realEstateFirmId() != null
                 && !firmId.equals(principal.realEstateFirmId())) {
             throw new ForbiddenException("Access to firm " + firmId + " denied");

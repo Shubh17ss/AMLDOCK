@@ -16,6 +16,7 @@ import { creatableRoles, isFirmLevel, roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import AddIcon from '@mui/icons-material/PersonAddAlt1';
+import { tokens } from '../../theme/theme.js';
 
 export function UsersAdminPage() {
   const qc = useQueryClient();
@@ -104,7 +105,7 @@ export function UsersAdminPage() {
             ))}
             {usersQ.data?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 4, color: tokens.muted }}>
                   No users yet.
                 </TableCell>
               </TableRow>

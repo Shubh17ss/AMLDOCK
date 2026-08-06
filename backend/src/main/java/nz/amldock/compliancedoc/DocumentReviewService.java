@@ -122,7 +122,7 @@ public class DocumentReviewService {
     /* ---------- helpers ---------- */
 
     private static Long resolveTargetFirm(UserPrincipal actor, Long requestedFirmId) {
-        if (actor.role() == Role.ROOT) return requestedFirmId;
+        if (actor.role().seesAllFirms()) return requestedFirmId;
         return actor.realEstateFirmId();
     }
 

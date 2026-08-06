@@ -18,7 +18,7 @@ import VerifiedUserRoundedIcon from '@mui/icons-material/VerifiedUserRounded';
 import WorkspacePremiumRoundedIcon from '@mui/icons-material/WorkspacePremiumRounded';
 import MonitorHeartRoundedIcon from '@mui/icons-material/MonitorHeartRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
-import { canAccessAllModules } from '../auth/roles.js';
+import { canAccessAllModules, FINANCE_MODULE_IDS } from '../auth/roles.js';
 
 // ── Compliance module registry ──────────────────────────────────────────────
 // Single source of truth for the workspace surface: the sidebar, the dashboard
@@ -123,12 +123,30 @@ export const isReviewableModule = (id) => REVIEWABLE_MODULE_KEYS.has(id);
 export const CDD_GROUP = MODULE_GROUPS.find((g) => g.slug === 'cdd');
 
 /**
- * Groups a role may see in the sidebar / dashboard hub. Privileged roles (ROOT, AML CO,
- * Senior Manager) get the whole workspace; everyone else is confined to the CDD section.
+ * Groups a role may see in the sidebar / dashboard hub.
+ *
+ *   ROOT / AML CO / Senior Manager → the whole workspace
+ *   AUDIT                          → the whole workspace, read-only (canAccessAllModules)
+ *   FINANCE                        → Monitoring, narrowed to its two modules
+ *   everyone else                  → the CDD section
  */
 export function visibleGroupsFor(role) {
-  return canAccessAllModules(role) ? MODULE_GROUPS : MODULE_GROUPS.filter((g) => g.slug === 'cdd');
+  if (canAccessAllModules(role)) return MODULE_GROUPS;
+  if (role === 'FINANCE') {
+    return MODULE_GROUPS
+      .filter((g) => g.slug === 'monitoring')
+      .map((g) => ({ ...g, items: g.items.filter((i) => FINANCE_MODULE_IDS.includes(i.id)) }));
+  }
+  return MODULE_GROUPS.filter((g) => g.slug === 'cdd');
 }
+
+/** The routes FINANCE may open: the Monitoring landing plus its two modules. */
+export const FINANCE_PATHS = [
+  MODULE_GROUPS.find((g) => g.slug === 'monitoring').to,
+  ...MODULE_GROUPS.find((g) => g.slug === 'monitoring').items
+    .filter((i) => FINANCE_MODULE_IDS.includes(i.id))
+    .map((i) => i.to),
+];
 
 /**
  * Paths inside the CDD section (its landing + items). Used to keep those routes open to

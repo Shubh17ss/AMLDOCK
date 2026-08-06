@@ -10,7 +10,8 @@ import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
-  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, FULL_WORKSPACE_ROLES,
+  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
+  FINANCE_SECTION_ROLES,
   TRAINING_ASSIGNABLE_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
@@ -20,6 +21,7 @@ import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
 import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
   SUSPICIOUS_ACTIVITIES_PATH, STAFF_TRAINING_PATH, MY_TRAINING_PATH, SECTION_LANDING_GROUPS,
+  FINANCE_PATHS,
 } from '../navigation/moduleRegistry.jsx';
 import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
 import { SectionLandingPage } from '../pages/SectionLandingPage.jsx';
@@ -37,6 +39,13 @@ import { NewDealWizardPage } from '../pages/NewDealWizardPage.jsx';
 import { DealDetailPage } from '../pages/DealDetailPage.jsx';
 import { DealReviewScreen } from '../pages/DealReviewScreen.jsx';
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
+
+/**
+ * Who may open a section landing or module route. Everything is section-read except the two
+ * Monitoring modules FINANCE works in, plus the landing they sit under.
+ */
+const rolesFor = (path) =>
+  (FINANCE_PATHS.includes(path) ? FINANCE_SECTION_ROLES : SECTION_READ_ROLES);
 
 export function AppRoutes() {
   return (
@@ -69,7 +78,7 @@ export function AppRoutes() {
               path={g.to}
               element={CDD_SECTION_PATHS.has(g.to)
                 ? page
-                : <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>{page}</ProtectedRoute>}
+                : <ProtectedRoute roles={rolesFor(g.to)}>{page}</ProtectedRoute>}
             />
           );
         })}
@@ -81,7 +90,7 @@ export function AppRoutes() {
             key={m.path}
             path={m.path}
             element={
-              <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
+              <ProtectedRoute roles={SECTION_READ_ROLES}>
                 <DocumentModulePage category={m.category} title={m.title} moduleKey={m.id} />
               </ProtectedRoute>
             }
@@ -91,21 +100,21 @@ export function AppRoutes() {
         {/* Monitoring › International Fund Transaction Register. Outside the CDD section, so
             restricted to the full-workspace roles like the Documents registers. */}
         <Route path={INTL_FUND_TRANSACTIONS_PATH} element={
-          <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
+          <ProtectedRoute roles={FINANCE_SECTION_ROLES}>
             <InternationalFundTransactionRegisterPage />
           </ProtectedRoute>
         } />
 
         {/* Monitoring › Suspicious Activity Register — same gating as the register above. */}
         <Route path={SUSPICIOUS_ACTIVITIES_PATH} element={
-          <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
+          <ProtectedRoute roles={SECTION_READ_ROLES}>
             <SuspiciousActivityRegisterPage />
           </ProtectedRoute>
         } />
 
         {/* AML Training › Staff Training — the workspace for whoever runs training. */}
         <Route path={STAFF_TRAINING_PATH} element={
-          <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>
+          <ProtectedRoute roles={SECTION_READ_ROLES}>
             <StaffTrainingPage />
           </ProtectedRoute>
         } />
@@ -148,7 +157,7 @@ export function AppRoutes() {
               path={r.to}
               element={CDD_SECTION_PATHS.has(r.to)
                 ? page
-                : <ProtectedRoute roles={FULL_WORKSPACE_ROLES}>{page}</ProtectedRoute>}
+                : <ProtectedRoute roles={rolesFor(r.to)}>{page}</ProtectedRoute>}
             />
           );
         })}

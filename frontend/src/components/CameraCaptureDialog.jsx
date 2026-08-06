@@ -7,6 +7,7 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import { tokens } from '../theme/theme.js';
 
 /**
  * Live-camera capture modal. Streams the device camera via getUserMedia, lets the
@@ -144,7 +145,7 @@ export function CameraCaptureDialog({ open, onClose, onCapture, suggestedName = 
               />
             </Stack>
           ) : (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: tokens.muted }}>
               Frame the document inside the viewport and tap <strong>Capture</strong>. You can retake
               before using the shot.
             </Typography>

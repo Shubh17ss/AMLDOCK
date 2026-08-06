@@ -30,7 +30,7 @@ final class TrainingScope {
 
     /** ROOT may target any firm (or the platform register when null); everyone else is pinned to their own. */
     static Long resolveTargetFirm(UserPrincipal actor, Long requestedFirmId) {
-        if (actor.role() == Role.ROOT) return requestedFirmId;
+        if (actor.role().seesAllFirms()) return requestedFirmId;
         return actor.realEstateFirmId();
     }
 
@@ -39,7 +39,7 @@ final class TrainingScope {
         boolean sameFirm = actor.realEstateFirmId() == null
                 ? recordFirmId == null
                 : actor.realEstateFirmId().equals(recordFirmId);
-        if (!sameFirm && actor.role() != Role.ROOT) {
+        if (!sameFirm && !actor.role().seesAllFirms()) {
             throw new ForbiddenException("This " + label + " belongs to another firm");
         }
     }

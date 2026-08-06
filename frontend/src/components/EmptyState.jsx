@@ -1,5 +1,6 @@
 import { Box, Button, Paper, Stack, Typography } from '@mui/material';
 import InboxIcon from '@mui/icons-material/Inbox';
+import { tokens } from '../theme/theme.js';
 
 export function EmptyState({ icon = <InboxIcon sx={{ fontSize: 48, color: 'text.disabled' }} />,
                              title, description, action, secondaryAction }) {
@@ -9,7 +10,7 @@ export function EmptyState({ icon = <InboxIcon sx={{ fontSize: 48, color: 'text.
         <Box>{icon}</Box>
         <Typography variant="h6">{title}</Typography>
         {description && (
-          <Typography color="text.secondary" variant="body2" sx={{ textAlign: 'center', maxWidth: 480 }}>
+          <Typography variant="body2" sx={{ color: tokens.muted, textAlign: 'center', maxWidth: 480 }}>
             {description}
           </Typography>
         )}

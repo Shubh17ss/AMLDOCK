@@ -43,7 +43,8 @@ public class DealLifecycleService {
      *   ADMIN / SALES_MANAGER      → any deal in their branch
      *   AML_COMPLIANCE_OFFICER /
      *     SENIOR_MANAGER           → any deal in their firm
-     *   ROOT                       → all deals
+     *   ROOT / AUDIT               → all deals (AUDIT reads only — see AuditReadOnlyFilter)
+     *   FINANCE                    → none; deals are outside its section
      */
     public void assertCanRead(Deal deal, UserPrincipal actor, Long branchFirmId) {
         switch (actor.role()) {
@@ -62,7 +63,9 @@ public class DealLifecycleService {
                     throw new ForbiddenException("Not your firm's deal");
                 }
             }
-            case ROOT -> { /* all access */ }
+            case ROOT, AUDIT -> { /* all access */ }
+            // Stated rather than left to fall through, which would have granted everything.
+            case FINANCE -> throw new ForbiddenException("Deals are outside the finance role");
         }
     }
 

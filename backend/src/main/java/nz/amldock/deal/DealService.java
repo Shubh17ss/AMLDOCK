@@ -73,7 +73,11 @@ public class DealService {
             case AGENT, AGENT_PA -> effectiveCreator = actor.id();
             case ADMIN, SALES_MANAGER -> effectiveBranch = actor.firmBranchId();
             case AML_COMPLIANCE_OFFICER, SENIOR_MANAGER -> effectiveFirm = actor.realEstateFirmId();
-            case ROOT -> { /* honour passed filters verbatim */ }
+            // Both see every firm, so the caller's filters stand as given.
+            case ROOT, AUDIT -> { /* honour passed filters verbatim */ }
+            // Finance works in the fund register, not the CDD workspace. Stated rather than
+            // left to fall through this switch, which would have handed over every deal.
+            case FINANCE -> throw new ForbiddenException("Deals are outside the finance role");
         }
 
         List<Deal> results = deals.search(status, effectiveCreator, effectiveFirm, effectiveBranch);

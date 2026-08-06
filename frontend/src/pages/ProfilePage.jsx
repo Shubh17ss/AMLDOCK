@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { roleLabel } from '../auth/roles.js';
 import { changePassword } from '../api/auth.js';
 import { PageHeader } from '../components/PageHeader.jsx';
+import { tokens } from '../theme/theme.js';
 
 export function ProfilePage() {
   const { user } = useAuth();
@@ -70,7 +71,7 @@ export function ProfilePage() {
           <CardContent>
             <Typography variant="h6" gutterBottom>Sign-in</Typography>
             <Divider sx={{ mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: tokens.muted }}>
               Your account is passwordless — you sign in with your email and a one-time code.
             </Typography>
           </CardContent>

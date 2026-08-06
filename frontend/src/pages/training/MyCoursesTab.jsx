@@ -105,13 +105,13 @@ export function MyCoursesTab({ courses, isLoading, isError }) {
                       : undefined}
                     sx={{
                       color: done ? tokens.approved : tokens.review,
-                      backgroundColor: `${done ? tokens.approved : tokens.review}14`,
+                      backgroundColor: `color-mix(in srgb, ${done ? tokens.approved : tokens.review} 8%, transparent)`,
                       fontWeight: 700, fontSize: '0.68rem',
                     }}
                   />
                   {overdue && (
                     <Chip size="small" label="Overdue" sx={{
-                      color: tokens.rejected, backgroundColor: `${tokens.rejected}14`,
+                      color: tokens.rejected, backgroundColor: `color-mix(in srgb, ${tokens.rejected} 8%, transparent)`,
                       fontWeight: 700, fontSize: '0.68rem',
                     }} />
                   )}
@@ -183,7 +183,7 @@ export function MyCoursesTab({ courses, isLoading, isError }) {
                     icon={<CheckCircleIcon sx={{ fontSize: 16, color: `${tokens.approved} !important` }} />}
                     label={`Passed ${dateFmt(c.myCompletedAt)}`}
                     sx={{
-                      color: tokens.approved, backgroundColor: `${tokens.approved}14`,
+                      color: tokens.approved, backgroundColor: `color-mix(in srgb, ${tokens.approved} 8%, transparent)`,
                       fontWeight: 600, fontSize: '0.75rem',
                     }}
                   />

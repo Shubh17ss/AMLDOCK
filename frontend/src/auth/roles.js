@@ -9,6 +9,8 @@ export const ROLES = [
   'AGENT',
   'AGENT_PA',
   'ADMIN',
+  'AUDIT',
+  'FINANCE',
 ];
 
 export const ROLE_LABELS = {
@@ -19,6 +21,8 @@ export const ROLE_LABELS = {
   AGENT: 'Agent',
   AGENT_PA: 'Agent PA',
   ADMIN: 'Branch Admin',
+  AUDIT: 'Auditor',
+  FINANCE: 'Finance',
 };
 
 export function roleLabel(role) {
@@ -32,6 +36,10 @@ export const PRIVILEGE_RANK = {
   AML_COMPLIANCE_OFFICER: 3,
   SENIOR_MANAGER: 3,
   SALES_MANAGER: 2,
+  // Specialists rank alongside the sales manager so ROOT and firm-level staff may appoint them.
+  // canCreateRole stops them appointing anyone in turn.
+  AUDIT: 2,
+  FINANCE: 2,
   AGENT: 1,
   AGENT_PA: 1,
   ADMIN: 1,
@@ -45,8 +53,9 @@ export const isFirmLevel = (role) => FIRM_LEVEL.has(role);
 export const isBranchLevel = (role) => BRANCH_LEVEL.has(role);
 
 // Mirrors Role.canCreate: strictly-lower rank, plus firm-level staff appointing firm-level
-// peers within their own reporting entity.
+// peers within their own reporting entity. The specialists manage nobody.
 export function canCreateRole(role, target) {
+  if (role === 'AUDIT' || role === 'FINANCE') return false;
   if (isFirmLevel(role) && isFirmLevel(target)) return true;
   return (PRIVILEGE_RANK[role] ?? 0) > (PRIVILEGE_RANK[target] ?? 0);
 }
@@ -54,8 +63,24 @@ export function canCreateRole(role, target) {
 export function creatableRoles(role) {
   return ROLES.filter((target) => canCreateRole(role, target));
 }
-export const requiresFirm = (role) => FIRM_LEVEL.has(role) || BRANCH_LEVEL.has(role);
+export const requiresFirm = (role) => FIRM_LEVEL.has(role) || BRANCH_LEVEL.has(role) || role === 'FINANCE';
 export const requiresBranch = (role) => BRANCH_LEVEL.has(role);
+
+// ── The two specialist roles ────────────────────────────────────────────────
+// Mirrors nz.amldock.user.Role. Neither is firm-level: that predicate carries meaning beyond
+// linkage (training assignability, firm-peer appointment) these roles have no part in.
+
+/** Reads every section, writes nothing. The server enforces this in AuditReadOnlyFilter. */
+export const READ_ONLY_ROLES = ['AUDIT'];
+export const isReadOnly = (role) => READ_ONLY_ROLES.includes(role);
+/** Gate for action controls the allow-list helpers below don't already cover. */
+export const canWrite = (role) => Boolean(role) && !isReadOnly(role);
+
+/** Sees every reporting entity rather than one — a visibility question, not a write grant. */
+export const seesAllFirms = (role) => role === 'ROOT' || role === 'AUDIT';
+
+/** FINANCE sees these two Monitoring modules and nothing else in the workspace. */
+export const FINANCE_MODULE_IDS = ['management-reports', 'intl-fund-transfers'];
 
 // Privilege groups used by route guards / page checks.
 export const DEAL_AUTHOR_ROLES = ['AGENT', 'AGENT_PA', 'ADMIN'];
@@ -65,13 +90,20 @@ export const DELETE_ROLES = ['ROOT', 'SENIOR_MANAGER'];
 export const REVIEW_MANAGER_ROLES = ['ROOT', 'SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER'];
 export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'SALES_MANAGER'];
 // Settings › Users and Settings › Reporting Entities. ROOT sees the platform; firm-level staff
-// see the same screens scoped by the API to their own reporting entity.
-export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+// see the same screens scoped by the API to their own reporting entity. AUDIT opens them too but
+// every control inside is gated by canWrite / canManageUsers, so it only reads.
+export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
 
 // Roles with the full compliance workspace. Everyone else is confined to the CDD section:
 // only CDD modules are visible in the sidebar / dashboard hub and only those routes resolve.
 export const FULL_WORKSPACE_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
-export const canAccessAllModules = (role) => FULL_WORKSPACE_ROLES.includes(role);
+
+// Who may reach a section at all. AUDIT sees every section (read-only); FINANCE is narrowed to
+// two Monitoring modules by visibleGroupsFor, not by this list.
+export const SECTION_READ_ROLES = [...FULL_WORKSPACE_ROLES, 'AUDIT'];
+export const canAccessAllModules = (role) => SECTION_READ_ROLES.includes(role);
+/** Route guard for FINANCE_MODULE_IDS and the Monitoring landing they sit under. */
+export const FINANCE_SECTION_ROLES = [...SECTION_READ_ROLES, 'FINANCE'];
 
 // Branch-level staff, as a route-guard list.
 export const BRANCH_LEVEL_ROLES = ['SALES_MANAGER', 'AGENT', 'AGENT_PA', 'ADMIN'];

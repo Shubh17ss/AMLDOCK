@@ -119,7 +119,7 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
                     <span>{dateFmt(s.sessionDate)}</span>
                     {isOverdue(s) && (
                       <Chip size="small" label="Overdue" sx={{
-                        color: tokens.rejected, backgroundColor: `${tokens.rejected}14`,
+                        color: tokens.rejected, backgroundColor: `color-mix(in srgb, ${tokens.rejected} 8%, transparent)`,
                         fontWeight: 700, fontSize: '0.68rem',
                       }} />
                     )}
@@ -161,7 +161,7 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
             ))}
             {!sessionsQ.isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: tokens.muted }}>
                   {search
                     ? `No sessions match “${search}”.`
                     : 'No sessions yet — create the first one to start the training record.'}

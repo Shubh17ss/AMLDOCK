@@ -114,7 +114,7 @@ export function CoursesTab({ createOpen, onCloseCreate }) {
                     <span>{dateFmt(c.dueDate)}</span>
                     {isOverdue(c) && (
                       <Chip size="small" label="Overdue" sx={{
-                        color: tokens.rejected, backgroundColor: `${tokens.rejected}14`,
+                        color: tokens.rejected, backgroundColor: `color-mix(in srgb, ${tokens.rejected} 8%, transparent)`,
                         fontWeight: 700, fontSize: '0.68rem',
                       }} />
                     )}
@@ -156,7 +156,7 @@ export function CoursesTab({ createOpen, onCloseCreate }) {
             ))}
             {!coursesQ.isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: tokens.muted }}>
                   {search
                     ? `No courses match “${search}”.`
                     : 'No courses yet — create the first one to start the training catalogue.'}

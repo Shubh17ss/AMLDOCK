@@ -7,6 +7,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import App from './App.jsx';
 import './styles/fonts.css';
+// Light/dark palette variables — the tokens in theme.js are var() refs into this.
+import './styles/theme-vars.css';
 // Country flag glyphs (SVG-in-CSS) for the Overseas Jurisdiction picker.
 import 'flag-icons/css/flag-icons.min.css';
 import { theme } from './theme/theme.js';

@@ -8,10 +8,12 @@ import {
 } from '@mui/material';
 import { createFirm, listFirms, updateFirm } from '../../api/firms.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
+import { canWrite } from '../../auth/roles.js';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
 import { flagClass } from '../../data/countries.js';
 import AddBusinessIcon from '@mui/icons-material/AddBusiness';
+import { tokens } from '../../theme/theme.js';
 
 export function FirmsAdminPage() {
   const qc = useQueryClient();
@@ -19,7 +21,10 @@ export function FirmsAdminPage() {
   const { user: currentUser } = useAuth();
   // The API returns every entity to ROOT and only their own to firm-level staff, so the table
   // needs no filtering here — but creating entities and the active toggle stay platform-only.
+  // AUDIT reaches this screen to read the register; only ROOT creates entities, and the active
+  // switch additionally needs write.
   const isRoot = currentUser?.role === 'ROOT';
+  const mayWrite = canWrite(currentUser?.role);
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -35,7 +40,7 @@ export function FirmsAdminPage() {
           ? `${firmsQ.data?.length ?? 0} reporting entities · ${(firmsQ.data ?? []).filter((f) => f.active).length} active`
           : 'Your reporting entity'}
         title="Reporting entities"
-        actions={isRoot && (
+        actions={isRoot && mayWrite && (
           <Button variant="contained" startIcon={<AddBusinessIcon />} onClick={() => setCreateOpen(true)}>
             New reporting entity
           </Button>
@@ -76,7 +81,7 @@ export function FirmsAdminPage() {
                       firm-level staff, so don't offer a switch that would silently do nothing. */}
                   <Switch
                     checked={firm.active}
-                    disabled={!isRoot}
+                    disabled={!isRoot || !mayWrite}
                     onChange={(e) => toggleActive.mutate({ id: firm.id, active: e.target.checked })}
                   />
                 </TableCell>
@@ -141,14 +146,14 @@ function CreateFirmDialog({ open, onClose }) {
             />
             <TextField label="NZBN/ABN" value={form.nzbn} onChange={ch('nzbn')} />
 
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Liaison</Typography>
+            <Typography variant="subtitle2" sx={{ color: tokens.muted, mt: 1 }}>Liaison</Typography>
             <TextField label="Liaison name" value={form.liaisonName} onChange={ch('liaisonName')} />
             <TextField label="Liaison email" type="email" value={form.liaisonEmail}
                        onChange={ch('liaisonEmail')} required />
             <TextField label="Liaison contact number" value={form.liaisonContactNumber}
                        onChange={ch('liaisonContactNumber')} />
 
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Compliance officer</Typography>
+            <Typography variant="subtitle2" sx={{ color: tokens.muted, mt: 1 }}>Compliance officer</Typography>
             <TextField label="Compliance officer name" value={form.complianceOfficerName}
                        onChange={ch('complianceOfficerName')} />
             <TextField label="Compliance officer email" type="email" value={form.complianceOfficerEmail}

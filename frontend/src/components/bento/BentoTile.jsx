@@ -25,11 +25,11 @@ export function BentoTile({
     // + higher saturation lets the wash glow through; the specular edge lives in the
     // shadows.glass inset highlight.
     plain: {
-      background: 'linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.62) 100%)',
+      background: tokens.glassBg,
       backdropFilter: 'blur(18px) saturate(180%)',
       WebkitBackdropFilter: 'blur(18px) saturate(180%)',
       color: tokens.ink,
-      border: '1px solid rgba(215,222,234,0.7)',
+      border: `1px solid ${tokens.glassBorder}`,
     },
     accent: {
       background: `linear-gradient(140deg, ${tokens.blue} 0%, ${tokens.blueDark} 100%)`,

@@ -80,6 +80,8 @@ public class WelcomeEmail {
             case AGENT -> "Agent";
             case AGENT_PA -> "Agent PA";
             case ADMIN -> "Branch Admin";
+            case AUDIT -> "Auditor";
+            case FINANCE -> "Finance";
         };
     }
 

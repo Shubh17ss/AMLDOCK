@@ -121,7 +121,7 @@ export function CourseContentUploader({
         sx={{
           border: `1.5px dashed ${dragOver ? tokens.blue : tokens.hairline2}`,
           borderRadius: '14px',
-          backgroundColor: dragOver ? tokens.blueWash : '#FBFCFE',
+          backgroundColor: dragOver ? tokens.blueWash : tokens.tileRaised,
           p: 4, textAlign: 'center', cursor: disabled ? 'default' : 'pointer',
           opacity: disabled ? 0.6 : 1,
           transition: 'border-color 0.15s ease, background-color 0.15s ease',

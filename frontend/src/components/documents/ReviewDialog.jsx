@@ -82,7 +82,7 @@ export function ReviewDialog({ open, onClose, moduleKey, title, review }) {
           />
           <Box sx={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1,
-            p: 1.5, borderRadius: '10px', backgroundColor: '#FBFCFE', border: `1px solid ${tokens.hairline}`,
+            p: 1.5, borderRadius: '10px', backgroundColor: tokens.tileRaised, border: `1px solid ${tokens.hairline}`,
           }}>
             <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: tokens.ink }}>

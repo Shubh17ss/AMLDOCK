@@ -14,6 +14,7 @@ import GroupIcon from '@mui/icons-material/Group';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddLinkIcon from '@mui/icons-material/AddLink';
+import { tokens } from '../../theme/theme.js';
 
 const NODE_ICON = {
   NATURAL_PERSON: <PersonIcon fontSize="small" />,
@@ -86,7 +87,7 @@ export function OwnershipTreeBuilder({
         {detached.length > 0 && (
           <Box sx={{ mt: root ? 2 : 0 }}>
             {root && (
-              <Typography variant="caption" color="text.secondary" sx={{ pl: 1 }}>
+              <Typography variant="caption" sx={{ color: tokens.muted, pl: 1 }}>
                 Detached
               </Typography>
             )}

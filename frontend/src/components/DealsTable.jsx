@@ -5,6 +5,7 @@ import { DealStatusChip } from './DealStatusChip.jsx';
 import { fonts } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
+import { tokens } from '../theme/theme.js';
 
 const mono = { fontFamily: fonts.mono, fontSize: '0.8rem' };
 
@@ -15,7 +16,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
   if (deals.length === 0) {
     return (
       <Box sx={{ py: 6, textAlign: 'center' }}>
-        <Typography color="text.secondary">{emptyMessage}</Typography>
+        <Typography sx={{ color: tokens.muted }}>{emptyMessage}</Typography>
       </Box>
     );
   }
@@ -50,7 +51,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
               <TableCell>{d.clientDisplayName ?? '—'}</TableCell>
               <TableCell>{d.propertyAddress ?? '—'}</TableCell>
               <TableCell>{d.createdByEmail ?? '—'}</TableCell>
-              <TableCell sx={{ color: 'text.secondary' }}>{timeAgo(d.updatedAt)}</TableCell>
+              <TableCell sx={{ color: tokens.muted }}>{timeAgo(d.updatedAt)}</TableCell>
               <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                 <Tooltip title="Open">
                   <IconButton size="small" onClick={() => navigate(`/deals/${d.id}`)}>

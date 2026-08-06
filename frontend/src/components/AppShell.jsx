@@ -1,14 +1,16 @@
-import { AppBar, Avatar, Box, Drawer, Stack, Toolbar, Typography } from '@mui/material';
-import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import LogoutIcon from '@mui/icons-material/Logout';
+import { AppBar, Box, Drawer, IconButton, Stack, Toolbar, Tooltip, Typography } from '@mui/material';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
+import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { roleLabel } from '../auth/roles.js';
 import { SidebarNav } from './SidebarNav.jsx';
-import { UserMenu, initialsFor } from './UserMenu.jsx';
+import { UserMenu } from './UserMenu.jsx';
+import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { BottomNav } from './BottomNav.jsx';
 import { moduleTitleFor } from '../navigation/moduleRegistry.jsx';
 import { DashboardScopeProvider } from '../dashboard/DashboardScope.jsx';
-import { tokens } from '../theme/theme.js';
+import { ColorModeProvider, useColorMode } from '../theme/ColorMode.jsx';
+import { tokens, fonts } from '../theme/theme.js';
 
 const SIDEBAR_WIDTH = 260;
 
@@ -29,20 +31,29 @@ function titleFor(pathname) {
   return moduleTitleFor(pathname) ?? 'AML·DOCK';
 }
 
+/** Sun/moon toggle in the app bar — dashboard-only, hence inside ColorModeProvider. */
+function ColorModeToggle() {
+  const { mode, toggle } = useColorMode();
+  const dark = mode === 'dark';
+  return (
+    <Tooltip title={dark ? 'Light mode' : 'Dark mode'}>
+      <IconButton onClick={toggle} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
+        {dark ? <LightModeOutlinedIcon sx={{ fontSize: 20 }} />
+              : <DarkModeOutlinedIcon sx={{ fontSize: 20 }} />}
+      </IconButton>
+    </Tooltip>
+  );
+}
+
 export function AppShell() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const pageTitle = titleFor(pathname);
 
-  const handleSignOut = async () => {
-    await logout();
-    navigate('/login', { replace: true });
-  };
-
   return (
+    <ColorModeProvider>
     <DashboardScopeProvider>
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: tokens.canvas }}>
 
       {/* Sidebar — desktop only */}
       <Box sx={{ display: { xs: 'none', md: 'block' }, width: SIDEBAR_WIDTH, flexShrink: 0 }}>
@@ -66,7 +77,7 @@ export function AppShell() {
               px: 2.5, py: 2.5,
               textDecoration: 'none', color: 'inherit',
               borderBottom: `1px solid ${tokens.hairline}`,
-              background: 'linear-gradient(180deg, #FFFFFF 0%, #F7FAFF 100%)',
+              background: tokens.sidebarHeadBg,
               boxShadow: '0 6px 16px -12px rgba(16,24,40,0.18)',
               position: 'relative', zIndex: 1,
             }}
@@ -96,37 +107,19 @@ export function AppShell() {
 
           <SidebarNav />
 
+          {/* Workspace scope lives in the sidebar footer — it travels with the user across every
+              view, and every register writes into whatever is selected here. The account details
+              and sign-out it replaced are in the app-bar avatar menu. */}
           {user && (
             <Box sx={{ p: 1.5, borderTop: `1px solid ${tokens.hairline}` }}>
-              <Stack direction="row" spacing={1.25} alignItems="center" sx={{ px: 1, py: 0.5 }}>
-                <Avatar sx={{ width: 34, height: 34, fontSize: '0.78rem', fontWeight: 700 }}>
-                  {initialsFor(user.fullName ?? user.email)}
-                </Avatar>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.85rem', color: tokens.ink, lineHeight: 1.3 }}>
-                    {user.fullName ?? user.email}
-                  </Typography>
-                  <Typography noWrap variant="caption" sx={{ color: tokens.muted, lineHeight: 1 }}>
-                    {roleLabel(user.role)}
-                  </Typography>
-                </Box>
-              </Stack>
-
-              <Box
-                component="button"
-                onClick={handleSignOut}
-                sx={{
-                  mt: 1, width: '100%', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                  display: 'flex', alignItems: 'center', gap: 1,
-                  px: 1, py: 0.85, borderRadius: '10px', backgroundColor: 'transparent',
-                  color: tokens.muted, fontSize: '0.85rem', fontWeight: 600,
-                  transition: 'background-color 0.15s ease, color 0.15s ease',
-                  '&:hover': { backgroundColor: '#FCEAEA', color: tokens.rejected },
-                }}
-              >
-                <LogoutIcon sx={{ fontSize: 18 }} />
-                Sign out
-              </Box>
+              <Typography sx={{
+                fontFamily: fonts.mono, fontSize: '0.6rem', fontWeight: 700,
+                letterSpacing: '0.13em', textTransform: 'uppercase',
+                color: tokens.muted, mb: 0.75, px: 1.25,
+              }}>
+                Scope
+              </Typography>
+              <ScopeSelector stacked />
             </Box>
           )}
         </Drawer>
@@ -161,6 +154,7 @@ export function AppShell() {
                 {pageTitle}
               </Typography>
             </Stack>
+            <ColorModeToggle />
             <UserMenu compact />
           </Toolbar>
         </AppBar>
@@ -200,6 +194,7 @@ export function AppShell() {
       <BottomNav />
     </Box>
     </DashboardScopeProvider>
+    </ColorModeProvider>
   );
 }
 
@@ -212,6 +207,8 @@ function roleDisplay(role) {
     case 'AML_COMPLIANCE_OFFICER':return 'Compliance workspace';
     case 'SENIOR_MANAGER':        return 'Senior management';
     case 'ROOT':                  return 'Platform administration';
+    case 'AUDIT':                 return 'Audit — read only';
+    case 'FINANCE':               return 'Finance workspace';
     default:                      return '';
   }
 }

@@ -4,6 +4,7 @@ import {
   FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import { EDGE_ROLES } from '../../api/ownership.js';
+import { tokens } from '../../theme/theme.js';
 
 /**
  * Lets the user attach an existing detached node to a chosen parent.
@@ -80,7 +81,7 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: tokens.muted }}>
               Pick the node that should sit <em>above</em> {node?.displayName ?? 'this node'} in
               the ownership tree. Ancestors-of-self are hidden from the list to prevent cycles.
             </Typography>

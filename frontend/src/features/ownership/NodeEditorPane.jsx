@@ -13,6 +13,7 @@ import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
 import { VoiceClip } from '../../components/VoiceClip.jsx';
+import { tokens } from '../../theme/theme.js';
 
 // Three user-facing manual states mapped onto the existing backend enum.
 const VERIFICATION_OPTIONS = [
@@ -102,7 +103,7 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   if (!selected || !form) {
     return (
       <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
-        <Typography color="text.secondary" variant="body2">
+        <Typography sx={{ color: tokens.muted }} variant="body2">
           Select a node from the tree to view or edit its details.
         </Typography>
       </Paper>
@@ -286,7 +287,7 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
         <Stack spacing={3} sx={{ overflowY: 'auto' }}>
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Manual verification</Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: tokens.muted }}>
               Mark this node's status while automated checks (LINZ / NZBN / IDV) are wired up.
               The status badge in the tree updates as soon as you save.
             </Typography>

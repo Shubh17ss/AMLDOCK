@@ -21,7 +21,7 @@ import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { canDelete } from '../../auth/roles.js';
+import { canDelete, canWrite } from '../../auth/roles.js';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { tokens, fonts } from '../../theme/theme.js';
 
@@ -82,6 +82,8 @@ export function InternationalFundTransactionRegisterPage() {
   const [toDelete, setToDelete] = useState(null);
 
   const mayDelete = canDelete(user?.role);
+  // AUDIT reads this register but files nothing into it.
+  const mayWrite = canWrite(user?.role);
   // The delete action gets its own column at the far right so it never sits under "File".
   const colCount = mayDelete ? 9 : 8;
 
@@ -150,9 +152,11 @@ export function InternationalFundTransactionRegisterPage() {
             >
               Download CSV
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+            {mayWrite && (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
               International Fund Transaction
-            </Button>
+              </Button>
+            )}
           </>
         }
       />
@@ -196,7 +200,7 @@ export function InternationalFundTransactionRegisterPage() {
                       label={flow.label}
                       sx={{
                         color: flow.color,
-                        backgroundColor: `${flow.color}14`,
+                        backgroundColor: `color-mix(in srgb, ${flow.color} 8%, transparent)`,
                         fontWeight: 600,
                         fontSize: '0.72rem',
                       }}
@@ -244,7 +248,7 @@ export function InternationalFundTransactionRegisterPage() {
             })}
             {!txQ.isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                <TableCell colSpan={colCount} align="center" sx={{ py: 5, color: tokens.muted }}>
                   No transactions yet — add the first international fund transaction to start the register.
                 </TableCell>
               </TableRow>

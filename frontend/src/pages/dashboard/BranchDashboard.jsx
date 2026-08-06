@@ -76,7 +76,7 @@ export function BranchDashboard() {
         <Box sx={{ mt: 'auto', display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {teamRows.length ? teamRows.map(([role, n]) => (
             <Box key={role} sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 0.6,
-              px: 1.25, py: 0.6, borderRadius: '9px', backgroundColor: '#F2F5FA' }}>
+              px: 1.25, py: 0.6, borderRadius: '9px', backgroundColor: tokens.hover }}>
               <Typography sx={{ fontFamily: fonts.mono, fontWeight: 700, color: tokens.ink, fontSize: '0.9rem' }}>{n}</Typography>
               <Typography sx={{ fontSize: '0.74rem', color: tokens.muted }}>{roleLabel(role)}</Typography>
             </Box>

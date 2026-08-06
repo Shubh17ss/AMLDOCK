@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Box, MenuItem, Select, Typography } from '@mui/material';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { isBranchLevel, requiresFirm } from '../../auth/roles.js';
+import { isBranchLevel, requiresFirm, seesAllFirms } from '../../auth/roles.js';
 import { getFirm, listFirms, listBranches } from '../../api/firms.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { tokens, fonts } from '../../theme/theme.js';
@@ -21,7 +21,9 @@ export function ScopeSelector({ stacked = false }) {
   const { firm, setFirm, branch, setBranch, initialized, setInitialized } = useDashboardScope();
 
   const role = user?.role;
-  const isRoot = role === 'ROOT';
+  // AUDIT reads every entity, so it gets ROOT's entity switcher — the read-only guarantee is
+  // enforced server-side by AuditReadOnlyFilter, not by pinning the scope.
+  const isRoot = seesAllFirms(role);
   const branchLevel = isBranchLevel(role);
   const firmLevel = !isRoot && !branchLevel && requiresFirm(role);
   const branchSelectable = isRoot || firmLevel;
@@ -144,13 +146,13 @@ function ScopeSelect({ label, value, display, onChange, disabled, fullWidth, chi
       sx={{
         minWidth: 168,
         borderRadius: '11px',
-        backgroundColor: 'rgba(255,255,255,0.72)',
+        backgroundColor: tokens.scopeBg,
         backdropFilter: 'blur(10px) saturate(160%)',
         WebkitBackdropFilter: 'blur(10px) saturate(160%)',
         boxShadow: '0 1px 2px rgba(16,24,40,0.05)',
         '& .MuiOutlinedInput-notchedOutline': { borderColor: tokens.hairline },
         '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: tokens.hairline2 },
-        '&.Mui-disabled': { backgroundColor: 'rgba(255,255,255,0.5)' },
+        '&.Mui-disabled': { backgroundColor: tokens.scopeBgOff },
       }}
     >
       {children}

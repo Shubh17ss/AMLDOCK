@@ -55,7 +55,8 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<User> findVisible(UserPrincipal actor) {
         Role role = actor.role();
-        if (role == Role.ROOT) {
+        // ROOT manages every user; AUDIT only reads them, which AuditReadOnlyFilter enforces.
+        if (role.seesAllFirms()) {
             return users.findAll(BY_ID);
         }
         if (role.isFirmLevel()) {
@@ -64,7 +65,7 @@ public class UserService {
         if (role == Role.SALES_MANAGER) {
             return users.findByFirmBranchIdOrderByIdAsc(actor.firmBranchId());
         }
-        // Agents / branch admins don't manage users.
+        // Agents, branch admins and FINANCE don't see the user register.
         return List.of();
     }
 
@@ -355,8 +356,14 @@ public class UserService {
             return; // ROOT assigns firm freely (validateFirmLinkage still checks the firm exists & is active)
         }
         if (creator.role().isFirmLevel()) {
-            // Creating a firm-level peer or a SALES_MANAGER — either way, inside the creator's
-            // own firm. This is the whole difference between them and ROOT.
+            // An auditor spans every reporting entity, so only ROOT can appoint one. Said plainly
+            // here — otherwise this falls into the firm check below and reports the wrong reason.
+            if (targetRole == Role.AUDIT) {
+                throw new ForbiddenException(
+                        "Auditors see every reporting entity, so only a platform administrator may create one");
+            }
+            // Creating a firm-level peer, a FINANCE user or a SALES_MANAGER — either way, inside
+            // the creator's own firm. This is the whole difference between them and ROOT.
             if (firmId == null || !firmId.equals(creator.realEstateFirmId())) {
                 throw new ForbiddenException("You can only create users within your own firm");
             }
@@ -372,10 +379,10 @@ public class UserService {
     }
 
     /**
-     * Per-tier linkage rules:
-     *   ROOT                                   → firmId null, branchId null
-     *   AML_COMPLIANCE_OFFICER / SENIOR_MANAGER → firmId required, branchId null
-     *   SALES_MANAGER / AGENT / AGENT_PA / ADMIN → firmId required, branchId required (branch in firm)
+     * Per-tier linkage rules, driven entirely by Role.requiresFirm()/requiresBranch():
+     *   ROOT / AUDIT                                     → firmId null, branchId null
+     *   AML_COMPLIANCE_OFFICER / SENIOR_MANAGER / FINANCE → firmId required, branchId null
+     *   SALES_MANAGER / AGENT / AGENT_PA / ADMIN          → firmId required, branchId required
      */
     private void validateFirmLinkage(Role role, Long firmId, Long branchId) {
         if (!role.requiresFirm()) {

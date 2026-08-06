@@ -79,8 +79,8 @@ export function SectionLandingPage({ group }) {
                     <Box sx={{
                       width: 30, height: 30, borderRadius: '10px', flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      backgroundColor: `${meta.color}1C`,
-                      boxShadow: `inset 0 0 0 1px ${meta.color}26`,
+                      backgroundColor: `color-mix(in srgb, ${meta.color} 11%, transparent)`,
+                      boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${meta.color} 15%, transparent)`,
                     }}>
                       <StatusIcon sx={{ fontSize: 18, color: meta.color }} />
                     </Box>

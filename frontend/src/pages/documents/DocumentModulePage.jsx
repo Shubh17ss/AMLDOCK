@@ -21,7 +21,7 @@ import { ReviewDialog } from '../../components/documents/ReviewDialog.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { canDelete, canManageReview } from '../../auth/roles.js';
+import { canDelete, canManageReview, canWrite } from '../../auth/roles.js';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { tokens, fonts } from '../../theme/theme.js';
 
@@ -73,6 +73,8 @@ export function DocumentModulePage({ category, title, moduleKey }) {
 
   const mayDelete = canDelete(user?.role);
   const mayReview = canManageReview(user?.role);
+  // AUDIT reads the register and its history but files no revisions.
+  const mayWrite = canWrite(user?.role);
 
   // Review schedule for this module in the current scope (one row per module + scope).
   const reviewsQ = useQuery({
@@ -161,9 +163,11 @@ export function DocumentModulePage({ category, title, moduleKey }) {
           >
             Download latest version
           </Button>
-          <Button variant="contained" startIcon={<UploadIcon />} onClick={() => setUploadOpen(true)}>
-            Upload new version
-          </Button>
+          {mayWrite && (
+            <Button variant="contained" startIcon={<UploadIcon />} onClick={() => setUploadOpen(true)}>
+              Upload new version
+            </Button>
+          )}
         </Stack>
       </Box>
 
@@ -211,7 +215,7 @@ export function DocumentModulePage({ category, title, moduleKey }) {
               ))}
               {!docsQ.isLoading && docs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                  <TableCell colSpan={4} align="center" sx={{ py: 5, color: tokens.muted }}>
                     No versions yet — upload the first {title.toLowerCase()} to start the register.
                   </TableCell>
                 </TableRow>
@@ -387,7 +391,7 @@ function UploadRevisionDialog({ open, onClose, category, title }) {
               sx={{
                 border: `1.5px dashed ${dragOver ? tokens.blue : tokens.hairline2}`,
                 borderRadius: '14px',
-                backgroundColor: dragOver ? tokens.blueWash : '#FBFCFE',
+                backgroundColor: dragOver ? tokens.blueWash : tokens.tileRaised,
                 p: 3, textAlign: 'center', cursor: 'pointer',
                 transition: 'border-color 0.15s ease, background-color 0.15s ease',
               }}

@@ -36,20 +36,20 @@ public class InternationalFundTransactionController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER','FINANCE')")
     public FundTransactionDto create(@Valid @RequestBody CreateFundTransactionRequest req) {
         return transactions.create(req);
     }
 
     @PostMapping("/{id}/upload-url")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER','FINANCE')")
     public UploadUrlResponse presignUpload(@PathVariable Long id,
                                           @Valid @RequestBody FundTransactionUploadUrlRequest req) {
         return transactions.presignUpload(id, req);
     }
 
     @PostMapping("/{id}/confirm")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER','FINANCE')")
     public FundTransactionDto confirmUpload(@PathVariable Long id) {
         return transactions.confirmUpload(id);
     }

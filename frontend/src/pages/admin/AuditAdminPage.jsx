@@ -13,6 +13,7 @@ import dayjs from 'dayjs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, searchAudit } from '../../api/audit.js';
 import { AuditActionChip } from '../../components/AuditActionChip.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
+import { tokens } from '../../theme/theme.js';
 
 const DEFAULT_FILTERS = {
   action: '',
@@ -112,7 +113,7 @@ export function AuditAdminPage() {
             {(q.data?.items ?? []).map((row) => <AuditRow key={row.id} row={row} />)}
             {!q.isLoading && (q.data?.items ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 4, color: tokens.muted }}>
                   No audit entries match these filters.
                 </TableCell>
               </TableRow>
@@ -161,7 +162,7 @@ function AuditRow({ row }) {
           <TableCell colSpan={7} sx={{ p: 0, borderBottom: open ? undefined : 'none' }}>
             <Collapse in={open} unmountOnExit>
               <Box sx={{ p: 2, bgcolor: 'action.hover' }}>
-                <Typography variant="caption" color="text.secondary">Metadata</Typography>
+                <Typography variant="caption" sx={{ color: tokens.muted }}>Metadata</Typography>
                 <Box component="pre" sx={{ m: 0, mt: 1, fontSize: 12, whiteSpace: 'pre-wrap' }}>
                   {prettyJson(row.metadata)}
                 </Box>

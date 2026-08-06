@@ -14,6 +14,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { fetchDownloadUrl, listDealDocuments } from '../../api/documents.js';
+import { tokens } from '../../theme/theme.js';
 
 // Configure the pdf.js worker once. Using a CDN keeps us out of Vite bundler config.
 pdfjs.GlobalWorkerOptions.workerSrc =
@@ -74,7 +75,7 @@ export function PdfViewerPane({ dealId, selectedDocumentId, onSelectDocument }) 
         <DocumentViewer doc={selected} />
       ) : (
         <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Typography color="text.secondary" variant="body2">
+          <Typography sx={{ color: tokens.muted }} variant="body2">
             Select a document from the dropdown to view it here.
           </Typography>
         </Box>

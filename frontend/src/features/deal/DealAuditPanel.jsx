@@ -9,6 +9,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { listAuditForDeal } from '../../api/audit.js';
 import { AuditActionChip } from '../../components/AuditActionChip.jsx';
+import { tokens } from '../../theme/theme.js';
 
 export function DealAuditPanel({ dealId, defaultExpanded = false }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -62,7 +63,7 @@ export function DealAuditPanel({ dealId, defaultExpanded = false }) {
                 ))}
                 {q.data.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3, color: tokens.muted }}>
                       No audit entries.
                     </TableCell>
                   </TableRow>

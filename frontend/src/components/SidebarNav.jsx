@@ -7,7 +7,6 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { visibleGroupsFor, DASHBOARD_PATH, MY_TRAINING_PATH } from '../navigation/moduleRegistry.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canBeAssignedTraining } from '../auth/roles.js';
-import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 
 const inGroup = (group, pathname) =>
@@ -34,18 +33,6 @@ export function SidebarNav() {
 
   return (
     <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 1.5 }}>
-      {/* Workspace scope — travels with the user across every dashboard view. */}
-      <Box sx={{ mb: 2, px: 0.25 }}>
-        <Typography sx={{
-          fontFamily: fonts.mono, fontSize: '0.6rem', fontWeight: 700,
-          letterSpacing: '0.13em', textTransform: 'uppercase',
-          color: tokens.muted, mb: 0.75, px: 1.25,
-        }}>
-          Scope
-        </Typography>
-        <ScopeSelector stacked />
-      </Box>
-
       {/* Anyone who can hold a training assignment gets the personal view here. For branch staff
           it's instead of the privileged AML Training section; firm-level staff have both, since
           they run training and also have their own to do. */}
@@ -70,16 +57,16 @@ export function SidebarNav() {
               onClick={() => setOpen(group.group)}
               sx={{
                 display: 'flex', alignItems: 'center', gap: 1.25,
-                px: 1.75, py: 1.1, borderRadius: '7rem', textDecoration: 'none',
+                px: 1.75, py: 1.1, borderRadius: '6px', textDecoration: 'none',
                 fontFamily: fonts.mono, fontSize: '0.64rem', fontWeight: 700,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
                 color: groupActive ? tokens.blue : tokens.muted,
-                // Pill chip: light wash at rest; the open header reads as a raised control.
-                background: isOpen ? 'linear-gradient(180deg, #FFFFFF 0%, #F6F9FE 100%)' : '#F4F7FB',
+                // Squared chip: light wash at rest; the open header reads as a raised control.
+                background: isOpen ? tokens.sidebarHeadBg : tokens.tileRaised,
                 border: `1px solid ${isOpen ? tokens.hairline : 'transparent'}`,
                 boxShadow: isOpen ? '0 2px 6px -2px rgba(16,24,40,0.10)' : 'none',
                 transition: 'color 0.15s ease, background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-                '&:hover': { color: tokens.blue, backgroundColor: isOpen ? undefined : '#EDF3FC' },
+                '&:hover': { color: tokens.blue, backgroundColor: isOpen ? undefined : tokens.hover },
               }}
             >
               {/* Section glyph — sized to sit with the mono label. */}
@@ -102,7 +89,7 @@ export function SidebarNav() {
                 }}
                 sx={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 22, height: 22, borderRadius: '7px', flexShrink: 0,
+                  width: 22, height: 22, borderRadius: '5px', flexShrink: 0,
                   color: 'inherit',
                   transition: 'transform 0.25s cubic-bezier(0.22,1,0.36,1), background-color 0.15s ease',
                   transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -141,11 +128,11 @@ function NavList({ items, pathname, sx }) {
               selected={active}
               sx={{
                 py: 0.9,
-                borderRadius: 2.5,
+                borderRadius: '6px',
                 color: active ? tokens.blue : tokens.ink,
                 '&.Mui-selected': { backgroundColor: tokens.blueWash, color: tokens.blue },
                 '&.Mui-selected:hover': { backgroundColor: tokens.blueWash },
-                '&:hover': { backgroundColor: '#F2F5FA' },
+                '&:hover': { backgroundColor: tokens.hover },
               }}
             >
               <ListItemIcon sx={{ minWidth: 36, color: active ? tokens.blue : tokens.muted }}>

@@ -8,6 +8,7 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import { createBranch, deactivateBranch, listBranches, updateBranch } from '../../api/firms.js';
+import { tokens } from '../../theme/theme.js';
 
 const EMPTY_BRANCH = {
   name: '', addressLine1: '', suburb: '', city: '', postcode: '',
@@ -49,7 +50,7 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
           <Stack direction="row" spacing={1} alignItems="baseline">
             <Typography variant="h6">Branches</Typography>
             {maxBranches != null && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: tokens.muted }}>
                 {activeCount} of {maxBranches} declared
               </Typography>
             )}
@@ -107,7 +108,7 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
               ))}
               {branchesQ.data?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3, color: tokens.muted }}>
                     No branches yet.
                   </TableCell>
                 </TableRow>

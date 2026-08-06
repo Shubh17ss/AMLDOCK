@@ -16,7 +16,7 @@ export function DealRow({ deal, to }) {
         py: 1, px: 0.75, textDecoration: 'none',
         borderRadius: '10px', borderBottom: `1px solid ${tokens.hairline}`,
         transition: 'background-color 0.15s ease',
-        '&:hover': { backgroundColor: '#F5F8FD' },
+        '&:hover': { backgroundColor: tokens.hover },
         '&:last-child': { borderBottom: 'none' },
       }}
     >

@@ -58,8 +58,8 @@ export function ModuleCard({
           sx={{
             width: 30, height: 30, borderRadius: '10px', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: `${statusColor}1C`,
-            boxShadow: `inset 0 0 0 1px ${statusColor}26`,
+            backgroundColor: `color-mix(in srgb, ${statusColor} 11%, transparent)`,
+            boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${statusColor} 15%, transparent)`,
             transition: 'transform 0.3s cubic-bezier(0.22,1,0.36,1)',
           }}
         >

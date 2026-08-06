@@ -62,7 +62,7 @@ export function MySessionsTab({ sessions, isLoading, isError }) {
                   </Typography>
                   {overdue && (
                     <Chip size="small" label="Overdue" sx={{
-                      color: tokens.rejected, backgroundColor: `${tokens.rejected}14`,
+                      color: tokens.rejected, backgroundColor: `color-mix(in srgb, ${tokens.rejected} 8%, transparent)`,
                       fontWeight: 700, fontSize: '0.68rem',
                     }} />
                   )}
@@ -104,7 +104,7 @@ export function MySessionsTab({ sessions, isLoading, isError }) {
                     icon={<CheckCircleIcon sx={{ fontSize: 16, color: `${tokens.approved} !important` }} />}
                     label={`Attended ${dateFmt(s.myCompletedAt)}`}
                     sx={{
-                      color: tokens.approved, backgroundColor: `${tokens.approved}14`,
+                      color: tokens.approved, backgroundColor: `color-mix(in srgb, ${tokens.approved} 8%, transparent)`,
                       fontWeight: 600, fontSize: '0.75rem',
                     }}
                   />
@@ -113,7 +113,7 @@ export function MySessionsTab({ sessions, isLoading, isError }) {
                     icon={<PendingIcon sx={{ fontSize: 16, color: `${tokens.review} !important` }} />}
                     label="Attendance not recorded"
                     sx={{
-                      color: tokens.review, backgroundColor: `${tokens.review}14`,
+                      color: tokens.review, backgroundColor: `color-mix(in srgb, ${tokens.review} 8%, transparent)`,
                       fontWeight: 600, fontSize: '0.75rem',
                     }}
                   />

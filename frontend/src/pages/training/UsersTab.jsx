@@ -151,7 +151,7 @@ export function UsersTab() {
                       size="small"
                       label={row.outstanding}
                       sx={{
-                        color: tokens.review, backgroundColor: `${tokens.review}14`,
+                        color: tokens.review, backgroundColor: `color-mix(in srgb, ${tokens.review} 8%, transparent)`,
                         fontWeight: 700, fontSize: '0.72rem', minWidth: 34,
                       }}
                     />
@@ -165,7 +165,7 @@ export function UsersTab() {
             ))}
             {!isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                <TableCell colSpan={4} align="center" sx={{ py: 5, color: tokens.muted }}>
                   {search ? `No staff match “${search}”.` : 'No staff in this branch.'}
                 </TableCell>
               </TableRow>
