@@ -13,15 +13,16 @@ import { PageHeader } from '../../components/PageHeader.jsx';
 import { ScopeGate } from '../../dashboard/ScopeGate.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { TRAINING_MANAGER_ROLES, canManageTraining } from '../../auth/roles.js';
+import { TRAINING_VIEWER_ROLES, canManageTraining } from '../../auth/roles.js';
 
 // Tabs as data so role restrictions are a filter rather than a thicket of conditionals.
-// Providers and Users are for the people who run training; Sessions and Courses are general.
+// Providers and Users are for the people who run training — and the auditor, who reads them.
+// The create/edit controls below are gated separately on canManageTraining.
 const TABS = [
   { value: 'sessions',  label: 'Sessions',  icon: <CoPresentIcon /> },
   { value: 'courses',   label: 'Courses',   icon: <MenuBookIcon /> },
-  { value: 'providers', label: 'Providers', icon: <BusinessIcon />,  roles: TRAINING_MANAGER_ROLES },
-  { value: 'users',     label: 'Users',     icon: <PeopleAltIcon />, roles: TRAINING_MANAGER_ROLES },
+  { value: 'providers', label: 'Providers', icon: <BusinessIcon />,  roles: TRAINING_VIEWER_ROLES },
+  { value: 'users',     label: 'Users',     icon: <PeopleAltIcon />, roles: TRAINING_VIEWER_ROLES },
 ];
 
 /**

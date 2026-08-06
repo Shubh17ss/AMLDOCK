@@ -18,7 +18,8 @@ import VerifiedUserRoundedIcon from '@mui/icons-material/VerifiedUserRounded';
 import WorkspacePremiumRoundedIcon from '@mui/icons-material/WorkspacePremiumRounded';
 import MonitorHeartRoundedIcon from '@mui/icons-material/MonitorHeartRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
-import { canAccessAllModules, FINANCE_MODULE_IDS } from '../auth/roles.js';
+import HistoryIcon from '@mui/icons-material/History';
+import { canAccessAllModules, FINANCE_MODULE_IDS, AUDIT_LOG_ROLES } from '../auth/roles.js';
 
 // ── Compliance module registry ──────────────────────────────────────────────
 // Single source of truth for the workspace surface: the sidebar, the dashboard
@@ -38,6 +39,7 @@ export const STAFF_TRAINING_PATH = '/aml-training/staff-training';
 // The personal training view for branch staff. Not a module — it sits beside Dashboard in the
 // sidebar rather than inside the AML Training section, which stays privileged.
 export const MY_TRAINING_PATH = '/my-training';
+export const AUDIT_LOG_PATH = '/settings/audit-log';
 
 export const MODULE_GROUPS = [
   {
@@ -98,6 +100,12 @@ export const MODULE_GROUPS = [
         blurb: 'Invite staff, set roles and manage access to the workspace.' },
       { id: 'reporting-entities', label: 'Reporting Entities', to: '/settings/reporting-entities', icon: <BusinessIcon />,
         blurb: 'Manage reporting entities, their branches and firm details.' },
+      // `roles` narrows an item within an otherwise-visible section. The trail is the record of
+      // who changed what, so it stays with the people accountable for it — not the auditor,
+      // whose own reads would otherwise be the thing being audited.
+      { id: 'audit-log', label: 'Audit Log', to: AUDIT_LOG_PATH, icon: <HistoryIcon />,
+        roles: AUDIT_LOG_ROLES,
+        blurb: 'Every recorded action across the workspace, with who did it and when.' },
     ],
   },
 ];
@@ -131,13 +139,16 @@ export const CDD_GROUP = MODULE_GROUPS.find((g) => g.slug === 'cdd');
  *   everyone else                  → the CDD section
  */
 export function visibleGroupsFor(role) {
-  if (canAccessAllModules(role)) return MODULE_GROUPS;
+  // Item-level `roles` narrows within a visible section; applied to every branch below.
+  const allowed = (g) => ({ ...g, items: g.items.filter((i) => !i.roles || i.roles.includes(role)) });
+
+  if (canAccessAllModules(role)) return MODULE_GROUPS.map(allowed);
   if (role === 'FINANCE') {
     return MODULE_GROUPS
       .filter((g) => g.slug === 'monitoring')
       .map((g) => ({ ...g, items: g.items.filter((i) => FINANCE_MODULE_IDS.includes(i.id)) }));
   }
-  return MODULE_GROUPS.filter((g) => g.slug === 'cdd');
+  return MODULE_GROUPS.filter((g) => g.slug === 'cdd').map(allowed);
 }
 
 /** The routes FINANCE may open: the Monitoring landing plus its two modules. */
@@ -169,6 +180,7 @@ export const IMPLEMENTED_PATHS = [
   '/documents/annual-report',
   '/settings/users',
   '/settings/reporting-entities',
+  AUDIT_LOG_PATH,
   INTL_FUND_TRANSACTIONS_PATH,
   SUSPICIOUS_ACTIVITIES_PATH,
   STAFF_TRAINING_PATH,

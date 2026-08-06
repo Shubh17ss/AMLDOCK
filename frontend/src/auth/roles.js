@@ -93,6 +93,9 @@ export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MAN
 // see the same screens scoped by the API to their own reporting entity. AUDIT opens them too but
 // every control inside is gated by canWrite / canManageUsers, so it only reads.
 export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
+// Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior manager
+// sees their own entity's, scoped server-side by actor in AuditService.search.
+export const AUDIT_LOG_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 
 // Roles with the full compliance workspace. Everyone else is confined to the CDD section:
 // only CDD modules are visible in the sidebar / dashboard hub and only those routes resolve.
@@ -111,6 +114,10 @@ export const BRANCH_LEVEL_ROLES = ['SALES_MANAGER', 'AGENT', 'AGENT_PA', 'ADMIN'
 // AML Training › Staff Training: who runs training (creates sessions, manages providers).
 export const TRAINING_MANAGER_ROLES = FULL_WORKSPACE_ROLES;
 export const canManageTraining = (role) => TRAINING_MANAGER_ROLES.includes(role);
+// Who may *see* the whole training register, as opposed to write to it — the managers plus the
+// auditor. Mirrors TrainingSessionService.canViewWholeRegister; keep the two questions separate,
+// or an auditor gets an empty register.
+export const TRAINING_VIEWER_ROLES = [...TRAINING_MANAGER_ROLES, 'AUDIT'];
 
 // Who can be *assigned* training, and so who the personal My Training page is for: a branch's
 // own staff, plus the firm's compliance officers and senior managers — they run training and

@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '../components/AppShell.jsx';
 import { ProtectedRoute } from '../auth/ProtectedRoute.jsx';
 import { LandingPage } from '../pages/LandingPage.jsx';
@@ -11,7 +11,7 @@ import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
   DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
-  FINANCE_SECTION_ROLES,
+  FINANCE_SECTION_ROLES, AUDIT_LOG_ROLES,
   TRAINING_ASSIGNABLE_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
@@ -21,7 +21,7 @@ import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
 import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
   SUSPICIOUS_ACTIVITIES_PATH, STAFF_TRAINING_PATH, MY_TRAINING_PATH, SECTION_LANDING_GROUPS,
-  FINANCE_PATHS,
+  FINANCE_PATHS, AUDIT_LOG_PATH,
 } from '../navigation/moduleRegistry.jsx';
 import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
 import { SectionLandingPage } from '../pages/SectionLandingPage.jsx';
@@ -196,11 +196,15 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        <Route path="/admin/audit" element={
-          <ProtectedRoute roles={['ROOT']}>
+        {/* Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior
+            manager sees their own entity's, narrowed by actor in AuditService.search. */}
+        <Route path={AUDIT_LOG_PATH} element={
+          <ProtectedRoute roles={AUDIT_LOG_ROLES}>
             <AuditAdminPage />
           </ProtectedRoute>
         } />
+        {/* The trail used to live under /admin; keep old links and bookmarks working. */}
+        <Route path="/admin/audit" element={<Navigate to={AUDIT_LOG_PATH} replace />} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

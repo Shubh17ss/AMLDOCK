@@ -67,7 +67,7 @@ export function RootDashboard() {
         index={4}
         eyebrow="ACTIVITY · RECENT"
         title="Across the platform"
-        to="/admin/audit"
+        to="/settings/audit-log"
         items={activity}
         renderItem={(a) => <AuditRow entry={a} />}
         empty={auditQ.isError ? 'Activity feed unavailable.' : 'No recent activity.'}
@@ -83,7 +83,7 @@ export function RootDashboard() {
         actions={[
           { to: '/settings/reporting-entities', label: 'Reporting entities', icon: <BusinessIcon fontSize="small" />, primary: true },
           { to: '/settings/users', label: 'Users', icon: <PeopleIcon fontSize="small" /> },
-          { to: '/admin/audit', label: 'Audit log', icon: <HistoryIcon fontSize="small" /> },
+          { to: '/settings/audit-log', label: 'Audit log', icon: <HistoryIcon fontSize="small" /> },
         ]}
       />
     </Bento>

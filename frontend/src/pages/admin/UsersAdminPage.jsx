@@ -14,6 +14,7 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { creatableRoles, isFirmLevel, roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
+import { SearchField, matchesSearch } from '../../components/SearchField.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import AddIcon from '@mui/icons-material/PersonAddAlt1';
 import { tokens } from '../../theme/theme.js';
@@ -35,6 +36,17 @@ export function UsersAdminPage() {
   }, [firmsQ.data]);
   const [createOpen, setCreateOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState(null);
+  const [search, setSearch] = useState('');
+
+  // Filtered client-side: the list is already narrowed to the actor's tier and the selected
+  // scope, so it's small enough that a round trip per keystroke would buy nothing. Searching
+  // the role label as well as the raw value means "auditor" finds an AUDIT user.
+  const rows = useMemo(
+    () => (usersQ.data ?? []).filter(
+      (u) => matchesSearch(search, u.fullName, u.email, u.role, roleLabel(u.role)),
+    ),
+    [usersQ.data, search],
+  );
 
   // The API already scopes the list (ROOT: everyone, firm-level: their own entity). These
   // mirror UserService.assertCanManage so we don't offer controls the API will reject.
@@ -57,7 +69,9 @@ export function UsersAdminPage() {
     <Stack spacing={3}>
       <PageHeader
         eyebrow={[
-          `${usersQ.data?.length ?? 0} users`,
+          search
+            ? `${rows.length} of ${usersQ.data?.length ?? 0} users`
+            : `${usersQ.data?.length ?? 0} users`,
           firm?.name ?? (isRoot ? 'all reporting entities' : 'your reporting entity'),
           branch?.name,
         ].filter(Boolean).join(' · ')}
@@ -70,6 +84,8 @@ export function UsersAdminPage() {
       />
 
       {usersQ.isError && <Alert severity="error">Failed to load users.</Alert>}
+
+      <SearchField value={search} onChange={setSearch} placeholder="Search name, email or role…" />
 
       <TableContainer component={Paper}>
         <Table size="small">
@@ -86,7 +102,7 @@ export function UsersAdminPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {usersQ.data?.map((u) => (
+            {rows.map((u) => (
               <UserRow
                 key={u.id}
                 user={u}
@@ -103,10 +119,10 @@ export function UsersAdminPage() {
                 }}
               />
             ))}
-            {usersQ.data?.length === 0 && (
+            {rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} align="center" sx={{ py: 4, color: tokens.muted }}>
-                  No users yet.
+                  {search ? `No users match “${search}”.` : 'No users yet.'}
                 </TableCell>
               </TableRow>
             )}

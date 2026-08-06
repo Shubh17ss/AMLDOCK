@@ -19,6 +19,7 @@ const TITLE_BY_PATH_PREFIX = [
   ['/deals/new',   'New deal'],
   ['/deals/',      'Deal'],
   ['/firm/deals',  'Firm deals'],
+  ['/settings/audit-log', 'Audit log'],
   ['/admin/audit', 'Audit log'],
   ['/profile',     'Profile'],
   ['/dashboard',   'Dashboard'],
