@@ -1,6 +1,7 @@
 package nz.amldock.property.dto;
 
 import nz.amldock.property.Property;
+import nz.amldock.property.PropertyType;
 
 import java.math.BigDecimal;
 
@@ -15,11 +16,14 @@ public record PropertyDto(
         String postcode,
         String titleReference,
         String legalDescription,
-        BigDecimal landAreaSqm
+        BigDecimal landAreaSqm,
+        PropertyType propertyType,
+        String reasonForSelling
 ) {
     public static PropertyDto from(Property p) {
         return new PropertyDto(p.getId(), p.getAddressLine1(), p.getAddressLine2(),
                 p.getSuburb(), p.getDistrict(), p.getRegion(), p.getCountry(), p.getPostcode(),
-                p.getTitleReference(), p.getLegalDescription(), p.getLandAreaSqm());
+                p.getTitleReference(), p.getLegalDescription(), p.getLandAreaSqm(),
+                p.getPropertyType(), p.getReasonForSelling());
     }
 }

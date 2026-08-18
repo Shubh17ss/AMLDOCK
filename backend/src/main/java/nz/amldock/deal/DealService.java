@@ -27,6 +27,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -136,28 +137,38 @@ public class DealService {
         if (!DealLifecycleService.isDealAuthor(actor.role())) {
             throw new BadRequestException("Only agents may create deals");
         }
-        FirmBranch branch = branches.findById(req.firmBranchId())
-                .orElseThrow(() -> new BadRequestException("Branch " + req.firmBranchId() + " not found"));
-        if (!branch.isActive()) {
-            throw new BadRequestException("Branch is inactive");
-        }
-        // Agents can only create deals for the branch they're assigned to.
+        // Agents can only create deals for the branch they're assigned to, so the request
+        // needn't name it — the deal form omits it entirely. A value that disagrees is still
+        // rejected rather than silently ignored.
         if (actor.firmBranchId() == null) {
             throw new ForbiddenException("You are not assigned to a branch — ask an administrator");
+        }
+        Long branchId = req.firmBranchId() == null ? actor.firmBranchId() : req.firmBranchId();
+        FirmBranch branch = branches.findById(branchId)
+                .orElseThrow(() -> new BadRequestException("Branch " + branchId + " not found"));
+        if (!branch.isActive()) {
+            throw new BadRequestException("Branch is inactive");
         }
         if (!actor.firmBranchId().equals(branch.getId())) {
             throw new ForbiddenException("You can only create deals on your assigned branch");
         }
+        validateValuationRange(req.valuationMin(), req.valuationMax());
 
         Property property = new Property();
         applyPropertyInput(property, req.property());
         Property savedProp = properties.save(property);
 
+        // The client is provisional at this point — the deal form creates the draft before it
+        // has asked anything about the owning entity. Both fields may be null; admin/AMLCo
+        // establishes the real client during the ownership-structure review.
         Client client = new Client();
-        client.setDisplayName(req.client().displayName());
-        client.setClientType(req.client().clientType());
-        client.setEmail(req.client().email());
-        client.setPhone(req.client().phone());
+        ClientInput ci = req.client();
+        if (ci != null) {
+            client.setDisplayName(blankToNull(ci.displayName()));
+            client.setClientType(ci.clientType());
+            client.setEmail(blankToNull(ci.email()));
+            client.setPhone(blankToNull(ci.phone()));
+        }
         Client savedClient = clients.save(client);
 
         Deal d = new Deal();
@@ -172,7 +183,15 @@ public class DealService {
         d.setPocPhone(orFallback(req.pocPhone(), branch.getPhone()));
         d.setPocEmail(orFallback(req.pocEmail(), branch.getEmail()));
         d.setNotes(req.notes());
+        d.setTransactionPurpose(blankToNull(req.transactionPurpose()));
+        d.setTrustInvolved(req.trustInvolved());
+        d.setOnSoldQuickly(req.onSoldQuickly());
+        d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
+        d.setRedFlagPresent(req.redFlagPresent());
+        d.setValuationMin(req.valuationMin());
+        d.setValuationMax(req.valuationMax());
         d.setCreatedByUserId(actor.id());
+        applyRiskRating(d);
         Deal saved = deals.save(d);
 
         // Generate human reference now that we have an id
@@ -194,11 +213,24 @@ public class DealService {
         }
         if (req.transactionType() != null) d.setTransactionType(req.transactionType());
         if (req.transactionValue() != null) d.setTransactionValue(req.transactionValue());
-        if (req.pocName() != null) d.setPocName(req.pocName());
-        if (req.pocRole() != null) d.setPocRole(req.pocRole());
-        if (req.pocPhone() != null) d.setPocPhone(req.pocPhone());
-        if (req.pocEmail() != null) d.setPocEmail(req.pocEmail());
-        if (req.notes() != null) d.setNotes(req.notes());
+        if (req.pocName() != null) d.setPocName(blankToNull(req.pocName()));
+        if (req.pocRole() != null) d.setPocRole(blankToNull(req.pocRole()));
+        if (req.pocPhone() != null) d.setPocPhone(blankToNull(req.pocPhone()));
+        if (req.pocEmail() != null) d.setPocEmail(blankToNull(req.pocEmail()));
+        if (req.notes() != null) d.setNotes(blankToNull(req.notes()));
+        if (req.transactionPurpose() != null) d.setTransactionPurpose(blankToNull(req.transactionPurpose()));
+        if (req.trustInvolved() != null) d.setTrustInvolved(req.trustInvolved());
+        if (req.onSoldQuickly() != null) d.setOnSoldQuickly(req.onSoldQuickly());
+        if (req.foreignExposureCountry() != null) {
+            d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
+        }
+        if (req.redFlagPresent() != null) d.setRedFlagPresent(req.redFlagPresent());
+        if (req.valuationMin() != null) d.setValuationMin(req.valuationMin());
+        if (req.valuationMax() != null) d.setValuationMax(req.valuationMax());
+        // Against the merged state, not the request — a PATCH carrying only one bound must
+        // still be checked against the bound already stored.
+        validateValuationRange(d.getValuationMin(), d.getValuationMax());
+        applyRiskRating(d);
         return d;
     }
 
@@ -216,10 +248,13 @@ public class DealService {
         Deal d = mustFindEditable(dealId);
         Client c = clients.findById(d.getClientId())
                 .orElseThrow(() -> new NotFoundException("Client not found"));
-        c.setDisplayName(input.displayName());
-        c.setClientType(input.clientType());
-        c.setEmail(input.email());
-        c.setPhone(input.phone());
+        // Null-guarded like applyPropertyInput, so the deal form can patch the client's name
+        // as soon as it knows it without blanking the contact details it hasn't asked for yet.
+        if (input == null) return c;
+        if (input.displayName() != null) c.setDisplayName(blankToNull(input.displayName()));
+        if (input.clientType() != null) c.setClientType(input.clientType());
+        if (input.email() != null) c.setEmail(blankToNull(input.email()));
+        if (input.phone() != null) c.setPhone(blankToNull(input.phone()));
         return c;
     }
 
@@ -242,6 +277,14 @@ public class DealService {
     private void assertCanDelete(Deal d) {
         UserPrincipal actor = currentPrincipal();
         if (actor.role() == Role.ROOT) {
+            return;
+        }
+        // A broker discarding their own unsubmitted draft. The deal form persists the draft
+        // partway through so documents have something to attach to, so without this the
+        // "Discard" button would leave an orphan the author has no way to clear.
+        if (DealLifecycleService.isDealAuthor(actor.role())
+                && actor.id().equals(d.getCreatedByUserId())
+                && d.getStatus() == DealStatus.DRAFT) {
             return;
         }
         if (actor.role() == Role.SENIOR_MANAGER) {
@@ -313,6 +356,33 @@ public class DealService {
         if (input.titleReference() != null) p.setTitleReference(input.titleReference());
         if (input.legalDescription() != null) p.setLegalDescription(input.legalDescription());
         if (input.landAreaSqm() != null) p.setLandAreaSqm(input.landAreaSqm());
+        if (input.propertyType() != null) p.setPropertyType(input.propertyType());
+        if (input.reasonForSelling() != null) p.setReasonForSelling(blankToNull(input.reasonForSelling()));
+    }
+
+    /** "" means "clear this field"; null means "leave it alone". */
+    private static String blankToNull(String v) {
+        return (v == null || v.isBlank()) ? null : v;
+    }
+
+    private static void validateValuationRange(BigDecimal min, BigDecimal max) {
+        if (min == null || max == null) return;
+        if (max.compareTo(min) < 0) {
+            throw new BadRequestException("Maximum property value cannot be below the minimum");
+        }
+    }
+
+    /**
+     * The deal's risk position. Derived here rather than accepted from the client: a rating
+     * that disagrees with its own inputs would be an unfalsifiable AML record, and keeping the
+     * rule in one place makes it hold across every write path, present and future.
+     *
+     * <p>OVERRIDE ratings were set deliberately by compliance, so the derivation leaves them
+     * alone.
+     */
+    private void applyRiskRating(Deal d) {
+        if (d.getRiskRatingSource() == RiskRatingSource.OVERRIDE) return;
+        d.setRiskRating(Boolean.TRUE.equals(d.getOnSoldQuickly()) ? RiskRating.HIGH : RiskRating.LOW);
     }
 
     private static String orFallback(String preferred, String fallback) {

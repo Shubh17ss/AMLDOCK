@@ -3,6 +3,8 @@ package nz.amldock.deal.dto;
 import nz.amldock.client.dto.ClientDto;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealStatus;
+import nz.amldock.deal.RiskRating;
+import nz.amldock.deal.RiskRatingSource;
 import nz.amldock.deal.TransactionType;
 import nz.amldock.property.dto.PropertyDto;
 
@@ -32,7 +34,18 @@ public record DealDto(
         Long decidedByUserId,
         Instant decidedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // V28 — appended rather than interleaved so the positional constructor calls below
+        // stay the only diff.
+        String transactionPurpose,
+        Boolean trustInvolved,
+        Boolean onSoldQuickly,
+        String foreignExposureCountry,
+        Boolean redFlagPresent,
+        BigDecimal valuationMin,
+        BigDecimal valuationMax,
+        RiskRating riskRating,
+        RiskRatingSource riskRatingSource
 ) {
     public static DealDto from(Deal d, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
@@ -45,6 +58,10 @@ public record DealDto(
                 d.getCreatedByUserId(), createdByEmail,
                 d.getAssignedComplianceUserId(), d.getDecisionNotes(),
                 d.getDecidedByUserId(), d.getDecidedAt(),
-                d.getCreatedAt(), d.getUpdatedAt());
+                d.getCreatedAt(), d.getUpdatedAt(),
+                d.getTransactionPurpose(), d.getTrustInvolved(), d.getOnSoldQuickly(),
+                d.getForeignExposureCountry(), d.getRedFlagPresent(),
+                d.getValuationMin(), d.getValuationMax(),
+                d.getRiskRating(), d.getRiskRatingSource());
     }
 }

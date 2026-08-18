@@ -106,7 +106,10 @@ public class DocumentService {
         d.setDealId(deal.getId());
         d.setOwnershipNodeId(nodeId);
         d.setUploadedByUserId(actor.id());
-        d.setOcrStatus(OcrStatus.NOT_APPLICABLE); // M5 sets PENDING for DL/PASSPORT
+        // Stays NOT_APPLICABLE until the bytes are provably in S3 — confirmUpload promotes
+        // OCR-eligible types to PENDING. Queueing here instead would fill the pending index
+        // with abandoned presigns whose objects never arrived.
+        d.setOcrStatus(OcrStatus.NOT_APPLICABLE);
         Document saved = documents.save(d);
 
         String url = storage.presignUpload(key, req.contentType(), uploadTtl);
@@ -141,7 +144,12 @@ public class DocumentService {
         audit.record(AuditAction.DOCUMENT_UPLOADED, "Document", doc.getId(),
                 "Uploaded " + doc.getOriginalFilename() + " for deal " + doc.getDealId());
 
-        // M5 will hook OCR dispatch here for DL/PASSPORT.
+        // Queue identity documents for extraction. The object is confirmed present in S3 by
+        // this point, so anything in the pending index is genuinely processable.
+        // idx_document_ocr_pending is that queue; Textract dispatch hooks in here later.
+        if (doc.getDocumentType().isOcrEligible()) {
+            doc.setOcrStatus(OcrStatus.PENDING);
+        }
 
         return toDto(doc);
     }

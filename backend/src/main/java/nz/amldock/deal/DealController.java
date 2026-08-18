@@ -60,7 +60,7 @@ public class DealController {
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
-    public DealDto update(@PathVariable Long id, @RequestBody UpdateDealRequest req) {
+    public DealDto update(@PathVariable Long id, @Valid @RequestBody UpdateDealRequest req) {
         Deal d = deals.update(id, req);
         return deals.toDtoAfterMutation(d);
     }
@@ -79,8 +79,13 @@ public class DealController {
         return deals.get(id);
     }
 
+    /**
+     * ROOT and SENIOR_MANAGER may delete any deal in scope; the deal authors may delete only
+     * their own DRAFT. DealService.assertCanDelete draws that second line — this annotation
+     * only decides who gets as far as asking.
+     */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AGENT','AGENT_PA','ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         deals.delete(id);
         return ResponseEntity.noContent().build();
