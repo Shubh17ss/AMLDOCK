@@ -12,84 +12,115 @@
 // Order is the order shown in each dropdown.
 
 export const PROPERTY_TYPES = [
-  { value: 'RESIDENTIAL_HOUSE', label: 'Residential house' },
-  { value: 'APARTMENT',         label: 'Apartment' },
-  { value: 'TOWNHOUSE',         label: 'Townhouse / unit' },
-  { value: 'LIFESTYLE_BLOCK',   label: 'Lifestyle block' },
-  { value: 'VACANT_LAND',       label: 'Vacant land / section' },
-  { value: 'RURAL_FARM',        label: 'Rural / farm' },
-  { value: 'COMMERCIAL',        label: 'Commercial' },
-  { value: 'INDUSTRIAL',        label: 'Industrial' },
-  { value: 'RETAIL',            label: 'Retail' },
-  { value: 'OTHER',             label: 'Other' },
+  { value: 'RESIDENTIAL', label: 'Residential' },
+  { value: 'LIFESTYLE', label: 'Lifestyle' },
+  { value: 'COMMERCIAL_SALE', label: 'Commercial sale' },
+  { value: 'COMMERCIAL_LEASE', label: 'Commercial lease' },
+  { value: 'RURAL', label: 'Rural' },
+  { value: 'BUSINESS', label: 'Business' },
 ];
 
 // The AML-salient reasons — distress, urgency and forced sale — appear in every list. They are
 // the reason this question is asked at all, so no property type may quietly omit them.
 const DISTRESS = [
   { value: 'FINANCIAL_PRESSURE', label: 'Financial pressure' },
-  { value: 'MORTGAGEE_SALE',     label: 'Mortgagee sale' },
-  { value: 'URGENT_SALE',        label: 'Urgent sale' },
+  { value: 'MORTGAGEE_SALE', label: 'Mortgagee sale' },
+  { value: 'URGENT_SALE', label: 'Urgent sale' },
 ];
 
 const RESIDENTIAL = [
-  { value: 'DOWNSIZING',            label: 'Downsizing' },
-  { value: 'UPSIZING',              label: 'Upsizing' },
-  { value: 'RELOCATION_WITHIN_NZ',  label: 'Relocating within New Zealand' },
-  { value: 'RELOCATION_OVERSEAS',   label: 'Relocating overseas' },
-  { value: 'RETIREMENT_OR_CARE',    label: 'Retirement or moving into care' },
-  { value: 'RELATIONSHIP_CHANGE',   label: 'Relationship change' },
-  { value: 'DECEASED_ESTATE',       label: 'Deceased estate' },
-  { value: 'INVESTMENT_EXIT',       label: 'Exiting an investment' },
-  { value: 'TRUST_RESTRUCTURE',     label: 'Trust restructure' },
-  ...DISTRESS,
-  { value: 'OTHER',                 label: 'Other' },
+  { value: 'DECEASED ESTATE', label: 'Deceased estate' },
+  { value: 'DOWNSIZING', label: 'Downsizing' },
+  { value: 'DEBT REDUCTION', label: 'Debt reduction' },
+  { value: 'RELOCATION DUE TO JOB TRANSFER', label: 'Relocation due to job transfer' },
+  { value: 'DOWNSIZING ASSET PORTFOLIO', label: 'Downsizing asset portfolio' },
+  { value: 'MORTGAGEE_SALE', label: 'Mortgagee sale' },
+  { value: 'LOST INTEREST', label: 'Lost interest' },
+  { value: 'RELATIONSHIP SPLIT', label: 'Relationship split' },
+  { value: 'PASSIVE INVESTMENT SALE', label: 'Passive investment sale' },
+  { value: 'REALISING VALUE OF ASSET', label: 'Realising value of asset' },
+  { value: 'RENTAL INVESTMENT SALE', label: 'Rental investment sale' },
+  { value: 'RELEASE EQUITY FOR OTHER INVESTMENTS', label: 'Release equity for other investments' },
+  { value: 'RETIREMENT', label: 'Retirement' },
+  { value: 'RELOCATING', label: 'Relocating' },
+  { value: 'SURPLUS TO REQUIREMENTS', label: 'Surplus to requirements' },
+  { value: 'SPEC BUILD', label: 'Spec build' },
+  { value: 'SUBDIVISION', label: 'Subdivision' },
+  { value: 'UPSIZING', label: 'Upsizing' },
+  { value: 'OTHER', label: 'Other' },
 ];
 
-const RURAL = [
-  { value: 'RETIREMENT_FROM_FARMING', label: 'Retiring from farming' },
-  { value: 'SUCCESSION_TO_FAMILY',    label: 'Succession to family' },
-  { value: 'FARM_RESTRUCTURE',        label: 'Farm restructure' },
-  { value: 'DOWNSIZING',              label: 'Downsizing' },
-  { value: 'RELOCATION',              label: 'Relocating' },
-  { value: 'DECEASED_ESTATE',         label: 'Deceased estate' },
-  ...DISTRESS,
-  { value: 'OTHER',                   label: 'Other' },
-];
+const LIFESTYLE = [
+  ...RESIDENTIAL,
+  {value : 'MOVING CLOSER TO CITY', label: 'Moving closer to city'},
+  {value : 'SUCCESSION PLANNING', label: 'Succession planning'},
+]
 
-const LAND = [
-  { value: 'DEVELOPMENT_ABANDONED', label: 'Development no longer proceeding' },
-  { value: 'SUBDIVISION_SALE',      label: 'Selling a subdivided lot' },
-  { value: 'CONSENT_LAPSED',        label: 'Resource consent lapsed' },
-  { value: 'INVESTMENT_EXIT',       label: 'Exiting an investment' },
-  { value: 'DECEASED_ESTATE',       label: 'Deceased estate' },
-  ...DISTRESS,
-  { value: 'OTHER',                 label: 'Other' },
-];
+const RURAL=[
+  ...LIFESTYLE
+]
 
-const BUSINESS = [
-  { value: 'BUSINESS_CLOSURE',    label: 'Business closing' },
-  { value: 'BUSINESS_RELOCATION', label: 'Business relocating' },
-  { value: 'PORTFOLIO_REBALANCE', label: 'Rebalancing a portfolio' },
-  { value: 'LEASE_EXPIRY',        label: 'Lease expiry' },
-  { value: 'INVESTMENT_EXIT',     label: 'Exiting an investment' },
-  { value: 'RECEIVERSHIP',        label: 'Receivership / liquidation' },
-  ...DISTRESS,
-  { value: 'OTHER',               label: 'Other' },
-];
+const COMMERCIAL_SALE=[
+  { value: 'DECEASED ESTATE', label: 'Deceased estate' },
+  { value: 'DOWNSIZING ASSET PORTFOLIO', label: 'Downsizing Asset Portfolio' },
+  { value: 'DEBT REDUCTION', label: 'Debt reduction' },
+  { value: 'MORTGAGEE_SALE/LIQUIDATION', label: 'Mortgagee sale/Liquidation' },
+  { value: 'IMMINENT CAPITAL REQUIREMENT', label: 'Imminent capital requirement' },
+  { value: 'PASSIVE INVESTMENT SALE', label: 'Passive investment sale' },
+  { value: 'PREMISES BECOMING VACANT', label: 'Premises becoming vacant' },
+  { value: 'RELOCATION', label: 'Relocation' },
+  { value: 'RENTAL INVESTMENT SALE', label: 'Rental investment sale' },
+  { value: 'RELATIONSHIP SPLIT', label: 'Relationship split' },
+  { value: 'RETIREMENT', label: 'Retirement' },
+  { value: 'REALISING VALUE OF ASSET', label: 'Realising value of asset' },
+  { value: 'RELEASE EQUITY FOR OTHER INVESTMENTS', label: 'Release equity for other investments' },
+  { value: 'SALE UNDER INSTRUCTION OF COURT', label: 'Sale under instruction of court' },
+  { value: 'SALE AND LEASEBACK', label: 'Sale and leaseback' },
+  { value: 'SPARE LAND SURPLUS TO REQUIREMENTS', label: 'Spare land surplus to requirements' },
+  { value: 'SURPLUS TO REQUIREMENTS', label: 'Surplus to requirements' },
+  { value: 'TOO MANAGEMENT INTENSIVE', label: 'Too management intensive' },
+  { value: 'SPEC BUILD', label: 'Spec build' },
+  { value: 'SUBDIVISION', label: 'Subdivision' },
+  { value: 'UPSIZING', label: 'Upsizing' },
+  { value: 'OTHER', label: 'Other' },
+]
+
+const COMMERCIAL_LEASE=[
+  {value : 'EXISTING LEASE DUE TO EXPIRE', label: 'Existing lease due to expire'},
+  {value : 'EXISTING TENANT-SUB LEASING', label: 'Existing tenant-sub leasing'},
+  {value : 'EXISTING VACANT SPACE', label: 'Existing vacant space'},
+  {value : 'NEW COMMERCIAL DEVELOPMENT', label: 'New commercial development'},
+  {value : 'SUBDIVIDING THE BUILDING', label: 'Subdividing the building'},
+  {value : 'OTHER', label: 'Other'},
+]
+
+const BUSINESS=[
+  {value:'DECEASED ESTATE', label: 'Deceased estate'},
+  {value:'DEBT REDUCTION', label: 'Debt reduction'},
+  {value:'RELATIONSHIP SPLIT', label: 'Relationship split'},
+  {value:'PARTNERSHIP SPLIT', label: 'Partnership split'},
+  {value:'RETIREMENT', label: 'Retirement'},
+  {value:'RELOCATING', label: 'Relocating'},
+  {value:'LOST INTEREST-EXIT', label: 'Lost interest-exit'},
+  {value:'RENTAL INVESTMENT SALE', label: 'Rental investment sale'},
+  {value:'SPEC BUILD', label: 'Spec build'},
+  {value:'SUBDIVISION', label: 'Subdivision'},
+  {value:'TOO MANAGEMENT INTENSIVE', label: 'Too management intensive'},
+  {value:'EXIT - CASHING OUT', label: 'Exit - Cashing out'},
+  {value:'RELEASE EQUITY FOR OTHER INVESTMENTS', label: 'Release equity for other investments'},
+  {value:'LIQUIDATION', label: 'Liquidation'},
+  {value:'SURPLUS TO REQUIREMENTS', label: 'Surplus to requirements'},
+  {value:'OTHER', label: 'Other'},
+]
 
 /** Reason options keyed by property type. */
 export const REASONS_FOR_SELLING = {
   RESIDENTIAL_HOUSE: RESIDENTIAL,
-  APARTMENT:         RESIDENTIAL,
-  TOWNHOUSE:         RESIDENTIAL,
-  LIFESTYLE_BLOCK:   RURAL,
-  RURAL_FARM:        RURAL,
-  VACANT_LAND:       LAND,
-  COMMERCIAL:        BUSINESS,
-  INDUSTRIAL:        BUSINESS,
-  RETAIL:            BUSINESS,
-  OTHER:             RESIDENTIAL,
+  LIFESTYLE: LIFESTYLE,
+  RURAL: RURAL,
+  COMMERIAL_SALE: COMMERCIAL_SALE,
+  COMMERCIAL_LEASE: COMMERCIAL_LEASE,
+  BUSINESS: BUSINESS,
 };
 
 /** Reason options for a property type; falls back to the residential list. */
