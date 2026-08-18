@@ -34,27 +34,61 @@ export async function deleteDeal(id) {
   await apiClient.delete(`/deals/${id}`);
 }
 
-export async function submitDeal(id) {
-  const { data } = await apiClient.post(`/deals/${id}/submit`);
+/* ---------- lifecycle ---------- */
+// One call per verb, mirroring the endpoints. The server owns the rules — see
+// data/dealStatus.js for the predicates that decide which of these to offer.
+
+/** NEW → HANDOVER. The broker has finished. */
+export async function handoverDeal(id) {
+  const { data } = await apiClient.post(`/deals/${id}/handover`);
   return data;
 }
 
-export async function assignDeal(id) {
-  const { data } = await apiClient.post(`/deals/${id}/assign`);
+/** HANDOVER → REVIEW. Assigns the deal to nobody. */
+export async function startDealReview(id) {
+  const { data } = await apiClient.post(`/deals/${id}/start-review`);
   return data;
 }
 
-export async function approveDeal(id, notes) {
-  const { data } = await apiClient.post(`/deals/${id}/approve`, { notes });
+/** REVIEW → ON_HOLD. */
+export async function holdDeal(id, note) {
+  const { data } = await apiClient.post(`/deals/${id}/hold`, { note });
   return data;
 }
 
-export async function rejectDeal(id, notes) {
-  const { data } = await apiClient.post(`/deals/${id}/reject`, { notes });
+/** REVIEW → VERIFIED. */
+export async function verifyDeal(id, note) {
+  const { data } = await apiClient.post(`/deals/${id}/verify`, { note });
+  return data;
+}
+
+/** VERIFIED → CLOSED. */
+export async function closeDeal(id) {
+  const { data } = await apiClient.post(`/deals/${id}/close`);
+  return data;
+}
+
+/** HANDOVER | REVIEW | ON_HOLD → NEW, handing edit rights back to the broker. */
+export async function revertDeal(id, note) {
+  const { data } = await apiClient.post(`/deals/${id}/revert`, { note });
   return data;
 }
 
 export async function overrideDeal(id, targetStatus, reason) {
   const { data } = await apiClient.post(`/deals/${id}/override`, { targetStatus, reason });
+  return data;
+}
+
+/* ---------- notes timeline ---------- */
+
+/** The whole thread: the broker's opening note, comments, and one entry per state change. */
+export async function listDealNotes(id) {
+  const { data } = await apiClient.get(`/deals/${id}/notes`);
+  return data;
+}
+
+/** Posts a comment. Returns the refreshed timeline. */
+export async function addDealNote(id, note) {
+  const { data } = await apiClient.post(`/deals/${id}/notes`, { note });
   return data;
 }

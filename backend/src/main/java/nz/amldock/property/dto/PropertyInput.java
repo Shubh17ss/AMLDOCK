@@ -12,7 +12,9 @@ public record PropertyInput(
         String suburb,
         String district,
         String region,
-        String country,
+        // No country. It is copied from the deal's reporting entity by DealService, so accepting
+        // one here would let a client state a property's jurisdiction — a compliance fact that
+        // is not theirs to assert.
         String postcode,
         String titleReference,
         String legalDescription,

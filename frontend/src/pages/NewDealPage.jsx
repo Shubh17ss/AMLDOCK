@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert, Box, Button, Stack, Step, StepLabel, Stepper } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import { deleteDeal, submitDeal } from '../api/deals.js';
+import { deleteDeal, handoverDeal } from '../api/deals.js';
 import { listDealDocuments, uploadToS3 } from '../api/documents.js';
 import { LoadingOverlay } from '../components/LoadingOverlay.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
@@ -133,20 +133,20 @@ export function NewDealPage() {
   const handleSubmit = async () => {
     if (!canAdvance) { setShowGaps(true); return; }
     setOverlay({
-      title: 'Submitting deal',
-      subText: 'Saving your answers, uploading attachments and sending the deal for review…',
+      title: 'Handing over',
+      subText: 'Saving your answers, uploading attachments and passing the deal to compliance…',
     });
     try {
       const id = await draft.ensureDraft();
       if (!id) return;
       await flushVoice(notesBlob, 'VOICE_NOTE', id);
       setNotesBlob(null);
-      await submitDeal(id);
+      await handoverDeal(id);
       queryClient.invalidateQueries({ queryKey: ['deals'] });
-      showToast({ severity: 'success', message: 'Deal submitted for review', anchorOrigin: TOP_CENTER });
+      showToast({ severity: 'success', message: 'Deal handed over to compliance', anchorOrigin: TOP_CENTER });
       navigate(`/deals/${id}`);
     } catch (e) {
-      const msg = e.response?.data?.message || 'Could not submit the deal';
+      const msg = e.response?.data?.message || 'Could not hand the deal over';
       setError(msg);
       showToast({ severity: 'error', message: msg, anchorOrigin: TOP_CENTER });
     } finally {
@@ -256,9 +256,10 @@ export function NewDealPage() {
 
       {isLast && deal?.reference && (
         <Alert severity="info">
-          Submitting moves <strong>{deal.reference}</strong> to <strong>SUBMITTED</strong> and
-          locks it from further edits. It's already saved as a draft, so you can leave and
-          finish later from <strong>My deals</strong>.
+          Handing over moves <strong>{deal.reference}</strong> to <strong>Handover</strong> and
+          locks it from further edits. It's already saved, so you can leave and finish later from{' '}
+          <strong>My deals</strong> — and if you hand it over too early you can recall it from the
+          deal's page.
         </Alert>
       )}
 
@@ -297,7 +298,7 @@ export function NewDealPage() {
             disabled={busy || purchaserBlocked}
             sx={{ flex: { xs: 1, sm: 'unset' } }}
           >
-            {busy ? 'Saving…' : isLast ? 'Submit' : 'Next'}
+            {busy ? 'Saving…' : isLast ? 'Hand over' : 'Next'}
           </Button>
         </Stack>
       </Stack>

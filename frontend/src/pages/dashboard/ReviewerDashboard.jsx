@@ -4,7 +4,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import InboxIcon from '@mui/icons-material/Inbox';
 import BusinessIcon from '@mui/icons-material/Business';
 import { listDeals } from '../../api/deals.js';
-import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles, STATUS_META } from '../../components/bento/Bento.jsx';
+import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles } from '../../components/bento/Bento.jsx';
+import { dealStatusDot, isReviewable } from '../../data/dealStatus.js';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
@@ -24,14 +25,18 @@ function oldestWait(deals) {
 }
 
 export function ReviewerDashboard() {
-  const submittedQ = useQuery({ queryKey: ['deals', 'queue', 'SUBMITTED', null], queryFn: () => listDeals({ status: 'SUBMITTED' }) });
-  const reviewQ = useQuery({ queryKey: ['deals', 'queue', 'UNDER_REVIEW', null], queryFn: () => listDeals({ status: 'UNDER_REVIEW' }) });
-  const submitted = useScopedDeals(submittedQ.data);
+  const handoverQ = useQuery({ queryKey: ['deals', 'queue', 'HANDOVER', null], queryFn: () => listDeals({ status: 'HANDOVER' }) });
+  const reviewQ = useQuery({ queryKey: ['deals', 'queue', 'REVIEW', null], queryFn: () => listDeals({ status: 'REVIEW' }) });
+  // On hold is a queue somebody has to clear, which the old REJECTED never was — a parked deal
+  // needs a person to either resolve it or send it back.
+  const holdQ = useQuery({ queryKey: ['deals', 'queue', 'ON_HOLD', null], queryFn: () => listDeals({ status: 'ON_HOLD' }) });
+  const submitted = useScopedDeals(handoverQ.data);
   const underReview = useScopedDeals(reviewQ.data);
+  const onHold = useScopedDeals(holdQ.data);
   const money = useCurrency();
 
-  if (submittedQ.isError) return <Alert severity="error">We couldn’t load the review queue. Refresh to try again.</Alert>;
-  if (submittedQ.isLoading || reviewQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
+  if (handoverQ.isError) return <Alert severity="error">We couldn’t load the review queue. Refresh to try again.</Alert>;
+  if (handoverQ.isLoading || reviewQ.isLoading || holdQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
   const firmsInQueue = new Set(submitted.map((d) => d.firmName).filter(Boolean)).size;
   const awaitingItems = [...submitted, ...underReview].slice(0, 6);
   const oldest = oldestWait(submitted);
@@ -53,9 +58,9 @@ export function ReviewerDashboard() {
         }
       />
 
-      <StatTile index={1} eyebrow="AWAITING" dot={STATUS_META.SUBMITTED.c} value={submitted.length}
-                label="To be claimed" to="/cdd/deals" />
-      <StatTile index={2} eyebrow="UNDER REVIEW" dot={STATUS_META.UNDER_REVIEW.c} value={underReview.length}
+      <StatTile index={1} eyebrow="HANDOVER" dot={dealStatusDot('HANDOVER')} value={submitted.length}
+                label="Not started" to="/cdd/deals" />
+      <StatTile index={2} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={underReview.length}
                 label="In progress" color={underReview.length ? tokens.review : undefined} to="/cdd/deals" />
       <StatTile index={3} eyebrow={`${money.code} · AWAITING`} cols={2} mono value={money.formatCompact(sum(submitted))}
                 label="Transaction value in the queue" />
@@ -66,13 +71,15 @@ export function ReviewerDashboard() {
         title="Next deals to review"
         to="/cdd/deals"
         items={awaitingItems}
-        renderItem={(d) => <DealRow deal={d} to={d.status === 'UNDER_REVIEW' ? `/deals/${d.id}/review` : `/deals/${d.id}`} />}
+        renderItem={(d) => <DealRow deal={d} to={isReviewable(d.status) ? `/deals/${d.id}/review` : `/deals/${d.id}`} />}
         empty="Nothing awaiting review."
       />
 
       <StatTile index={5} eyebrow="OLDEST WAIT" mono value={oldest}
                 label="Longest awaiting review" color={oldestUrgent ? tokens.rejected : undefined} to="/cdd/deals" />
-      <StatTile index={6} eyebrow="ENTITIES" value={firmsInQueue} label="With deals waiting" to="/cdd/deals" />
+      <StatTile index={6} eyebrow="ON HOLD" dot={dealStatusDot('ON_HOLD')} value={onHold.length}
+                label="Parked, needing a decision" color={onHold.length ? tokens.rejected : undefined} to="/cdd/deals" />
+      <StatTile index={9} eyebrow="ENTITIES" value={firmsInQueue} label="With deals waiting" to="/cdd/deals" />
 
       <ActionTile
         index={7}

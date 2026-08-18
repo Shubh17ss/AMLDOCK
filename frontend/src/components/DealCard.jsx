@@ -2,6 +2,7 @@ import { Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
 import { RiskRatingChip } from './RiskRatingChip.jsx';
+import { isReviewable } from '../data/dealStatus.js';
 import { tokens, shadows } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -13,12 +14,17 @@ const NEU_ACCENT = tokens.blue;
 const EXT        = shadows.md;
 const EXT_SM     = shadows.sm;
 
-export function DealCard({ deal, onClaim, onReview, claimPending }) {
+/**
+ * `onReview` opts the card into the reviewer affordances. There is no claim step any more — a
+ * deal belongs to the firm's compliance function, so anyone with rights can open the workspace
+ * from the moment it is handed over.
+ */
+export function DealCard({ deal, onReview }) {
   const navigate = useNavigate();
   const money = useCurrency();
 
   const handleCardClick = () => {
-    if (deal.status === 'UNDER_REVIEW' && onReview) {
+    if (onReview && isReviewable(deal.status)) {
       navigate(`/deals/${deal.id}/review`);
     } else {
       navigate(`/deals/${deal.id}`);
@@ -85,7 +91,7 @@ export function DealCard({ deal, onClaim, onReview, claimPending }) {
       )}
 
       {/* Row 4: meta chips */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: onClaim || onReview ? 2 : 0 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: onReview ? 2 : 0 }}>
         {/* Standalone pill with no header to name the currency, so it carries the code. */}
         {(deal.valuationMin != null || deal.valuationMax != null || deal.transactionValue != null) && (
           <MetaPill>
@@ -107,22 +113,13 @@ export function DealCard({ deal, onClaim, onReview, claimPending }) {
       </Box>
 
       {/* Queue actions */}
-      {(onClaim || onReview) && (
+      {onReview && (
         <Box
           onClick={(e) => e.stopPropagation()}
           sx={{ display: 'flex', gap: 1.5 }}
         >
-          {deal.status === 'SUBMITTED' && onClaim && (
-            <ActionButton
-              onClick={() => onClaim(deal.id)}
-              disabled={claimPending}
-              accent
-            >
-              Claim deal →
-            </ActionButton>
-          )}
-          {deal.status === 'UNDER_REVIEW' && onReview && (
-            <ActionButton onClick={() => navigate(`/deals/${deal.id}/review`)}>
+          {isReviewable(deal.status) && (
+            <ActionButton onClick={() => navigate(`/deals/${deal.id}/review`)} accent>
               Open review →
             </ActionButton>
           )}

@@ -7,34 +7,166 @@ import nz.amldock.user.UserPrincipal;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
- * Encapsulates allowed status transitions and permission checks. Reused across milestones —
- * M3 only exercises submit; assign/approve/reject/override come in M7/M10.
+ * The deal's state machine and the permission checks guarding it.
+ *
+ * <p>Every transition goes through {@link #transition}, so {@link #RULES} is the only place a
+ * status changes — apart from {@link #override}, which sits outside the table on purpose. That
+ * is the whole design: a new state or a new verb is a row, not another method carrying its own
+ * half-remembered checks.
+ *
+ * <p><b>Firm scope.</b> Every entry point takes the deal's firm id and checks it. The version
+ * this replaces checked the actor's <em>role</em> and nothing else on the decision paths, which
+ * let a compliance officer of one reporting entity act on another's deals by id.
  */
 @Service
 public class DealLifecycleService {
 
-    public void assertOwnerEditable(Deal deal, UserPrincipal actor) {
-        assertDealOwner(deal, actor);
-        if (deal.getStatus() != DealStatus.DRAFT) {
-            throw new BadRequestException("Only DRAFT deals may be edited by their owner");
+    /** Who a rule admits. Both are additionally scoped to the deal's own firm. */
+    private enum Who {
+        /** The broker who created it (AGENT / AGENT_PA / ADMIN), or any AMLCO / SM of the firm. */
+        EDITOR,
+        /** AMLCO / SENIOR_MANAGER of the firm. */
+        REVIEWER
+    }
+
+    private record Rule(Set<DealStatus> from, DealStatus to, Who who, boolean noteRequired) {}
+
+    /**
+     * The transition table.
+     *
+     * <pre>
+     * NEW ──handover──▶ HANDOVER ──start review──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
+     *  ▲                    │                        │
+     *  │                    │                        └──hold──▶ ON_HOLD
+     *  └────────revert──────┴────────────────────────────────────────┘
+     * </pre>
+     *
+     * <p>ON_HOLD is the only negative outcome and its only exit is back to NEW — a parked deal
+     * always returns through the broker, so there is a fresh handover on the record before
+     * verification.
+     */
+    private static final Map<DealAction, Rule> RULES = Map.of(
+        DealAction.HANDOVER,     new Rule(EnumSet.of(DealStatus.NEW),      DealStatus.HANDOVER, Who.EDITOR,   false),
+        DealAction.START_REVIEW, new Rule(EnumSet.of(DealStatus.HANDOVER), DealStatus.REVIEW,   Who.REVIEWER, false),
+        DealAction.HOLD,         new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.ON_HOLD,  Who.REVIEWER, true),
+        DealAction.VERIFY,       new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.VERIFIED, Who.REVIEWER, true),
+        DealAction.CLOSE,        new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.CLOSED,   Who.REVIEWER, false),
+        // Revert's `who` is the strictest case; assertRevert relaxes it for a broker recalling
+        // their own deal from HANDOVER. See that method for why it can't be a plain Rule.
+        DealAction.REVERT,       new Rule(EnumSet.of(DealStatus.HANDOVER,
+                                                    DealStatus.REVIEW,
+                                                    DealStatus.ON_HOLD),  DealStatus.NEW,      Who.REVIEWER, true));
+
+    /** The only status in which a deal's content may be changed. */
+    public static final DealStatus EDITABLE_STATUS = DealStatus.NEW;
+
+    /* ---------- entry points ---------- */
+
+    /**
+     * Runs a lifecycle verb and returns the status the deal came from.
+     *
+     * <p>Permission is checked before state, so someone who may not act at all is told that,
+     * rather than being told which states the deal is not in.
+     */
+    public DealStatus transition(Deal deal, UserPrincipal actor, DealAction action,
+                                 Long dealFirmId, String note) {
+        Rule rule = RULES.get(action);
+        if (rule == null) {
+            throw new BadRequestException("Unknown action " + action);
+        }
+
+        if (action == DealAction.REVERT) {
+            assertRevert(deal, actor, dealFirmId);
+        } else {
+            assertActor(deal, actor, dealFirmId, rule.who());
+        }
+
+        DealStatus previous = deal.getStatus();
+        if (!rule.from().contains(previous)) {
+            throw new BadRequestException("A deal in " + previous + " cannot be " + past(action)
+                    + " (allowed from: " + rule.from() + ")");
+        }
+        if (rule.noteRequired()) {
+            requireNote(note, "A note is required to " + action.name().toLowerCase().replace('_', ' '));
+        }
+
+        deal.setStatus(rule.to());
+        stampDecision(deal, actor, rule.to());
+        return previous;
+    }
+
+    /**
+     * Reverting is the one verb whose permission depends on where it starts.
+     *
+     * <p>A broker may pull their own deal back from HANDOVER — before anyone has looked at it,
+     * an early handover is their mistake to undo. Once review has started, sending a deal back
+     * is a compliance decision and needs a compliance name against it.
+     */
+    private void assertRevert(Deal deal, UserPrincipal actor, Long dealFirmId) {
+        if (deal.getStatus() == DealStatus.HANDOVER) {
+            assertActor(deal, actor, dealFirmId, Who.EDITOR);
+            return;
+        }
+        assertActor(deal, actor, dealFirmId, Who.REVIEWER);
+    }
+
+    /**
+     * May this actor change the deal's <em>content</em>?
+     *
+     * <p>Two groups, and they differ for a reason: the broker who created it owns the answers
+     * and may correct them; an AMLCO or senior manager of the firm may correct them on the
+     * broker's behalf rather than bounce a deal back over a typo. Nobody else — including ROOT,
+     * which reads and deletes but does not author a firm's compliance records.
+     */
+    public void assertEditable(Deal deal, UserPrincipal actor, Long dealFirmId) {
+        assertActor(deal, actor, dealFirmId, Who.EDITOR);
+        if (deal.getStatus() != EDITABLE_STATUS) {
+            throw new BadRequestException("Only " + EDITABLE_STATUS + " deals may be edited — this one is "
+                    + deal.getStatus() + ". Revert it first.");
         }
     }
 
-    /** Deals are authored/owned by the branch-level deal creators: AGENT, AGENT_PA, ADMIN. */
-    public void assertDealOwner(Deal deal, UserPrincipal actor) {
-        if (!isDealAuthor(actor.role())) {
-            throw new ForbiddenException("Only agents may modify their own draft deals");
+    /**
+     * SENIOR_MANAGER-only force transition, deliberately outside the table above.
+     *
+     * <p>With no rejected state and no path out of VERIFIED or CLOSED, this is the only way to
+     * correct a deal that ended up somewhere wrong.
+     */
+    public DealStatus override(Deal deal, UserPrincipal actor, DealStatus target,
+                               Long dealFirmId, String reason) {
+        if (actor.role() != Role.SENIOR_MANAGER) {
+            throw new ForbiddenException("Only senior managers may override a deal's status");
         }
-        if (!actor.id().equals(deal.getCreatedByUserId())) {
-            throw new ForbiddenException("Not your deal");
+        assertSameFirm(actor, dealFirmId);
+        if (target == null) {
+            throw new BadRequestException("Target status is required");
         }
+        requireNote(reason, "An override reason is required");
+
+        DealStatus previous = deal.getStatus();
+        if (previous == target) {
+            throw new BadRequestException("Deal is already in status " + target);
+        }
+        deal.setStatus(target);
+        stampDecision(deal, actor, target);
+        return previous;
     }
 
+    /* ---------- read scope — unchanged ---------- */
+
+    /** Deals are authored by the branch-level deal creators: AGENT, AGENT_PA, ADMIN. */
     static boolean isDealAuthor(Role role) {
         return role == Role.AGENT || role == Role.AGENT_PA || role == Role.ADMIN;
+    }
+
+    /** Firm-level reviewers. A deal is no longer tied to one of them — any will do. */
+    static boolean isDecider(Role role) {
+        return role == Role.AML_COMPLIANCE_OFFICER || role == Role.SENIOR_MANAGER;
     }
 
     /**
@@ -64,125 +196,66 @@ public class DealLifecycleService {
                 }
             }
             case ROOT, AUDIT -> { /* all access */ }
-            // Stated rather than left to fall through, which would have granted everything.
+            // Stated rather than left to fall through this switch, which would have granted
+            // everything.
             case FINANCE -> throw new ForbiddenException("Deals are outside the finance role");
         }
     }
 
-    public void submit(Deal deal, UserPrincipal actor) {
-        assertOwnerEditable(deal, actor);
-        ensureSubmittable(deal);
-        deal.setStatus(DealStatus.SUBMITTED);
-    }
+    /* ---------- internals ---------- */
 
-    /** SUBMITTED → UNDER_REVIEW (or no-op if already assigned to this caller). */
-    public void assign(Deal deal, UserPrincipal actor) {
-        if (!isDecider(actor.role())) {
-            throw new ForbiddenException("Only compliance officers or senior managers may claim a deal");
-        }
-        if (deal.getStatus() == DealStatus.DRAFT) {
-            throw new BadRequestException("Deal must be submitted before it can be claimed");
-        }
-        if (deal.getStatus() == DealStatus.APPROVED || deal.getStatus() == DealStatus.REJECTED) {
-            throw new BadRequestException("Decided deals can't be re-claimed");
-        }
-        // Idempotent: if already UNDER_REVIEW and assigned to caller, do nothing.
-        if (deal.getStatus() == DealStatus.UNDER_REVIEW && actor.id().equals(deal.getAssignedComplianceUserId())) {
+    private void assertActor(Deal deal, UserPrincipal actor, Long dealFirmId, Who who) {
+        if (isDecider(actor.role())) {
+            assertSameFirm(actor, dealFirmId);
             return;
         }
-        deal.setAssignedComplianceUserId(actor.id());
-        deal.setStatus(DealStatus.UNDER_REVIEW);
+        if (who == Who.EDITOR && isDealAuthor(actor.role())) {
+            if (!actor.id().equals(deal.getCreatedByUserId())) {
+                throw new ForbiddenException("Not your deal");
+            }
+            return;
+        }
+        throw new ForbiddenException(who == Who.EDITOR
+                ? "Only the broker who created this deal, or a compliance officer or senior manager "
+                  + "of the firm, may change it"
+                : "Only a compliance officer or senior manager of the firm may do this");
     }
 
-    /** UNDER_REVIEW → APPROVED. Compliance / Manager. Notes required. */
-    public void approve(Deal deal, UserPrincipal actor, String notes) {
-        assertDecider(actor);
-        if (deal.getStatus() != DealStatus.UNDER_REVIEW) {
-            throw new BadRequestException("Only UNDER_REVIEW deals can be approved");
+    private void assertSameFirm(UserPrincipal actor, Long dealFirmId) {
+        if (dealFirmId == null || !dealFirmId.equals(actor.realEstateFirmId())) {
+            throw new ForbiddenException("Not your firm's deal");
         }
-        requireNotes(notes, "Decision notes are required to approve");
-        applyDecision(deal, actor, DealStatus.APPROVED, notes);
-    }
-
-    /** UNDER_REVIEW → REJECTED. Compliance / Manager. Notes required. */
-    public void reject(Deal deal, UserPrincipal actor, String notes) {
-        assertDecider(actor);
-        if (deal.getStatus() != DealStatus.UNDER_REVIEW) {
-            throw new BadRequestException("Only UNDER_REVIEW deals can be rejected");
-        }
-        requireNotes(notes, "Decision notes are required to reject");
-        applyDecision(deal, actor, DealStatus.REJECTED, notes);
     }
 
     /**
-     * SENIOR_MANAGER-only force transition to an arbitrary target. Reason required and prefixed
-     * into the decision notes so the override is visible in any subsequent UI.
-     * Returns the previous status so the caller can include it in the audit record.
+     * decided_by / decided_at record the compliance sign-off, so only VERIFIED sets them.
+     * CLOSED follows verification and keeps the stamp; anything else has left the verified line,
+     * where a stamp would claim a sign-off that no longer stands.
      */
-    public DealStatus override(Deal deal, UserPrincipal actor, DealStatus target, String reason) {
-        if (actor.role() != Role.SENIOR_MANAGER) {
-            throw new ForbiddenException("Only senior managers may override a deal's status");
-        }
-        if (target == null) {
-            throw new BadRequestException("Target status is required");
-        }
-        requireNotes(reason, "An override reason is required");
-        DealStatus previous = deal.getStatus();
-        if (previous == target) {
-            throw new BadRequestException("Deal is already in status " + target);
-        }
-        deal.setStatus(target);
-        // Capture override reason in decision_notes for audit/visibility.
-        String prefixed = String.format("[OVERRIDE %s → %s] %s", previous, target, reason);
-        deal.setDecisionNotes(prefixed);
-        // Only stamp decided_by/at when transitioning to a terminal state, so non-terminal
-        // overrides (e.g. APPROVED → UNDER_REVIEW for re-review) don't fake a fresh decision.
-        if (target == DealStatus.APPROVED || target == DealStatus.REJECTED) {
+    private void stampDecision(Deal deal, UserPrincipal actor, DealStatus target) {
+        if (target == DealStatus.VERIFIED) {
             deal.setDecidedByUserId(actor.id());
             deal.setDecidedAt(Instant.now());
-        } else {
+        } else if (target != DealStatus.CLOSED) {
             deal.setDecidedByUserId(null);
             deal.setDecidedAt(null);
         }
-        // Clear assignment if going back to a pre-claim state.
-        if (target == DealStatus.DRAFT || target == DealStatus.SUBMITTED) {
-            deal.setAssignedComplianceUserId(null);
-        }
-        return previous;
     }
 
-    private void assertDecider(UserPrincipal actor) {
-        if (!isDecider(actor.role())) {
-            throw new ForbiddenException("Only compliance officers or senior managers may decide a deal");
-        }
-    }
-
-    /** Firm-level reviewers who can change a deal's status. */
-    static boolean isDecider(Role role) {
-        return role == Role.AML_COMPLIANCE_OFFICER || role == Role.SENIOR_MANAGER;
-    }
-
-    private void requireNotes(String notes, String message) {
-        if (notes == null || notes.trim().length() < 3) {
+    private void requireNote(String note, String message) {
+        if (note == null || note.trim().length() < 3) {
             throw new BadRequestException(message + " (min 3 characters)");
         }
     }
 
-    private void applyDecision(Deal deal, UserPrincipal actor, DealStatus target, String notes) {
-        deal.setStatus(target);
-        deal.setDecisionNotes(notes.trim());
-        deal.setDecidedByUserId(actor.id());
-        deal.setDecidedAt(Instant.now());
+    private static String past(DealAction a) {
+        return switch (a) {
+            case HANDOVER     -> "handed over";
+            case START_REVIEW -> "moved into review";
+            case HOLD         -> "put on hold";
+            case VERIFY       -> "verified";
+            case CLOSE        -> "closed";
+            case REVERT       -> "reverted";
+        };
     }
-
-    private void ensureSubmittable(Deal deal) {
-        if (deal.getClientId() == null || deal.getPropertyId() == null || deal.getFirmBranchId() == null) {
-            throw new BadRequestException("Deal is missing required references (property/client/branch)");
-        }
-        if (deal.getTransactionType() == null) {
-            throw new BadRequestException("Transaction type is required before submission");
-        }
-    }
-
-    public static final Set<DealStatus> EDITABLE_BY_BROKER = Set.of(DealStatus.DRAFT);
 }

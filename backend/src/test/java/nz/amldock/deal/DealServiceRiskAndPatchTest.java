@@ -7,8 +7,12 @@ import nz.amldock.client.dto.ClientInput;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.UpdateDealRequest;
+import nz.amldock.dealnote.DealNoteRepository;
+import nz.amldock.dealnote.DealNoteService;
+import nz.amldock.document.DocumentRepository;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.firm.RealEstateFirm;
 import nz.amldock.firm.RealEstateFirmRepository;
 import nz.amldock.property.Property;
 import nz.amldock.property.PropertyRepository;
@@ -49,6 +53,8 @@ class DealServiceRiskAndPatchTest {
     @Mock FirmBranchRepository branches;
     @Mock RealEstateFirmRepository firms;
     @Mock UserRepository users;
+    @Mock DealNoteRepository dealNotes;
+    @Mock DocumentRepository documents;
 
     DealService service;
 
@@ -59,7 +65,7 @@ class DealServiceRiskAndPatchTest {
     @BeforeEach
     void setUp() {
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService());
+                new DealLifecycleService(), new DealNoteService(dealNotes, documents, users));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 
@@ -68,6 +74,11 @@ class DealServiceRiskAndPatchTest {
         branch.setActive(true);
         setId(branch, 10L);
         lenient().when(branches.findById(10L)).thenReturn(Optional.of(branch));
+
+        // create() copies the property's country from the deal's reporting entity (V29).
+        RealEstateFirm firm = new RealEstateFirm();
+        firm.setCountry("NZ");
+        lenient().when(firms.findById(1L)).thenReturn(Optional.of(firm));
         lenient().when(properties.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(clients.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(deals.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -174,16 +185,16 @@ class DealServiceRiskAndPatchTest {
     void propertyTypeAndReasonSurviveALaterDealPatch() {
         draftInRepo();
         Property p = new Property();
-        p.setPropertyType(PropertyType.APARTMENT);
+        p.setPropertyType(PropertyType.LIFESTYLE);
         p.setReasonForSelling("DOWNSIZING");
         when(properties.findById(any())).thenReturn(Optional.of(p));
 
         // A property patch that only carries the address must not clear the classification.
         service.updateProperty(1L, new PropertyInput("12 Queen St", null, null, null, null,
-                null, null, null, null, null, null, null));
+                null, null, null, null, null, null));
 
         assertThat(p.getAddressLine1()).isEqualTo("12 Queen St");
-        assertThat(p.getPropertyType()).isEqualTo(PropertyType.APARTMENT);
+        assertThat(p.getPropertyType()).isEqualTo(PropertyType.LIFESTYLE);
         assertThat(p.getReasonForSelling()).isEqualTo("DOWNSIZING");
     }
 
@@ -230,8 +241,8 @@ class DealServiceRiskAndPatchTest {
     void aClientWithNoTypeIsAccepted() {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null,
-                new PropertyInput("12 Queen St", null, null, null, null, null, null, null, null, null, null, null),
+                null, null, null, null, null, null, null, null,
+                new PropertyInput("12 Queen St", null, null, null, null, null, null, null, null, null, null),
                 new ClientInput("Jane Marsh", null, null, null));
 
         service.create(req);
@@ -244,7 +255,7 @@ class DealServiceRiskAndPatchTest {
     void aClientTypeIsStillStoredWhenOneIsGiven() {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
                 new ClientInput("Marsh Family Trust", ClientType.ENTITY, null, null));
 
         service.create(req);
@@ -257,17 +268,17 @@ class DealServiceRiskAndPatchTest {
     private CreateDealRequest request(Boolean onSoldQuickly) {
         return new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                "Retiring overseas", false, onSoldQuickly, "NONE", false, null, null,
-                new PropertyInput("12 Queen St", null, null, null, null, null, null, null, null,
-                        null, PropertyType.RESIDENTIAL_HOUSE, "RETIREMENT_OR_CARE"),
+                "Retiring overseas", false, onSoldQuickly, "NONE", false, false, null, null,
+                new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
+                        null, PropertyType.RESIDENTIAL, "RETIREMENT"),
                 new ClientInput("Jane Marsh", null, null, null));
     }
 
-    /** A DRAFT deal owned by {@link #agent}, findable at id 1, that update() can load. */
+    /** A NEW deal owned by {@link #agent}, findable at id 1, that update() can load. */
     private Deal draftInRepo() {
         Deal d = new Deal();
         setId(d, 1L);
-        d.setStatus(DealStatus.DRAFT);
+        d.setStatus(DealStatus.NEW);
         d.setCreatedByUserId(agent.id());
         d.setFirmBranchId(10L);
         d.setPropertyId(2L);
@@ -308,7 +319,7 @@ class DealServiceRiskAndPatchTest {
         UpdateDealRequest build() {
             return new UpdateDealRequest(null, null, null, null, null, null, null, notes,
                     transactionPurpose, trustInvolved, onSoldQuickly, foreignExposureCountry,
-                    redFlagPresent, valuationMin, valuationMax);
+                    null, redFlagPresent, valuationMin, valuationMax);
         }
     }
 

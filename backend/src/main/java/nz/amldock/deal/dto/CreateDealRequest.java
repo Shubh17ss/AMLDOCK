@@ -36,6 +36,11 @@ public record CreateDealRequest(
         @Pattern(regexp = "NONE|[A-Z]{2}", message = "Must be 'NONE' or an ISO alpha-2 country code")
         String foreignExposureCountry,
 
+        /* ---------- section 3: client identity ---------- */
+
+        /** Not met face to face. Drives remote identity verification later, not the risk rating. */
+        Boolean clientRemote,
+
         /* ---------- section 4: risk and valuation ---------- */
 
         Boolean redFlagPresent,

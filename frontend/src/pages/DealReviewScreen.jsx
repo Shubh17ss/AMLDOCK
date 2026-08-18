@@ -10,7 +10,7 @@ import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
-import { approveDeal, assignDeal, getDeal, overrideDeal, rejectDeal } from '../api/deals.js';
+import { closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, startDealReview, verifyDeal } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealReviewer } from '../auth/roles.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
@@ -21,19 +21,39 @@ import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
 import { AttachToParentDialog } from '../features/ownership/AttachToParentDialog.jsx';
 import { PdfViewerPane } from '../features/ownership/PdfViewerPane.jsx';
 import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
-import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
-import { DecideDialog, OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
+import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
+import { OverrideDialog, StatusNoteDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { DealCapturedInfo } from '../features/deal/DealCapturedInfo.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { tokens, shadows } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
+import { canClose, canHold, canRevert, canStartReview, canVerify, dealStatusLabel } from '../data/dealStatus.js';
 
 const NEU_BASE   = tokens.tile;
 const NEU_ACCENT = tokens.blue;
 const NEU_MUTED  = tokens.muted;
 const EXT_SM     = shadows.sm;
 const INSET_SM   = 'inset 0 1px 2px rgba(16,24,40,0.06)';
+
+/** Wording for the three verbs that require a note. Keyed by the value held in `noteAction`. */
+const NOTE_DIALOGS = {
+  hold: {
+    title: 'Put this deal on hold?',
+    prompt: "It stays with compliance, parked. Say what you're waiting on — the broker sees this on the deal's timeline.",
+    confirmLabel: 'Put on hold', color: 'warning',
+  },
+  verify: {
+    title: 'Verify this deal?',
+    prompt: 'Record what you checked. This is the compliance sign-off and it is kept against the deal.',
+    confirmLabel: 'Verify', color: 'success',
+  },
+  revert: {
+    title: 'Send this deal back?',
+    prompt: "It returns to NEW so the broker can make changes. Say what needs doing — they see this on the deal's timeline.",
+    confirmLabel: 'Send back', color: 'primary',
+  },
+};
 
 export function DealReviewScreen() {
   const { id } = useParams();
@@ -50,7 +70,8 @@ export function DealReviewScreen() {
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
   const [addDialog, setAddDialog]               = useState(null);
   const [attachNodeId, setAttachNodeId]         = useState(null);
-  const [decideMode, setDecideMode]             = useState(null);
+  // Which note-taking dialog is open: 'hold' | 'verify' | 'revert' | null.
+  const [noteAction, setNoteAction]             = useState(null);
   const [overrideOpen, setOverrideOpen]         = useState(false);
   const [actionError, setActionError]           = useState(null);
   const [mobileTab, setMobileTab]               = useState('docs');
@@ -65,27 +86,41 @@ export function DealReviewScreen() {
     qc.invalidateQueries({ queryKey: ['deals', 'firm'] });
   };
 
-  const claimMut = useMutation({
-    mutationFn: () => assignDeal(dealId),
-    onSuccess: () => { invalidate(); showToast({ severity: 'success', message: 'Claimed for review' }); },
+  const startReviewMut = useMutation({
+    mutationFn: () => startDealReview(dealId),
+    onSuccess: () => { invalidate(); showToast({ severity: 'success', message: 'Review started' }); },
     onError: (e) => {
-      const msg = e.response?.data?.message || 'Failed to claim';
+      const msg = e.response?.data?.message || 'Could not start the review';
       setActionError(msg);
       showToast({ severity: 'error', message: msg });
     },
   });
 
-  const decideMut = useMutation({
-    mutationFn: ({ mode, notes }) =>
-      (mode === 'approve' ? approveDeal(dealId, notes) : rejectDeal(dealId, notes)),
+  const closeMut = useMutation({
+    mutationFn: () => closeDeal(dealId),
+    onSuccess: () => { invalidate(); showToast({ severity: 'success', message: 'Deal closed' }); },
+    onError: (e) => setActionError(e.response?.data?.message || 'Could not close the deal'),
+  });
+
+  /**
+   * The three verbs that carry a note. One mutation rather than three: they differ only in which
+   * endpoint they hit and where the reviewer ends up afterwards.
+   */
+  const noteMut = useMutation({
+    mutationFn: ({ action, note }) => {
+      if (action === 'hold') return holdDeal(dealId, note);
+      if (action === 'verify') return verifyDeal(dealId, note);
+      return revertDeal(dealId, note);
+    },
     onSuccess: (_, vars) => {
       invalidate();
-      setDecideMode(null);
-      showToast({
-        severity: vars.mode === 'approve' ? 'success' : 'warning',
-        message: `Deal ${vars.mode === 'approve' ? 'approved' : 'rejected'}`,
-      });
-      navigate('/cdd/deals');
+      qc.invalidateQueries({ queryKey: ['dealNotes', dealId] });
+      setNoteAction(null);
+      const said = { hold: 'Deal put on hold', verify: 'Deal verified', revert: 'Sent back to the broker' };
+      showToast({ severity: vars.action === 'verify' ? 'success' : 'warning', message: said[vars.action] });
+      // Verifying and reverting both end this reviewer's involvement for now; a hold does not,
+      // so it stays on the deal.
+      if (vars.action !== 'hold') navigate('/cdd/deals');
     },
   });
 
@@ -107,11 +142,44 @@ export function DealReviewScreen() {
 
   const deal        = dealQ.data;
   const isFirstNode = !tree.tree || tree.tree.nodes.length === 0;
-  const canClaim    = deal.status === 'SUBMITTED';
-  const isUnderReview = deal.status === 'UNDER_REVIEW';
+  const startable   = canStartReview(deal.status);
+  const inReview    = deal.status === 'REVIEW';
   const isOverrider = user?.role === 'SENIOR_MANAGER';
-  const canDecide   = isUnderReview;
-  const canOverride = isOverrider && deal.status !== 'DRAFT';
+  const showOverride = isOverrider;
+
+  /**
+   * What this reviewer can do to the deal right now.
+   *
+   * Built once and rendered by both headers — the desktop and mobile rows used to carry their
+   * own copies of the status rules, which is how they drifted. Mirrors
+   * DealLifecycleService.RULES; the server rejects anything this lets through.
+   */
+  const actions = [
+    startable && {
+      key: 'start', label: 'Start review', variant: 'contained',
+      onClick: () => startReviewMut.mutate(), pending: startReviewMut.isPending,
+    },
+    canHold(deal.status) && {
+      key: 'hold', label: 'Put on hold', variant: 'outlined', color: 'warning',
+      onClick: () => setNoteAction('hold'),
+    },
+    canVerify(deal.status) && {
+      key: 'verify', label: 'Verify', variant: 'contained', color: 'success',
+      onClick: () => setNoteAction('verify'),
+    },
+    canClose(deal.status) && {
+      key: 'close', label: 'Close deal', variant: 'contained',
+      onClick: () => closeMut.mutate(), pending: closeMut.isPending,
+    },
+    canRevert(deal.status) && {
+      key: 'revert', label: 'Send back', variant: 'outlined',
+      onClick: () => setNoteAction('revert'),
+    },
+    showOverride && {
+      key: 'override', label: 'Override', variant: 'outlined', color: 'warning',
+      onClick: () => setOverrideOpen(true),
+    },
+  ].filter(Boolean);
 
   // Switch to node tab automatically when a node is selected on mobile
   const handleSelectNode = (nodeId) => {
@@ -128,13 +196,8 @@ export function DealReviewScreen() {
       {isMobile ? (
         <MobileHeader
           deal={deal}
-          canClaim={canClaim}
-          canDecide={canDecide}
-          canOverride={canOverride}
-          claimMut={claimMut}
-          onReject={() => setDecideMode('reject')}
-          onApprove={() => setDecideMode('approve')}
-          onOverride={() => setOverrideOpen(true)}
+          money={money}
+          actions={actions}
           onBack={() => navigate('/cdd/deals')}
         />
       ) : (
@@ -154,31 +217,12 @@ export function DealReviewScreen() {
               variant="outlined"
             />
           )}
-          {canClaim && (
-            <Button variant="contained" onClick={() => claimMut.mutate()} disabled={claimMut.isPending}>
-              {claimMut.isPending ? 'Claiming…' : 'Claim for review'}
+          {actions.map((a) => (
+            <Button key={a.key} variant={a.variant} color={a.color}
+                    onClick={a.onClick} disabled={a.pending}>
+              {a.pending ? 'Working…' : a.label}
             </Button>
-          )}
-          {canDecide && (
-            <>
-              <Button variant="outlined" color="error" onClick={() => setDecideMode('reject')}>Reject</Button>
-              <Button
-                variant="contained"
-                sx={{
-                  backgroundColor: '#2E8B57',
-                  '&:hover': {
-                    backgroundColor: '#2d905a',
-                  },
-                }}
-                onClick={() => setDecideMode('approve')}
-              >
-                Approve
-              </Button>
-            </>
-          )}
-          {canOverride && (
-            <Button variant="outlined" color="warning" onClick={() => setOverrideOpen(true)}>Override</Button>
-          )}
+          ))}
         </Stack>
       )}
 
@@ -186,17 +230,16 @@ export function DealReviewScreen() {
         <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>
       )}
 
-      {!isUnderReview && !canClaim && (
+      {!inReview && !startable && (
         <Alert severity="info" sx={{ py: 0.5 }}>
-          This deal is <strong>{deal.status}</strong>. Ownership edits are best made while UNDER_REVIEW.
+          This deal is <strong>{dealStatusLabel(deal.status)}</strong>. Ownership edits are best
+          made while it is in review.
         </Alert>
       )}
 
       <DealCapturedInfo deal={deal} />
 
-      {isDealReviewer(user?.role) && (
-        <BrokerNotesCard deal={deal} />
-      )}
+      <DealNotesTimeline dealId={dealId} status={deal.status} />
 
       <DealAuditPanel dealId={dealId} />
 
@@ -358,13 +401,15 @@ export function DealReviewScreen() {
         useTree={tree}
       />
 
-      <DecideDialog
-        open={Boolean(decideMode)}
-        mode={decideMode}
-        dealReference={deal.reference ?? `#${deal.id}`}
-        onClose={() => setDecideMode(null)}
-        submitting={decideMut.isPending}
-        onSubmit={(notes) => decideMut.mutateAsync({ mode: decideMode, notes })}
+      <StatusNoteDialog
+        open={Boolean(noteAction)}
+        title={NOTE_DIALOGS[noteAction]?.title}
+        prompt={NOTE_DIALOGS[noteAction]?.prompt}
+        confirmLabel={NOTE_DIALOGS[noteAction]?.confirmLabel}
+        confirmColor={NOTE_DIALOGS[noteAction]?.color}
+        onClose={() => setNoteAction(null)}
+        submitting={noteMut.isPending}
+        onSubmit={(note) => noteMut.mutateAsync({ action: noteAction, note })}
       />
 
       <OverrideDialog
@@ -387,8 +432,7 @@ export function DealReviewScreen() {
 }
 
 /* ── Mobile-specific header ─────────────────────────────────────────────── */
-function MobileHeader({ deal, canClaim, canDecide, canOverride, claimMut, onReject, onApprove, onOverride, onBack }) {
-  const hasActions = canClaim || canDecide || canOverride;
+function MobileHeader({ deal, money, actions, onBack }) {
   return (
     <Stack spacing={1.5}>
       {/* Row 1: back + reference */}
@@ -417,28 +461,15 @@ function MobileHeader({ deal, canClaim, canDecide, canOverride, claimMut, onReje
         )}
       </Stack>
 
-      {/* Row 3: action buttons (full-width, equal split) */}
-      {hasActions && (
-        <Stack direction="row" spacing={1}>
-          {canClaim && (
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={() => claimMut.mutate()}
-              disabled={claimMut.isPending}
-            >
-              {claimMut.isPending ? 'Claiming…' : 'Claim'}
+      {/* Row 3: action buttons — wraps rather than squeezing, since a REVIEW deal offers four */}
+      {actions.length > 0 && (
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          {actions.map((a) => (
+            <Button key={a.key} variant={a.variant} color={a.color} sx={{ flex: '1 1 45%' }}
+                    onClick={a.onClick} disabled={a.pending}>
+              {a.pending ? 'Working…' : a.label}
             </Button>
-          )}
-          {canDecide && (
-            <>
-              <Button variant="outlined" color="error" fullWidth onClick={onReject}>Reject</Button>
-              <Button variant="contained" sx={{backgroundColor:'#2E8B57'}} fullWidth onClick={onApprove}>Approve</Button>
-            </>
-          )}
-          {canOverride && (
-            <Button variant="outlined" color="warning" fullWidth onClick={onOverride}>Override</Button>
-          )}
+          ))}
         </Stack>
       )}
     </Stack>

@@ -29,7 +29,7 @@ export const EMPTY_FORM = {
   // Section 2
   property: {
     addressLine1: '', addressLine2: '', suburb: '', district: '', region: '',
-    country: 'NZ', postcode: '',
+    postcode: '',
     propertyType: '', reasonForSelling: '',
   },
   transactionPurpose: '',
@@ -38,6 +38,7 @@ export const EMPTY_FORM = {
   foreignExposureCountry: '', // '' = unanswered, 'NONE' = asked and there is none
 
   // Section 3
+  clientRemote: null,       // null = unanswered, distinct from "no"
   contactName: '',
   contactEmail: '',
   contactPhone: '',
@@ -59,6 +60,7 @@ export function buildDealPatch(form) {
     trustInvolved: form.trustInvolved,
     onSoldQuickly: form.onSoldQuickly,
     foreignExposureCountry: form.foreignExposureCountry,
+    clientRemote: form.clientRemote,
     redFlagPresent: form.redFlagPresent,
     valuationMin: num(form.valuationMin),
     valuationMax: num(form.valuationMax),
@@ -80,7 +82,6 @@ export function buildPropertyPatch(form) {
     suburb: p.suburb,
     district: p.district,
     region: p.region,
-    country: p.country || 'NZ',
     postcode: p.postcode,
     propertyType: p.propertyType || null,
     reasonForSelling: p.reasonForSelling,
@@ -137,6 +138,7 @@ export function dtoToForm(dto) {
     trustInvolved: dto.trustInvolved ?? null,
     onSoldQuickly: dto.onSoldQuickly ?? null,
     foreignExposureCountry: dto.foreignExposureCountry ?? '',
+    clientRemote: dto.clientRemote ?? null,
     contactName: dto.pocName ?? '',
     contactEmail: dto.pocEmail ?? '',
     contactPhone: dto.pocPhone ?? '',
@@ -161,8 +163,6 @@ export function sectionGaps(section, form) {
   if (section === 2) {
     const p = form.property;
     if (!p.addressLine1) gaps.push('Property address');
-    if (!p.region) gaps.push('Region');
-    if (!p.district) gaps.push('District / city');
     if (!p.propertyType) gaps.push('Property type');
     if (!p.reasonForSelling) gaps.push('Reason for selling');
     if (form.trustInvolved == null) gaps.push('Whether a trust is involved in beneficial ownership');
@@ -170,6 +170,7 @@ export function sectionGaps(section, form) {
     if (!form.foreignExposureCountry) gaps.push('Foreign exposure (choose "None" if there is none)');
   }
   if (section === 3) {
+    if (form.clientRemote == null) gaps.push('Whether the client is remote');
     if (!form.contactName) gaps.push('Key contact name');
   }
   if (section === 4) {

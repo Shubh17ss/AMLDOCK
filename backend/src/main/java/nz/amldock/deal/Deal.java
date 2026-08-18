@@ -53,13 +53,11 @@ public class Deal extends BaseEntity {
     @Column(name = "created_by_user_id", nullable = false)
     private Long createdByUserId;
 
-    @Column(name = "assigned_compliance_user_id")
-    private Long assignedComplianceUserId;
-
-    @Column(name = "decision_notes", columnDefinition = "text")
-    private String decisionNotes;
-
-    /** General deal-level notes from the broker (section 4 of the deal form). */
+    /**
+     * The broker's own note (section 4 of the deal form). Editable while the deal is NEW, and
+     * rendered as the opening entry of the deal's notes timeline — see DealNoteService, which
+     * synthesises that entry rather than copying this into deal_note.
+     */
     @Column(name = "notes", columnDefinition = "text")
     private String notes;
 
@@ -85,6 +83,14 @@ public class Deal extends BaseEntity {
 
     @Column(name = "red_flag_present")
     private Boolean redFlagPresent;
+
+    /**
+     * Whether the broker has met the client face to face (V29, section 3). Captured to trigger
+     * remote identity verification later; deliberately not an input to the risk rating — see
+     * {@code DealService.applyRiskRating}.
+     */
+    @Column(name = "client_remote")
+    private Boolean clientRemote;
 
     /** Broker's valuation range, in the reporting entity's own currency. */
     @Column(name = "valuation_min")
@@ -133,10 +139,6 @@ public class Deal extends BaseEntity {
     public void setPocEmail(String v) { this.pocEmail = v; }
     public Long getCreatedByUserId() { return createdByUserId; }
     public void setCreatedByUserId(Long v) { this.createdByUserId = v; }
-    public Long getAssignedComplianceUserId() { return assignedComplianceUserId; }
-    public void setAssignedComplianceUserId(Long v) { this.assignedComplianceUserId = v; }
-    public String getDecisionNotes() { return decisionNotes; }
-    public void setDecisionNotes(String v) { this.decisionNotes = v; }
     public String getNotes() { return notes; }
     public void setNotes(String v) { this.notes = v; }
     public Long getDecidedByUserId() { return decidedByUserId; }
@@ -153,6 +155,8 @@ public class Deal extends BaseEntity {
     public void setForeignExposureCountry(String v) { this.foreignExposureCountry = v; }
     public Boolean getRedFlagPresent() { return redFlagPresent; }
     public void setRedFlagPresent(Boolean v) { this.redFlagPresent = v; }
+    public Boolean getClientRemote() { return clientRemote; }
+    public void setClientRemote(Boolean v) { this.clientRemote = v; }
     public BigDecimal getValuationMin() { return valuationMin; }
     public void setValuationMin(BigDecimal v) { this.valuationMin = v; }
     public BigDecimal getValuationMax() { return valuationMax; }

@@ -10,8 +10,9 @@ import { listFirms } from '../../api/firms.js';
 import { listUsers } from '../../api/users.js';
 import { searchAudit } from '../../api/audit.js';
 import {
-  Bento, HeroTile, StatTile, ListTile, ActionTile, DistributionTile, SkeletonTiles, STATUS_META,
+  Bento, HeroTile, StatTile, ListTile, ActionTile, DistributionTile, SkeletonTiles,
 } from '../../components/bento/Bento.jsx';
+import { DEAL_STATUSES, dealStatusDot, dealStatusLabel } from '../../data/dealStatus.js';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { timeAgo } from '../../utils/formatters.js';
 import { tokens, fonts } from '../../theme/theme.js';
@@ -32,8 +33,8 @@ export function RootDashboard() {
   const activity = auditQ.data?.items ?? [];
 
   const count = (s) => deals.filter((d) => d.status === s).length;
-  const segments = ['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'].map((s) => ({
-    label: STATUS_META[s].label, value: count(s), c: STATUS_META[s].c,
+  const segments = DEAL_STATUSES.map((s) => ({
+    label: dealStatusLabel(s), value: count(s), c: dealStatusDot(s),
   }));
   const activeFirms = firms.filter((f) => f.active).length;
 
@@ -75,8 +76,8 @@ export function RootDashboard() {
 
       <StatTile index={5} eyebrow="ACTIVE ENTITIES" dot={tokens.approved} value={activeFirms}
                 label={`${firms.length - activeFirms} inactive`} to="/settings/reporting-entities" />
-      <StatTile index={6} eyebrow="AWAITING" dot={STATUS_META.SUBMITTED.c} value={count('SUBMITTED')}
-                label="Awaiting review" color={count('SUBMITTED') ? tokens.submitted : undefined} to="/cdd/deals" />
+      <StatTile index={6} eyebrow="HANDOVER" dot={dealStatusDot('HANDOVER')} value={count('HANDOVER')}
+                label="Awaiting review" color={count('HANDOVER') ? tokens.submitted : undefined} to="/cdd/deals" />
 
       <ActionTile
         index={7}

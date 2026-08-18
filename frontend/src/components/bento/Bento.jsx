@@ -5,14 +5,8 @@ import { BentoTile, Eyebrow } from './BentoTile.jsx';
 
 export { BentoTile, Eyebrow };
 
-/** Deal-status → tile colour + human label (single source for dashboard tiles). */
-export const STATUS_META = {
-  DRAFT:        { c: tokens.draft,     label: 'Draft' },
-  SUBMITTED:    { c: tokens.submitted, label: 'Submitted' },
-  UNDER_REVIEW: { c: tokens.review,    label: 'In review' },
-  APPROVED:     { c: tokens.approved,  label: 'Approved' },
-  REJECTED:     { c: tokens.rejected,  label: 'Rejected' },
-};
+// Deal-status colours and labels used to live here. They belong to the deal vocabulary, not to
+// a layout primitive — see data/dealStatus.js (dealStatusDot / dealStatusLabel).
 
 /** Responsive bento grid: 2 cols on mobile, 4 on desktop, dense flow. */
 export function Bento({ children, sx }) {

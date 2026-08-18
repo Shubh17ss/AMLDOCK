@@ -28,6 +28,7 @@ public record UpdateDealRequest(
         Boolean onSoldQuickly,
         @Pattern(regexp = "NONE|[A-Z]{2}", message = "Must be 'NONE' or an ISO alpha-2 country code")
         String foreignExposureCountry,
+        Boolean clientRemote,
         Boolean redFlagPresent,
         @PositiveOrZero BigDecimal valuationMin,
         @PositiveOrZero BigDecimal valuationMax

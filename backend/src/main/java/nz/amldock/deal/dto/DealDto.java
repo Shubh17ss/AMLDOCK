@@ -29,8 +29,6 @@ public record DealDto(
         String notes,
         Long createdByUserId,
         String createdByEmail,
-        Long assignedComplianceUserId,
-        String decisionNotes,
         Long decidedByUserId,
         Instant decidedAt,
         Instant createdAt,
@@ -45,7 +43,9 @@ public record DealDto(
         BigDecimal valuationMin,
         BigDecimal valuationMax,
         RiskRating riskRating,
-        RiskRatingSource riskRatingSource
+        RiskRatingSource riskRatingSource,
+        // V29
+        Boolean clientRemote
 ) {
     public static DealDto from(Deal d, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
@@ -56,12 +56,12 @@ public record DealDto(
                 d.getPocName(), d.getPocRole(), d.getPocPhone(), d.getPocEmail(),
                 property, client, d.getNotes(),
                 d.getCreatedByUserId(), createdByEmail,
-                d.getAssignedComplianceUserId(), d.getDecisionNotes(),
                 d.getDecidedByUserId(), d.getDecidedAt(),
                 d.getCreatedAt(), d.getUpdatedAt(),
                 d.getTransactionPurpose(), d.getTrustInvolved(), d.getOnSoldQuickly(),
                 d.getForeignExposureCountry(), d.getRedFlagPresent(),
                 d.getValuationMin(), d.getValuationMax(),
-                d.getRiskRating(), d.getRiskRatingSource());
+                d.getRiskRating(), d.getRiskRatingSource(),
+                d.getClientRemote());
     }
 }

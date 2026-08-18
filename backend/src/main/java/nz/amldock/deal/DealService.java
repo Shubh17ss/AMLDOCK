@@ -11,6 +11,8 @@ import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
+import nz.amldock.dealnote.DealNoteService;
+import nz.amldock.dealnote.dto.DealNoteDto;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
@@ -44,6 +46,7 @@ public class DealService {
     private final RealEstateFirmRepository firms;
     private final UserRepository users;
     private final DealLifecycleService lifecycle;
+    private final DealNoteService dealNotes;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -51,7 +54,8 @@ public class DealService {
                        FirmBranchRepository branches,
                        RealEstateFirmRepository firms,
                        UserRepository users,
-                       DealLifecycleService lifecycle) {
+                       DealLifecycleService lifecycle,
+                       DealNoteService dealNotes) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -59,6 +63,7 @@ public class DealService {
         this.firms = firms;
         this.users = users;
         this.lifecycle = lifecycle;
+        this.dealNotes = dealNotes;
     }
 
     /* ---------- queries ---------- */
@@ -156,6 +161,8 @@ public class DealService {
 
         Property property = new Property();
         applyPropertyInput(property, req.property());
+        // The property's jurisdiction is the reporting entity's, not something the broker states.
+        property.setCountry(firmCountryOf(branch));
         Property savedProp = properties.save(property);
 
         // The client is provisional at this point — the deal form creates the draft before it
@@ -175,7 +182,7 @@ public class DealService {
         d.setFirmBranchId(branch.getId());
         d.setPropertyId(savedProp.getId());
         d.setClientId(savedClient.getId());
-        d.setStatus(DealStatus.DRAFT);
+        d.setStatus(DealStatus.NEW);
         d.setTransactionType(req.transactionType());
         d.setTransactionValue(req.transactionValue());
         d.setPocName(orFallback(req.pocName(), branch.getManagerName()));
@@ -187,6 +194,7 @@ public class DealService {
         d.setTrustInvolved(req.trustInvolved());
         d.setOnSoldQuickly(req.onSoldQuickly());
         d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
+        d.setClientRemote(req.clientRemote());
         d.setRedFlagPresent(req.redFlagPresent());
         d.setValuationMin(req.valuationMin());
         d.setValuationMax(req.valuationMax());
@@ -224,6 +232,7 @@ public class DealService {
         if (req.foreignExposureCountry() != null) {
             d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         }
+        if (req.clientRemote() != null) d.setClientRemote(req.clientRemote());
         if (req.redFlagPresent() != null) d.setRedFlagPresent(req.redFlagPresent());
         if (req.valuationMin() != null) d.setValuationMin(req.valuationMin());
         if (req.valuationMax() != null) d.setValuationMax(req.valuationMax());
@@ -240,6 +249,9 @@ public class DealService {
         Property p = properties.findById(d.getPropertyId())
                 .orElseThrow(() -> new NotFoundException("Property not found"));
         applyPropertyInput(p, input); // idempotent to allow partial updates
+        // Re-asserted on every write, not just at creation: the branch can move, and the country
+        // is the reporting entity's answer rather than a value the property carries on its own.
+        p.setCountry(firmCountryOf(d));
         return p;
     }
 
@@ -279,12 +291,12 @@ public class DealService {
         if (actor.role() == Role.ROOT) {
             return;
         }
-        // A broker discarding their own unsubmitted draft. The deal form persists the draft
-        // partway through so documents have something to attach to, so without this the
+        // A broker discarding their own deal before handing it over. The deal form persists a
+        // deal partway through so documents have something to attach to, so without this the
         // "Discard" button would leave an orphan the author has no way to clear.
         if (DealLifecycleService.isDealAuthor(actor.role())
                 && actor.id().equals(d.getCreatedByUserId())
-                && d.getStatus() == DealStatus.DRAFT) {
+                && d.getStatus() == DealStatus.NEW) {
             return;
         }
         if (actor.role() == Role.SENIOR_MANAGER) {
@@ -298,41 +310,49 @@ public class DealService {
         throw new ForbiddenException("Only ROOT or a senior manager may delete a deal");
     }
 
+    /**
+     * Runs a lifecycle verb and records its note on the deal's timeline.
+     *
+     * <p>One method behind all six endpoints — the rules live in {@link DealLifecycleService},
+     * so this only has to resolve the deal's firm (for the scope check) and append the note.
+     */
     @Transactional
-    public Deal submit(Long id) {
-        Deal d = mustFindEditable(id);
-        lifecycle.submit(d, currentPrincipal());
+    public TransitionResult act(Long id, DealAction action, String note) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        UserPrincipal actor = currentPrincipal();
+        DealStatus previous = lifecycle.transition(d, actor, action, firmIdOf(d), note);
+        dealNotes.appendTransition(d, actor, note, previous, d.getStatus());
+        return new TransitionResult(d, previous);
+    }
+
+    /** Adds a free comment to the deal's timeline. Readable deal, writable comment. */
+    @Transactional
+    public Deal comment(Long id, String body) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        UserPrincipal actor = currentPrincipal();
+        lifecycle.assertCanRead(d, actor, firmIdOf(d));
+        dealNotes.appendComment(d, actor, body);
         return d;
     }
 
-    @Transactional
-    public Deal assign(Long id) {
+    /** The whole notes timeline for a deal the caller is allowed to read. */
+    @Transactional(readOnly = true)
+    public List<DealNoteDto> notes(Long id) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
-        lifecycle.assign(d, currentPrincipal());
-        return d;
-    }
-
-    @Transactional
-    public Deal approve(Long id, String notes) {
-        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
-        lifecycle.approve(d, currentPrincipal(), notes);
-        return d;
-    }
-
-    @Transactional
-    public Deal reject(Long id, String notes) {
-        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
-        lifecycle.reject(d, currentPrincipal(), notes);
-        return d;
+        lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
+        return dealNotes.timeline(d);
     }
 
     /** Returns a pair of (deal, previousStatus) so the controller can audit the transition. */
     @Transactional
     public OverrideResult override(Long id, DealStatus target, String reason) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
-        DealStatus previous = lifecycle.override(d, currentPrincipal(), target, reason);
+        DealStatus previous = lifecycle.override(d, currentPrincipal(), target, firmIdOf(d), reason);
+        dealNotes.appendTransition(d, currentPrincipal(), reason, previous, d.getStatus());
         return new OverrideResult(d, previous);
     }
+
+    public record TransitionResult(Deal deal, DealStatus previousStatus) {}
 
     public record OverrideResult(Deal deal, DealStatus previousStatus) {}
 
@@ -340,8 +360,31 @@ public class DealService {
 
     private Deal mustFindEditable(Long id) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
-        lifecycle.assertOwnerEditable(d, currentPrincipal());
+        lifecycle.assertEditable(d, currentPrincipal(), firmIdOf(d));
         return d;
+    }
+
+    /**
+     * The reporting entity a deal belongs to, via its branch.
+     *
+     * <p>Every lifecycle check needs it. The version this replaces checked only the actor's role
+     * on the decision paths, which let a compliance officer of one firm act on another's deals.
+     */
+    private Long firmIdOf(Deal d) {
+        FirmBranch b = branches.findById(d.getFirmBranchId()).orElse(null);
+        return b == null ? null : b.getRealEstateFirmId();
+    }
+
+    private String firmCountryOf(Deal d) {
+        FirmBranch b = branches.findById(d.getFirmBranchId()).orElse(null);
+        return b == null ? null : firmCountryOf(b);
+    }
+
+    private String firmCountryOf(FirmBranch branch) {
+        return firms.findById(branch.getRealEstateFirmId())
+                .map(RealEstateFirm::getCountry)
+                .orElseThrow(() -> new BadRequestException(
+                        "Branch " + branch.getId() + " has no reporting entity"));
     }
 
     private void applyPropertyInput(Property p, PropertyInput input) {
@@ -351,7 +394,6 @@ public class DealService {
         if (input.suburb() != null) p.setSuburb(input.suburb());
         if (input.district() != null) p.setDistrict(input.district());
         if (input.region() != null) p.setRegion(input.region());
-        if (input.country() != null) p.setCountry(input.country());
         if (input.postcode() != null) p.setPostcode(input.postcode());
         if (input.titleReference() != null) p.setTitleReference(input.titleReference());
         if (input.legalDescription() != null) p.setLegalDescription(input.legalDescription());

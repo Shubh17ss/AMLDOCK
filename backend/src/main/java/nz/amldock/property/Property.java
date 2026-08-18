@@ -26,7 +26,11 @@ public class Property extends BaseEntity {
     @Column(name = "address_line2")
     private String addressLine2;
 
-    @Column(nullable = false, length = 3)
+    /**
+     * ISO 3166-1 alpha-2, copied from the deal's reporting entity (deal → branch → firm) by
+     * {@code DealService}. Not client-supplied — {@code PropertyInput} carries no country.
+     */
+    @Column(nullable = false, length = 2)
     private String country = "NZ";
 
     private String region;

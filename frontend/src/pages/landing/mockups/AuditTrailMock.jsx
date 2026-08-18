@@ -1,13 +1,13 @@
 import { BrowserFrame } from './BrowserFrame.jsx';
 
 const ENTRIES = [
-  { time: '14:08:22', actor: 'manager@firm.nz',   action: 'DEAL_APPROVED',     tone: 'success',
+  { time: '14:08:22', actor: 'manager@firm.nz',   action: 'DEAL_VERIFIED',     tone: 'success',
     summary: 'Approved DEAL-2026-0142 — "All checks passed."' },
   { time: '13:55:01', actor: 'compliance@firm.nz', action: 'VERIFICATION_TRIGGERED', tone: 'info',
     summary: 'LINZ title check started — title NA12B/345' },
-  { time: '13:48:17', actor: 'compliance@firm.nz', action: 'DEAL_ASSIGNED',     tone: 'primary',
-    summary: 'Claimed for review' },
-  { time: '13:11:42', actor: 'broker1@firm.nz',    action: 'DEAL_SUBMITTED',    tone: 'primary',
+  { time: '13:48:17', actor: 'compliance@firm.nz', action: 'DEAL_REVIEW_STARTED',     tone: 'primary',
+    summary: 'Review started' },
+  { time: '13:11:42', actor: 'broker1@firm.nz',    action: 'DEAL_HANDED_OVER',    tone: 'primary',
     summary: 'Submitted for review' },
   { time: '13:09:58', actor: 'broker1@firm.nz',    action: 'DOCUMENT_UPLOADED', tone: 'info',
     summary: 'Trust deed.pdf (1.2 MB)' },

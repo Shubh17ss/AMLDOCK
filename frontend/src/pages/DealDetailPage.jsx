@@ -7,16 +7,19 @@ import {
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SendIcon from '@mui/icons-material/Send';
+import UndoIcon from '@mui/icons-material/Undo';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor, isDealReviewer, canDelete, canOverride } from '../auth/roles.js';
-import { deleteDeal, getDeal, overrideDeal, submitDeal } from '../api/deals.js';
+import { deleteDeal, getDeal, handoverDeal, overrideDeal, revertDeal } from '../api/deals.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { propertyTypeLabel, reasonForSellingLabel } from '../data/propertyTypes.js';
 import { countryName } from '../data/countries.js';
+import { formatPropertyAddress } from '../data/addressFinderMeta.js';
+import { canBrokerRevert, canRevert, isEditable, isReviewable } from '../data/dealStatus.js';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
-import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
-import { OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
+import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
+import { OverrideDialog, StatusNoteDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { tokens } from '../theme/theme.js';
@@ -30,6 +33,7 @@ export function DealDetailPage() {
   const money = useCurrency();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
+  const [revertOpen, setRevertOpen] = useState(false);
   const [actionError, setActionError] = useState(null);
 
   const q = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
@@ -39,10 +43,20 @@ export function DealDetailPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['deals', dealId] }); setOverrideOpen(false); },
   });
 
-  const submitMut = useMutation({
-    mutationFn: () => submitDeal(dealId),
+  const handoverMut = useMutation({
+    mutationFn: () => handoverDeal(dealId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deals', dealId] }),
-    onError: (e) => setActionError(e.response?.data?.message || 'Failed to submit'),
+    onError: (e) => setActionError(e.response?.data?.message || 'Could not hand the deal over'),
+  });
+
+  const revertMut = useMutation({
+    mutationFn: (note) => revertDeal(dealId, note),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['deals', dealId] });
+      qc.invalidateQueries({ queryKey: ['dealNotes', dealId] });
+      setRevertOpen(false);
+    },
+    onError: (e) => setActionError(e.response?.data?.message || 'Could not send the deal back'),
   });
 
   const deleteMut = useMutation({
@@ -60,7 +74,11 @@ export function DealDetailPage() {
 
   const deal = q.data;
   const isOwnerAgent = isDealAuthor(user?.role) && user.userId === deal.createdByUserId;
-  const isDraft = deal.status === 'DRAFT';
+  const editable = isEditable(deal.status);
+  // A broker may pull back their own deal from handover; past that, only a reviewer sends it
+  // back. Mirrors DealLifecycleService.assertRevert.
+  const mayRevert = canRevert(deal.status)
+    && (isDealReviewer(user?.role) || (isOwnerAgent && canBrokerRevert(deal.status)));
 
   return (
     /* Centered, max-width container */
@@ -88,32 +106,43 @@ export function DealDetailPage() {
 
               {/* Action buttons */}
               <Stack direction="row" spacing={1.5} flexWrap="wrap">
-                {isOwnerAgent && isDraft && (
+                {isOwnerAgent && editable && (
                   <Button
                     variant="contained"
                     startIcon={<SendIcon />}
-                    onClick={() => submitMut.mutate()}
-                    disabled={submitMut.isPending}
+                    onClick={() => handoverMut.mutate()}
+                    disabled={handoverMut.isPending}
                   >
-                    {submitMut.isPending ? 'Submitting…' : 'Submit for review'}
+                    {handoverMut.isPending ? 'Handing over…' : 'Hand over to compliance'}
                   </Button>
                 )}
-                {canDelete(user?.role) && (
+                {mayRevert && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<UndoIcon />}
+                    onClick={() => setRevertOpen(true)}
+                  >
+                    {isOwnerAgent && !isDealReviewer(user?.role) ? 'Recall for changes' : 'Send back to broker'}
+                  </Button>
+                )}
+                {/* Deleting is only ever offered while the deal is still the broker's — the
+                    server refuses it past NEW, so showing it later would only produce a 403. */}
+                {(canDelete(user?.role) || (isOwnerAgent && editable)) && editable && (
                   <Button
                     color="error"
                     startIcon={<DeleteOutlineIcon />}
                     onClick={() => setConfirmDelete(true)}
-                    disabled={submitMut.isPending || deleteMut.isPending}
+                    disabled={handoverMut.isPending || deleteMut.isPending}
                   >
                     Delete
                   </Button>
                 )}
-                {isDealReviewer(user?.role) && deal.status !== 'DRAFT' && (
+                {isDealReviewer(user?.role) && isReviewable(deal.status) && (
                   <Button variant="contained" onClick={() => navigate(`/deals/${deal.id}/review`)}>
                     Open review
                   </Button>
                 )}
-                {canOverride(user?.role) && deal.status !== 'DRAFT' && (
+                {canOverride(user?.role) && isReviewable(deal.status) && (
                   <Button variant="outlined" color="warning" onClick={() => setOverrideOpen(true)}>
                     Override
                   </Button>
@@ -127,11 +156,9 @@ export function DealDetailPage() {
           <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>
         )}
 
-        {(deal.status === 'APPROVED' || deal.status === 'REJECTED') && (
-          <DecisionCard deal={deal} />
-        )}
-
-        <BrokerNotesCard deal={deal} />
+        {/* The reason a deal is where it is now lives in the timeline, alongside everything else
+            anyone has said about it — there is no separate decision card to keep in step. */}
+        <DealNotesTimeline dealId={deal.id} status={deal.status} />
 
         {/* ── Detail cards grid ────────────────────────────────────────── */}
         {/* Box clips the negative margin MUI Grid adds for spacing */}
@@ -163,12 +190,8 @@ export function DealDetailPage() {
                 <DetailRow label="Reason"        value={deal.property?.reasonForSelling
                   ? reasonForSellingLabel(deal.property?.propertyType, deal.property.reasonForSelling)
                   : null} />
-                <DetailRow label="Address"      value={[deal.property?.addressLine1, deal.property?.addressLine2].filter(Boolean).join(', ')} />
-                <DetailRow label="Suburb"        value={deal.property?.suburb} />
-                <DetailRow label="District"      value={deal.property?.district} />
-                <DetailRow label="Region"        value={deal.property?.region} />
-                <DetailRow label="Country"       value={deal.property?.country} />
-                <DetailRow label="Postcode"      value={deal.property?.postcode} />
+                <DetailRow label="Address"      value={formatPropertyAddress(deal.property)} />
+                <DetailRow label="Country"       value={deal.property?.country ? countryName(deal.property.country) : null} />
                 <DetailRow label="Title ref"     value={deal.property?.titleReference} />
                 <DetailRow label="Land area"     value={deal.property?.landAreaSqm ? `${deal.property.landAreaSqm} m²` : null} />
                 <DetailRow label="Legal desc."   value={deal.property?.legalDescription} />
@@ -228,11 +251,10 @@ export function DealDetailPage() {
                 <DetailRow label="Created by" value={deal.createdByEmail} />
                 <DetailRow label="Created"    value={new Date(deal.createdAt).toLocaleString()} />
                 <DetailRow label="Updated"    value={new Date(deal.updatedAt).toLocaleString()} />
+                {/* The note that came with the sign-off is in the timeline, with everything
+                    else said about this deal. */}
                 {deal.decidedAt && (
-                  <>
-                    <DetailRow label="Decided" value={new Date(deal.decidedAt).toLocaleString()} />
-                    <DetailRow label="Notes"   value={deal.decisionNotes} />
-                  </>
+                  <DetailRow label="Verified" value={new Date(deal.decidedAt).toLocaleString()} />
                 )}
               </CardContent>
             </Card>
@@ -247,7 +269,7 @@ export function DealDetailPage() {
               dealId={deal.id}
               canUpload={
                 isDealReviewer(user?.role) ||
-                (isOwnerAgent && isDraft)
+                (isOwnerAgent && editable)
               }
               title="Documents"
               hideVoiceNotes
@@ -263,10 +285,10 @@ export function DealDetailPage() {
 
         {/* ── Delete confirm dialog ─────────────────────────────────────── */}
         <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-          <DialogTitle>Delete this draft?</DialogTitle>
+          <DialogTitle>Delete this deal?</DialogTitle>
           <DialogContent>
             <DialogContentText>
-              Draft <strong>{deal.reference ?? `#${deal.id}`}</strong> will be removed permanently along with its
+              <strong>{deal.reference ?? `#${deal.id}`}</strong> will be removed permanently along with its
               property and client records. This cannot be undone.
             </DialogContentText>
           </DialogContent>
@@ -285,33 +307,21 @@ export function DealDetailPage() {
           submitting={overrideMut.isPending}
           onSubmit={(targetStatus, reason) => overrideMut.mutateAsync({ targetStatus, reason })}
         />
+
+        <StatusNoteDialog
+          open={revertOpen}
+          title="Send this deal back?"
+          prompt="It returns to NEW so the broker can make changes. Say what needs doing — they see this on the deal's timeline."
+          confirmLabel="Send back"
+          submitting={revertMut.isPending}
+          onClose={() => setRevertOpen(false)}
+          onSubmit={(note) => revertMut.mutateAsync(note)}
+        />
       </Stack>
     </Box>
   );
 }
 
-function DecisionCard({ deal }) {
-  const isApproved = deal.status === 'APPROVED';
-  const isOverride = (deal.decisionNotes ?? '').startsWith('[OVERRIDE');
-  return (
-    <Alert severity={isApproved ? 'success' : 'error'} sx={{ alignItems: 'flex-start' }}>
-      <Stack spacing={0.5}>
-        <Typography variant="subtitle1">
-          {isApproved ? 'Approved' : 'Rejected'}{isOverride ? ' (via override)' : ''}
-        </Typography>
-        <Typography variant="caption" sx={{ color: tokens.muted }}>
-          {deal.decidedAt && new Date(deal.decidedAt).toLocaleString()}
-          {deal.decidedByUserId && ` · by user #${deal.decidedByUserId}`}
-        </Typography>
-        {deal.decisionNotes && (
-          <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
-            {deal.decisionNotes}
-          </Typography>
-        )}
-      </Stack>
-    </Alert>
-  );
-}
 
 /**
  * Booleans have to reach DetailRow as strings: it hides falsy values, so a raw `false` would

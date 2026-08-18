@@ -7,6 +7,7 @@ import { tokens, fonts } from '../../theme/theme.js';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { propertyTypeLabel, reasonForSellingLabel } from '../../data/propertyTypes.js';
 import { countryName } from '../../data/countries.js';
+import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
 
 const TXN_LABEL = { PURCHASE: 'Purchase', SALE: 'Sale' };
 const CLIENT_TYPE_LABEL = { INDIVIDUAL: 'Individual', ENTITY: 'Entity' };
@@ -91,13 +92,10 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
             <Group title="Property">
               <Row label="Type"        value={p.propertyType ? propertyTypeLabel(p.propertyType) : null} />
               <Row label="Reason"      value={p.reasonForSelling ? reasonForSellingLabel(p.propertyType, p.reasonForSelling) : null} />
-              <Row label="Address"     value={p.addressLine1} />
-              <Row label="Address 2"   value={p.addressLine2} />
-              <Row label="Suburb"      value={p.suburb} />
-              <Row label="District"    value={p.district} />
-              <Row label="Region"      value={p.region} />
-              <Row label="Country"     value={p.country} />
-              <Row label="Postcode"    value={p.postcode} />
+              {/* One address, as it was captured. Country is separate because it is a
+                  firm-derived compliance fact, not part of what the broker typed. */}
+              <Row label="Address"     value={formatPropertyAddress(p)} />
+              <Row label="Country"     value={p.country ? countryName(p.country) : null} />
               <Row label="Title ref"   value={p.titleReference} />
               <Row label="Land area"   value={p.landAreaSqm != null ? `${p.landAreaSqm} m²` : null} />
               <Row label="Legal desc." value={p.legalDescription} />

@@ -1,5 +1,6 @@
 import { Alert, Stack, TextField, Typography } from '@mui/material';
 import { IdScanList } from './IdScanList.jsx';
+import { YesNoField } from './YesNoField.jsx';
 import { SectionCard, FieldGroup } from './SectionShell.jsx';
 import { tokens } from '../../../theme/theme.js';
 
@@ -18,6 +19,16 @@ export function Section3Identity({ form, setField, dealId, idDocuments, onUpload
       title="Client identity"
       subtitle="Scan the IDs you've sighted, and tell us who to contact about this deal."
     >
+      <FieldGroup title="How you met the client">
+        <YesNoField
+          label="Is the client remote?"
+          help="You have not met them face to face. This decides whether remote identity checks are needed."
+          value={form.clientRemote}
+          onChange={setField('clientRemote')}
+          required
+        />
+      </FieldGroup>
+
       <FieldGroup title="Identity documents">
         {!dealId ? (
           <Alert severity="info">Saving your draft so scans have somewhere to go…</Alert>

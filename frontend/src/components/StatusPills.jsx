@@ -1,17 +1,9 @@
 import { Box, Typography } from '@mui/material';
 import { tokens } from '../theme/theme.js';
+import { dealStatusDot, dealStatusLabel } from '../data/dealStatus.js';
 
 const NEU_ACCENT = tokens.blue;
 const NEU_MUTED  = tokens.muted;
-
-const STATUS_DOTS = {
-  ALL:          tokens.muted,
-  DRAFT:        tokens.draft,
-  SUBMITTED:    tokens.submitted,
-  UNDER_REVIEW: tokens.review,
-  APPROVED:     tokens.approved,
-  REJECTED:     tokens.rejected,
-};
 
 export function StatusPills({ value, onChange, options }) {
   return (
@@ -57,7 +49,7 @@ export function StatusPills({ value, onChange, options }) {
                 width: 7,
                 height: 7,
                 borderRadius: '50%',
-                backgroundColor: STATUS_DOTS[opt] ?? NEU_MUTED,
+                backgroundColor: dealStatusDot(opt),
                 flexShrink: 0,
                 opacity: active ? 1 : 0.6,
               }}
@@ -69,9 +61,7 @@ export function StatusPills({ value, onChange, options }) {
               letterSpacing: '0.02em',
               lineHeight: 1,
             }}>
-              {opt === 'ALL' ? 'All' :
-               opt === 'UNDER_REVIEW' ? 'In review' :
-               opt.charAt(0) + opt.slice(1).toLowerCase()}
+              {dealStatusLabel(opt)}
             </Typography>
           </Box>
         );

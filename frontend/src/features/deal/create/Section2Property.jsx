@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
 import { AddressFinderField } from '../../../components/AddressFinderField.jsx';
+import { useFirmCountry } from '../../../hooks/useFirmCountry.js';
 import { CountrySelect } from '../../../components/CountrySelect.jsx';
 import { VoiceRecorderField } from '../../../components/VoiceRecorderField.jsx';
 import { RiskRatingChip } from '../../../components/RiskRatingChip.jsx';
@@ -32,6 +33,12 @@ export function Section2Property({ form, setNested, setField, setGroup, voiceBlo
 
   const previewRisk = previewRiskRating(form);
 
+  // Which address database to search. A resumed deal already carries the country the server
+  // stamped on its property — prefer it, because the deal's own reporting entity is the
+  // authority, not whoever happens to be looking at it.
+  const { country: firmCountry } = useFirmCountry();
+  const country = form.property.country || firmCountry;
+
   return (
     <SectionCard
       title="The property"
@@ -41,7 +48,7 @@ export function Section2Property({ form, setNested, setField, setGroup, voiceBlo
         <AddressFinderField
           value={form.property}
           onChange={setGroup('property')}
-          required={{ region: true, district: true }}
+          country={country}
         />
       </FieldGroup>
 

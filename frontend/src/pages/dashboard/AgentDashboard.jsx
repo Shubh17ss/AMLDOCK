@@ -4,7 +4,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { listDeals } from '../../api/deals.js';
-import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles, STATUS_META } from '../../components/bento/Bento.jsx';
+import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles } from '../../components/bento/Bento.jsx';
+import { dealStatusDot } from '../../data/dealStatus.js';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
@@ -22,10 +23,12 @@ export function AgentDashboard() {
 
   if (q.isError) return <Alert severity="error">We couldn’t load your deals. Refresh to try again.</Alert>;
   if (q.isLoading) return <Bento><SkeletonTiles /></Bento>;
-  const drafts = deals.filter((d) => d.status === 'DRAFT');
-  const inReview = deals.filter((d) => d.status === 'SUBMITTED' || d.status === 'UNDER_REVIEW');
-  const approved = deals.filter((d) => d.status === 'APPROVED');
-  const open = drafts.length + inReview.length;
+  // ON_HOLD sits with compliance too, but it is waiting on *this broker* to act, so it is
+  // counted alongside their own in-progress work rather than as something in flight.
+  const mine = deals.filter((d) => d.status === 'NEW' || d.status === 'ON_HOLD');
+  const inReview = deals.filter((d) => d.status === 'HANDOVER' || d.status === 'REVIEW');
+  const verified = deals.filter((d) => d.status === 'VERIFIED' || d.status === 'CLOSED');
+  const open = mine.length + inReview.length;
   const recent = [...deals].sort(byUpdated).slice(0, 5);
 
   return (
@@ -35,7 +38,7 @@ export function AgentDashboard() {
         eyebrow="YOUR DESK · LIVE"
         value={open}
         label={open === 1 ? 'deal open' : 'deals open'}
-        caption={`${approved.length} cleared to date · ${money.formatCompact(sum(inReview))} in flight`}
+        caption={`${verified.length} cleared to date · ${money.formatCompact(sum(inReview))} in flight`}
         action={
           <Button component={RouterLink} to="/deals/new" startIcon={<AddIcon />}
                   sx={{ bgcolor: '#fff', color: tokens.blue, fontWeight: 700, '&:hover': { bgcolor: '#EEF3FF' } }}>
@@ -44,9 +47,9 @@ export function AgentDashboard() {
         }
       />
 
-      <StatTile index={1} eyebrow="DRAFT" dot={STATUS_META.DRAFT.c} value={drafts.length}
-                label="In progress" to="/my-deals" />
-      <StatTile index={2} eyebrow="IN REVIEW" dot={STATUS_META.UNDER_REVIEW.c} value={inReview.length}
+      <StatTile index={1} eyebrow="WITH YOU" dot={dealStatusDot('NEW')} value={mine.length}
+                label="New or sent back" to="/my-deals" />
+      <StatTile index={2} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={inReview.length}
                 label="With compliance" color={inReview.length ? tokens.review : undefined} to="/my-deals" />
       <StatTile index={3} eyebrow={`${money.code} · IN FLIGHT`} cols={2} mono value={money.formatCompact(sum(inReview))}
                 label="Value awaiting clearance" />
@@ -69,8 +72,8 @@ export function AgentDashboard() {
         ]}
       />
 
-      <StatTile index={6} eyebrow="APPROVED" dot={STATUS_META.APPROVED.c} value={approved.length}
-                label="Cleared" color={approved.length ? tokens.approved : undefined} to="/my-deals" />
+      <StatTile index={6} eyebrow="VERIFIED" dot={dealStatusDot('VERIFIED')} value={verified.length}
+                label="Cleared" color={verified.length ? tokens.approved : undefined} to="/my-deals" />
       <StatTile index={7} eyebrow="ALL DEALS" value={deals.length} label="Total on your desk" to="/my-deals" />
     </Bento>
   );
