@@ -14,6 +14,7 @@ import { approveDeal, assignDeal, getDeal, overrideDeal, rejectDeal } from '../a
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealReviewer } from '../auth/roles.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
+import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
 import { NodeEditorPane } from '../features/ownership/NodeEditorPane.jsx';
 import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
@@ -144,9 +145,14 @@ export function DealReviewScreen() {
           <Box sx={{ flexGrow: 1 }} />
           <Typography variant="h6">{deal.reference ?? `Deal #${deal.id}`}</Typography>
           <DealStatusChip status={deal.status} />
+          <RiskRatingChip rating={deal.riskRating} hideWhenUnset />
           <Chip label={deal.transactionType} size="small" variant="outlined" />
-          {deal.transactionValue != null && (
-            <Chip label={money.formatWithCode(deal.transactionValue)} size="small" variant="outlined" />
+          {(deal.valuationMin != null || deal.valuationMax != null || deal.transactionValue != null) && (
+            <Chip
+              label={`${money.code} ${money.dealRange(deal)}`}
+              size="small"
+              variant="outlined"
+            />
           )}
           {canClaim && (
             <Button variant="contained" onClick={() => claimMut.mutate()} disabled={claimMut.isPending}>
@@ -404,9 +410,10 @@ function MobileHeader({ deal, canClaim, canDecide, canOverride, claimMut, onReje
       {/* Row 2: status chips */}
       <Stack direction="row" spacing={1} flexWrap="wrap">
         <DealStatusChip status={deal.status} />
+        <RiskRatingChip rating={deal.riskRating} hideWhenUnset />
         <Chip label={deal.transactionType} size="small" />
-        {deal.transactionValue != null && (
-          <Chip label={money.formatWithCode(deal.transactionValue)} size="small" />
+        {(deal.valuationMin != null || deal.valuationMax != null || deal.transactionValue != null) && (
+          <Chip label={`${money.code} ${money.dealRange(deal)}`} size="small" />
         )}
       </Stack>
 

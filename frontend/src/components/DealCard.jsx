@@ -1,6 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
+import { RiskRatingChip } from './RiskRatingChip.jsx';
 import { tokens, shadows } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -53,7 +54,12 @@ export function DealCard({ deal, onClaim, onReview, claimPending }) {
         }}>
           {deal.reference ?? `#${deal.id}`}
         </Typography>
-        <DealStatusChip status={deal.status} />
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {/* Hidden when unassessed — a card is dense enough without "Not assessed" on every
+              pre-V28 deal, and the absence says nothing a reviewer needs here. */}
+          <RiskRatingChip rating={deal.riskRating} hideWhenUnset />
+          <DealStatusChip status={deal.status} />
+        </Box>
       </Box>
 
       {/* Row 2: property address */}
@@ -81,8 +87,10 @@ export function DealCard({ deal, onClaim, onReview, claimPending }) {
       {/* Row 4: meta chips */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: onClaim || onReview ? 2 : 0 }}>
         {/* Standalone pill with no header to name the currency, so it carries the code. */}
-        {deal.transactionValue != null && (
-          <MetaPill>{money.formatWithCode(deal.transactionValue)}</MetaPill>
+        {(deal.valuationMin != null || deal.valuationMax != null || deal.transactionValue != null) && (
+          <MetaPill>
+            {`${money.code} ${money.dealRangeCompact(deal)}`}
+          </MetaPill>
         )}
         {deal.transactionType && (
           <MetaPill>{deal.transactionType}</MetaPill>

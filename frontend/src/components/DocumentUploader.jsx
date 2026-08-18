@@ -11,8 +11,8 @@ import DownloadIcon from '@mui/icons-material/Download';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
-  DOCUMENT_TYPES, deleteDocument, fetchDownloadUrl, listDealDocuments,
-  listNodeDocuments, uploadToS3,
+  AUDIO_DOCUMENT_TYPES, DOCUMENT_TYPES, deleteDocument, documentTypeLabel, fetchDownloadUrl,
+  listDealDocuments, listNodeDocuments, uploadToS3,
 } from '../api/documents.js';
 import { CameraCaptureDialog } from './CameraCaptureDialog.jsx';
 import { tokens } from '../theme/theme.js';
@@ -103,7 +103,7 @@ export function DocumentUploader({
   // Optionally drop voice notes — some screens surface them separately (e.g. a Broker
   // notes card) and don't want them repeated in the document table.
   const rows = (listQ.data ?? []).filter(
-    (d) => !(hideVoiceNotes && d.documentType === 'VOICE_NOTE'),
+    (d) => !(hideVoiceNotes && AUDIO_DOCUMENT_TYPES.includes(d.documentType)),
   );
 
   const handleDownload = async (id) => {
@@ -211,7 +211,7 @@ export function DocumentUploader({
             {rows.map((d) => (
               <TableRow key={d.id}>
                 <TableCell>{d.originalFilename}</TableCell>
-                <TableCell><Chip size="small" label={d.documentType} /></TableCell>
+                <TableCell><Chip size="small" label={documentTypeLabel(d.documentType)} /></TableCell>
                 <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
                 <TableCell>{d.uploadedByEmail ?? '—'}</TableCell>
                 <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>

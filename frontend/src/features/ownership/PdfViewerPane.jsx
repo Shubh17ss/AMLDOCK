@@ -13,7 +13,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
-import { fetchDownloadUrl, listDealDocuments } from '../../api/documents.js';
+import { AUDIO_DOCUMENT_TYPES, fetchDownloadUrl, listDealDocuments } from '../../api/documents.js';
 import { tokens } from '../../theme/theme.js';
 
 // Configure the pdf.js worker once. Using a CDN keeps us out of Vite bundler config.
@@ -31,7 +31,7 @@ export function PdfViewerPane({ dealId, selectedDocumentId, onSelectDocument }) 
 
   // Voice notes are played in the Broker notes card above this pane, so keep them out of the
   // "Open document" picker — this viewer only handles previewable files (PDFs / images).
-  const documents = (docsQ.data ?? []).filter((d) => d.documentType !== 'VOICE_NOTE');
+  const documents = (docsQ.data ?? []).filter((d) => !AUDIO_DOCUMENT_TYPES.includes(d.documentType));
   const selected = useMemo(
     () => documents.find((d) => d.id === selectedDocumentId) ?? null,
     [documents, selectedDocumentId],

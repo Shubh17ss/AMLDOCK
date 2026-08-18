@@ -11,6 +11,9 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor, isDealReviewer, canDelete, canOverride } from '../auth/roles.js';
 import { deleteDeal, getDeal, overrideDeal, submitDeal } from '../api/deals.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
+import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
+import { propertyTypeLabel, reasonForSellingLabel } from '../data/propertyTypes.js';
+import { countryName } from '../data/countries.js';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
 import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
 import { OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
@@ -79,6 +82,7 @@ export function DealDetailPage() {
                   {deal.reference ?? `Deal #${deal.id}`}
                 </Typography>
                 <DealStatusChip status={deal.status} />
+                <RiskRatingChip rating={deal.riskRating} />
                 <Chip label={deal.transactionType} size="small" />
               </Stack>
 
@@ -140,7 +144,7 @@ export function DealDetailPage() {
                 <Divider sx={{ mb: 1.5 }} />
                 <DetailRow label="Reporting entity" value={deal.firmName} />
                 <DetailRow label="Branch"  value={deal.branchName} />
-                <DetailRow label="Value"   value={deal.transactionValue != null ? money.formatWithCode(deal.transactionValue) : null} />
+                <DetailRow label="Value"   value={hasValue(deal) ? money.dealRange(deal) : null} />
                 <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontWeight: 700 }}>Point of contact</Typography>
                 <DetailRow label="Name"    value={deal.pocName} />
                 <DetailRow label="Role"    value={deal.pocRole} />
@@ -155,6 +159,10 @@ export function DealDetailPage() {
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Property</Typography>
                 <Divider sx={{ mb: 1.5 }} />
+                <DetailRow label="Type"          value={deal.property?.propertyType ? propertyTypeLabel(deal.property.propertyType) : null} />
+                <DetailRow label="Reason"        value={deal.property?.reasonForSelling
+                  ? reasonForSellingLabel(deal.property?.propertyType, deal.property.reasonForSelling)
+                  : null} />
                 <DetailRow label="Address"      value={[deal.property?.addressLine1, deal.property?.addressLine2].filter(Boolean).join(', ')} />
                 <DetailRow label="Suburb"        value={deal.property?.suburb} />
                 <DetailRow label="District"      value={deal.property?.district} />
@@ -174,9 +182,40 @@ export function DealDetailPage() {
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Client</Typography>
                 <Divider sx={{ mb: 1.5 }} />
                 <DetailRow label="Name"  value={deal.client?.displayName} />
-                <DetailRow label="Type"  value={deal.client?.clientType} />
+                {/* Set during the ownership-structure review, not at creation — the broker
+                    scans IDs of natural persons and can't be asked to classify the entity. */}
+                <DetailRow label="Type"  value={deal.client?.clientType ?? 'Pending review'} />
                 <DetailRow label="Email" value={deal.client?.email} />
                 <DetailRow label="Phone" value={deal.client?.phone} />
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%', minHeight: 200, overflow: 'auto' }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Risk & valuation</Typography>
+                <Divider sx={{ mb: 1.5 }} />
+                <DetailRow label="Risk rating" value={deal.riskRating
+                  ? `${deal.riskRating}${deal.riskRatingSource === 'OVERRIDE' ? ' (set by compliance)' : ''}`
+                  : 'Not assessed'} />
+                <DetailRow label="Red flag"    value={yesNo(deal.redFlagPresent)} />
+                <DetailRow label="Min value"   value={deal.valuationMin != null ? money.formatWithCode(deal.valuationMin) : null} />
+                <DetailRow label="Max value"   value={deal.valuationMax != null ? money.formatWithCode(deal.valuationMax) : null} />
+                {/* Pre-V28 deals answered none of these, so the whole block goes rather than
+                    leaving a heading with nothing under it. */}
+                {hasTransactionContext(deal) && (
+                  <>
+                    <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, fontWeight: 700 }}>Transaction</Typography>
+                    <DetailRow label="Purpose"     value={deal.transactionPurpose} />
+                    <DetailRow label="Trust in ownership" value={yesNo(deal.trustInvolved)} />
+                    <DetailRow label="On-sold quickly"    value={yesNo(deal.onSoldQuickly)} />
+                    <DetailRow label="Foreign exposure"   value={
+                      deal.foreignExposureCountry === 'NONE' ? 'None'
+                        : deal.foreignExposureCountry ? countryName(deal.foreignExposureCountry)
+                          : null} />
+                  </>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -273,6 +312,22 @@ function DecisionCard({ deal }) {
     </Alert>
   );
 }
+
+/**
+ * Booleans have to reach DetailRow as strings: it hides falsy values, so a raw `false` would
+ * silently drop the row and read as "never asked" — the opposite of what a "No" answer means.
+ */
+function yesNo(v) {
+  if (v == null) return null;
+  return v ? 'Yes' : 'No';
+}
+
+const hasValue = (d) =>
+  d.valuationMin != null || d.valuationMax != null || d.transactionValue != null;
+
+const hasTransactionContext = (d) =>
+  Boolean(d.transactionPurpose) || d.trustInvolved != null || d.onSoldQuickly != null
+  || Boolean(d.foreignExposureCountry);
 
 function DetailRow({ label, value }) {
   if (!value) return null;

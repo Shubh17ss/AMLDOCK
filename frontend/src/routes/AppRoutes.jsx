@@ -35,7 +35,7 @@ import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
 import { MyDealsPage } from '../pages/MyDealsPage.jsx';
 import { DealsPage } from '../pages/DealsPage.jsx';
 import { FirmDealsPage } from '../pages/FirmDealsPage.jsx';
-import { NewDealWizardPage } from '../pages/NewDealWizardPage.jsx';
+import { NewDealPage } from '../pages/NewDealPage.jsx';
 import { DealDetailPage } from '../pages/DealDetailPage.jsx';
 import { DealReviewScreen } from '../pages/DealReviewScreen.jsx';
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
@@ -169,7 +169,7 @@ export function AppRoutes() {
         } />
         <Route path="/deals/new" element={
           <ProtectedRoute roles={DEAL_AUTHOR_ROLES}>
-            <NewDealWizardPage />
+            <NewDealPage />
           </ProtectedRoute>
         } />
         <Route path="/deals/:id" element={<DealDetailPage />} />

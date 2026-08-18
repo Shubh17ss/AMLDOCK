@@ -2,6 +2,7 @@ import { Box, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContai
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
+import { RiskRatingChip } from './RiskRatingChip.jsx';
 import { fonts } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -28,6 +29,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
           <TableRow>
             <TableCell>Reference</TableCell>
             <TableCell>Status</TableCell>
+            <TableCell>Risk</TableCell>
             <TableCell>Type</TableCell>
             <TableCell>Value ({money.code})</TableCell>
             {showFirm && <TableCell>Reporting entity</TableCell>}
@@ -44,8 +46,10 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
             <TableRow key={d.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/deals/${d.id}`)}>
               <TableCell sx={mono}>{d.reference ?? `#${d.id}`}</TableCell>
               <TableCell><DealStatusChip status={d.status} /></TableCell>
+              <TableCell><RiskRatingChip rating={d.riskRating} /></TableCell>
               <TableCell>{d.transactionType}</TableCell>
-              <TableCell sx={mono}>{money.format(d.transactionValue)}</TableCell>
+              {/* The broker's min–max estimate; pre-V28 deals fall back to their single value. */}
+              <TableCell sx={mono}>{money.dealRange(d)}</TableCell>
               {showFirm && <TableCell>{d.firmName ?? '—'}</TableCell>}
               <TableCell>{d.branchName ?? '—'}</TableCell>
               <TableCell>{d.clientDisplayName ?? '—'}</TableCell>

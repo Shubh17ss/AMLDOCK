@@ -10,7 +10,9 @@ import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { tokens } from '../../theme/theme.js';
 
-const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValue || 0), 0);
+// Deal worth is a min-max range, so totals take the upper bound — the conservative read
+// for AML value thresholds. Pre-V28 deals only have the single transactionValue.
+const sum = (deals) => deals.reduce((t, d) => t + (d.valuationMax ?? d.transactionValue ?? 0), 0);
 
 function oldestWait(deals) {
   if (!deals.length) return '—';

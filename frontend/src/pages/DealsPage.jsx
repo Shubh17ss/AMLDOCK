@@ -14,6 +14,7 @@ import { DEAL_REVIEWER_ROLES } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
+import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { DealCard } from '../components/DealCard.jsx';
@@ -131,6 +132,7 @@ export function DealsPage() {
                 <TableRow>
                   <TableCell>Reference</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Risk</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Value ({money.code})</TableCell>
                   <TableCell>Reporting entity</TableCell>
@@ -146,8 +148,9 @@ export function DealsPage() {
                   <TableRow key={d.id} hover>
                     <TableCell>{d.reference ?? `#${d.id}`}</TableCell>
                     <TableCell><DealStatusChip status={d.status} /></TableCell>
+                    <TableCell><RiskRatingChip rating={d.riskRating} /></TableCell>
                     <TableCell>{d.transactionType}</TableCell>
-                    <TableCell>{money.format(d.transactionValue)}</TableCell>
+                    <TableCell>{money.dealRange(d)}</TableCell>
                     <TableCell>{d.firmName ?? '—'}</TableCell>
                     <TableCell>{d.branchName ?? '—'}</TableCell>
                     <TableCell>{d.clientDisplayName ?? '—'}</TableCell>

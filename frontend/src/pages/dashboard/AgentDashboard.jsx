@@ -11,7 +11,9 @@ import { useCurrency } from '../../dashboard/useCurrency.js';
 import { tokens } from '../../theme/theme.js';
 
 const byUpdated = (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt);
-const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValue || 0), 0);
+// Deal worth is a min-max range, so totals take the upper bound — the conservative read
+// for AML value thresholds. Pre-V28 deals only have the single transactionValue.
+const sum = (deals) => deals.reduce((t, d) => t + (d.valuationMax ?? d.transactionValue ?? 0), 0);
 
 export function AgentDashboard() {
   const q = useQuery({ queryKey: ['deals', 'mine', 'ALL'], queryFn: () => listDeals() });

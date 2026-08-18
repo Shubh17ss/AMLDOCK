@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { apiClient } from './client.js';
 
+// Keep in sync with the DocumentType enum in the backend
+// (backend/src/main/java/nz/amldock/document/DocumentType.java) and with the
+// chk_document_type constraint, which V28 last rebuilt.
 export const DOCUMENT_TYPES = [
   { value: 'DRIVER_LICENCE', label: 'Driver licence' },
   { value: 'PASSPORT', label: 'Passport' },
@@ -9,8 +12,23 @@ export const DOCUMENT_TYPES = [
   { value: 'TITLE_DOC', label: 'Title document' },
   { value: 'SALE_AGREEMENT', label: 'Sale agreement' },
   { value: 'VOICE_NOTE', label: 'Voice note' },
+  { value: 'VOICE_NOTE_PURPOSE', label: 'Voice note — transaction purpose' },
+  { value: 'VALUATION_MIN_EVIDENCE', label: 'Valuation evidence — minimum' },
+  { value: 'VALUATION_MAX_EVIDENCE', label: 'Valuation evidence — maximum' },
   { value: 'OTHER', label: 'Other' },
 ];
+
+/** Identity documents scanned in the deal form. These are the OCR-eligible types. */
+export const ID_DOCUMENT_TYPES = DOCUMENT_TYPES.filter(
+  (t) => t.value === 'DRIVER_LICENCE' || t.value === 'PASSPORT',
+);
+
+/** Both audio types, for read surfaces that route to the player rather than a preview. */
+export const AUDIO_DOCUMENT_TYPES = ['VOICE_NOTE', 'VOICE_NOTE_PURPOSE'];
+
+/** Display label for a stored document-type code; falls back to the raw value. */
+export const documentTypeLabel = (value) =>
+  DOCUMENT_TYPES.find((t) => t.value === value)?.label ?? value ?? '—';
 
 export async function requestUploadUrl({ filename, contentType, sizeBytes, documentType, dealId, ownershipNodeId }) {
   const { data } = await apiClient.post('/documents/upload-url', {
