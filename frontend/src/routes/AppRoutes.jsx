@@ -173,6 +173,14 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
         <Route path="/deals/:id" element={<DealDetailPage />} />
+        {/* Both role groups: a compliance officer may correct a NEW deal on the broker's
+            behalf, so DEAL_AUTHOR_ROLES alone would lock them out at the router. The real
+            authority is NewDealPage's own mayEdit check and, behind it, assertEditable. */}
+        <Route path="/deals/:id/edit" element={
+          <ProtectedRoute roles={[...DEAL_AUTHOR_ROLES, ...DEAL_REVIEWER_ROLES]}>
+            <NewDealPage />
+          </ProtectedRoute>
+        } />
         <Route path="/deals/:id/review" element={
           <ProtectedRoute roles={DEAL_REVIEWER_ROLES}>
             <DealReviewScreen />

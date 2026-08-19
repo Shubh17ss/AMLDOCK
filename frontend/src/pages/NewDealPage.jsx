@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Alert, Box, Button, Stack, Step, StepLabel, Stepper } from '@mui/material';
+import {
+  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
+  Stack, Step, StepLabel, Stepper,
+} from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { deleteDeal, handoverDeal } from '../api/deals.js';
 import { listDealDocuments, uploadToS3 } from '../api/documents.js';
@@ -15,6 +18,10 @@ import { Section1ClientType } from '../features/deal/create/Section1ClientType.j
 import { Section2Property } from '../features/deal/create/Section2Property.jsx';
 import { Section3Identity } from '../features/deal/create/Section3Identity.jsx';
 import { Section4Risk } from '../features/deal/create/Section4Risk.jsx';
+import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { isDealAuthor, isDealReviewer } from '../auth/roles.js';
+import { isEditable } from '../data/dealStatus.js';
 import { tokens } from '../theme/theme.js';
 
 // Deal-status notifications sit top-centre so they read as a prominent, page-level result
@@ -37,8 +44,13 @@ export function NewDealPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { id: routeDealId } = useParams();
   const [params] = useSearchParams();
-  const resumeDealId = params.get('dealId');
+  // Either entry point resumes the same way. The route param is the real one; the query form is
+  // kept because it costs nothing and is a valid way to link to a half-finished deal.
+  const resumeDealId = routeDealId ?? params.get('dealId');
+  const isEditMode = Boolean(routeDealId);
 
   const draft = useDealDraft({ resumeDealId });
   const { form, setField, setNested, setGroup, dealId, deal, saveState, error, setError } = draft;
@@ -50,6 +62,7 @@ export function NewDealPage() {
   const [overlay, setOverlay] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showGaps, setShowGaps] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const gaps = sectionGaps(section + 1, form);
   const purchaserBlocked = form.clientRole === 'PURCHASER';
@@ -155,16 +168,18 @@ export function NewDealPage() {
   };
 
   const handleDiscard = async () => {
-    // A draft that exists on the server is genuinely deleted, not just navigated away from.
+    setConfirmDelete(false);
+    // A deal that exists on the server is genuinely deleted, not just navigated away from.
     if (dealId) {
-      setOverlay({ title: 'Discarding draft' });
+      setOverlay({ title: isEditMode ? 'Deleting deal' : 'Discarding draft' });
       try {
         await deleteDeal(dealId);
         queryClient.invalidateQueries({ queryKey: ['deals'] });
       } catch (e) {
         showToast({
           severity: 'error',
-          message: e.response?.data?.message || 'Could not discard the draft',
+          message: e.response?.data?.message
+            || (isEditMode ? 'Could not delete the deal' : 'Could not discard the draft'),
           anchorOrigin: TOP_CENTER,
         });
         setOverlay(null);
@@ -179,6 +194,15 @@ export function NewDealPage() {
     return <LoadingOverlay open title="Opening your draft…" />;
   }
 
+  // Editing is only possible while a deal is NEW, and only by its broker or a reviewer of the
+  // firm. Anyone else — or anyone still here after the deal moved on — goes to the read-only
+  // view. The exact complement of DealDetailPage's redirect, so the two cannot loop.
+  const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === deal?.createdByUserId;
+  const mayEdit = isOwnerAgent || isDealReviewer(user?.role);
+  if (isEditMode && deal && (!isEditable(deal.status) || !mayEdit)) {
+    return <Navigate to={`/deals/${resumeDealId}`} replace />;
+  }
+
   const isLast = section === SECTIONS.length - 1;
 
   return (
@@ -187,7 +211,7 @@ export function NewDealPage() {
 
       <PageHeader
         eyebrow={`section ${section + 1} of ${SECTIONS.length}`}
-        title="New deal"
+        title={isEditMode ? `Editing ${deal?.reference ?? 'deal'}` : 'New deal'}
         actions={<SaveStateChip state={saveState} hasDraft={Boolean(dealId)} />}
       />
 
@@ -272,8 +296,11 @@ export function NewDealPage() {
         {/* Padding rather than margin for the mobile gap: the parent Stack's `spacing` sets a
             margin on each direct child, which would override the button's own `mt`. */}
         <Box sx={{ width: { xs: '100%', sm: 'auto' }, pt: { xs: 4, sm: 0 } }}>
+          {/* Named for what it does. In edit mode the broker arrived from a deal page, where
+              "Discard" would read as "cancel my edits" rather than "delete this deal" — so it
+              says Delete and asks first. */}
           <Button
-            onClick={handleDiscard}
+            onClick={isEditMode ? () => setConfirmDelete(true) : handleDiscard}
             disabled={busy}
             startIcon={<DeleteOutlineIcon />}
             sx={{
@@ -282,11 +309,19 @@ export function NewDealPage() {
               '&:hover': { backgroundColor: 'var(--cl-err-wash)', color: tokens.rejected },
             }}
           >
-            Discard
+            {isEditMode ? 'Delete deal' : 'Discard'}
           </Button>
         </Box>
 
         <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'stretch', sm: 'flex-end' }}>
+          {/* Everything autosaves, so leaving is not losing — an editor needs a way out that
+              isn't "hand over" or "delete". */}
+          {isEditMode && (
+            <Button onClick={() => navigate(`/deals/${resumeDealId}`)} disabled={busy}
+                    sx={{ flex: { xs: 1, sm: 'unset' } }}>
+              Done
+            </Button>
+          )}
           <Button onClick={goBack} disabled={section === 0 || busy} sx={{ flex: { xs: 1, sm: 'unset' } }}>
             Back
           </Button>
@@ -302,6 +337,28 @@ export function NewDealPage() {
           </Button>
         </Stack>
       </Stack>
+
+      {/* The reason a deal came back is on its timeline, and the broker needs it in front of
+          them while they act on it — not one navigation away. */}
+      {isEditMode && dealId && (
+        <DealNotesTimeline dealId={dealId} status={deal?.status} />
+      )}
+
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+        <DialogTitle>Delete this deal?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            <strong>{deal?.reference ?? `#${dealId}`}</strong> will be removed permanently, along
+            with its property and client records. This cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={handleDiscard} disabled={busy}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

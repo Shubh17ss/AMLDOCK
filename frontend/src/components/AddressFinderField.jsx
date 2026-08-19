@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Stack, TextField, Typography } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
+import { Alert, Box, Stack, TextField, Typography } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useAddressFinder, ADDRESSFINDER_KEY } from '../hooks/useAddressFinder.js';
 import { mapAddressFinderResult, formatPropertyAddress } from '../data/addressFinderMeta.js';
@@ -28,6 +27,9 @@ import { tokens } from '../theme/theme.js';
  */
 export function AddressFinderField({ value, onChange, country }) {
   const inputRef = useRef(null);
+  // The suggestion list is appended here rather than to <body>, so it can be positioned
+  // against the field instead of the page. See styles/addressfinder.css.
+  const wrapperRef = useRef(null);
   const { status, error } = useAddressFinder();
   const [picked, setPicked] = useState(null);
 
@@ -43,13 +45,29 @@ export function AddressFinderField({ value, onChange, country }) {
   const lookupUsable = status === 'ready' && Boolean(country);
 
   useEffect(() => {
-    if (!lookupUsable || !inputRef.current) return undefined;
+    if (!lookupUsable || !inputRef.current || !wrapperRef.current) return undefined;
 
     const widget = new window.AddressFinder.Widget(
       inputRef.current,
       ADDRESSFINDER_KEY,
       country,
-      { show_locations: false, empty_content: 'No matches — keep typing, or type the address in full.' },
+      {
+        show_locations: false,
+        empty_content: 'No matches — keep typing, or type the address in full.',
+        // Milliseconds of stillness before a lookup fires. The widget's own default is 50,
+        // which bills a call per keystroke — a 15-character address costs ~15 lookups. At 300
+        // a burst of typing collapses into ~3, and the list still appears as the broker stops.
+        timeout: 300,
+        // Our own classes alongside the widget's, so styles/addressfinder.css can pin the list
+        // to the field without touching anything else the widget renders.
+        list_class: 'af_list amldock-af-list',
+        item_class: 'af_item amldock-af-item',
+        hover_class: 'af_hover amldock-af-hover',
+        empty_class: 'af_empty amldock-af-empty',
+        // Positioned against the wrapper below rather than <body>, so `left: 0` in the
+        // stylesheet means the left edge of the field.
+        container: wrapperRef.current,
+      },
     );
 
     widget.on('result:select', (fullAddress, meta) => {
@@ -91,6 +109,9 @@ export function AddressFinderField({ value, onChange, country }) {
 
   return (
     <Stack spacing={1}>
+      {/* position: relative makes this the offset parent the widget's absolutely-positioned
+          list resolves against. */}
+      <Box ref={wrapperRef} sx={{ position: 'relative' }}>
       <TextField
         // inputRef, not ref: the widget binds to the native <input>, and `ref` would hand it
         // MUI's wrapper div, which it cannot attach to.
@@ -101,8 +122,8 @@ export function AddressFinderField({ value, onChange, country }) {
         fullWidth
         required
         autoComplete="off"
-        InputProps={{ startAdornment: <SearchIcon sx={{ color: tokens.muted, mr: 1 }} /> }}
       />
+      </Box>
 
       {picked ? (
         <Stack direction="row" spacing={1} alignItems="flex-start">

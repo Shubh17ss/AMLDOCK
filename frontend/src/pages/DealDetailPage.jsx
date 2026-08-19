@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions,
   DialogContent, DialogContentText, DialogTitle, Divider, Grid, Stack, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import SendIcon from '@mui/icons-material/Send';
 import UndoIcon from '@mui/icons-material/Undo';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor, isDealReviewer, canDelete, canOverride } from '../auth/roles.js';
-import { deleteDeal, getDeal, handoverDeal, overrideDeal, revertDeal } from '../api/deals.js';
+import { deleteDeal, getDeal, overrideDeal, revertDeal } from '../api/deals.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { propertyTypeLabel, reasonForSellingLabel } from '../data/propertyTypes.js';
@@ -43,12 +42,6 @@ export function DealDetailPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['deals', dealId] }); setOverrideOpen(false); },
   });
 
-  const handoverMut = useMutation({
-    mutationFn: () => handoverDeal(dealId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['deals', dealId] }),
-    onError: (e) => setActionError(e.response?.data?.message || 'Could not hand the deal over'),
-  });
-
   const revertMut = useMutation({
     mutationFn: (note) => revertDeal(dealId, note),
     onSuccess: () => {
@@ -75,6 +68,19 @@ export function DealDetailPage() {
   const deal = q.data;
   const isOwnerAgent = isDealAuthor(user?.role) && user.userId === deal.createdByUserId;
   const editable = isEditable(deal.status);
+
+  // A NEW deal is still the broker's to change, so whoever can change it gets the form rather
+  // than these read-only cards. Redirecting here — rather than re-pointing the dozen links that
+  // lead to a deal — keeps /deals/:id the one address a deal has, and gives /firm/deals/:id the
+  // same behaviour for free since it renders this component too.
+  //
+  // Anyone who may read but not write (a sales manager on their branch, an auditor) falls
+  // through and keeps the cards. NewDealPage holds the exact complement of this condition, so
+  // the two cannot bounce off each other.
+  if (editable && (isOwnerAgent || isDealReviewer(user?.role))) {
+    return <Navigate to={`/deals/${deal.id}/edit`} replace />;
+  }
+
   // A broker may pull back their own deal from handover; past that, only a reviewer sends it
   // back. Mirrors DealLifecycleService.assertRevert.
   const mayRevert = canRevert(deal.status)
@@ -106,16 +112,8 @@ export function DealDetailPage() {
 
               {/* Action buttons */}
               <Stack direction="row" spacing={1.5} flexWrap="wrap">
-                {isOwnerAgent && editable && (
-                  <Button
-                    variant="contained"
-                    startIcon={<SendIcon />}
-                    onClick={() => handoverMut.mutate()}
-                    disabled={handoverMut.isPending}
-                  >
-                    {handoverMut.isPending ? 'Handing over…' : 'Hand over to compliance'}
-                  </Button>
-                )}
+                {/* Handing over lives on the form — anyone who could press it here is
+                    redirected there before this renders. */}
                 {mayRevert && (
                   <Button
                     variant="outlined"
@@ -132,7 +130,7 @@ export function DealDetailPage() {
                     color="error"
                     startIcon={<DeleteOutlineIcon />}
                     onClick={() => setConfirmDelete(true)}
-                    disabled={handoverMut.isPending || deleteMut.isPending}
+                    disabled={deleteMut.isPending}
                   >
                     Delete
                   </Button>

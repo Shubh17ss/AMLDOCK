@@ -82,8 +82,8 @@ export function Section1ClientType({ form, setField, locked = false }) {
 
       {locked && (
         <Alert severity="info">
-          This is locked because the draft has already been created against it. Discard the
-          draft to start a deal for the other side.
+          Locked — the deal already exists against this choice. Delete it and start again if
+          you need the other side.
         </Alert>
       )}
     </SectionCard>
