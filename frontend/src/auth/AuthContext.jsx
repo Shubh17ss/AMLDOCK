@@ -5,6 +5,7 @@ import {
   adminLogin as apiAdminLogin, adminVerify as apiAdminVerify,
 } from '../api/auth.js';
 import { setOnUnauthorized } from '../api/client.js';
+import { clearSavedScope } from '../dashboard/scopeStorage.js';
 
 const AuthContext = createContext(null);
 
@@ -47,9 +48,12 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try { await apiLogout(); } catch { /* ignore */ }
+    // The saved dashboard scope is keyed by user id, and ids are reused — a reseeded database
+    // hands id 1 to a different person, who would otherwise inherit this selection.
+    clearSavedScope(user);
     setUser(null);
     setStatus('guest');
-  }, []);
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{

@@ -1,37 +1,25 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { readSavedScope, writeSavedScope } from './scopeStorage.js';
 
 // ── Dashboard scope ─────────────────────────────────────────────────────────
 // A firm + branch selection shared across the whole app shell (sidebar selector,
 // dashboard hub, CDD Register stats). `branch` is `{ id, name } | null` and `firm` is
 // `{ id, name, country } | null`; null means "all". The firm's country is carried because it
 // decides the currency amounts are shown in — see useCurrency.
-// Persisted per user in localStorage so it survives refresh; a selection saved before country
-// existed simply has none, and falls back to NZD until the selector is touched.
+// Persisted per user in localStorage (see scopeStorage.js) so it survives refresh; a selection
+// saved before country existed simply has none, and falls back to NZD until the selector is
+// touched. ScopeSelector discards a saved selection whose firm or branch no longer exists.
 // `initialized` guards one-time default seeding (from the signed-in user); a
 // saved selection counts as initialized so seeding never overwrites it.
 
 const DashboardScopeContext = createContext(null);
 
-const keyFor = (user) => `amldock.dashScope.${user?.id ?? user?.email ?? 'anon'}`;
-
-function readSaved(storageKey) {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      const saved = JSON.parse(raw);
-      return { firm: saved.firm ?? null, branch: saved.branch ?? null, initialized: true };
-    }
-  } catch { /* corrupt or unavailable storage — fall through to defaults */ }
-  return { firm: null, branch: null, initialized: false };
-}
-
 export function DashboardScopeProvider({ children }) {
   const { user } = useAuth();
-  const storageKey = keyFor(user);
 
   // Hydrate synchronously on mount (the shell only mounts once auth is resolved).
-  const saved = useMemo(() => readSaved(storageKey), [storageKey]);
+  const saved = useMemo(() => readSavedScope(user), [user]);
   const [firm, setFirm] = useState(saved.firm);
   const [branch, setBranch] = useState(saved.branch);
   const [initialized, setInitialized] = useState(saved.initialized);
@@ -39,8 +27,8 @@ export function DashboardScopeProvider({ children }) {
   // Persist every settled selection (including "all" = nulls).
   useEffect(() => {
     if (!initialized) return;
-    try { localStorage.setItem(storageKey, JSON.stringify({ firm, branch })); } catch { /* ignore */ }
-  }, [firm, branch, initialized, storageKey]);
+    writeSavedScope(user, { firm, branch });
+  }, [firm, branch, initialized, user]);
 
   const value = useMemo(
     () => ({ firm, setFirm, branch, setBranch, initialized, setInitialized }),
