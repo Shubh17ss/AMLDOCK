@@ -83,6 +83,13 @@ public class OwnershipNode extends BaseEntity {
     @Column(name = "verification_notes", columnDefinition = "text")
     private String verificationNotes;
 
+    /**
+     * The person this node represents, when it came from a scanned ID (V31). Null for nodes
+     * added by hand and for every non-INDIVIDUAL type.
+     */
+    @Column(name = "beneficial_owner_id")
+    private Long beneficialOwnerId;
+
     public Long getId() { return id; }
     public Long getOwnershipStructureId() { return ownershipStructureId; }
     public void setOwnershipStructureId(Long v) { this.ownershipStructureId = v; }
@@ -120,4 +127,6 @@ public class OwnershipNode extends BaseEntity {
     public void setNotes(String v) { this.notes = v; }
     public String getVerificationNotes() { return verificationNotes; }
     public void setVerificationNotes(String v) { this.verificationNotes = v; }
+    public Long getBeneficialOwnerId() { return beneficialOwnerId; }
+    public void setBeneficialOwnerId(Long v) { this.beneficialOwnerId = v; }
 }

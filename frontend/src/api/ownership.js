@@ -1,7 +1,7 @@
 import { apiClient } from './client.js';
 
 export const NODE_TYPES = [
-  { value: 'NATURAL_PERSON', label: 'Natural person' },
+  { value: 'INDIVIDUAL', label: 'Individual' },
   { value: 'NZ_COMPANY', label: 'NZ company' },
   { value: 'TRUST', label: 'Trust' },
   { value: 'PARTNERSHIP', label: 'Partnership' },

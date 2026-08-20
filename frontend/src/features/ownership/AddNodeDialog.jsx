@@ -7,7 +7,7 @@ import { EDGE_ROLES } from '../../api/ownership.js';
 import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 
 const EMPTY_NODE = {
-  nodeType: 'NATURAL_PERSON',
+  nodeType: 'INDIVIDUAL',
   displayName: '',
   dateOfBirth: '',
   idDocumentType: '',

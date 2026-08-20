@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
@@ -204,6 +205,43 @@ public class OwnershipService {
             structure.setRootNodeId(n.getId());
         }
         return loadTree(structure);
+    }
+
+    /* ---------- extraction-driven creation ---------- */
+
+    /**
+     * Creates the INDIVIDUAL node for a person read off a scanned ID.
+     *
+     * <p><strong>No permission check, deliberately.</strong> Every other entry point on this
+     * service runs {@code assertReadable}, which reads the caller from the SecurityContext. The
+     * OCR worker runs on a scheduler thread and has no SecurityContext, so that call would throw
+     * rather than deny. Authorisation for this write already happened upstream: the broker had to
+     * pass {@code mustLoadDealForWrite} to upload the document this person came from. Do not call
+     * this from a controller.
+     *
+     * <p>The node is created as an <em>unattached leaf</em> — no ownership_edge rows. The entity
+     * that actually owns the property (company, trust, partnership) is not established until the
+     * compliance review, so there is no parent to attach to and inventing one would fabricate a
+     * structure nobody asserted.
+     */
+    @Transactional
+    public OwnershipNode attachExtractedIndividual(Long dealId,
+                                                   Long beneficialOwnerId,
+                                                   String displayName,
+                                                   LocalDate dateOfBirth,
+                                                   String idDocumentType) {
+        OwnershipStructure structure = structures.findByDealId(dealId)
+                .orElseGet(() -> createEmptyStructure(dealId));
+
+        OwnershipNode n = new OwnershipNode();
+        n.setOwnershipStructureId(structure.getId());
+        n.setNodeType(NodeType.INDIVIDUAL);
+        n.setDisplayName(displayName);
+        n.setDateOfBirth(dateOfBirth);
+        n.setIdDocumentType(idDocumentType);
+        n.setBeneficialOwnerId(beneficialOwnerId);
+        n.setVerificationStatus(NodeVerificationStatus.NOT_STARTED);
+        return nodes.save(n);
     }
 
     /* ---------- helpers ---------- */

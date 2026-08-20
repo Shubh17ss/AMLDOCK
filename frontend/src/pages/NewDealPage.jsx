@@ -88,6 +88,22 @@ export function NewDealPage() {
     () => documents.filter((d) => d.documentType === 'DRIVER_LICENCE' || d.documentType === 'PASSPORT'),
     [documents],
   );
+  // Extraction runs server-side off the request thread, so nothing pushes the result back here.
+  // Poll only while a scan is actually in flight — once every ID reads DONE or FAILED this stops
+  // on its own, so an idle form makes no requests.
+  const extractionInFlight = useMemo(
+    () => idDocuments.some((d) => d.ocrStatus === 'PENDING' || d.ocrStatus === 'IN_PROGRESS'),
+    [idDocuments],
+  );
+
+  useEffect(() => {
+    if (!dealId || !extractionInFlight) return undefined;
+    const timer = setInterval(() => {
+      listDealDocuments(dealId).then(setDocuments).catch(() => {});
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [dealId, extractionInFlight]);
+
   const minEvidence = documents.find((d) => d.documentType === 'VALUATION_MIN_EVIDENCE');
   const maxEvidence = documents.find((d) => d.documentType === 'VALUATION_MAX_EVIDENCE');
 

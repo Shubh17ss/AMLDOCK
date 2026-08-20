@@ -8,6 +8,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import BadgeIcon from '@mui/icons-material/Badge';
 import { CameraCaptureDialog } from '../../../components/CameraCaptureDialog.jsx';
+import { IdExtractionSummary } from './IdExtractionSummary.jsx';
 import { ID_DOCUMENT_TYPES, uploadToS3, deleteDocument } from '../../../api/documents.js';
 import { tokens, fonts } from '../../../theme/theme.js';
 
@@ -159,34 +160,37 @@ export function IdScanList({ dealId, documents = [], onUploaded, onRemoved }) {
           {documents.map((d) => (
             <Stack
               key={d.id}
-              direction="row"
-              alignItems="center"
-              spacing={1.5}
+              spacing={1}
               sx={{
-                px: 1.5, py: 1, borderRadius: 2,
+                px: 1.5, py: 1.25, borderRadius: 2,
                 border: `1px solid ${tokens.hairline}`, backgroundColor: tokens.tileRaised,
               }}
             >
-              <Chip
-                size="small"
-                label={d.documentType === 'PASSPORT' ? 'Passport' : 'Driver licence'}
-                sx={{ fontFamily: fonts.mono, fontSize: '0.66rem' }}
-              />
-              <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
-                {d.originalFilename}
-              </Typography>
-              {removingId === d.id ? (
-                <CircularProgress size={18} />
-              ) : (
-                <IconButton
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Chip
                   size="small"
-                  aria-label={`Remove ${d.originalFilename}`}
-                  onClick={() => handleRemove(d.id)}
-                  sx={{ color: tokens.muted, '&:hover': { color: tokens.rejected } }}
-                >
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              )}
+                  label={d.documentType === 'PASSPORT' ? 'Passport' : 'Driver licence'}
+                  sx={{ fontFamily: fonts.mono, fontSize: '0.66rem' }}
+                />
+                <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
+                  {d.originalFilename}
+                </Typography>
+                {removingId === d.id ? (
+                  <CircularProgress size={18} />
+                ) : (
+                  <IconButton
+                    size="small"
+                    aria-label={`Remove ${d.originalFilename}`}
+                    onClick={() => handleRemove(d.id)}
+                    sx={{ color: tokens.muted, '&:hover': { color: tokens.rejected } }}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </Stack>
+
+              {/* What the server read off this scan. Renders nothing until extraction starts. */}
+              <IdExtractionSummary document={d} />
             </Stack>
           ))}
         </Stack>

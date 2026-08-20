@@ -28,6 +28,7 @@ public record NodeDto(
         String settlorName,
 
         String extraJson,
+        Long beneficialOwnerId,
         NodeVerificationStatus verificationStatus,
         String notes,
         String verificationNotes,
@@ -40,7 +41,7 @@ public record NodeDto(
                 n.getDateOfBirth(), n.getIdDocumentType(), n.getIdDocumentNumber(), n.getIdDocumentCountry(),
                 n.getNzbn(), n.getCompanyNumber(), n.getIncorporationDate(), n.getRegisteredOffice(),
                 n.getTrustName(), n.getTrustDeedDocumentId(), n.getSettlorName(),
-                n.getExtraJson(), n.getVerificationStatus(),
+                n.getExtraJson(), n.getBeneficialOwnerId(), n.getVerificationStatus(),
                 n.getNotes(), n.getVerificationNotes(),
                 n.getCreatedAt(), n.getUpdatedAt());
     }

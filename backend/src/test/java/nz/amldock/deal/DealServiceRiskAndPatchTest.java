@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.Client;
 import nz.amldock.client.ClientRepository;
 import nz.amldock.client.ClientType;
@@ -54,6 +55,7 @@ class DealServiceRiskAndPatchTest {
     @Mock RealEstateFirmRepository firms;
     @Mock UserRepository users;
     @Mock DealNoteRepository dealNotes;
+    @Mock BeneficialOwnerService beneficialOwners;
     @Mock DocumentRepository documents;
 
     DealService service;
@@ -65,7 +67,8 @@ class DealServiceRiskAndPatchTest {
     @BeforeEach
     void setUp() {
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService(), new DealNoteService(dealNotes, documents, users));
+                new DealLifecycleService(), new DealNoteService(dealNotes, documents, users),
+                beneficialOwners);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 

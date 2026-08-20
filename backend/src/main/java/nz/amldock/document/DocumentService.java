@@ -144,9 +144,12 @@ public class DocumentService {
         audit.record(AuditAction.DOCUMENT_UPLOADED, "Document", doc.getId(),
                 "Uploaded " + doc.getOriginalFilename() + " for deal " + doc.getDealId());
 
-        // Queue identity documents for extraction. The object is confirmed present in S3 by
-        // this point, so anything in the pending index is genuinely processable.
-        // idx_document_ocr_pending is that queue; Textract dispatch hooks in here later.
+        // Queue identity documents for extraction. The object is confirmed present in S3 by this
+        // point, so anything in the queue is genuinely processable.
+        //
+        // This write is the whole reason the queue lives in the database: it commits in the same
+        // transaction as the document going ACTIVE, so the work item and the row it refers to can
+        // never disagree. See ScheduledIdExtractionDispatcher, which drains it.
         if (doc.getDocumentType().isOcrEligible()) {
             doc.setOcrStatus(OcrStatus.PENDING);
         }

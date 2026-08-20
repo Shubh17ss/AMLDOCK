@@ -25,7 +25,7 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
       <TextField label="Display name" value={value.displayName ?? ''}
                  onChange={(e) => set({ displayName: e.target.value })} required />
 
-      {value.nodeType === 'NATURAL_PERSON' && (
+      {value.nodeType === 'INDIVIDUAL' && (
         <>
           <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
                      value={value.dateOfBirth ?? ''} onChange={(e) => set({ dateOfBirth: e.target.value })} />

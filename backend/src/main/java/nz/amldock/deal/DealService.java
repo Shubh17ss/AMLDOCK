@@ -1,6 +1,7 @@
 package nz.amldock.deal;
 
 import nz.amldock.client.Client;
+import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
 import nz.amldock.client.dto.ClientDto;
 import nz.amldock.client.dto.ClientInput;
@@ -47,6 +48,7 @@ public class DealService {
     private final UserRepository users;
     private final DealLifecycleService lifecycle;
     private final DealNoteService dealNotes;
+    private final BeneficialOwnerService beneficialOwners;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -55,7 +57,8 @@ public class DealService {
                        RealEstateFirmRepository firms,
                        UserRepository users,
                        DealLifecycleService lifecycle,
-                       DealNoteService dealNotes) {
+                       DealNoteService dealNotes,
+                       BeneficialOwnerService beneficialOwners) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -64,6 +67,7 @@ public class DealService {
         this.users = users;
         this.lifecycle = lifecycle;
         this.dealNotes = dealNotes;
+        this.beneficialOwners = beneficialOwners;
     }
 
     /* ---------- queries ---------- */
@@ -280,6 +284,12 @@ public class DealService {
         assertCanDelete(d);
         Long propertyId = d.getPropertyId();
         Long clientId = d.getClientId();
+
+        // Before the deal row goes. deal_beneficial_owner cascades with it, so afterwards there
+        // is no way to tell which people this deal held — and any left on no other deal would
+        // linger as identity records nothing can reach.
+        beneficialOwners.releaseFromDeal(d.getId());
+
         deals.delete(d);
         // Property and client are 1-1 with deal, so safe to clean up.
         properties.deleteById(propertyId);

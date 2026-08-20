@@ -72,6 +72,22 @@ public class Document extends BaseEntity {
     @Column(name = "ocr_completed_at")
     private Instant ocrCompletedAt;
 
+    /* ---------- queue mechanics (V30) ---------- */
+
+    @Column(name = "ocr_attempt_count", nullable = false)
+    private int ocrAttemptCount;
+
+    /** When this row next becomes claimable. Null means immediately. */
+    @Column(name = "ocr_next_attempt_at")
+    private Instant ocrNextAttemptAt;
+
+    @Column(name = "ocr_error", columnDefinition = "text")
+    private String ocrError;
+
+    /** Set when a worker claims the row; its age is what makes an abandoned claim collectable. */
+    @Column(name = "ocr_claimed_at")
+    private Instant ocrClaimedAt;
+
     public Long getId() { return id; }
     public String getS3Key() { return s3Key; }
     public void setS3Key(String v) { this.s3Key = v; }
@@ -103,4 +119,12 @@ public class Document extends BaseEntity {
     public void setOcrConfidence(BigDecimal v) { this.ocrConfidence = v; }
     public Instant getOcrCompletedAt() { return ocrCompletedAt; }
     public void setOcrCompletedAt(Instant v) { this.ocrCompletedAt = v; }
+    public int getOcrAttemptCount() { return ocrAttemptCount; }
+    public void setOcrAttemptCount(int v) { this.ocrAttemptCount = v; }
+    public Instant getOcrNextAttemptAt() { return ocrNextAttemptAt; }
+    public void setOcrNextAttemptAt(Instant v) { this.ocrNextAttemptAt = v; }
+    public String getOcrError() { return ocrError; }
+    public void setOcrError(String v) { this.ocrError = v; }
+    public Instant getOcrClaimedAt() { return ocrClaimedAt; }
+    public void setOcrClaimedAt(Instant v) { this.ocrClaimedAt = v; }
 }

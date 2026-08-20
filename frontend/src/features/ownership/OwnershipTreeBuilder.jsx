@@ -17,7 +17,7 @@ import AddLinkIcon from '@mui/icons-material/AddLink';
 import { tokens } from '../../theme/theme.js';
 
 const NODE_ICON = {
-  NATURAL_PERSON: <PersonIcon fontSize="small" />,
+  INDIVIDUAL: <PersonIcon fontSize="small" />,
   NZ_COMPANY: <BusinessIcon fontSize="small" />,
   TRUST: <AccountBalanceIcon fontSize="small" />,
   PARTNERSHIP: <GroupIcon fontSize="small" />,
