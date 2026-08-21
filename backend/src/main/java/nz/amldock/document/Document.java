@@ -49,6 +49,17 @@ public class Document extends BaseEntity {
     @Column(name = "ownership_node_id")
     private Long ownershipNodeId;
 
+    /**
+     * The person this scan identifies (V32). Front and back of one card share it, which is what
+     * makes two images count as a single individual. Null for every non-identity document.
+     */
+    @Column(name = "beneficial_owner_id")
+    private Long beneficialOwnerId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "id_side", length = 8)
+    private IdSide idSide;
+
     @Column(name = "uploaded_by_user_id", nullable = false)
     private Long uploadedByUserId;
 
@@ -105,6 +116,10 @@ public class Document extends BaseEntity {
     public void setDealId(Long v) { this.dealId = v; }
     public Long getOwnershipNodeId() { return ownershipNodeId; }
     public void setOwnershipNodeId(Long v) { this.ownershipNodeId = v; }
+    public Long getBeneficialOwnerId() { return beneficialOwnerId; }
+    public void setBeneficialOwnerId(Long v) { this.beneficialOwnerId = v; }
+    public IdSide getIdSide() { return idSide; }
+    public void setIdSide(IdSide v) { this.idSide = v; }
     public Long getUploadedByUserId() { return uploadedByUserId; }
     public void setUploadedByUserId(Long v) { this.uploadedByUserId = v; }
     public OcrStatus getOcrStatus() { return ocrStatus; }

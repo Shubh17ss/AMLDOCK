@@ -1,5 +1,6 @@
 package nz.amldock.beneficialowner;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import nz.amldock.beneficialowner.dto.BeneficialOwnerDto;
@@ -8,11 +9,12 @@ import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
 import nz.amldock.document.Document;
+import nz.amldock.document.DocumentRepository;
+import nz.amldock.document.DocumentStatus;
 import nz.amldock.document.ocr.ExtractedField;
 import nz.amldock.document.ocr.ExtractedIdFields;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
-import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipService;
 import nz.amldock.user.UserPrincipal;
 import org.slf4j.Logger;
@@ -24,13 +26,18 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
- * Turns an extracted identity document into a person on the deal.
+ * The people identified from a deal's scanned IDs.
  *
- * <p>Runs inside the extraction worker's completion transaction, so a document can never reach
- * DONE without its person records existing.
+ * <p><strong>One identity document, one person.</strong> An owner is created the moment the first
+ * image of a card is confirmed — before anything has been read — and is never merged into another.
+ * Front and back of one card share an owner because they are one document; anything else is a
+ * different person, whatever the extracted names happen to say.
+ *
+ * <p>That last part is deliberate and replaces the name + date-of-birth matching this class used
+ * to do. Deciding that two documents describe one human is a judgement, not an extraction result,
+ * and getting it wrong silently fuses two people in an AML record.
  */
 @Service
 public class BeneficialOwnerService {
@@ -40,6 +47,7 @@ public class BeneficialOwnerService {
     private final BeneficialOwnerRepository owners;
     private final DealBeneficialOwnerRepository links;
     private final DealRepository deals;
+    private final DocumentRepository documents;
     private final FirmBranchRepository branches;
     private final OwnershipService ownership;
     private final DealLifecycleService lifecycle;
@@ -48,6 +56,7 @@ public class BeneficialOwnerService {
     public BeneficialOwnerService(BeneficialOwnerRepository owners,
                                   DealBeneficialOwnerRepository links,
                                   DealRepository deals,
+                                  DocumentRepository documents,
                                   FirmBranchRepository branches,
                                   OwnershipService ownership,
                                   DealLifecycleService lifecycle,
@@ -55,73 +64,116 @@ public class BeneficialOwnerService {
         this.owners = owners;
         this.links = links;
         this.deals = deals;
+        this.documents = documents;
         this.branches = branches;
         this.ownership = ownership;
         this.lifecycle = lifecycle;
         this.json = json;
     }
 
+    /* ---------- creation, at upload time ---------- */
+
     /**
-     * Records the person on {@code doc} against its deal, creating the ownership node too.
+     * Creates the person a newly confirmed identity scan belongs to, with nothing filled in yet.
      *
-     * <p>No permission check — see {@link OwnershipService#attachExtractedIndividual}. The caller
-     * is the OCR worker, which runs on a scheduler thread with no SecurityContext.
+     * <p>Called from {@code DocumentService.confirmUpload} rather than from extraction, so a
+     * broker who scans an ID sees an individual appear immediately — including when Textract
+     * later fails to read it. An unreadable scan is still evidence that someone was presented.
      *
-     * @return the person, existing or new
+     * <p>No permission check: the caller has already passed {@code mustLoadDealForWrite}.
      */
     @Transactional
-    public BeneficialOwner recordFromExtraction(Document doc, ExtractedIdFields fields) {
+    public BeneficialOwner createProvisional(Document doc) {
         Long dealId = doc.getDealId();
-        Long firmId = firmIdForDeal(dealId);
-
-        String name = normaliseName(fields.fullName().value());
-
-        Optional<BeneficialOwner> existing = findWithinDeal(dealId, name, fields);
-        if (existing.isPresent()) {
-            BeneficialOwner owner = existing.get();
-            // A second scan of the same person - a passport after a licence, say - is new
-            // evidence, not a new human. Fill gaps rather than creating a duplicate.
-            mergeInto(owner, fields);
-            log.debug("Matched extraction from document {} to existing beneficial owner {}",
-                    doc.getId(), owner.getId());
-            return owner;
-        }
 
         BeneficialOwner owner = new BeneficialOwner();
-        owner.setRealEstateFirmId(firmId);
-        owner.setFullName(name);
-        owner.setDateOfBirth(fields.dateOfBirth().value());
-        owner.setIdExpiryDate(fields.expiryDate().value());
-        owner.setExtractionConfidence(confidenceJson(fields));
+        owner.setRealEstateFirmId(firmIdForDeal(dealId));
         owner.setReviewStatus(ReviewStatus.UNREVIEWED);
         owner = owners.save(owner);
 
         links.save(new DealBeneficialOwner(dealId, owner.getId(), doc.getId()));
 
-        OwnershipNode node = ownership.attachExtractedIndividual(
-                dealId,
-                owner.getId(),
-                displayNameFor(owner, doc),
-                owner.getDateOfBirth(),
-                doc.getDocumentType().name());
+        ownership.attachExtractedIndividual(
+                dealId, owner.getId(), displayNameFor(owner, doc), null, doc.getDocumentType().name());
 
-        log.debug("Created beneficial owner {} and ownership node {} from document {}",
-                owner.getId(), node.getId(), doc.getId());
+        log.debug("Created provisional beneficial owner {} for document {}", owner.getId(), doc.getId());
         return owner;
     }
 
-    @Transactional(readOnly = true)
-    public List<BeneficialOwnerDto> listForDeal(Long dealId) {
-        Deal deal = deals.findById(dealId)
-                .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
-        lifecycle.assertCanRead(deal, currentPrincipal(), firmIdForDeal(dealId));
+    /* ---------- extraction results ---------- */
 
-        return links.findAllByDealIdOrderByCreatedAtAsc(dealId).stream()
-                .map(link -> owners.findById(link.getBeneficialOwnerId())
-                        .map(o -> BeneficialOwnerDto.from(o, link.getSourceDocumentId()))
-                        .orElse(null))
-                .filter(Objects::nonNull)
-                .toList();
+    /**
+     * Folds what was read off one image into the person it belongs to.
+     *
+     * <p>The person is always {@code doc.beneficialOwnerId}, fixed when the image was uploaded.
+     * Extraction never chooses who a document belongs to, so a misread name cannot move evidence
+     * onto the wrong individual.
+     *
+     * <p>Front and back are extracted independently and land in either order, so neither may
+     * assume it went first — hence fill-or-improve rather than overwrite. A licence back usually
+     * reads nothing and correctly leaves the person untouched.
+     */
+    @Transactional
+    public void applyExtraction(Document doc, ExtractedIdFields fields) {
+        if (doc.getBeneficialOwnerId() == null) return;      // not an identity scan
+        BeneficialOwner owner = owners.findById(doc.getBeneficialOwnerId()).orElse(null);
+        if (owner == null) return;                            // scan deleted mid-extraction
+
+        ObjectNode confidence = parseConfidence(owner.getExtractionConfidence());
+
+        if (shouldWrite(owner.getFullName(), storedConfidence(confidence, "fullName"), fields.fullName())) {
+            owner.setFullName(normaliseName(fields.fullName().value()));
+            putConfidence(confidence, "fullName", fields.fullName());
+        }
+        if (shouldWrite(owner.getDateOfBirth(), storedConfidence(confidence, "dateOfBirth"), fields.dateOfBirth())) {
+            owner.setDateOfBirth(fields.dateOfBirth().value());
+            putConfidence(confidence, "dateOfBirth", fields.dateOfBirth());
+        }
+        if (shouldWrite(owner.getIdExpiryDate(), storedConfidence(confidence, "expiryDate"), fields.expiryDate())) {
+            owner.setIdExpiryDate(fields.expiryDate().value());
+            putConfidence(confidence, "expiryDate", fields.expiryDate());
+        }
+
+        owner.setExtractionConfidence(confidence.toString());
+
+        ownership.refreshExtractedIndividual(
+                owner.getId(), displayNameFor(owner, doc), owner.getDateOfBirth());
+    }
+
+    /**
+     * Whether an incoming reading should displace what is already recorded.
+     *
+     * <p>Fills a gap unconditionally, and otherwise replaces only on a <em>strictly</em> higher
+     * confidence. A reading whose confidence is unknown never displaces a value that has one —
+     * without a number to compare, "different" is not evidence of "better".
+     */
+    static boolean shouldWrite(Object current, BigDecimal stored, ExtractedField<?> incoming) {
+        if (!incoming.isPresent()) return false;
+        if (current == null) return true;
+        BigDecimal in = incoming.confidence();
+        if (in == null) return false;
+        if (stored == null) return true;
+        return in.compareTo(stored) > 0;
+    }
+
+    /* ---------- removal ---------- */
+
+    /**
+     * Removes a person once their last remaining scan has gone.
+     *
+     * <p>Deleting one side of a two-sided card leaves the person in place with an empty slot —
+     * they were still presented, and the other image still evidences them.
+     */
+    @Transactional
+    public void removeIfOrphaned(Long beneficialOwnerId) {
+        if (beneficialOwnerId == null) return;
+        if (!documents.findAllByBeneficialOwnerIdAndStatus(beneficialOwnerId, DocumentStatus.ACTIVE).isEmpty()) {
+            return;
+        }
+        ownership.removeExtractedIndividual(beneficialOwnerId);
+        links.deleteAllByBeneficialOwnerId(beneficialOwnerId);
+        owners.deleteById(beneficialOwnerId);
+        log.debug("Removed beneficial owner {} — last identity scan deleted", beneficialOwnerId);
     }
 
     /**
@@ -161,41 +213,31 @@ public class BeneficialOwnerService {
         }
     }
 
-    /* ---------- matching ---------- */
+    /* ---------- reads ---------- */
 
-    /**
-     * Looks for the same person already on this deal.
-     *
-     * <p><strong>Within the deal only, and only on an exact name plus date-of-birth match.</strong>
-     * Both must be present: a null identifies nobody, so two unreadable scans must not collapse
-     * into one person.
-     *
-     * <p>Matching is deliberately not attempted across deals. The schema supports one person on
-     * many deals, but OCR mangles names, and a wrong link between two deals is a false statement
-     * in an AML record - hard to notice and harder to unpick. Promoting a match across deals
-     * should be something a human does.
-     */
-    private Optional<BeneficialOwner> findWithinDeal(Long dealId, String name, ExtractedIdFields fields) {
-        if (name == null || fields.dateOfBirth().value() == null) return Optional.empty();
+    @Transactional(readOnly = true)
+    public List<BeneficialOwnerDto> listForDeal(Long dealId) {
+        Deal deal = deals.findById(dealId)
+                .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
+        lifecycle.assertCanRead(deal, currentPrincipal(), firmIdForDeal(dealId));
 
-        // A deal carries a handful of people, so this is a small list and the comparison can be
-        // done in Java, where it uses the same normalisation that wrote the value.
         return links.findAllByDealIdOrderByCreatedAtAsc(dealId).stream()
-                .map(l -> owners.findById(l.getBeneficialOwnerId()).orElse(null))
+                .map(link -> owners.findById(link.getBeneficialOwnerId()).orElse(null))
                 .filter(Objects::nonNull)
-                .filter(o -> fields.dateOfBirth().value().equals(o.getDateOfBirth()))
-                .filter(o -> name.equalsIgnoreCase(normaliseName(o.getFullName())))
-                .findFirst();
+                .map(this::toDto)
+                .toList();
     }
 
-    /** Fills only what is currently missing; an existing value is never overwritten by a rescan. */
-    private void mergeInto(BeneficialOwner owner, ExtractedIdFields fields) {
-        if (owner.getFullName() == null) owner.setFullName(normaliseName(fields.fullName().value()));
-        if (owner.getDateOfBirth() == null) owner.setDateOfBirth(fields.dateOfBirth().value());
-        if (owner.getIdExpiryDate() == null) owner.setIdExpiryDate(fields.expiryDate().value());
+    private BeneficialOwnerDto toDto(BeneficialOwner owner) {
+        List<Document> scans =
+                documents.findAllByBeneficialOwnerIdAndStatus(owner.getId(), DocumentStatus.ACTIVE);
+        String type = scans.stream().findFirst().map(d -> d.getDocumentType().name()).orElse(null);
+        return BeneficialOwnerDto.from(owner, type, scans.size());
     }
 
-    /** Collapses whitespace and trims. Case is preserved for display; matching is case-insensitive. */
+    /* ---------- helpers ---------- */
+
+    /** Collapses whitespace and trims. Case is preserved — this is a name, shown as read. */
     static String normaliseName(String raw) {
         if (raw == null) return null;
         String n = raw.replaceAll("\\s+", " ").trim();
@@ -212,18 +254,28 @@ public class BeneficialOwnerService {
         return "Unread ID - " + doc.getOriginalFilename();
     }
 
-    private String confidenceJson(ExtractedIdFields fields) {
-        ObjectNode node = json.createObjectNode();
-        putConfidence(node, "fullName", fields.fullName());
-        putConfidence(node, "dateOfBirth", fields.dateOfBirth());
-        putConfidence(node, "expiryDate", fields.expiryDate());
-        return node.toString();
+    private ObjectNode parseConfidence(String raw) {
+        if (raw != null && !raw.isBlank()) {
+            try {
+                JsonNode parsed = json.readTree(raw);
+                if (parsed instanceof ObjectNode node) return node;
+            } catch (Exception e) {
+                // A malformed blob must not stall extraction; start a fresh one.
+                log.warn("Unreadable extraction_confidence, replacing: {}", e.toString());
+            }
+        }
+        return json.createObjectNode();
+    }
+
+    private static BigDecimal storedConfidence(ObjectNode node, String key) {
+        JsonNode v = node.get(key);
+        return v == null || v.isNull() ? null : v.decimalValue();
     }
 
     private static void putConfidence(ObjectNode node, String key, ExtractedField<?> field) {
         BigDecimal c = field.confidence();
-        if (field.isPresent() && c != null) node.put(key, c);
-        else node.putNull(key);
+        if (c == null) node.putNull(key);
+        else node.put(key, c);
     }
 
     private Long firmIdForDeal(Long dealId) {

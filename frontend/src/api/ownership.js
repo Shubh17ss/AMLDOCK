@@ -1,4 +1,5 @@
 import { apiClient } from './client.js';
+import { ID_DOCUMENT_TYPES as CATALOGUE_ID_TYPES } from './documents.js';
 
 export const NODE_TYPES = [
   { value: 'INDIVIDUAL', label: 'Individual' },
@@ -15,10 +16,9 @@ export const EDGE_ROLES = [
   { value: 'PARTNER', label: 'Partner' },
 ];
 
-export const ID_DOCUMENT_TYPES = [
-  { value: 'DRIVER_LICENCE', label: 'Driver licence' },
-  { value: 'PASSPORT', label: 'Passport' },
-];
+// The same catalogue the deal form scans from — a node's ID type and a scanned document's type
+// name the same thing, so they must not drift into two lists.
+export const ID_DOCUMENT_TYPES = CATALOGUE_ID_TYPES;
 
 export async function getTree(dealId) {
   const { data } = await apiClient.get(`/deals/${dealId}/ownership`);

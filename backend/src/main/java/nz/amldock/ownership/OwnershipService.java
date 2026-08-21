@@ -244,6 +244,29 @@ public class OwnershipService {
         return nodes.save(n);
     }
 
+    /**
+     * Updates the node standing for a person once extraction has read their card.
+     *
+     * <p>Same no-permission-check reasoning as {@link #attachExtractedIndividual}: the caller is
+     * the OCR worker, on a scheduler thread with no SecurityContext.
+     *
+     * <p>A no-op when the node has since been removed — a broker can delete the scan while
+     * extraction is still in flight.
+     */
+    @Transactional
+    public void refreshExtractedIndividual(Long beneficialOwnerId, String displayName, LocalDate dateOfBirth) {
+        nodes.findFirstByBeneficialOwnerId(beneficialOwnerId).ifPresent(n -> {
+            if (displayName != null) n.setDisplayName(displayName);
+            if (dateOfBirth != null) n.setDateOfBirth(dateOfBirth);
+        });
+    }
+
+    /** Removes the node standing for a person. Used when their last scan is deleted. */
+    @Transactional
+    public void removeExtractedIndividual(Long beneficialOwnerId) {
+        nodes.findFirstByBeneficialOwnerId(beneficialOwnerId).ifPresent(nodes::delete);
+    }
+
     /* ---------- helpers ---------- */
 
     private OwnershipStructure createEmptyStructure(Long dealId) {

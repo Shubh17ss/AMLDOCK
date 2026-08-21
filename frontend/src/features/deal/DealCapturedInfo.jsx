@@ -7,6 +7,7 @@ import { tokens, fonts } from '../../theme/theme.js';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { propertyTypeLabel, reasonForSellingLabel } from '../../data/propertyTypes.js';
 import { countryName } from '../../data/countries.js';
+import { IndividualsFromIds } from './IndividualsFromIds.jsx';
 import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
 
 const TXN_LABEL = { PURCHASE: 'Purchase', SALE: 'Sale' };
@@ -108,6 +109,7 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
               <Row label="Type"  value={c.clientType ? (CLIENT_TYPE_LABEL[c.clientType] ?? c.clientType) : 'Pending review'} />
               <Row label="Email" value={c.email} />
               <Row label="Phone" value={c.phone} />
+              <IndividualsFromIds dealId={deal.id} dense />
             </Group>
 
             <Group title="Transaction & risk">

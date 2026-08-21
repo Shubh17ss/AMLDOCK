@@ -149,8 +149,9 @@ public class IdExtractionService {
         doc.setOcrError(null);
         doc.setOcrNextAttemptAt(null);
 
-        // Same transaction as the result, so a document cannot be DONE without its person.
-        beneficialOwners.recordFromExtraction(doc, fields);
+        // Same transaction as the result. The person already exists — created when this image
+        // was confirmed — so this only fills them in; it never decides who the scan belongs to.
+        beneficialOwners.applyExtraction(doc, fields);
 
         recordAudit(doc, AuditAction.OCR_COMPLETED, summarise(doc, fields));
     }

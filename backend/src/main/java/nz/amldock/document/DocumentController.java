@@ -57,8 +57,13 @@ public class DocumentController {
         return documents.presignDownload(id);
     }
 
+    /**
+     * The role check lives in {@link DocumentService#delete} rather than here, because it is not
+     * a role check alone: the uploader may remove their own document while the deal is still
+     * editable. A @PreAuthorize naming only ROOT and SENIOR_MANAGER used to 403 every broker
+     * clearing a mis-scanned ID from their own deal form.
+     */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         documents.delete(id);
         return ResponseEntity.noContent().build();

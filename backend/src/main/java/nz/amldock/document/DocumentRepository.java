@@ -13,6 +13,9 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     List<Document> findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(Long nodeId, DocumentStatus status);
     Optional<Document> findByS3Key(String s3Key);
 
+    /** The images making up one person's identity document — at most a front and a back. */
+    List<Document> findAllByBeneficialOwnerIdAndStatus(Long beneficialOwnerId, DocumentStatus status);
+
     /**
      * Claims the next batch of documents to extract.
      *

@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { deleteDeal, handoverDeal } from '../api/deals.js';
-import { listDealDocuments, uploadToS3 } from '../api/documents.js';
+import { ID_DOCUMENT_TYPES, listDealDocuments, uploadToS3 } from '../api/documents.js';
 import { LoadingOverlay } from '../components/LoadingOverlay.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
@@ -40,6 +40,8 @@ const SECTIONS = ['Your client', 'The property', 'Client identity', 'Risk & valu
  * Firm and branch aren't asked for: agents may only create deals on the branch they're
  * assigned to, and the API derives it from the caller.
  */
+const ID_DOCUMENT_TYPE_VALUES = new Set(ID_DOCUMENT_TYPES.map((t) => t.value));
+
 export function NewDealPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -85,7 +87,8 @@ export function NewDealPage() {
   const handleRemoved = (id) => setDocuments((ds) => ds.filter((d) => d.id !== id));
 
   const idDocuments = useMemo(
-    () => documents.filter((d) => d.documentType === 'DRIVER_LICENCE' || d.documentType === 'PASSPORT'),
+    // Identity documents only — supporting evidence is filed elsewhere and never creates a person.
+    () => documents.filter((d) => ID_DOCUMENT_TYPE_VALUES.has(d.documentType)),
     [documents],
   );
   // Extraction runs server-side off the request thread, so nothing pushes the result back here.

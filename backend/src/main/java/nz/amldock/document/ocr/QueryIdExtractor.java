@@ -30,8 +30,10 @@ import java.util.stream.Collectors;
  * means one implementation covers NZ's single national licence design and the eight different
  * ones the Australian states issue. A template-matching approach would need nine.
  *
- * <p>Also serves as the passport fallback when {@link PassportMrzExtractor} finds no readable
- * machine-readable zone, hence the deliberately document-agnostic query wording.
+ * <p>Handles every card-shaped ID — licences, national and foreign identity cards, international
+ * driving permits, evidence-of-age cards — and also serves as the fallback when
+ * {@link PassportMrzExtractor} finds no readable machine-readable zone. Hence the deliberately
+ * document-agnostic query wording: one set of questions covers all of them.
  */
 @Component
 public class QueryIdExtractor implements IdExtractor {
@@ -53,7 +55,7 @@ public class QueryIdExtractor implements IdExtractor {
 
     @Override
     public boolean supports(DocumentType type) {
-        return type == DocumentType.DRIVER_LICENCE;
+        return type.extraction() == DocumentType.Extraction.QUERIES;
     }
 
     @Override

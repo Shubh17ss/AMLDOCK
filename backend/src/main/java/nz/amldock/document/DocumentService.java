@@ -2,6 +2,7 @@ package nz.amldock.document;
 
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
+import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
@@ -43,6 +44,7 @@ public class DocumentService {
     private final UserRepository users;
     private final FileStorageService storage;
     private final DealLifecycleService lifecycle;
+    private final BeneficialOwnerService beneficialOwners;
     private final AuditService audit;
     private final long maxBytes;
     private final Duration uploadTtl;
@@ -56,6 +58,7 @@ public class DocumentService {
                            UserRepository users,
                            FileStorageService storage,
                            DealLifecycleService lifecycle,
+                           BeneficialOwnerService beneficialOwners,
                            AuditService audit,
                            @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
                            @Value("${S3_UPLOAD_TTL_MINUTES:5}") long uploadTtlMinutes,
@@ -68,6 +71,7 @@ public class DocumentService {
         this.users = users;
         this.storage = storage;
         this.lifecycle = lifecycle;
+        this.beneficialOwners = beneficialOwners;
         this.audit = audit;
         this.maxBytes = maxBytes;
         this.uploadTtl = Duration.ofMinutes(uploadTtlMinutes);
@@ -105,6 +109,10 @@ public class DocumentService {
         d.setStatus(DocumentStatus.PENDING);
         d.setDealId(deal.getId());
         d.setOwnershipNodeId(nodeId);
+        // Carried from the request so confirmUpload knows whether this scan joins an existing
+        // person (the back of a card) or starts a new one.
+        d.setBeneficialOwnerId(req.beneficialOwnerId());
+        d.setIdSide(req.idSide());
         d.setUploadedByUserId(actor.id());
         // Stays NOT_APPLICABLE until the bytes are provably in S3 — confirmUpload promotes
         // OCR-eligible types to PENDING. Queueing here instead would fill the pending index
@@ -152,6 +160,17 @@ public class DocumentService {
         // never disagree. See ScheduledIdExtractionDispatcher, which drains it.
         if (doc.getDocumentType().isOcrEligible()) {
             doc.setOcrStatus(OcrStatus.PENDING);
+
+            // The individual exists from here, not from a successful extraction. A broker who
+            // scans an ID sees a person appear straight away, and still does when Textract
+            // cannot read the card — an unreadable scan is still evidence someone was presented.
+            if (doc.getBeneficialOwnerId() == null) {
+                doc.setBeneficialOwnerId(beneficialOwners.createProvisional(doc).getId());
+            }
+            // A scan with no side named is the front; a back is only ever explicit.
+            if (doc.getIdSide() == null) {
+                doc.setIdSide(IdSide.FRONT);
+            }
         }
 
         return toDto(doc);
@@ -192,14 +211,32 @@ public class DocumentService {
         return new DownloadUrlResponse(url, (int) downloadTtl.toSeconds());
     }
 
-    /** Deletes are restricted to ROOT and SENIOR_MANAGER (gated by @PreAuthorize on the controller). */
+    /**
+     * Deletes a document.
+     *
+     * <p>Open to ROOT and SENIOR_MANAGER for any document, and to the <em>uploader</em> for their
+     * own. That second case is not a loosening for its own sake: the deal form's own remove
+     * buttons (IdScanList, ValuationField) call this endpoint as the broker, so without it an
+     * agent could not clear a mis-scanned ID they had just taken.
+     */
     @Transactional
     public void delete(Long id) {
         Document d = documents.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
-        if (actor.role() != Role.ROOT && actor.role() != Role.SENIOR_MANAGER) {
-            throw new ForbiddenException("Only ROOT or a senior manager may delete a document");
+        boolean elevated = actor.role() == Role.ROOT || actor.role() == Role.SENIOR_MANAGER;
+        if (!elevated && !actor.id().equals(d.getUploadedByUserId())) {
+            throw new ForbiddenException("Only the uploader, ROOT or a senior manager may delete this document");
+        }
+        // The uploader's right lapses once the deal moves on; the elevated roles' does not.
+        // assertEditable is the codebase's existing answer to "may this actor write to this
+        // deal" — reusing it beats a second, parallel rule that could drift from it.
+        if (!elevated && d.getDealId() != null) {
+            Deal deal = deals.findById(d.getDealId())
+                    .orElseThrow(() -> new NotFoundException("Deal " + d.getDealId() + " not found"));
+            Long firmId = branches.findById(deal.getFirmBranchId())
+                    .map(FirmBranch::getRealEstateFirmId).orElse(null);
+            lifecycle.assertEditable(deal, actor, firmId);
         }
         if (d.getStatus() == DocumentStatus.DELETED) return;
 
@@ -207,6 +244,10 @@ public class DocumentService {
         d.setStatus(DocumentStatus.DELETED);
         audit.record(AuditAction.DOCUMENT_DELETED, "Document", d.getId(),
                 "Deleted " + d.getOriginalFilename());
+
+        // The person goes only with their last remaining image — removing one side of a card
+        // leaves someone who was still presented, evidenced by the other side.
+        beneficialOwners.removeIfOrphaned(d.getBeneficialOwnerId());
     }
 
     /* ---------- helpers ---------- */

@@ -5,7 +5,10 @@ import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
 import nz.amldock.document.Document;
+import nz.amldock.document.DocumentRepository;
+import nz.amldock.document.DocumentStatus;
 import nz.amldock.document.DocumentType;
+import nz.amldock.document.IdSide;
 import nz.amldock.document.ocr.ExtractedField;
 import nz.amldock.document.ocr.ExtractedIdFields;
 import nz.amldock.firm.FirmBranch;
@@ -38,10 +41,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * How extraction output becomes people.
+ * How scanned IDs become people.
  *
- * <p>The behaviour worth guarding is what the service refuses to do: it must not turn two scans
- * of one person into two people, and it must not merge two people it cannot actually identify.
+ * <p>The behaviour worth guarding is the rule that a document never chooses whose evidence it is:
+ * the person is decided at upload and extraction only fills them in. Everything else follows from
+ * that — including the deliberate absence of any merging.
  */
 @ExtendWith(MockitoExtension.class)
 class BeneficialOwnerServiceTest {
@@ -49,10 +53,12 @@ class BeneficialOwnerServiceTest {
     static final Long DEAL_ID = 1L;
     static final Long BRANCH_ID = 10L;
     static final Long FIRM_ID = 100L;
+    static final Long OWNER_ID = 50L;
 
     @Mock BeneficialOwnerRepository owners;
     @Mock DealBeneficialOwnerRepository links;
     @Mock DealRepository deals;
+    @Mock DocumentRepository documents;
     @Mock FirmBranchRepository branches;
     @Mock OwnershipService ownership;
     @Mock DealLifecycleService lifecycle;
@@ -61,8 +67,8 @@ class BeneficialOwnerServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new BeneficialOwnerService(owners, links, deals, branches, ownership, lifecycle,
-                new ObjectMapper());
+        service = new BeneficialOwnerService(owners, links, deals, documents, branches, ownership,
+                lifecycle, new ObjectMapper());
 
         Deal deal = new Deal();
         deal.setFirmBranchId(BRANCH_ID);
@@ -76,80 +82,31 @@ class BeneficialOwnerServiceTest {
                 .thenReturn(new OwnershipNode());
     }
 
+    /* ---------- creation at upload ---------- */
+
     @Test
-    void createsAPersonAndAnOwnershipNodeFromTheFirstScan() {
-        when(links.findAllByDealIdOrderByCreatedAtAsc(DEAL_ID)).thenReturn(List.of());
+    void confirmingAScanCreatesThePersonBeforeAnythingIsRead() {
+        // The individual must exist from upload, not from a successful extraction — a card
+        // Textract cannot read is still evidence that someone was presented.
+        service.createProvisional(document("licence-front.jpg", DocumentType.NZ_DRIVER_LICENCE));
 
-        service.recordFromExtraction(document("licence.jpg", DocumentType.DRIVER_LICENCE),
-                fields("Anna Eriksson", LocalDate.of(1974, 8, 12), LocalDate.of(2030, 4, 15)));
+        ArgumentCaptor<BeneficialOwner> saved = ArgumentCaptor.forClass(BeneficialOwner.class);
+        verify(owners).save(saved.capture());
+        assertThat(saved.getValue().getFullName()).isNull();
+        assertThat(saved.getValue().getDateOfBirth()).isNull();
+        assertThat(saved.getValue().getReviewStatus()).isEqualTo(ReviewStatus.UNREVIEWED);
+        assertThat(saved.getValue().getRealEstateFirmId()).isEqualTo(FIRM_ID);
 
-        verify(owners).save(any(BeneficialOwner.class));
         verify(links).save(any(DealBeneficialOwner.class));
         verify(ownership).attachExtractedIndividual(
-                eq(DEAL_ID), any(), eq("Anna Eriksson"),
-                eq(LocalDate.of(1974, 8, 12)), eq("DRIVER_LICENCE"));
+                eq(DEAL_ID), any(), anyString(), eq(null), eq("NZ_DRIVER_LICENCE"));
     }
 
     @Test
-    void aSecondScanOfTheSamePersonDoesNotCreateASecondPerson() {
-        // A client with both a licence and a passport is one human with two documents.
-        BeneficialOwner existing = existing(50L, "ANNA ERIKSSON", LocalDate.of(1974, 8, 12), null);
-        givenDealHas(existing);
-
-        BeneficialOwner result = service.recordFromExtraction(
-                document("passport.jpg", DocumentType.PASSPORT),
-                fields("Anna  Eriksson", LocalDate.of(1974, 8, 12), LocalDate.of(2030, 4, 15)));
-
-        assertThat(result).isSameAs(existing);
-        verify(owners, never()).save(any());
-        verify(links, never()).save(any());
-        verify(ownership, never()).attachExtractedIndividual(anyLong(), any(), anyString(), any(), any());
-    }
-
-    @Test
-    void theSecondScanFillsGapsWithoutOverwriting() {
-        BeneficialOwner existing = existing(50L, "ANNA ERIKSSON", LocalDate.of(1974, 8, 12), null);
-        givenDealHas(existing);
-
-        service.recordFromExtraction(document("passport.jpg", DocumentType.PASSPORT),
-                fields("ANNA ERIKSSON", LocalDate.of(1974, 8, 12), LocalDate.of(2030, 4, 15)));
-
-        // Expiry was missing and is now known.
-        assertThat(existing.getIdExpiryDate()).isEqualTo(LocalDate.of(2030, 4, 15));
-        // The name was already there and is not disturbed by the rescan.
-        assertThat(existing.getFullName()).isEqualTo("ANNA ERIKSSON");
-    }
-
-    @Test
-    void twoUnreadableScansDoNotBecomeOnePerson() {
-        // A null identifies nobody, so the service must not even look for a match — comparing
-        // null to null would fuse two unrelated people into a single AML record. Asserting that
-        // the deal's existing people are never consulted pins the short-circuit itself, not just
-        // its outcome.
-        service.recordFromExtraction(document("blurry.jpg", DocumentType.DRIVER_LICENCE),
-                fields(null, null, null));
-
-        verify(links, never()).findAllByDealIdOrderByCreatedAtAsc(anyLong());
-        verify(owners).save(any(BeneficialOwner.class));
-    }
-
-    @Test
-    void aMatchingNameWithADifferentBirthDateIsADifferentPerson() {
-        BeneficialOwner existing = existing(50L, "ANNA ERIKSSON", LocalDate.of(1974, 8, 12), null);
-        givenDealHas(existing);
-
-        service.recordFromExtraction(document("licence.jpg", DocumentType.DRIVER_LICENCE),
-                fields("Anna Eriksson", LocalDate.of(1981, 3, 2), null));
-
-        verify(owners).save(any(BeneficialOwner.class));
-    }
-
-    @Test
-    void anUnreadableScanStillGetsANodeNamedAfterItsEvidence() {
-        // ownership_node.display_name is NOT NULL, so this path must produce something — and
-        // naming it after the file keeps the node traceable back to the scan.
-        service.recordFromExtraction(document("blurry-licence.jpg", DocumentType.DRIVER_LICENCE),
-                fields(null, null, null));
+    void anUnreadPersonIsNamedAfterTheirScan() {
+        // ownership_node.display_name is NOT NULL, and naming the node after the file keeps it
+        // traceable to its evidence in a way "Unknown" would not.
+        service.createProvisional(document("blurry-licence.jpg", DocumentType.NZ_DRIVER_LICENCE));
 
         ArgumentCaptor<String> displayName = ArgumentCaptor.forClass(String.class);
         verify(ownership).attachExtractedIndividual(
@@ -157,26 +114,165 @@ class BeneficialOwnerServiceTest {
         assertThat(displayName.getValue()).contains("blurry-licence.jpg");
     }
 
+    /* ---------- extraction fills the person in ---------- */
+
     @Test
-    void recordsPerFieldConfidence() {
-        when(links.findAllByDealIdOrderByCreatedAtAsc(DEAL_ID)).thenReturn(List.of());
+    void extractionFillsTheOwnerTheScanAlreadyBelongsTo() {
+        BeneficialOwner owner = existing(OWNER_ID, null, null, null);
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner));
 
-        service.recordFromExtraction(document("licence.jpg", DocumentType.DRIVER_LICENCE),
-                new ExtractedIdFields(
-                        ExtractedField.of("Anna Eriksson", new BigDecimal("0.940")),
-                        ExtractedField.of(LocalDate.of(1974, 8, 12), new BigDecimal("1.000")),
-                        ExtractedField.empty(),
-                        "raw"));
+        service.applyExtraction(scan(OWNER_ID, IdSide.FRONT),
+                fields("Anna Eriksson", LocalDate.of(1974, 8, 12), LocalDate.of(2030, 4, 15), "0.950"));
 
-        ArgumentCaptor<BeneficialOwner> saved = ArgumentCaptor.forClass(BeneficialOwner.class);
-        verify(owners).save(saved.capture());
-        assertThat(saved.getValue().getExtractionConfidence())
-                .contains("\"fullName\":0.940")
-                .contains("\"dateOfBirth\":1.000")
-                // A field that was never read reports null rather than zero, which would read as
-                // "we looked and were certain it was nothing".
-                .contains("\"expiryDate\":null");
-        assertThat(saved.getValue().getReviewStatus()).isEqualTo(ReviewStatus.UNREVIEWED);
+        assertThat(owner.getFullName()).isEqualTo("Anna Eriksson");
+        assertThat(owner.getDateOfBirth()).isEqualTo(LocalDate.of(1974, 8, 12));
+        assertThat(owner.getIdExpiryDate()).isEqualTo(LocalDate.of(2030, 4, 15));
+        verify(ownership).refreshExtractedIndividual(
+                eq(OWNER_ID), eq("Anna Eriksson"), eq(LocalDate.of(1974, 8, 12)));
+    }
+
+    @Test
+    void theBackOfACardDoesNotEraseWhatTheFrontRead() {
+        // A licence back typically reads nothing. Front and back arrive in either order, so
+        // neither may assume it went first.
+        BeneficialOwner owner = existing(OWNER_ID, "Anna Eriksson", LocalDate.of(1974, 8, 12), null);
+        owner.setExtractionConfidence("{\"fullName\":0.950,\"dateOfBirth\":0.950,\"expiryDate\":null}");
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+
+        service.applyExtraction(scan(OWNER_ID, IdSide.BACK), fields(null, null, null, null));
+
+        assertThat(owner.getFullName()).isEqualTo("Anna Eriksson");
+        assertThat(owner.getDateOfBirth()).isEqualTo(LocalDate.of(1974, 8, 12));
+    }
+
+    @Test
+    void theBackFillsAGapTheFrontLeft() {
+        BeneficialOwner owner = existing(OWNER_ID, "Anna Eriksson", LocalDate.of(1974, 8, 12), null);
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+
+        service.applyExtraction(scan(OWNER_ID, IdSide.BACK),
+                fields(null, null, LocalDate.of(2030, 4, 15), "0.800"));
+
+        assertThat(owner.getIdExpiryDate()).isEqualTo(LocalDate.of(2030, 4, 15));
+    }
+
+    @Test
+    void extractionIsAnUpdateOnlyAndNeverCreatesAPerson() {
+        BeneficialOwner owner = existing(OWNER_ID, null, null, null);
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+
+        service.applyExtraction(scan(OWNER_ID, IdSide.FRONT),
+                fields("Anna Eriksson", LocalDate.of(1974, 8, 12), null, "0.950"));
+
+        verify(owners, never()).save(any());
+        verify(links, never()).save(any());
+        verify(ownership, never()).attachExtractedIndividual(anyLong(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void aScanWhoseOwnerVanishedMidExtractionIsDropped() {
+        // The broker can delete a scan while Textract is still reading it.
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.empty());
+
+        service.applyExtraction(scan(OWNER_ID, IdSide.FRONT),
+                fields("Anna Eriksson", LocalDate.of(1974, 8, 12), null, "0.950"));
+
+        verify(ownership, never()).refreshExtractedIndividual(anyLong(), any(), any());
+    }
+
+    @Test
+    void aDocumentWithNoOwnerIsIgnored() {
+        service.applyExtraction(scan(null, null),
+                fields("Anna Eriksson", LocalDate.of(1974, 8, 12), null, "0.950"));
+
+        verify(owners, never()).findById(any());
+    }
+
+    /* ---------- no merging, ever ---------- */
+
+    @Test
+    void twoDocumentsReadingAsTheSamePersonStayTwoPeople() {
+        // The previous round merged these on an exact name + date-of-birth match. It no longer
+        // does: a different card is a different individual, and deciding otherwise is a
+        // judgement rather than an extraction result. Asserted so it cannot regress quietly.
+        BeneficialOwner first = existing(OWNER_ID, "Anna Eriksson", LocalDate.of(1974, 8, 12), null);
+        BeneficialOwner second = existing(51L, null, null, null);
+        when(owners.findById(51L)).thenReturn(Optional.of(second));
+
+        service.applyExtraction(scan(51L, IdSide.FRONT),
+                fields("Anna Eriksson", LocalDate.of(1974, 8, 12), null, "0.950"));
+
+        // The second person is filled in on their own terms and the first is untouched.
+        assertThat(second.getFullName()).isEqualTo("Anna Eriksson");
+        assertThat(first.getFullName()).isEqualTo("Anna Eriksson");
+        verify(owners, never()).deleteById(anyLong());
+        // Nothing looked at who else is on the deal, because nothing needed to.
+        verify(links, never()).findAllByDealIdOrderByCreatedAtAsc(anyLong());
+    }
+
+    /* ---------- fill-or-improve ---------- */
+
+    @Test
+    void aGapIsFilledWhateverTheConfidence() {
+        assertThat(BeneficialOwnerService.shouldWrite(
+                null, null, ExtractedField.of("X", new BigDecimal("0.100")))).isTrue();
+    }
+
+    @Test
+    void onlyAStrictlyBetterReadingDisplacesAValue() {
+        BigDecimal stored = new BigDecimal("0.900");
+        assertThat(BeneficialOwnerService.shouldWrite(
+                "old", stored, ExtractedField.of("new", new BigDecimal("0.950")))).isTrue();
+        assertThat(BeneficialOwnerService.shouldWrite(
+                "old", stored, ExtractedField.of("new", new BigDecimal("0.900")))).isFalse();
+        assertThat(BeneficialOwnerService.shouldWrite(
+                "old", stored, ExtractedField.of("new", new BigDecimal("0.100")))).isFalse();
+    }
+
+    @Test
+    void anUnmeasuredReadingNeverDisplacesAMeasuredOne() {
+        // Without a number to compare, "different" is not evidence of "better".
+        assertThat(BeneficialOwnerService.shouldWrite(
+                "old", new BigDecimal("0.900"), ExtractedField.of("new", null))).isFalse();
+    }
+
+    @Test
+    void nothingReadMeansNothingWritten() {
+        assertThat(BeneficialOwnerService.shouldWrite(
+                "old", new BigDecimal("0.900"), ExtractedField.empty())).isFalse();
+    }
+
+    /* ---------- removal ---------- */
+
+    @Test
+    void removingOneSideOfACardKeepsThePerson() {
+        // They were still presented, and the remaining image still evidences them.
+        when(documents.findAllByBeneficialOwnerIdAndStatus(OWNER_ID, DocumentStatus.ACTIVE))
+                .thenReturn(List.of(scan(OWNER_ID, IdSide.BACK)));
+
+        service.removeIfOrphaned(OWNER_ID);
+
+        verify(owners, never()).deleteById(anyLong());
+        verify(ownership, never()).removeExtractedIndividual(anyLong());
+    }
+
+    @Test
+    void removingTheLastScanRemovesThePerson() {
+        when(documents.findAllByBeneficialOwnerIdAndStatus(OWNER_ID, DocumentStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        service.removeIfOrphaned(OWNER_ID);
+
+        verify(ownership).removeExtractedIndividual(OWNER_ID);
+        verify(links).deleteAllByBeneficialOwnerId(OWNER_ID);
+        verify(owners).deleteById(OWNER_ID);
+    }
+
+    @Test
+    void aDocumentThatNeverHadAnOwnerRemovesNothing() {
+        service.removeIfOrphaned(null);
+
+        verify(owners, never()).deleteById(anyLong());
     }
 
     /* ---------- release on deal deletion ---------- */
@@ -184,36 +280,32 @@ class BeneficialOwnerServiceTest {
     @Test
     void deletingADealRemovesAPersonLeftOnNoOtherDeal() {
         when(links.findAllByDealIdOrderByCreatedAtAsc(DEAL_ID))
-                .thenReturn(List.of(new DealBeneficialOwner(DEAL_ID, 50L, 4L)));
-        when(links.countByBeneficialOwnerId(50L)).thenReturn(0L);
+                .thenReturn(List.of(new DealBeneficialOwner(DEAL_ID, OWNER_ID, 4L)));
+        when(links.countByBeneficialOwnerId(OWNER_ID)).thenReturn(0L);
 
         service.releaseFromDeal(DEAL_ID);
 
         verify(links).deleteAllByDealId(DEAL_ID);
-        // Nothing can reach this person any more, so keeping the row would only accumulate
-        // identity data no one can review.
-        verify(owners).deleteById(50L);
+        verify(owners).deleteById(OWNER_ID);
     }
 
     @Test
     void deletingADealKeepsAPersonWhoAppearsOnAnother() {
         when(links.findAllByDealIdOrderByCreatedAtAsc(DEAL_ID))
-                .thenReturn(List.of(new DealBeneficialOwner(DEAL_ID, 50L, 4L)));
-        when(links.countByBeneficialOwnerId(50L)).thenReturn(1L);
+                .thenReturn(List.of(new DealBeneficialOwner(DEAL_ID, OWNER_ID, 4L)));
+        when(links.countByBeneficialOwnerId(OWNER_ID)).thenReturn(1L);
 
         service.releaseFromDeal(DEAL_ID);
 
         verify(links).deleteAllByDealId(DEAL_ID);
-        // Deleting one deal says nothing about the others the same human appears on — which is
-        // the entire reason a person is not owned by a single deal.
         verify(owners, never()).deleteById(anyLong());
     }
 
     @Test
     void countsAreTakenAfterTheLinksAreActuallyGone() {
         when(links.findAllByDealIdOrderByCreatedAtAsc(DEAL_ID))
-                .thenReturn(List.of(new DealBeneficialOwner(DEAL_ID, 50L, 4L)));
-        when(links.countByBeneficialOwnerId(50L)).thenReturn(0L);
+                .thenReturn(List.of(new DealBeneficialOwner(DEAL_ID, OWNER_ID, 4L)));
+        when(links.countByBeneficialOwnerId(OWNER_ID)).thenReturn(0L);
 
         service.releaseFromDeal(DEAL_ID);
 
@@ -222,7 +314,7 @@ class BeneficialOwnerServiceTest {
         InOrder order = inOrder(links);
         order.verify(links).deleteAllByDealId(DEAL_ID);
         order.verify(links).flush();
-        order.verify(links).countByBeneficialOwnerId(50L);
+        order.verify(links).countByBeneficialOwnerId(OWNER_ID);
     }
 
     @Test
@@ -245,12 +337,6 @@ class BeneficialOwnerServiceTest {
 
     /* ---------- fixtures ---------- */
 
-    private void givenDealHas(BeneficialOwner owner) {
-        when(links.findAllByDealIdOrderByCreatedAtAsc(DEAL_ID))
-                .thenReturn(List.of(new DealBeneficialOwner(DEAL_ID, owner.getId(), 4L)));
-        when(owners.findById(owner.getId())).thenReturn(Optional.of(owner));
-    }
-
     private static Document document(String filename, DocumentType type) {
         Document d = new Document();
         d.setDealId(DEAL_ID);
@@ -259,11 +345,19 @@ class BeneficialOwnerServiceTest {
         return d;
     }
 
-    private static ExtractedIdFields fields(String name, LocalDate dob, LocalDate expiry) {
+    private static Document scan(Long ownerId, IdSide side) {
+        Document d = document("licence.jpg", DocumentType.NZ_DRIVER_LICENCE);
+        d.setBeneficialOwnerId(ownerId);
+        d.setIdSide(side);
+        return d;
+    }
+
+    private static ExtractedIdFields fields(String name, LocalDate dob, LocalDate expiry, String confidence) {
+        BigDecimal c = confidence == null ? null : new BigDecimal(confidence);
         return new ExtractedIdFields(
-                ExtractedField.of(name, name == null ? null : new BigDecimal("0.950")),
-                ExtractedField.of(dob, dob == null ? null : new BigDecimal("0.950")),
-                ExtractedField.of(expiry, expiry == null ? null : new BigDecimal("0.950")),
+                ExtractedField.of(name, c),
+                ExtractedField.of(dob, c),
+                ExtractedField.of(expiry, c),
                 "raw text");
     }
 

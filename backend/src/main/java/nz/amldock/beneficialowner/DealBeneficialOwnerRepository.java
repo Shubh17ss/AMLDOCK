@@ -13,4 +13,6 @@ public interface DealBeneficialOwnerRepository
     long countByBeneficialOwnerId(Long beneficialOwnerId);
 
     void deleteAllByDealId(Long dealId);
+
+    void deleteAllByBeneficialOwnerId(Long beneficialOwnerId);
 }

@@ -18,6 +18,7 @@ import { formatPropertyAddress } from '../data/addressFinderMeta.js';
 import { canBrokerRevert, canRevert, isEditable, isReviewable } from '../data/dealStatus.js';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
 import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
+import { IndividualsFromIds } from '../features/deal/IndividualsFromIds.jsx';
 import { OverrideDialog, StatusNoteDialog } from '../features/deal/DecisionDialogs.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -208,6 +209,9 @@ export function DealDetailPage() {
                 <DetailRow label="Type"  value={deal.client?.clientType ?? 'Pending review'} />
                 <DetailRow label="Email" value={deal.client?.email} />
                 <DetailRow label="Phone" value={deal.client?.phone} />
+                {/* The entity above is still provisional; these are the people whose cards were
+                    actually scanned, and the evidence for whatever it turns out to be. */}
+                <IndividualsFromIds dealId={deal.id} />
               </CardContent>
             </Card>
           </Grid>

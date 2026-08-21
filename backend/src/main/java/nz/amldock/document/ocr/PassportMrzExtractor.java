@@ -46,7 +46,9 @@ public class PassportMrzExtractor implements IdExtractor {
 
     @Override
     public boolean supports(DocumentType type) {
-        return type == DocumentType.PASSPORT;
+        // Every ICAO 9303 travel document, not passports by name — a refugee travel document
+        // carries the same machine-readable zone and parses identically.
+        return type.extraction() == DocumentType.Extraction.MRZ;
     }
 
     @Override
