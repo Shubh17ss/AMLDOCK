@@ -186,6 +186,19 @@ export function NewDealPage() {
     }
   };
 
+  /**
+   * Discarding always asks first. It deletes a real deal from the server — with whatever ID
+   * scans are already attached to it — and the button sits next to Back on a form used
+   * one-handed on a phone, where a mis-tap is not a remote possibility.
+   *
+   * The one case that skips the dialog is an untouched form: no draft on the server and nothing
+   * typed, so there is nothing to lose and a prompt would only be in the way.
+   */
+  const requestDiscard = () => {
+    if (!dealId && !draft.isDirty()) { navigate('/my-deals'); return; }
+    setConfirmDelete(true);
+  };
+
   const handleDiscard = async () => {
     setConfirmDelete(false);
     // A deal that exists on the server is genuinely deleted, not just navigated away from.
@@ -316,10 +329,9 @@ export function NewDealPage() {
             margin on each direct child, which would override the button's own `mt`. */}
         <Box sx={{ width: { xs: '100%', sm: 'auto' }, pt: { xs: 4, sm: 0 } }}>
           {/* Named for what it does. In edit mode the broker arrived from a deal page, where
-              "Discard" would read as "cancel my edits" rather than "delete this deal" — so it
-              says Delete and asks first. */}
+              "Discard" would read as "cancel my edits" rather than "delete this deal". */}
           <Button
-            onClick={isEditMode ? () => setConfirmDelete(true) : handleDiscard}
+            onClick={requestDiscard}
             disabled={busy}
             startIcon={<DeleteOutlineIcon />}
             sx={{
@@ -363,18 +375,43 @@ export function NewDealPage() {
         <DealNotesTimeline dealId={dealId} status={deal?.status} />
       )}
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>Delete this deal?</DialogTitle>
+      {/* fullWidth + xs so the card is the same centred shape on a phone as on a desktop, rather
+          than a narrow box shrink-wrapped to whichever sentence it happens to be showing. */}
+      <Dialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        fullWidth
+        maxWidth="xs"
+        aria-labelledby="confirm-discard-title"
+      >
+        <DialogTitle id="confirm-discard-title">
+          {isEditMode ? 'Delete this deal?' : 'Discard this draft?'}
+        </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            <strong>{deal?.reference ?? `#${dealId}`}</strong> will be removed permanently, along
-            with its property and client records. This cannot be undone.
+            {isEditMode ? (
+              <>
+                <strong>{deal?.reference ?? `#${dealId}`}</strong> will be removed permanently,
+                along with its property and client records. This cannot be undone.
+              </>
+            ) : dealId ? (
+              // Said plainly because it surprises people: the draft is already on the server by
+              // section 3, and the ID scans uploaded into it go with it.
+              <>
+                This draft is already saved, so discarding deletes it — along with any ID scans
+                you have uploaded. This cannot be undone.
+              </>
+            ) : (
+              <>Nothing has been saved yet. What you have entered on this form will be lost.</>
+            )}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          {/* Cancel is the resting choice: it holds the focus, so a stray Enter backs out
+              rather than deleting. */}
+          <Button onClick={() => setConfirmDelete(false)} autoFocus>Cancel</Button>
           <Button color="error" variant="contained" onClick={handleDiscard} disabled={busy}>
-            Delete
+            {isEditMode ? 'Delete' : 'Discard'}
           </Button>
         </DialogActions>
       </Dialog>

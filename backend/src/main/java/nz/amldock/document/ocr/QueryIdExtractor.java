@@ -41,11 +41,18 @@ public class QueryIdExtractor implements IdExtractor {
     static final String ALIAS_FULL_NAME = "FULL_NAME";
     static final String ALIAS_DOB       = "DATE_OF_BIRTH";
     static final String ALIAS_EXPIRY    = "EXPIRY_DATE";
+    static final String ALIAS_VALIDITY  = "VALIDITY";
 
     private static final List<Query> QUERIES = List.of(
             Query.builder().alias(ALIAS_FULL_NAME).text("What is the full name of the document holder?").build(),
             Query.builder().alias(ALIAS_DOB).text("What is the date of birth?").build(),
-            Query.builder().alias(ALIAS_EXPIRY).text("What is the expiry date?").build());
+            Query.builder().alias(ALIAS_EXPIRY).text("What is the expiry date?").build(),
+            // Asked as well as the expiry question, not instead of it. Plenty of cards never print
+            // the word "expiry" — NZ licences say "Valid to", many national identity cards print
+            // "Validity" or "Valid until" — and a semantic match against the wrong label is the
+            // most common way this path returns no expiry at all. Queries is billed per page
+            // rather than per question, so the second reading costs nothing; the limit is 15.
+            Query.builder().alias(ALIAS_VALIDITY).text("Until what date is this document valid?").build());
 
     private final TextractClient textract;
 
@@ -71,15 +78,49 @@ public class QueryIdExtractor implements IdExtractor {
         AnalyzeDocumentResponse res = textract.analyzeDocument(req);
         Map<String, Block> answers = answersByAlias(res.blocks());
 
-        Block nameBlock   = answers.get(ALIAS_FULL_NAME);
-        Block dobBlock    = answers.get(ALIAS_DOB);
-        Block expiryBlock = answers.get(ALIAS_EXPIRY);
+        Block nameBlock = answers.get(ALIAS_FULL_NAME);
+        Block dobBlock  = answers.get(ALIAS_DOB);
 
         return new ExtractedIdFields(
                 ExtractedField.fromPercent(text(nameBlock), confidence(nameBlock)),
                 ExtractedField.fromPercent(date(dobBlock), confidence(dobBlock)),
-                ExtractedField.fromPercent(date(expiryBlock), confidence(expiryBlock)),
+                chooseExpiry(answers.get(ALIAS_EXPIRY), answers.get(ALIAS_VALIDITY)),
                 rawText(res.blocks()));
+    }
+
+    /**
+     * Settles the two expiry readings into one.
+     *
+     * <p>The expiry question stays authoritative — it names the field being asked for — so the
+     * validity answer is taken only when it is the sole reading, or a strictly more confident
+     * one. That is the same rule {@code BeneficialOwnerService.shouldWrite} applies when the
+     * front and back of a card disagree.
+     *
+     * <p>The <em>not earlier</em> guard covers the one predictable way this goes wrong: a card
+     * printing both "Valid from" and "Valid to" can answer the validity question with the start
+     * of the window. An issue date is never an expiry, so an earlier reading is discarded however
+     * confidently it was read.
+     *
+     * <p>Either block may hold text that is not a date at all, in which case parsing yields
+     * nothing and the other reading stands alone.
+     */
+    static ExtractedField<LocalDate> chooseExpiry(Block expiryBlock, Block validityBlock) {
+        ExtractedField<LocalDate> expiry =
+                ExtractedField.fromPercent(date(expiryBlock), confidence(expiryBlock));
+        ExtractedField<LocalDate> validity =
+                ExtractedField.fromPercent(date(validityBlock), confidence(validityBlock));
+
+        if (!validity.isPresent()) return expiry;
+        if (!expiry.isPresent()) return validity;
+        if (validity.value().isBefore(expiry.value())) return expiry;
+        return moreConfident(validity, expiry) ? validity : expiry;
+    }
+
+    /** Strictly higher confidence wins; an unmeasured reading never displaces a measured one. */
+    private static boolean moreConfident(ExtractedField<?> candidate, ExtractedField<?> incumbent) {
+        if (candidate.confidence() == null) return false;
+        return incumbent.confidence() == null
+                || candidate.confidence().compareTo(incumbent.confidence()) > 0;
     }
 
     /**
