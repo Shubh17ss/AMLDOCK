@@ -20,6 +20,12 @@ const EMPTY_NODE = {
   trustName: '',
   trustDeedDocumentId: '',
   settlorName: '',
+  personRole: '',
+  reference: '',
+  notes: '',
+  // Present from the start so the individual's shared fields are controlled inputs rather
+  // than flipping from uncontrolled the moment someone types into one.
+  person: { email: '', phoneCountry: null, phoneNumber: '', occupation: '', sourceOfFunds: '' },
 };
 
 /**
@@ -99,8 +105,8 @@ export function AddNodeDialog({ open, onClose, parentNodeId, parentLabel, isFirs
                              helperText="Shareholders / partners. Leave blank for role-only edges (e.g. trustees)."
                              sx={{ width: 200 }} />
                   <FormControl sx={{ minWidth: 220 }}>
-                    <InputLabel id="role-label">Role</InputLabel>
-                    <Select labelId="role-label" label="Role" value={edge.role}
+                    <InputLabel id="role-label">Link role</InputLabel>
+                    <Select labelId="role-label" label="Link role" value={edge.role}
                             onChange={(e) => setEdge((p) => ({ ...p, role: e.target.value }))}>
                       <MenuItem value=""><em>None</em></MenuItem>
                       {EDGE_ROLES.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}

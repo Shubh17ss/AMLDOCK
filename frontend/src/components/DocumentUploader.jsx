@@ -106,6 +106,15 @@ export function DocumentUploader({
     (d) => !(hideVoiceNotes && AUDIO_DOCUMENT_TYPES.includes(d.documentType)),
   );
 
+  /**
+   * A node's list also carries the ID scans of the person behind it, which live on the person
+   * rather than on the node. Those are not deletable from here: removing the last one takes the
+   * person — and the node being edited — with it, which is not what a delete icon on a document
+   * row looks like it will do. The broker's ID list is where that action reads as what it is.
+   */
+  const isDeletableHere = (d) =>
+    !isNodeScoped || d.ownershipNodeId === ownershipNodeId;
+
   const handleDownload = async (id) => {
     try {
       const { downloadUrl } = await fetchDownloadUrl(id);
@@ -210,7 +219,15 @@ export function DocumentUploader({
           <TableBody>
             {rows.map((d) => (
               <TableRow key={d.id}>
-                <TableCell>{d.originalFilename}</TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <span>{d.originalFilename}</span>
+                    {d.idSide && (
+                      <Chip size="small" variant="outlined"
+                            label={d.idSide === 'BACK' ? 'back' : 'front'} />
+                    )}
+                  </Stack>
+                </TableCell>
                 <TableCell><Chip size="small" label={documentTypeLabel(d.documentType)} /></TableCell>
                 <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
                 <TableCell>{d.uploadedByEmail ?? '—'}</TableCell>
@@ -228,7 +245,7 @@ export function DocumentUploader({
                       <DownloadIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  {canUpload && (
+                  {canUpload && (isDeletableHere(d) ? (
                     <Tooltip title="Delete">
                       <IconButton size="small"
                                   onClick={() => deleteMut.mutate(d.id)}
@@ -236,7 +253,15 @@ export function DocumentUploader({
                         <DeleteOutlineIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                  )}
+                  ) : (
+                    <Tooltip title="This is an ID scan from the deal form. Remove it there — deleting the last one removes the person.">
+                      <span>
+                        <IconButton size="small" disabled>
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  ))}
                 </TableCell>
               </TableRow>
             ))}

@@ -52,6 +52,30 @@ public class BeneficialOwner extends BaseEntity {
     @Column(name = "review_status", nullable = false, length = 32)
     private ReviewStatus reviewStatus = ReviewStatus.UNREVIEWED;
 
+    /* ---------- entered by hand, and shared across every deal this person is on (V34) ---------- */
+
+    /**
+     * Unvalidated beyond length. A CDD record holds what the client gave; an address rejected
+     * for looking wrong is a fact lost rather than a mistake prevented.
+     */
+    @Column(name = "email", length = 320)
+    private String email;
+
+    /** ISO 3166-1 alpha-2. Kept apart from the number so the flag has something to render. */
+    @Column(name = "phone_country", length = 2)
+    private String phoneCountry;
+
+    /** The national significant number, as typed. Not normalised — see {@link #email}. */
+    @Column(name = "phone_number", length = 32)
+    private String phoneNumber;
+
+    @Column(name = "occupation")
+    private String occupation;
+
+    /** Source of wealth and of funds together: one question, asked and answered in one breath. */
+    @Column(name = "source_of_funds", columnDefinition = "text")
+    private String sourceOfFunds;
+
     public Long getId() { return id; }
     public Long getRealEstateFirmId() { return realEstateFirmId; }
     public void setRealEstateFirmId(Long v) { this.realEstateFirmId = v; }
@@ -65,4 +89,14 @@ public class BeneficialOwner extends BaseEntity {
     public void setExtractionConfidence(String v) { this.extractionConfidence = v; }
     public ReviewStatus getReviewStatus() { return reviewStatus; }
     public void setReviewStatus(ReviewStatus v) { this.reviewStatus = v; }
+    public String getEmail() { return email; }
+    public void setEmail(String v) { this.email = v; }
+    public String getPhoneCountry() { return phoneCountry; }
+    public void setPhoneCountry(String v) { this.phoneCountry = v; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public void setPhoneNumber(String v) { this.phoneNumber = v; }
+    public String getOccupation() { return occupation; }
+    public void setOccupation(String v) { this.occupation = v; }
+    public String getSourceOfFunds() { return sourceOfFunds; }
+    public void setSourceOfFunds(String v) { this.sourceOfFunds = v; }
 }

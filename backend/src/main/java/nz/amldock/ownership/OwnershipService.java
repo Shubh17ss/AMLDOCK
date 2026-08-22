@@ -1,6 +1,11 @@
 package nz.amldock.ownership;
 
+import nz.amldock.beneficialowner.BeneficialOwner;
+import nz.amldock.beneficialowner.BeneficialOwnerRepository;
+import nz.amldock.beneficialowner.DealBeneficialOwner;
+import nz.amldock.beneficialowner.DealBeneficialOwnerRepository;
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
@@ -11,6 +16,8 @@ import nz.amldock.ownership.dto.CreateEdgeRequest;
 import nz.amldock.ownership.dto.CreateNodeRequest;
 import nz.amldock.ownership.dto.EdgeDto;
 import nz.amldock.ownership.dto.NodeDto;
+import nz.amldock.ownership.dto.PersonDto;
+import nz.amldock.ownership.dto.PersonPatch;
 import nz.amldock.ownership.dto.TreeDto;
 import nz.amldock.ownership.dto.UpdateEdgeRequest;
 import nz.amldock.ownership.dto.UpdateNodeRequest;
@@ -23,8 +30,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -36,19 +45,27 @@ public class OwnershipService {
     private final DealRepository deals;
     private final FirmBranchRepository branches;
     private final DealLifecycleService lifecycle;
+    // The repositories rather than BeneficialOwnerService: that service already depends on this
+    // one (extraction creates nodes through it), and a constructor cycle fails at startup.
+    private final BeneficialOwnerRepository owners;
+    private final DealBeneficialOwnerRepository ownerLinks;
 
     public OwnershipService(OwnershipStructureRepository structures,
                             OwnershipNodeRepository nodes,
                             OwnershipEdgeRepository edges,
                             DealRepository deals,
                             FirmBranchRepository branches,
-                            DealLifecycleService lifecycle) {
+                            DealLifecycleService lifecycle,
+                            BeneficialOwnerRepository owners,
+                            DealBeneficialOwnerRepository ownerLinks) {
         this.structures = structures;
         this.nodes = nodes;
         this.edges = edges;
         this.deals = deals;
         this.branches = branches;
         this.lifecycle = lifecycle;
+        this.owners = owners;
+        this.ownerLinks = ownerLinks;
     }
 
     /* ---------- queries ---------- */
@@ -83,17 +100,34 @@ public class OwnershipService {
         n.setOwnershipStructureId(structure.getId());
         n.setNodeType(req.nodeType());
         n.setDisplayName(req.displayName());
+        n.setPersonRole(req.personRole());
+        n.setReference(req.reference());
+        n.setNotes(req.notes());
         applyNodeFields(n, req.dateOfBirth(), req.idDocumentType(), req.idDocumentNumber(), req.idDocumentCountry(),
                 req.nzbn(), req.companyNumber(), req.incorporationDate(), req.registeredOffice(),
                 req.trustName(), req.trustDeedDocumentId(), req.settlorName(), req.extraJson());
-        return NodeDto.from(nodes.save(n));
+
+        // Every individual has a person record, whether they arrived through a scanned ID or by
+        // hand: the shared contact and background fields live there, so a node without one has
+        // nowhere to put an email address and the form would silently discard it.
+        BeneficialOwner person = null;
+        if (req.nodeType() == NodeType.INDIVIDUAL) {
+            person = createPersonFor(deal, req.displayName());
+            n.setBeneficialOwnerId(person.getId());
+            applyPersonPatch(person, req.person());
+        }
+
+        return NodeDto.from(nodes.save(n), person == null ? null : PersonDto.from(person));
     }
 
     @Transactional
     public NodeDto updateNode(Long dealId, Long nodeId, UpdateNodeRequest req) {
         Deal deal = assertReadable(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
-        if (req.nodeType() != null) n.setNodeType(req.nodeType());
+        if (req.nodeType() != null) {
+            assertRetypeAllowed(n, req.nodeType());
+            n.setNodeType(req.nodeType());
+        }
         if (req.displayName() != null && !req.displayName().isBlank()) n.setDisplayName(req.displayName());
         if (req.dateOfBirth() != null) n.setDateOfBirth(req.dateOfBirth());
         if (req.idDocumentType() != null) n.setIdDocumentType(req.idDocumentType());
@@ -107,10 +141,24 @@ public class OwnershipService {
         if (req.trustDeedDocumentId() != null) n.setTrustDeedDocumentId(req.trustDeedDocumentId());
         if (req.settlorName() != null) n.setSettlorName(req.settlorName());
         if (req.extraJson() != null) n.setExtraJson(req.extraJson());
+        if (req.personRole() != null) n.setPersonRole(req.personRole());
+        if (req.reference() != null) n.setReference(req.reference());
         if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
         if (req.notes() != null) n.setNotes(req.notes());
         if (req.verificationNotes() != null) n.setVerificationNotes(req.verificationNotes());
-        return NodeDto.from(n);
+
+        BeneficialOwner person = personFor(n);
+        if (req.person() != null && person != null) {
+            // This write leaves the deal. The check is the person's own firm against this deal's,
+            // deliberately not inherited from the deal-scoped URL the request arrived on.
+            assertSameFirm(person, deal);
+            applyPersonPatch(person, req.person());
+            // display_name is NOT NULL and is what the tree renders, so it follows the name.
+            if (person.getFullName() != null && !person.getFullName().isBlank()) {
+                n.setDisplayName(person.getFullName());
+            }
+        }
+        return NodeDto.from(n, person == null ? null : PersonDto.from(person));
     }
 
     @Transactional
@@ -134,7 +182,32 @@ public class OwnershipService {
             structure.setRootNodeId(null);
         }
 
+        Long personId = n.getBeneficialOwnerId();
         nodes.delete(n);
+        if (personId != null) removePersonIfHandAdded(deal, personId);
+    }
+
+    /**
+     * Removes the person behind a deleted node when nobody ever scanned an ID for them.
+     *
+     * <p>A hand-added individual exists only as that node, so leaving the person behind would
+     * leave a name on the deal's people list that no longer appears anywhere in the structure.
+     *
+     * <p>A person who came from a scan is left alone: their evidence is still in the deal, and
+     * removing them is {@code BeneficialOwnerService.removeIfOrphaned}'s job when the last image
+     * of their card goes. The source document on the link is what tells the two apart.
+     */
+    private void removePersonIfHandAdded(Deal deal, Long personId) {
+        DealBeneficialOwner link = ownerLinks.findAllByDealIdOrderByCreatedAtAsc(deal.getId()).stream()
+                .filter(l -> l.getBeneficialOwnerId().equals(personId))
+                .findFirst().orElse(null);
+        if (link == null || link.getSourceDocumentId() != null) return;
+
+        ownerLinks.delete(link);
+        ownerLinks.flush();   // the count below must not see the row just removed
+        if (ownerLinks.countByBeneficialOwnerId(personId) == 0) {
+            owners.deleteById(personId);
+        }
     }
 
     /* ---------- edge CRUD ---------- */
@@ -149,6 +222,11 @@ public class OwnershipService {
         OwnershipNode child = mustLoadNodeForDeal(deal, req.childNodeId());
         if (!parent.getOwnershipStructureId().equals(child.getOwnershipStructureId())) {
             throw new BadRequestException("Parent and child belong to different ownership structures");
+        }
+        if (parent.getNodeType().isLeafOnly()) {
+            throw new BadRequestException(
+                    "An individual cannot own another node — " + parent.getDisplayName()
+                            + " is always the bottom of a chain");
         }
 
         edges.findByParentNodeIdAndChildNodeId(parent.getId(), child.getId())
@@ -281,22 +359,98 @@ public class OwnershipService {
         List<OwnershipEdge> edgeList = nodeIds.isEmpty()
                 ? List.of()
                 : edges.findAllByParentNodeIdIn(nodeIds);
+
+        // One query for every person on the tree, rather than one per individual node.
+        List<Long> ownerIds = nodeList.stream()
+                .map(OwnershipNode::getBeneficialOwnerId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Map<Long, PersonDto> people = new HashMap<>();
+        if (!ownerIds.isEmpty()) {
+            owners.findAllById(ownerIds).forEach(o -> people.put(o.getId(), PersonDto.from(o)));
+        }
+
         return new TreeDto(
                 structure.getId(),
                 structure.getDealId(),
                 structure.getRootNodeId(),
                 structure.getNotes(),
-                nodeList.stream().map(NodeDto::from).toList(),
+                nodeList.stream().map(n -> NodeDto.from(n, people.get(n.getBeneficialOwnerId()))).toList(),
                 edgeList.stream().map(EdgeDto::from).toList());
+    }
+
+    /* ---------- the person behind an individual ---------- */
+
+    /**
+     * Creates the firm-scoped person record for a hand-added individual, and links them to the
+     * deal so they appear alongside the people read off scanned IDs.
+     *
+     * <p>The mirror of {@code BeneficialOwnerService.createProvisional}, which does the same for
+     * an individual arriving through an upload. Both paths end with one node, one person and one
+     * deal link; only the trigger differs.
+     */
+    private BeneficialOwner createPersonFor(Deal deal, String displayName) {
+        Long firmId = firmIdFor(deal);
+        if (firmId == null) {
+            throw new NotFoundException("Branch for deal " + deal.getId() + " not found");
+        }
+        BeneficialOwner person = new BeneficialOwner();
+        person.setRealEstateFirmId(firmId);
+        person.setFullName(displayName);
+        person = owners.save(person);
+        ownerLinks.save(new DealBeneficialOwner(deal.getId(), person.getId(), null));
+        return person;
+    }
+
+    private BeneficialOwner personFor(OwnershipNode n) {
+        return n.getBeneficialOwnerId() == null
+                ? null
+                : owners.findById(n.getBeneficialOwnerId()).orElse(null);
+    }
+
+    /** Only non-null fields are written; an empty string is a value and clears the field. */
+    private static void applyPersonPatch(BeneficialOwner person, PersonPatch patch) {
+        if (patch == null) return;
+        if (patch.fullName() != null && !patch.fullName().isBlank()) person.setFullName(patch.fullName().trim());
+        if (patch.email() != null) person.setEmail(emptyToNull(patch.email()));
+        if (patch.phoneCountry() != null) person.setPhoneCountry(emptyToNull(patch.phoneCountry()));
+        if (patch.phoneNumber() != null) person.setPhoneNumber(emptyToNull(patch.phoneNumber()));
+        if (patch.occupation() != null) person.setOccupation(emptyToNull(patch.occupation()));
+        if (patch.sourceOfFunds() != null) person.setSourceOfFunds(emptyToNull(patch.sourceOfFunds()));
+    }
+
+    private static String emptyToNull(String v) {
+        return v == null || v.isBlank() ? null : v.trim();
+    }
+
+    private void assertSameFirm(BeneficialOwner person, Deal deal) {
+        if (!person.getRealEstateFirmId().equals(firmIdFor(deal))) {
+            throw new ForbiddenException("That person belongs to another reporting entity");
+        }
+    }
+
+    /**
+     * A node with children cannot become an individual, for the same reason an individual cannot
+     * be given children: the type says it owns nothing.
+     */
+    private void assertRetypeAllowed(OwnershipNode n, NodeType next) {
+        if (next.isLeafOnly() && !edges.findAllByParentNodeId(n.getId()).isEmpty()) {
+            throw new BadRequestException(
+                    "\"" + n.getDisplayName() + "\" owns other nodes, so it cannot become an individual."
+                            + " Detach them first.");
+        }
     }
 
     private Deal assertReadable(Long dealId) {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
-        Long firmId = branches.findById(deal.getFirmBranchId())
-                .map(FirmBranch::getRealEstateFirmId).orElse(null);
-        lifecycle.assertCanRead(deal, currentPrincipal(), firmId);
+        lifecycle.assertCanRead(deal, currentPrincipal(), firmIdFor(deal));
         return deal;
+    }
+
+    private Long firmIdFor(Deal deal) {
+        return branches.findById(deal.getFirmBranchId())
+                .map(FirmBranch::getRealEstateFirmId).orElse(null);
     }
 
     /** Loads a node and ensures it belongs to the given deal's structure. */

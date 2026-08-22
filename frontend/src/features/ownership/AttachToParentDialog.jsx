@@ -3,7 +3,7 @@ import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
-import { EDGE_ROLES } from '../../api/ownership.js';
+import { EDGE_ROLES, isLeafOnlyType, nodeTypeLabel } from '../../api/ownership.js';
 import { tokens } from '../../theme/theme.js';
 
 /**
@@ -46,7 +46,8 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
         });
     }
     return tree.nodes
-      .filter((n) => !forbidden.has(n.id))
+      // Individuals are excluded outright: they own nothing, so they can never be a parent.
+      .filter((n) => !forbidden.has(n.id) && !isLeafOnlyType(n.nodeType))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }, [node?.id, tree]);
 
@@ -101,7 +102,7 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
                       <Chip
                         size="small"
                         variant="outlined"
-                        label={n.nodeType.replaceAll('_', ' ').toLowerCase()}
+                        label={nodeTypeLabel(n.nodeType)}
                       />
                     </Stack>
                   </MenuItem>
@@ -125,10 +126,10 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
                 helperText="Optional"
               />
               <FormControl sx={{ minWidth: 220 }}>
-                <InputLabel id="role-label">Role</InputLabel>
+                <InputLabel id="role-label">Link role</InputLabel>
                 <Select
                   labelId="role-label"
-                  label="Role"
+                  label="Link role"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                 >

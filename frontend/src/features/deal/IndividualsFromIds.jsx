@@ -19,8 +19,9 @@ const typeLabel = (t) => (t ? documentTypeLabel(t).toLowerCase() : null);
  * "Pending review" until compliance classifies it, while these are the people whose cards were
  * actually photographed. They are the evidence for whatever the entity turns out to be.
  *
- * <p>One entry per identity document. Two IDs naming the same human show as two people; nothing
- * here merges them, because that is a judgement rather than an extraction result.
+ * <p>One entry per identity document, plus anyone added by hand in the ownership structure. Two
+ * IDs naming the same human show as two people; nothing here merges them, because that is a
+ * judgement rather than an extraction result.
  *
  * <p>A person whose card could not be read still appears, reading "Not yet read". An ID that
  * yielded nothing is precisely what a reviewer needs to notice.
@@ -42,12 +43,12 @@ export function IndividualsFromIds({ dealId, dense = false }) {
         variant="caption"
         sx={{ color: tokens.muted, fontWeight: 700, display: 'block', mb: 0.5 }}
       >
-        Individuals from scanned IDs{people.length ? ` (${people.length})` : ''}
+        Individuals{people.length ? ` (${people.length})` : ''}
       </Typography>
 
       {people.length === 0 ? (
         <Typography variant="body2" sx={{ color: tokens.muted }}>
-          None scanned
+          None yet
         </Typography>
       ) : (
         <Stack spacing={0.5}>
@@ -55,9 +56,13 @@ export function IndividualsFromIds({ dealId, dense = false }) {
             const dob = fmtDate(p.dateOfBirth);
             const type = typeLabel(p.idDocumentType);
             // Sides captured is worth surfacing: a licence recorded front-only is a known gap.
+            // Only for people who came from a scan — someone added by hand in the ownership
+            // structure has no images, and "front only" would read as a missing back.
             const sides = p.imageCount >= 2 ? 'front + back' : 'front only';
-            const detail = [dob && `DOB ${dob}`, type && `${type}, ${sides}`]
-              .filter(Boolean).join(' · ');
+            const detail = [
+              dob && `DOB ${dob}`,
+              type ? `${type}, ${sides}` : (p.imageCount === 0 ? 'added by hand' : null),
+            ].filter(Boolean).join(' · ');
 
             return (
               <Stack key={p.id} direction="row" spacing={1} alignItems="baseline" flexWrap="wrap">

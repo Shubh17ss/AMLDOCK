@@ -9,19 +9,36 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PersonIcon from '@mui/icons-material/Person';
 import BusinessIcon from '@mui/icons-material/Business';
+import DomainIcon from '@mui/icons-material/Domain';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import GroupIcon from '@mui/icons-material/Group';
+import HandshakeIcon from '@mui/icons-material/Handshake';
+import GroupsIcon from '@mui/icons-material/Groups';
+import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
+import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
+import GavelIcon from '@mui/icons-material/Gavel';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddLinkIcon from '@mui/icons-material/AddLink';
+import { isLeafOnlyType, nodeTypeLabel } from '../../api/ownership.js';
 import { tokens } from '../../theme/theme.js';
 
 const NODE_ICON = {
   INDIVIDUAL: <PersonIcon fontSize="small" />,
-  NZ_COMPANY: <BusinessIcon fontSize="small" />,
+  PRIVATE_COMPANY: <BusinessIcon fontSize="small" />,
+  LISTED_COMPANY: <DomainIcon fontSize="small" />,
+  TRUSTEE_COMPANY: <ShieldOutlinedIcon fontSize="small" />,
   TRUST: <AccountBalanceIcon fontSize="small" />,
-  PARTNERSHIP: <GroupIcon fontSize="small" />,
+  PARTNERSHIP: <HandshakeIcon fontSize="small" />,
+  LIMITED_PARTNERSHIP: <GroupIcon fontSize="small" />,
+  INCORPORATED_SOCIETY: <GroupsIcon fontSize="small" />,
+  CHARITY: <VolunteerActivismIcon fontSize="small" />,
+  GOVERNMENT_AGENCY: <AccountBalanceOutlinedIcon fontSize="small" />,
+  DECEASED_ESTATE: <GavelIcon fontSize="small" />,
   OTHER: <HelpOutlineIcon fontSize="small" />,
+  // Superseded by PRIVATE_COMPANY in V34; kept so a stored value still draws something.
+  NZ_COMPANY: <BusinessIcon fontSize="small" />,
 };
 
 const VERIFICATION_COLOR = {
@@ -154,7 +171,7 @@ function NodeBranch({
         <Typography variant="body2" sx={{ fontWeight: isSelected ? 600 : 400 }}>
           {node.displayName}
         </Typography>
-        <Chip size="small" label={prettyType(node.nodeType)} variant="outlined" />
+        <Chip size="small" label={nodeTypeLabel(node.nodeType)} variant="outlined" />
         {parentEdge && (
           <>
             {parentEdge.role && <Chip size="small" label={prettyType(parentEdge.role)} />}
@@ -171,11 +188,15 @@ function NodeBranch({
           label={node.verificationStatus.replaceAll('_', ' ').toLowerCase()}
         />
         <Box sx={{ flexGrow: 1 }} />
-        <Tooltip title="Add child">
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }}>
-            <AddIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        {/* An individual owns nothing, so there is no child to add. The server refuses the edge
+            either way; offering the control and then explaining a 400 is the worse order. */}
+        {!isLeafOnlyType(node.nodeType) && (
+          <Tooltip title="Add child">
+            <IconButton size="small" onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }}>
+              <AddIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title="More">
           <IconButton size="small" onClick={(e) => { e.stopPropagation(); setMenuAnchor(e.currentTarget); }}>
             <MoreVertSafe />

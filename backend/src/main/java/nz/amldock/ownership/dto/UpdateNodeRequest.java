@@ -1,7 +1,9 @@
 package nz.amldock.ownership.dto;
 
+import jakarta.validation.Valid;
 import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NodeVerificationStatus;
+import nz.amldock.ownership.PersonRole;
 
 import java.time.LocalDate;
 
@@ -25,6 +27,17 @@ public record UpdateNodeRequest(
         String settlorName,
 
         String extraJson,
+
+        /** The capacity this individual appears in on this deal. */
+        PersonRole personRole,
+        /** Free text; the form prompts for a link to a previous deal. */
+        String reference,
+
+        /**
+         * Changes to the shared person record. Applied to every deal this individual is on —
+         * see {@link PersonPatch}. Ignored for nodes that have no person behind them.
+         */
+        @Valid PersonPatch person,
 
         /** Manual verification mark from the Verifications tab. */
         NodeVerificationStatus verificationStatus,

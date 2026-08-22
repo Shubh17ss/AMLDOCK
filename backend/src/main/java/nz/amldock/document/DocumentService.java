@@ -158,7 +158,15 @@ public class DocumentService {
         // This write is the whole reason the queue lives in the database: it commits in the same
         // transaction as the document going ACTIVE, so the work item and the row it refers to can
         // never disagree. See ScheduledIdExtractionDispatcher, which drains it.
-        if (doc.getDocumentType().isOcrEligible()) {
+        // A document attached to an ownership node is filed against a person who is already in
+        // the structure — evidence about them, not the discovery of someone new. Without this,
+        // a reviewer attaching a passport on a node's Documents tab creates a *second*
+        // individual on the deal, which is the opposite of what attaching it to a node means.
+        // It is also why an ID added there is never read: there is no person record for
+        // extraction to write into, so the Textract call would be spend with nowhere to land.
+        boolean filedAgainstNode = doc.getOwnershipNodeId() != null;
+
+        if (doc.getDocumentType().isOcrEligible() && !filedAgainstNode) {
             doc.setOcrStatus(OcrStatus.PENDING);
 
             // The individual exists from here, not from a successful extraction. A broker who
@@ -183,6 +191,16 @@ public class DocumentService {
                 .stream().map(this::toDto).toList();
     }
 
+    /**
+     * Everything filed against one node, and — for an individual — the ID scans of the person
+     * behind it.
+     *
+     * <p>The two sets exist for different reasons and are joined here rather than at either
+     * source. Node documents are what a reviewer attached while working on this node; the
+     * person's scans are what the broker photographed, and they are linked to the <em>person</em>
+     * so they follow them across deals. Showing only the first left the tab empty on every
+     * extraction-created individual, which is most of them.
+     */
     @Transactional(readOnly = true)
     public List<DocumentDto> listForNode(Long nodeId) {
         OwnershipNode node = ownershipNodes.findById(nodeId)
@@ -191,8 +209,20 @@ public class DocumentService {
                 .orElseThrow(() -> new NotFoundException("Ownership structure not found"));
         // Reuse the deal-level read permission check so firm-user / broker scoping is honoured.
         mustLoadDealForRead(structure.getDealId());
-        return documents.findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(node.getId(), DocumentStatus.ACTIVE)
-                .stream().map(this::toDto).toList();
+
+        List<Document> found = new java.util.ArrayList<>(
+                documents.findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(node.getId(), DocumentStatus.ACTIVE));
+
+        if (node.getBeneficialOwnerId() != null) {
+            java.util.Set<Long> seen = found.stream().map(Document::getId)
+                    .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
+            // A document can legitimately be on both — the dedupe is on identity, not position.
+            documents.findAllByBeneficialOwnerIdAndStatus(node.getBeneficialOwnerId(), DocumentStatus.ACTIVE)
+                    .stream().filter(d -> seen.add(d.getId())).forEach(found::add);
+            found.sort(java.util.Comparator.comparing(Document::getCreatedAt).reversed());
+        }
+
+        return found.stream().map(this::toDto).toList();
     }
 
     @Transactional(readOnly = true)

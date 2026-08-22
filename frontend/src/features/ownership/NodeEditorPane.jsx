@@ -67,7 +67,19 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
         trustName: selected.trustName ?? '',
         trustDeedDocumentId: selected.trustDeedDocumentId ?? '',
         settlorName: selected.settlorName ?? '',
+        personRole: selected.personRole ?? '',
+        reference: selected.reference ?? '',
         notes: selected.notes ?? '',
+        // The shared record behind an individual. Absent on every entity type.
+        person: selected.person
+          ? {
+            email: selected.person.email ?? '',
+            phoneCountry: selected.person.phoneCountry ?? null,
+            phoneNumber: selected.person.phoneNumber ?? '',
+            occupation: selected.person.occupation ?? '',
+            sourceOfFunds: selected.person.sourceOfFunds ?? '',
+          }
+          : null,
       });
       setVerification({
         status: selected.verificationStatus ?? 'IN_PROGRESS',
@@ -244,9 +256,11 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
                            value={edgeForm.percentage}
                            onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
                            sx={{ width: 180 }} />
+                {/* "Link role", not "Role" — an individual now has a Type of its own, and two
+                    fields both called Role would be two answers to one apparent question. */}
                 <FormControl sx={{ minWidth: 200 }}>
-                  <InputLabel id="edge-role-label">Role</InputLabel>
-                  <Select labelId="edge-role-label" label="Role" value={edgeForm.role}
+                  <InputLabel id="edge-role-label">Link role</InputLabel>
+                  <Select labelId="edge-role-label" label="Link role" value={edgeForm.role}
                           onChange={(e) => setEdgeForm((p) => ({ ...p, role: e.target.value }))}>
                     <MenuItem value=""><em>None</em></MenuItem>
                     {EDGE_ROLES.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}
@@ -273,14 +287,23 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
       )}
 
       {tab === 1 && (
-        <Box sx={{ overflowY: 'auto' }}>
+        <Stack spacing={1.5} sx={{ overflowY: 'auto' }}>
+          {/* The list below includes the ID scans the broker captured — those are linked to the
+              person, not to this node, and were invisible here until now. */}
+          {selected.nodeType === 'INDIVIDUAL' && (
+            <Typography variant="caption" sx={{ color: tokens.muted }}>
+              Includes the ID scans captured for this person. Anything added here is filed as
+              evidence against this node — an ID uploaded here is not read automatically, and
+              does not create a second individual.
+            </Typography>
+          )}
           <DocumentUploader
             dealId={dealId}
             ownershipNodeId={selected.id}
             title={`Documents on ${selected.displayName}`}
             onViewDocument={onViewDocument}
           />
-        </Box>
+        </Stack>
       )}
 
       {tab === 2 && (

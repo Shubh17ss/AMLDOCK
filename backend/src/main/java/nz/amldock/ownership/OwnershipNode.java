@@ -84,11 +84,29 @@ public class OwnershipNode extends BaseEntity {
     private String verificationNotes;
 
     /**
-     * The person this node represents, when it came from a scanned ID (V31). Null for nodes
-     * added by hand and for every non-INDIVIDUAL type.
+     * The person this node represents. Every INDIVIDUAL has one from V34 — extraction-created
+     * nodes get theirs at upload, hand-added ones when the node is created — because the shared
+     * contact and background fields live on that record. Null for every other type.
      */
     @Column(name = "beneficial_owner_id")
     private Long beneficialOwnerId;
+
+    /**
+     * The capacity this individual appears in <em>on this deal</em>. Null for entity types.
+     *
+     * <p>Per-deal by design: shared person facts live on {@code beneficial_owner}, but a trustee
+     * here can be a guarantor on the next deal.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "person_role", length = 32)
+    private PersonRole personRole;
+
+    /**
+     * Free text. The form prompts for a link to a previous deal, but a file-note or external
+     * system reference is just as legitimate, so nothing parses this.
+     */
+    @Column(name = "reference")
+    private String reference;
 
     public Long getId() { return id; }
     public Long getOwnershipStructureId() { return ownershipStructureId; }
@@ -129,4 +147,8 @@ public class OwnershipNode extends BaseEntity {
     public void setVerificationNotes(String v) { this.verificationNotes = v; }
     public Long getBeneficialOwnerId() { return beneficialOwnerId; }
     public void setBeneficialOwnerId(Long v) { this.beneficialOwnerId = v; }
+    public PersonRole getPersonRole() { return personRole; }
+    public void setPersonRole(PersonRole v) { this.personRole = v; }
+    public String getReference() { return reference; }
+    public void setReference(String v) { this.reference = v; }
 }
