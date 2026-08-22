@@ -17,32 +17,13 @@ import { NodeDrawer } from '../features/deal/review/NodeDrawer.jsx';
 import { ReviewTabPanel } from '../features/deal/review/ReviewTabPanel.jsx';
 import { ParkedPanel } from '../features/deal/review/ParkedPanel.jsx';
 import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
-import { OverrideDialog, StatusNoteDialog } from '../features/deal/DecisionDialogs.jsx';
+import { DealStatusDialog } from '../features/deal/DealStatusDialog.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { DealCapturedInfo } from '../features/deal/DealCapturedInfo.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
-import { canClose, canHold, canRevert, canStartReview, canVerify, dealStatusLabel } from '../data/dealStatus.js';
-
-/** Wording for the three verbs that require a note. Keyed by the value held in `noteAction`. */
-const NOTE_DIALOGS = {
-  hold: {
-    title: 'Put this deal on hold?',
-    prompt: "It stays with compliance, parked. Say what you're waiting on — the broker sees this on the deal's timeline.",
-    confirmLabel: 'Put on hold', color: 'warning',
-  },
-  verify: {
-    title: 'Verify this deal?',
-    prompt: 'Record what you checked. This is the compliance sign-off and it is kept against the deal.',
-    confirmLabel: 'Verify', color: 'success',
-  },
-  revert: {
-    title: 'Send this deal back?',
-    prompt: "It returns to NEW so the broker can make changes. Say what needs doing — they see this on the deal's timeline.",
-    confirmLabel: 'Send back', color: 'primary',
-  },
-};
+import { canStartReview, dealStatusLabel, transitionsFrom } from '../data/dealStatus.js';
 
 /**
  * The six faces of a deal under review.
@@ -85,9 +66,7 @@ export function DealReviewScreen() {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [addDialog, setAddDialog]           = useState(null);
   const [attachNodeId, setAttachNodeId]     = useState(null);
-  // Which note-taking dialog is open: 'hold' | 'verify' | 'revert' | null.
-  const [noteAction, setNoteAction]         = useState(null);
-  const [overrideOpen, setOverrideOpen]     = useState(false);
+  const [statusOpen, setStatusOpen]         = useState(false);
   const [actionError, setActionError]       = useState(null);
 
   const dealQ = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
@@ -100,51 +79,48 @@ export function DealReviewScreen() {
     qc.invalidateQueries({ queryKey: ['deals', 'firm'] });
   };
 
-  const startReviewMut = useMutation({
-    mutationFn: () => startDealReview(dealId),
-    onSuccess: () => { invalidate(); showToast({ severity: 'success', message: 'Review started' }); },
-    onError: (e) => {
-      const msg = e.response?.data?.message || 'Could not start the review';
-      setActionError(msg);
-      showToast({ severity: 'error', message: msg });
-    },
-  });
-
-  const closeMut = useMutation({
-    mutationFn: () => closeDeal(dealId),
-    onSuccess: () => { invalidate(); showToast({ severity: 'success', message: 'Deal closed' }); },
-    onError: (e) => setActionError(e.response?.data?.message || 'Could not close the deal'),
-  });
+  /** What each move is called once it has happened, and how loudly to say it. */
+  const SAID = {
+    start:    { message: 'Review started', severity: 'success' },
+    verify:   { message: 'Deal verified', severity: 'success' },
+    hold:     { message: 'Deal put on hold', severity: 'warning' },
+    revert:   { message: 'Sent back to the broker', severity: 'warning' },
+    close:    { message: 'Deal closed', severity: 'success' },
+  };
 
   /**
-   * The three verbs that carry a note. One mutation rather than three: they differ only in which
-   * endpoint they hit and where the reviewer ends up afterwards.
+   * Every status change, through one mutation.
+   *
+   * <p>There were four, and between them they were the six buttons this screen used to carry.
+   * They only ever differed in which endpoint they hit, so the dialog picks the row and this
+   * reads the row's `action`.
    */
-  const noteMut = useMutation({
-    mutationFn: ({ action, note }) => {
-      if (action === 'hold') return holdDeal(dealId, note);
-      if (action === 'verify') return verifyDeal(dealId, note);
-      return revertDeal(dealId, note);
+  const statusMut = useMutation({
+    mutationFn: ({ transition, reason }) => {
+      switch (transition.action) {
+        case 'start':  return startDealReview(dealId);
+        case 'hold':   return holdDeal(dealId, reason);
+        case 'verify': return verifyDeal(dealId, reason);
+        case 'revert': return revertDeal(dealId, reason);
+        case 'close':  return closeDeal(dealId);
+        default:       return overrideDeal(dealId, transition.to, reason);
+      }
     },
     onSuccess: (_, vars) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ['dealNotes', dealId] });
-      setNoteAction(null);
-      const said = { hold: 'Deal put on hold', verify: 'Deal verified', revert: 'Sent back to the broker' };
-      showToast({ severity: vars.action === 'verify' ? 'success' : 'warning', message: said[vars.action] });
-      // Verifying and reverting both end this reviewer's involvement for now; a hold does not,
+      setStatusOpen(false);
+      setActionError(null);
+      const said = SAID[vars.transition.action]
+        ?? { message: `Status overridden to ${dealStatusLabel(vars.transition.to)}`, severity: 'warning' };
+      showToast(said);
+      // Verifying and sending back both end this reviewer's involvement for now; a hold does not,
       // so it stays on the deal.
-      if (vars.action !== 'hold') navigate('/cdd/deals');
+      if (vars.transition.action === 'verify' || vars.transition.action === 'revert') {
+        navigate('/cdd/deals');
+      }
     },
-  });
-
-  const overrideMut = useMutation({
-    mutationFn: ({ targetStatus, reason }) => overrideDeal(dealId, targetStatus, reason),
-    onSuccess: (_, vars) => {
-      invalidate();
-      setOverrideOpen(false);
-      showToast({ severity: 'warning', message: `Status overridden to ${vars.targetStatus}` });
-    },
+    onError: (e) => setActionError(e.response?.data?.message || 'Could not update the status'),
   });
 
   if (dealQ.isLoading) {
@@ -162,36 +138,9 @@ export function DealReviewScreen() {
 
   const selectedNode = tree.tree?.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
-  /**
-   * What this reviewer can do to the deal right now. Mirrors DealLifecycleService.RULES; the
-   * server rejects anything this lets through.
-   */
-  const actions = [
-    startable && {
-      key: 'start', label: 'Start review', variant: 'contained',
-      onClick: () => startReviewMut.mutate(), pending: startReviewMut.isPending,
-    },
-    canHold(deal.status) && {
-      key: 'hold', label: 'Put on hold', variant: 'outlined', color: 'warning',
-      onClick: () => setNoteAction('hold'),
-    },
-    canVerify(deal.status) && {
-      key: 'verify', label: 'Verify', variant: 'contained', color: 'success',
-      onClick: () => setNoteAction('verify'),
-    },
-    canClose(deal.status) && {
-      key: 'close', label: 'Close deal', variant: 'contained',
-      onClick: () => closeMut.mutate(), pending: closeMut.isPending,
-    },
-    canRevert(deal.status) && {
-      key: 'revert', label: 'Send back', variant: 'outlined',
-      onClick: () => setNoteAction('revert'),
-    },
-    showOverride && {
-      key: 'override', label: 'Override', variant: 'outlined', color: 'warning',
-      onClick: () => setOverrideOpen(true),
-    },
-  ].filter(Boolean);
+  // Whether the deal has anywhere to go. A closed deal has not, and there is no sense offering a
+  // button that opens onto nothing.
+  const canUpdateStatus = transitionsFrom(deal.status).length > 0 || showOverride;
 
   return (
     <Stack spacing={2}>
@@ -213,14 +162,13 @@ export function DealReviewScreen() {
           )}
         </Stack>
 
-        {actions.length > 0 && (
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap justifyContent="flex-end">
-            {actions.map((a) => (
-              <Button key={a.key} variant={a.variant} color={a.color} size="small"
-                      onClick={a.onClick} disabled={a.pending}>
-                {a.pending ? 'Working…' : a.label}
-              </Button>
-            ))}
+        {/* One button. It used to be up to six verbs, and "Verify" beside an ownership tree read
+            as an action on the tree rather than on the deal. */}
+        {canUpdateStatus && (
+          <Stack direction="row" justifyContent="flex-end">
+            <Button variant="contained" size="small" onClick={() => setStatusOpen(true)}>
+              Update status
+            </Button>
           </Stack>
         )}
       </Stack>
@@ -332,25 +280,17 @@ export function DealReviewScreen() {
           : null}
         isFirstNode={isFirstNode}
         useTree={tree}
+        // Straight into the panel that asks for everything the picker no longer does.
+        onCreated={setSelectedNodeId}
       />
 
-      <StatusNoteDialog
-        open={Boolean(noteAction)}
-        title={NOTE_DIALOGS[noteAction]?.title}
-        prompt={NOTE_DIALOGS[noteAction]?.prompt}
-        confirmLabel={NOTE_DIALOGS[noteAction]?.confirmLabel}
-        confirmColor={NOTE_DIALOGS[noteAction]?.color}
-        onClose={() => setNoteAction(null)}
-        submitting={noteMut.isPending}
-        onSubmit={(note) => noteMut.mutateAsync({ action: noteAction, note })}
-      />
-
-      <OverrideDialog
-        open={overrideOpen}
+      <DealStatusDialog
+        open={statusOpen}
         deal={deal}
-        onClose={() => setOverrideOpen(false)}
-        submitting={overrideMut.isPending}
-        onSubmit={(targetStatus, reason) => overrideMut.mutateAsync({ targetStatus, reason })}
+        canOverride={showOverride}
+        onClose={() => setStatusOpen(false)}
+        submitting={statusMut.isPending}
+        onSubmit={(transition, reason) => statusMut.mutateAsync({ transition, reason })}
       />
 
       <AttachToParentDialog

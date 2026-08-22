@@ -50,7 +50,7 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose }) {
       }}
       PaperProps={{
         sx: motion.respectful({
-          width: { xs: '100%', sm: 480 },
+          width: { xs: '100%', sm: 560, md: 640 },
           maxWidth: '100%',
           display: 'flex',
           flexDirection: 'column',
@@ -108,14 +108,15 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose }) {
         sx={{
           px: 1,
           borderBottom: `1px solid ${tokens.hairline}`,
-          minHeight: 40,
+          // No minHeight here or on the tab. The theme's track carries 5px of padding around the
+          // pill, so its height and the tab's are one sum — 5 + 38 + 5 — and overriding half of it
+          // left the pill sitting off-centre in its own highlight.
           '& .MuiTab-root': {
-            minHeight: 40,
             textTransform: 'none',
             fontSize: '0.78rem',
             fontFamily: fonts.body,
-            // Five tabs have to fit 480px without the last one clipping. The theme's default
-            // tab padding is sized for a page-width strip, not a panel.
+            // Horizontal padding still comes down: the theme's 18px is sized for a page-width
+            // strip, and five tabs have to fit a panel without the last one clipping.
             minWidth: 0,
             px: 1.25,
           },
@@ -132,10 +133,9 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose }) {
           flexGrow: 1,
           overflowY: 'auto',
           px: 2.5,
-          // An outlined field draws its shrunk label about 9px above its own border box, and a
-          // scroll container clips whatever sits above its content edge. Every tab starts with
-          // one of these, so the top gets more room than the bottom needs.
-          pt: 3.5,
+          // Every tab opens on a field or a heading, and a label sitting tight under the tab strip
+          // reads as part of it. The top gets more room than the bottom needs.
+          pt: 4,
           pb: 2.5,
           // Keyed on the tab so switching re-runs the entrance — the same quiet rise the deal
           // panels use, so the two tab strips behave alike.

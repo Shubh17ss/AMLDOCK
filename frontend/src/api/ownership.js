@@ -31,12 +31,32 @@ export const nodeTypeLabel = (value) =>
   ?? value
   ?? '—';
 
+/**
+ * What a node's display name is called, per type. It is the same column either way — only the
+ * question changes, and asking a trust for a "display name" is asking nobody's question.
+ */
+const NAME_LABEL = {
+  INDIVIDUAL: 'Name',
+  PRIVATE_COMPANY: 'Company name',
+  LISTED_COMPANY: 'Company name',
+  TRUSTEE_COMPANY: 'Company name',
+  TRUST: 'Trust name',
+  PARTNERSHIP: 'Partnership name',
+  LIMITED_PARTNERSHIP: 'Partnership name',
+  INCORPORATED_SOCIETY: 'Society name',
+  CHARITY: 'Charity name',
+  GOVERNMENT_AGENCY: 'Agency name',
+  DECEASED_ESTATE: 'Estate name',
+};
+
+export const nameLabelFor = (nodeType) => NAME_LABEL[nodeType] ?? 'Display name';
+
 /** An individual never owns anything, so the tree offers no way to give one children. */
 export const isLeafOnlyType = (value) => value === 'INDIVIDUAL';
 
 /**
- * The capacity an individual appears in on one deal. Distinct from EDGE_ROLES below, which
- * describes a link between two nodes and carries the ownership percentage.
+ * The capacity an individual appears in on one deal. An edge between two nodes carries the
+ * ownership percentage; this is the answer to what the person is, and the only role the UI sets.
  *
  * Keep in sync with `nz.amldock.ownership.PersonRole` and `chk_ownership_node_person_role`.
  */
@@ -129,13 +149,6 @@ export const NOMINEE_OPTIONS = [
   { value: 'NOT_ASKED', label: 'Not asked' },
   { value: 'YES', label: 'Yes' },
   { value: 'NO', label: 'No' },
-];
-
-export const EDGE_ROLES = [
-  { value: 'TRUSTEE', label: 'Trustee' },
-  { value: 'BENEFICIARY', label: 'Beneficiary' },
-  { value: 'SHAREHOLDER', label: 'Shareholder' },
-  { value: 'PARTNER', label: 'Partner' },
 ];
 
 // The same catalogue the deal form scans from — a node's ID type and a scanned document's type

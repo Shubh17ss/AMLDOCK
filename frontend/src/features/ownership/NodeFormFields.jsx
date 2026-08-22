@@ -2,8 +2,7 @@ import {
   Box, Divider, FormControl, FormLabel, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import {
-  ID_DOCUMENT_TYPES, NODE_TYPES, NOMINEE_OPTIONS, PERSON_ROLES,
-  TRUST_HOLDING_COMPLEXITY, TRUST_TYPES,
+  NODE_TYPES, NOMINEE_OPTIONS, PERSON_ROLES, TRUST_HOLDING_COMPLEXITY, TRUST_TYPES, nameLabelFor,
 } from '../../api/ownership.js';
 import { CountrySelect } from '../../components/CountrySelect.jsx';
 import { PhoneField } from '../../components/PhoneField.jsx';
@@ -17,21 +16,6 @@ function businessNumberLabel(country) {
 }
 
 const YES_NO = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
-
-/** What the node's display name is called, per type. It is the same column either way. */
-const NAME_LABEL = {
-  INDIVIDUAL: 'Name',
-  PRIVATE_COMPANY: 'Company name',
-  LISTED_COMPANY: 'Company name',
-  TRUSTEE_COMPANY: 'Company name',
-  TRUST: 'Trust name',
-  PARTNERSHIP: 'Partnership name',
-  LIMITED_PARTNERSHIP: 'Partnership name',
-  INCORPORATED_SOCIETY: 'Society name',
-  CHARITY: 'Charity name',
-  GOVERNMENT_AGENCY: 'Agency name',
-  DECEASED_ESTATE: 'Estate name',
-};
 
 /**
  * Types whose only extra field is where they are governed from.
@@ -150,7 +134,7 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
           </Select>
         </FormControl>
       )}
-      <TextField label={NAME_LABEL[value.nodeType] ?? 'Display name'}
+      <TextField label={nameLabelFor(value.nodeType)}
                  value={value.displayName ?? ''}
                  onChange={(e) => set({ displayName: e.target.value })} required />
 
@@ -196,26 +180,14 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
 
           {/* The node's own column, not the person's. Extraction keeps the two in step through
               refreshExtractedIndividual, and reading one while writing the other would make an
-              edit look like it had not taken. */}
+              edit look like it had not taken.
+
+              The ID document's own type, number and country used to be asked for here. They are
+              facts about a document, and the document is one tab across — asking twice invites two
+              answers. */}
           <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
                      value={value.dateOfBirth ?? ''}
                      onChange={(e) => set({ dateOfBirth: e.target.value })} />
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <FormControl sx={{ minWidth: 180 }}>
-              <InputLabel id="id-doc-type-label">ID document type</InputLabel>
-              <Select labelId="id-doc-type-label" label="ID document type"
-                      value={value.idDocumentType ?? ''}
-                      onChange={(e) => set({ idDocumentType: e.target.value || null })}>
-                <MenuItem value=""><em>None</em></MenuItem>
-                {ID_DOCUMENT_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <TextField label="ID document number" value={value.idDocumentNumber ?? ''}
-                       onChange={(e) => set({ idDocumentNumber: e.target.value })} fullWidth />
-            <TextField label="Country" placeholder="NZ" value={value.idDocumentCountry ?? ''}
-                       onChange={(e) => set({ idDocumentCountry: e.target.value })}
-                       sx={{ width: { sm: 120 } }} />
-          </Stack>
         </>
       )}
 
@@ -399,6 +371,9 @@ export function buildNodePayload(form) {
     nodeType: form.nodeType,
     displayName: form.displayName,
     dateOfBirth: norm(form.dateOfBirth),
+    // Still sent, though nothing above asks for them: the editor hydrates the form from the node,
+    // so these carry back whatever extraction read off the scan. Dropping them would make Save
+    // details quietly erase it.
     idDocumentType: norm(form.idDocumentType),
     idDocumentNumber: norm(form.idDocumentNumber),
     idDocumentCountry: norm(form.idDocumentCountry),

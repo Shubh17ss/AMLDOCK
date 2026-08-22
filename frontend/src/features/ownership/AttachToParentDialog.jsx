@@ -3,7 +3,7 @@ import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
-import { EDGE_ROLES, isLeafOnlyType, nodeTypeLabel } from '../../api/ownership.js';
+import { isLeafOnlyType, nodeTypeLabel } from '../../api/ownership.js';
 import { tokens } from '../../theme/theme.js';
 
 /**
@@ -16,7 +16,6 @@ import { tokens } from '../../theme/theme.js';
 export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
   const [parentId, setParentId] = useState('');
   const [percentage, setPercentage] = useState('');
-  const [role, setRole] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -24,7 +23,6 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
     if (open) {
       setParentId('');
       setPercentage('');
-      setRole('');
       setError(null);
     }
   }, [open, node?.id]);
@@ -64,7 +62,6 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
         parentNodeId: parentId,
         childNodeId: node.id,
         percentage: percentage === '' ? null : Number(percentage),
-        role: role || null,
       });
       onClose();
     } catch (err) {
@@ -125,20 +122,6 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
                 sx={{ width: 180 }}
                 helperText="Optional"
               />
-              <FormControl sx={{ minWidth: 220 }}>
-                <InputLabel id="role-label">Link role</InputLabel>
-                <Select
-                  labelId="role-label"
-                  label="Link role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                >
-                  <MenuItem value=""><em>None</em></MenuItem>
-                  {EDGE_ROLES.map((r) => (
-                    <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
             </Stack>
 
             {error && <Alert severity="error">{error}</Alert>}

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Chip, Divider, FormControl, FormControlLabel, FormLabel,
-  InputLabel, MenuItem, Radio, RadioGroup, Select, Stack, TextField, Typography,
+  Radio, RadioGroup, Stack, TextField, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ACCEPTED_DOCUMENT_TYPES, EDGE_ROLES } from '../../api/ownership.js';
+import { ACCEPTED_DOCUMENT_TYPES } from '../../api/ownership.js';
 import { listNodeDocuments, uploadToS3 } from '../../api/documents.js';
 import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
@@ -37,7 +37,7 @@ export function NodeEditorPane({
   tab = 'details',
 }) {
   const [form, setForm] = useState(null);
-  const [edgeForm, setEdgeForm] = useState({ percentage: '', role: '' });
+  const [edgeForm, setEdgeForm] = useState({ percentage: '' });
   const [verification, setVerification] = useState({ status: 'IN_PROGRESS', notes: '' });
   const [verificationVoice, setVerificationVoice] = useState(null); // Blob | null
   const [error, setError] = useState(null);
@@ -117,14 +117,7 @@ export function NodeEditorPane({
   const nodeVoiceNotes = (nodeDocsQ.data ?? []).filter((d) => d.documentType === 'VOICE_NOTE');
 
   useEffect(() => {
-    if (incomingEdge) {
-      setEdgeForm({
-        percentage: incomingEdge.percentage ?? '',
-        role: incomingEdge.role ?? '',
-      });
-    } else {
-      setEdgeForm({ percentage: '', role: '' });
-    }
+    setEdgeForm({ percentage: incomingEdge?.percentage ?? '' });
   }, [incomingEdge?.id]);
 
   if (!selected || !form) return null;
@@ -186,9 +179,11 @@ export function NodeEditorPane({
     try {
       await useTree.updateEdge.mutateAsync({
         edgeId: incomingEdge.id,
+        // No role in the payload. updateEdge reads a null role as "leave alone", so a role
+        // captured before this field went away stays on the edge rather than being cleared by an
+        // unrelated save.
         payload: {
           percentage: edgeForm.percentage === '' ? null : Number(edgeForm.percentage),
-          role: edgeForm.role || null,
         },
       });
     } catch (err) {
@@ -235,30 +230,24 @@ export function NodeEditorPane({
     <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
+      {/* None of the tabs below scrolls on its own. This pane used to be a fixed-height panel and
+          kept the scrolling; inside the drawer the body already scrolls, and an `overflow` box here
+          clips whatever sits above its content edge — which is exactly where an outlined field
+          draws its floating label. That was the chopped heading on each tab's first field. */}
       {tab === 'details' && (
-        <Stack spacing={3} sx={{ overflowY: 'auto' }}>
+        <Stack spacing={3}>
           <NodeFormFields value={form} onChange={setForm} includeTypeSelector={false} />
 
           {incomingEdge && (
             <>
               <Divider />
               <Typography variant="subtitle2">Link from parent</Typography>
-              <Stack direction="row" spacing={2}>
-                <TextField label="Percentage" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }}
-                           value={edgeForm.percentage}
-                           onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
-                           sx={{ width: 180 }} />
-                {/* "Link role", not "Role" — an individual now has a Type of its own, and two
-                    fields both called Role would be two answers to one apparent question. */}
-                <FormControl sx={{ minWidth: 200 }}>
-                  <InputLabel id="edge-role-label">Link role</InputLabel>
-                  <Select labelId="edge-role-label" label="Link role" value={edgeForm.role}
-                          onChange={(e) => setEdgeForm((p) => ({ ...p, role: e.target.value }))}>
-                    <MenuItem value=""><em>None</em></MenuItem>
-                    {EDGE_ROLES.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Stack>
+              {/* Percentage only. The edge used to carry a Link role as well, which was a second
+                  answer to the question Type already asks on the node itself. */}
+              <TextField label="Percentage" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }}
+                         value={edgeForm.percentage}
+                         onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
+                         sx={{ width: 180 }} />
               <Stack direction="row" spacing={1}>
                 <Button size="small" variant="outlined" onClick={saveEdge}
                         disabled={useTree.updateEdge.isPending}>Save link</Button>
@@ -284,7 +273,7 @@ export function NodeEditorPane({
       )}
 
       {tab === 'documents' && (
-        <Stack spacing={1.5} sx={{ overflowY: 'auto' }}>
+        <Stack spacing={1.5}>
           {/* The list below includes the ID scans the broker captured — those are linked to the
               person, not to this node, and were invisible here until now. */}
           {selected.nodeType === 'INDIVIDUAL' && (
@@ -331,7 +320,7 @@ export function NodeEditorPane({
       />
 
       {tab === 'verification' && (
-        <Stack spacing={3} sx={{ overflowY: 'auto' }}>
+        <Stack spacing={3}>
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Manual verification</Typography>
             <Typography variant="caption" sx={{ color: tokens.muted }}>

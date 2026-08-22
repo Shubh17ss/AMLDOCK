@@ -62,12 +62,54 @@ export const canEditContent = (status, role) =>
     ? REVIEWER_EDITABLE.includes(status)
     : isEditable(status);
 
+/**
+ * Every status change a reviewer can make, as a table.
+ *
+ * <p>Mirrors `DealLifecycleService.RULES`, `noteRequired` included — that is the server's own
+ * column, and the Update status dialog reads it to decide whether to ask for a reason. Handover
+ * is absent on purpose: it is the submit action of the broker's create form, not a status a
+ * reviewer picks off a list.
+ *
+ * <p>`blurb` is what the reviewer reads beside each status. It says what the status means and who
+ * the deal lands on, because "Verified" alone is exactly the button this table replaced.
+ */
+export const STATUS_TRANSITIONS = [
+  {
+    to: 'REVIEW', from: ['HANDOVER'], action: 'start', noteRequired: false,
+    blurb: 'Take this deal on. It stays with compliance until you decide.',
+  },
+  {
+    to: 'VERIFIED', from: ['REVIEW'], action: 'verify', noteRequired: true,
+    blurb: 'Compliance sign-off. Record what you checked — it is kept against the deal.',
+  },
+  {
+    to: 'ON_HOLD', from: ['REVIEW'], action: 'hold', noteRequired: true,
+    blurb: "Parked with compliance. Say what you're waiting on; the broker sees it on the timeline.",
+  },
+  {
+    to: 'NEW', from: ['HANDOVER', 'REVIEW', 'ON_HOLD'], action: 'revert', noteRequired: true,
+    blurb: 'Back to the broker for changes. Say what needs doing — they see it on the timeline.',
+  },
+  {
+    to: 'CLOSED', from: ['VERIFIED'], action: 'close', noteRequired: false,
+    blurb: 'The file is finished. Nothing further happens to this deal.',
+  },
+];
+
+/** Where a deal in this status can go next, in the order a reviewer should read them. */
+export const transitionsFrom = (status) =>
+  STATUS_TRANSITIONS.filter((t) => t.from.includes(status));
+
+/** Whether the table holds this move. The predicates below are all this question, narrowed. */
+const allows = (action, status) =>
+  STATUS_TRANSITIONS.some((t) => t.action === action && t.from.includes(status));
+
 export const canHandover = (s) => s === 'NEW';
-export const canStartReview = (s) => s === 'HANDOVER';
-export const canHold = (s) => s === 'REVIEW';
-export const canVerify = (s) => s === 'REVIEW';
-export const canClose = (s) => s === 'VERIFIED';
-export const canRevert = (s) => s === 'HANDOVER' || s === 'REVIEW' || s === 'ON_HOLD';
+export const canStartReview = (s) => allows('start', s);
+export const canHold = (s) => allows('hold', s);
+export const canVerify = (s) => allows('verify', s);
+export const canClose = (s) => allows('close', s);
+export const canRevert = (s) => allows('revert', s);
 
 /**
  * Whether the broker may revert it themselves.

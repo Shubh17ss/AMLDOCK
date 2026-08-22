@@ -7,18 +7,6 @@ import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import PersonIcon from '@mui/icons-material/Person';
-import BusinessIcon from '@mui/icons-material/Business';
-import DomainIcon from '@mui/icons-material/Domain';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import GroupIcon from '@mui/icons-material/Group';
-import HandshakeIcon from '@mui/icons-material/Handshake';
-import GroupsIcon from '@mui/icons-material/Groups';
-import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
-import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
-import GavelIcon from '@mui/icons-material/Gavel';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import HomeWorkOutlinedIcon from '@mui/icons-material/HomeWorkOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddLinkIcon from '@mui/icons-material/AddLink';
@@ -27,24 +15,8 @@ import { isLeafOnlyType, nodeTypeLabel, personRoleLabel, trustTypeLabel } from '
 import { countryName } from '../../data/countries.js';
 import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
 import { propertyTypeLabel } from '../../data/propertyTypes.js';
+import { visualFor, tintOf } from './nodeTypeVisual.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
-
-const NODE_ICON = {
-  INDIVIDUAL: <PersonIcon fontSize="small" />,
-  PRIVATE_COMPANY: <BusinessIcon fontSize="small" />,
-  LISTED_COMPANY: <DomainIcon fontSize="small" />,
-  TRUSTEE_COMPANY: <ShieldOutlinedIcon fontSize="small" />,
-  TRUST: <AccountBalanceIcon fontSize="small" />,
-  PARTNERSHIP: <HandshakeIcon fontSize="small" />,
-  LIMITED_PARTNERSHIP: <GroupIcon fontSize="small" />,
-  INCORPORATED_SOCIETY: <GroupsIcon fontSize="small" />,
-  CHARITY: <VolunteerActivismIcon fontSize="small" />,
-  GOVERNMENT_AGENCY: <AccountBalanceOutlinedIcon fontSize="small" />,
-  DECEASED_ESTATE: <GavelIcon fontSize="small" />,
-  OTHER: <HelpOutlineIcon fontSize="small" />,
-  // Superseded by PRIVATE_COMPANY in V34; kept so a stored value still draws something.
-  NZ_COMPANY: <BusinessIcon fontSize="small" />,
-};
 
 const VERIFICATION_COLOR = {
   NOT_STARTED: 'default',
@@ -142,8 +114,8 @@ export function OwnershipTreeBuilder({
             Who stands behind this property, down to the people
           </Typography>
         </Box>
-        <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={onAddRoot}>
-          {root ? 'Add owner' : 'Add first owner'}
+        <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={onAddRoot}>
+          Add owner
         </Button>
       </Stack>
 
@@ -262,6 +234,7 @@ function NodeBranch({
   // (with parentEdge set) and should NOT show the attach action.
   const isDetached = !isRoot && !parentEdge;
   const riskReason = riskReasonFor(node);
+  const visual = visualFor(node.nodeType);
 
   // Captured at first render and never recomputed: a tree that re-animated on every save would
   // be exhausting to work in.
@@ -333,16 +306,17 @@ function NodeBranch({
             {expanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
           </IconButton>
 
+          {/* The type's colour holds whether the row is selected or not — identity should not
+              change when you click on something. The row itself carries the selected state. */}
           <Box
             sx={{
               width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
               display: 'grid', placeItems: 'center',
-              backgroundColor: isSelected ? tokens.blue : tokens.tileRaised,
-              color: isSelected ? '#fff' : tokens.muted,
-              transition: `background-color ${motion.swift} ease`,
+              backgroundColor: tintOf(visual.hue),
+              color: visual.hue,
             }}
           >
-            {isRoot ? <StarIcon fontSize="small" /> : NODE_ICON[node.nodeType]}
+            {isRoot ? <StarIcon fontSize="small" /> : <visual.Icon fontSize="small" />}
           </Box>
 
           <Box sx={{ minWidth: 0, flexGrow: 1 }}>
@@ -382,10 +356,6 @@ function NodeBranch({
               label={`${Number(parentEdge.percentage).toFixed(0)}%`}
               sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', flexShrink: 0 }}
             />
-          )}
-          {parentEdge?.role && (
-            <Chip size="small" variant="outlined" label={prettyType(parentEdge.role)}
-                  sx={{ fontSize: '0.66rem', flexShrink: 0, display: { xs: 'none', sm: 'flex' } }} />
           )}
           <Chip
             size="small"
@@ -466,11 +436,6 @@ function NodeBranch({
       </Box>
     </Box>
   );
-}
-
-function prettyType(value) {
-  if (!value) return '';
-  return value.replaceAll('_', ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
 }
 
 function indexTree(tree) {
