@@ -5,7 +5,9 @@ import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.document.dto.DocumentDto;
+import nz.amldock.document.dto.UploadUrlRequest;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
@@ -32,6 +34,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -186,7 +189,123 @@ class DocumentServiceNodeScopeTest {
         assertThat(doc.getIdSide()).isEqualTo(IdSide.FRONT);
     }
 
+    /* ---------- accepted document types (V35) ---------- */
+
+    @Test
+    void aPrivateCompanyRefusesADocumentTypeItDoesNotProduce() {
+        // Enforced at the upload, not only in the picker: a restriction that lives in a dropdown
+        // is a suggestion.
+        stubNodeForUpload(NodeType.PRIVATE_COMPANY);
+
+        assertThatThrownBy(() -> service.presignUpload(uploadRequest(DocumentType.TRUST_DEED)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not accept");
+
+        verify(documents, never()).save(any());
+    }
+
+    @Test
+    void aPrivateCompanyAcceptsItsOwnEvidence() {
+        stubNodeForUpload(NodeType.PRIVATE_COMPANY);
+        when(documents.save(any())).thenAnswer(i -> {
+            Document d = i.getArgument(0);
+            ReflectionTestUtils.setField(d, "id", 42L);
+            return d;
+        });
+        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+
+        service.presignUpload(uploadRequest(DocumentType.FINANCIAL_STATEMENTS));
+
+        verify(documents).save(any(Document.class));
+    }
+
+    @Test
+    void anUnrestrictedTypeStillAcceptsAnything() {
+        // Only private company carries a list today. Asserting one for a type nobody has worked
+        // through yet would be a guess with teeth.
+        stubNodeForUpload(NodeType.TRUST);
+        when(documents.save(any())).thenAnswer(i -> {
+            Document d = i.getArgument(0);
+            ReflectionTestUtils.setField(d, "id", 42L);
+            return d;
+        });
+        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+
+        service.presignUpload(uploadRequest(DocumentType.TRUST_DEED));
+
+        verify(documents).save(any(Document.class));
+    }
+
+    @Test
+    void aTrustAcceptsItsOwnEvidenceAndRefusesACompanyExtract() {
+        stubNodeForUpload(NodeType.TRUST);
+
+        assertThatThrownBy(() -> service.presignUpload(uploadRequest(DocumentType.COMPANY_EXTRACT)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not accept");
+
+        when(documents.save(any())).thenAnswer(i -> {
+            Document d = i.getArgument(0);
+            ReflectionTestUtils.setField(d, "id", 42L);
+            return d;
+        });
+        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+
+        service.presignUpload(uploadRequest(DocumentType.TRUSTEES_RESOLUTION));
+
+        verify(documents).save(any(Document.class));
+    }
+
+    @Test
+    void eachEntityTypeAcceptsOnlyItsOwnEvidence() {
+        // One case per restricted type, so a list edited in one place and not the other is
+        // caught here rather than by a broker hitting a 400.
+        assertAccepts(NodeType.TRUSTEE_COMPANY, DocumentType.COMPANY_EXTRACT);
+        assertRefuses(NodeType.TRUSTEE_COMPANY, DocumentType.BANK_STATEMENT);
+
+        assertAccepts(NodeType.LIMITED_PARTNERSHIP, DocumentType.LIMITED_PARTNERSHIP_EXTRACT);
+        assertRefuses(NodeType.LIMITED_PARTNERSHIP, DocumentType.TRUST_DEED);
+
+        assertAccepts(NodeType.PARTNERSHIP, DocumentType.PARTNERSHIP_AGREEMENT);
+        // A partnership has no registry extract of its own — that is the limited one.
+        assertRefuses(NodeType.PARTNERSHIP, DocumentType.LIMITED_PARTNERSHIP_EXTRACT);
+
+        assertAccepts(NodeType.LISTED_COMPANY, DocumentType.EXCHANGE_REGISTRATION_SEARCH_RESULT);
+        assertRefuses(NodeType.LISTED_COMPANY, DocumentType.BANK_STATEMENT);
+
+        assertAccepts(NodeType.INCORPORATED_SOCIETY, DocumentType.SOCIETY_RULES);
+        assertAccepts(NodeType.CHARITY, DocumentType.CHARITIES_REGISTER_INFORMATION);
+        assertRefuses(NodeType.CHARITY, DocumentType.REGISTRY_SEARCH_RESULT);
+
+        assertAccepts(NodeType.GOVERNMENT_AGENCY, DocumentType.REGISTRY_SEARCH_RESULT);
+        assertAccepts(NodeType.DECEASED_ESTATE, DocumentType.PROBATE_OR_WILL);
+        assertRefuses(NodeType.DECEASED_ESTATE, DocumentType.TRUST_DEED);
+
+        // OTHER exists precisely because nobody could say in advance what it holds.
+        assertAccepts(NodeType.OTHER, DocumentType.TRUST_DEED);
+    }
+
+    private void assertAccepts(NodeType type, DocumentType doc) {
+        assertThat(type.accepts(doc))
+                .as("%s should accept %s", type, doc).isTrue();
+    }
+
+    private void assertRefuses(NodeType type, DocumentType doc) {
+        assertThat(type.accepts(doc))
+                .as("%s should refuse %s", type, doc).isFalse();
+    }
+
     /* ---------- helpers ---------- */
+
+    private void stubNodeForUpload(NodeType type) {
+        stubNode(type, null);
+    }
+
+    private static UploadUrlRequest uploadRequest(DocumentType type) {
+        return new UploadUrlRequest("evidence.pdf", "application/pdf", 1024L, type,
+                DEAL_ID, NODE_ID, null, null);
+    }
+
 
     private void stubNode(NodeType type, Long personId) {
         OwnershipNode node = new OwnershipNode();

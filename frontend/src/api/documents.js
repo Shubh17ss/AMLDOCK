@@ -46,8 +46,22 @@ export const DOCUMENT_TYPES = [
   { value: 'LETTER_FROM_TRUSTED_REFEREE',   label: 'Letter from trusted referee' },
 
   // Property and entity documents, from before the CDD catalogue
+  { value: 'COMPANY_EXTRACT',               label: "Company's extract" },
+  { value: 'OWNERSHIP_STRUCTURE',           label: 'Ownership structure' },
+  { value: 'COMPANY_CONSTITUTION',          label: "Company's constitution" },
+  { value: 'FINANCIAL_STATEMENTS',          label: 'Financial statements' },
+  { value: 'REGISTRY_SEARCH_RESULT',        label: 'Registry search result' },
   { value: 'TRUST_DEED',                    label: 'Trust deed' },
-  { value: 'COMPANY_CERT',                  label: 'Company certificate' },
+  { value: 'AMENDMENTS_OR_VARIATIONS',      label: 'Amendments or variations' },
+  { value: 'TRUSTEES_RESOLUTION',           label: 'Trustees resolution' },
+  { value: 'LIMITED_PARTNERSHIP_EXTRACT',   label: "Limited partnership's extract" },
+  { value: 'PARTNERSHIP_STRUCTURE',         label: 'Partnership structure' },
+  { value: 'PARTNERSHIP_AGREEMENT',         label: 'Partnership agreement' },
+  { value: 'EXCHANGE_REGISTRATION_SEARCH_RESULT', label: 'Exchange registration search result' },
+  { value: 'SOCIETY_RULES',                 label: 'Society rules' },
+  { value: 'CHARITIES_REGISTER_INFORMATION', label: 'Charities register information' },
+  { value: 'PROBATE_OR_WILL',               label: 'Probate or will' },
+  { value: 'COMPANY_CERT',                  label: 'Certificate of incorporation' },
   { value: 'TITLE_DOC',                     label: 'Title document' },
   { value: 'SALE_AGREEMENT',                label: 'Sale agreement' },
 

@@ -57,6 +57,9 @@ class DealServiceRiskAndPatchTest {
     @Mock DealNoteRepository dealNotes;
     @Mock BeneficialOwnerService beneficialOwners;
     @Mock DocumentRepository documents;
+    @Mock nz.amldock.ownership.OwnershipStructureRepository structures;
+    @Mock nz.amldock.ownership.OwnershipNodeRepository nodes;
+    @Mock nz.amldock.audit.AuditService audit;
 
     DealService service;
 
@@ -66,9 +69,11 @@ class DealServiceRiskAndPatchTest {
 
     @BeforeEach
     void setUp() {
+        // The real DealRiskService, not a mock: these tests exist to pin the derivation, and a
+        // mocked one would assert only that DealService calls something.
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(), new DealNoteService(dealNotes, documents, users),
-                beneficialOwners);
+                beneficialOwners, new DealRiskService(deals, structures, nodes, audit));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 

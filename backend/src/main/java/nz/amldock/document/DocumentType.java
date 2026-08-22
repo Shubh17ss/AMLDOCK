@@ -63,6 +63,36 @@ public enum DocumentType {
     WEB_SEARCH_RESULT(Extraction.NONE),
     LETTER_FROM_TRUSTED_REFEREE(Extraction.NONE),
 
+    /* ---------- entity evidence (V35) ---------- */
+
+    /** A companies-register extract: directors, shareholders, status as at a date. */
+    COMPANY_EXTRACT(Extraction.NONE),
+    /** A structure chart or written account of who owns whom. */
+    OWNERSHIP_STRUCTURE(Extraction.NONE),
+    COMPANY_CONSTITUTION(Extraction.NONE),
+    FINANCIAL_STATEMENTS(Extraction.NONE),
+    /** The output of a companies-register or similar search, kept as evidence it was run. */
+    REGISTRY_SEARCH_RESULT(Extraction.NONE),
+
+    /* ---------- trust evidence (V36) ---------- */
+
+    /** A deed of variation or amendment — a trust deed is rarely the whole story. */
+    AMENDMENTS_OR_VARIATIONS(Extraction.NONE),
+    TRUSTEES_RESOLUTION(Extraction.NONE),
+
+    /* ---------- partnership, listed company, society, charity, estate (V37) ---------- */
+
+    LIMITED_PARTNERSHIP_EXTRACT(Extraction.NONE),
+    /** A structure chart or written account of who the partners are. */
+    PARTNERSHIP_STRUCTURE(Extraction.NONE),
+    PARTNERSHIP_AGREEMENT(Extraction.NONE),
+    /** Evidence the entity is listed: a search of the exchange it is registered on. */
+    EXCHANGE_REGISTRATION_SEARCH_RESULT(Extraction.NONE),
+    SOCIETY_RULES(Extraction.NONE),
+    CHARITIES_REGISTER_INFORMATION(Extraction.NONE),
+    /** Grant of probate, or the will itself, for a deceased estate. */
+    PROBATE_OR_WILL(Extraction.NONE),
+
     /* ---------- pre-existing types, still in use ---------- */
 
     TRUST_DEED(Extraction.NONE),

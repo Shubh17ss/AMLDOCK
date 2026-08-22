@@ -7,7 +7,7 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { EDGE_ROLES } from '../../api/ownership.js';
+import { ACCEPTED_DOCUMENT_TYPES, EDGE_ROLES } from '../../api/ownership.js';
 import { listNodeDocuments, uploadToS3 } from '../../api/documents.js';
 import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
@@ -60,13 +60,20 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
         idDocumentType: selected.idDocumentType ?? '',
         idDocumentNumber: selected.idDocumentNumber ?? '',
         idDocumentCountry: selected.idDocumentCountry ?? '',
-        nzbn: selected.nzbn ?? '',
+        businessNumber: selected.businessNumber ?? '',
+        jurisdictionCountry: selected.jurisdictionCountry ?? null,
+        companyHasConstitution: selected.companyHasConstitution ?? false,
+        nomineeStatus: selected.nomineeStatus ?? 'NOT_ASKED',
+        sourceOfFunds: selected.sourceOfFunds ?? '',
+        companyComplexOwnership: selected.companyComplexOwnership ?? false,
+        companyPersonalAssets: selected.companyPersonalAssets ?? false,
+        companyNewDeveloper: selected.companyNewDeveloper ?? false,
         companyNumber: selected.companyNumber ?? '',
         incorporationDate: selected.incorporationDate ?? '',
         registeredOffice: selected.registeredOffice ?? '',
-        trustName: selected.trustName ?? '',
-        trustDeedDocumentId: selected.trustDeedDocumentId ?? '',
-        settlorName: selected.settlorName ?? '',
+        trustType: selected.trustType ?? '',
+        trustDiscretionary: selected.trustDiscretionary ?? false,
+        trustHoldingComplexity: selected.trustHoldingComplexity ?? '',
         personRole: selected.personRole ?? '',
         reference: selected.reference ?? '',
         notes: selected.notes ?? '',
@@ -125,6 +132,8 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   const saveDetails = async () => {
     setError(null);
     try {
+      // The deal is refetched too — useOwnershipTree invalidates it on every node write, since
+      // the answers on this form feed its risk rating.
       await useTree.updateNode.mutateAsync({ nodeId: selected.id, payload: buildNodePayload(form) });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save');
@@ -300,6 +309,7 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
           <DocumentUploader
             dealId={dealId}
             ownershipNodeId={selected.id}
+            allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
             title={`Documents on ${selected.displayName}`}
             onViewDocument={onViewDocument}
           />

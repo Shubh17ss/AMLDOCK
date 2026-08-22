@@ -26,6 +26,13 @@ public enum AuditAction {
     DEAL_REVERTED,
     DEAL_NOTE_ADDED,
     DEAL_OVERRIDDEN,
+    /**
+     * The derived rating moved because something outside the deal changed — today, an ownership
+     * node answering one of the risk-raising questions. Deal edits are already covered by
+     * DEAL_UPDATED; this exists so a rating that changes with no deal edit still has a cause on
+     * the record.
+     */
+    DEAL_RISK_CHANGED,
     NODE_CREATED,
     NODE_UPDATED,
     NODE_DELETED,

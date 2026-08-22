@@ -45,9 +45,13 @@ public class OwnershipNode extends BaseEntity {
     @Column(name = "id_document_country", length = 3)
     private String idDocumentCountry;
 
-    // ---- NZ company ----
-    @Column(length = 32)
-    private String nzbn;
+    // ---- Company ----
+    /**
+     * NZBN, ABN or a foreign registration number, depending on {@link #jurisdictionCountry}.
+     * Renamed from nzbn in V35 — the column has always been able to hold a non-NZ identifier.
+     */
+    @Column(name = "business_number", length = 32)
+    private String businessNumber;
 
     @Column(name = "company_number", length = 64)
     private String companyNumber;
@@ -108,6 +112,69 @@ public class OwnershipNode extends BaseEntity {
     @Column(name = "reference")
     private String reference;
 
+    /* ---------- private company (V35) ---------- */
+
+    /**
+     * ISO 3166-1 alpha-2. Where the entity is incorporated, registered or otherwise governed.
+     *
+     * <p>One column, labelled per type: "Country of incorporation" for a company or limited
+     * partnership, "Jurisdiction" for a society, charity, agency or estate — none of which is
+     * incorporated anywhere. Also decides how {@link #businessNumber} is labelled.
+     */
+    @Column(name = "jurisdiction_country", length = 2)
+    private String jurisdictionCountry;
+
+    @Column(name = "company_has_constitution")
+    private Boolean companyHasConstitution;
+
+    /**
+     * Whether an intermediary stands in for the real party: a nominee director or shareholder
+     * on a company, a nominee limited partner on a limited partnership. YES raises the deal to
+     * HIGH — see {@code DealRiskService}.
+     *
+     * <p>Boxed and nullable rather than defaulted to NOT_ASKED in the field initialiser: the
+     * types that are never asked leave this null, and a trust reading "not asked" about a
+     * question nobody was going to put to it is noise in the record.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "nominee_status", length = 16)
+    private NomineeStatus nomineeStatus;
+
+    /** TRUE raises the deal to HIGH — see {@code DealRiskService}. */
+    @Column(name = "company_complex_ownership")
+    private Boolean companyComplexOwnership;
+
+    @Column(name = "company_personal_assets")
+    private Boolean companyPersonalAssets;
+
+    @Column(name = "company_new_developer")
+    private Boolean companyNewDeveloper;
+
+    /* ---------- trust (V36) ---------- */
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "trust_type", length = 48)
+    private TrustType trustType;
+
+    @Column(name = "trust_discretionary")
+    private Boolean trustDiscretionary;
+
+    /** EXTENSIVE_DIVERSE_PORTFOLIO raises the deal to HIGH — see {@code DealRiskService}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "trust_holding_complexity", length = 48)
+    private TrustHoldingComplexity trustHoldingComplexity;
+
+    /* ---------- partnership (V37) ---------- */
+
+    /**
+     * Where the entity says its money comes from.
+     *
+     * <p>Node-level, and distinct from {@code beneficial_owner.source_of_funds}: that one
+     * belongs to a person and follows them across deals, and a partnership is not a person.
+     */
+    @Column(name = "source_of_funds", columnDefinition = "text")
+    private String sourceOfFunds;
+
     public Long getId() { return id; }
     public Long getOwnershipStructureId() { return ownershipStructureId; }
     public void setOwnershipStructureId(Long v) { this.ownershipStructureId = v; }
@@ -123,8 +190,8 @@ public class OwnershipNode extends BaseEntity {
     public void setIdDocumentNumber(String v) { this.idDocumentNumber = v; }
     public String getIdDocumentCountry() { return idDocumentCountry; }
     public void setIdDocumentCountry(String v) { this.idDocumentCountry = v; }
-    public String getNzbn() { return nzbn; }
-    public void setNzbn(String v) { this.nzbn = v; }
+    public String getBusinessNumber() { return businessNumber; }
+    public void setBusinessNumber(String v) { this.businessNumber = v; }
     public String getCompanyNumber() { return companyNumber; }
     public void setCompanyNumber(String v) { this.companyNumber = v; }
     public LocalDate getIncorporationDate() { return incorporationDate; }
@@ -151,4 +218,24 @@ public class OwnershipNode extends BaseEntity {
     public void setPersonRole(PersonRole v) { this.personRole = v; }
     public String getReference() { return reference; }
     public void setReference(String v) { this.reference = v; }
+    public String getJurisdictionCountry() { return jurisdictionCountry; }
+    public void setJurisdictionCountry(String v) { this.jurisdictionCountry = v; }
+    public Boolean getCompanyHasConstitution() { return companyHasConstitution; }
+    public void setCompanyHasConstitution(Boolean v) { this.companyHasConstitution = v; }
+    public NomineeStatus getNomineeStatus() { return nomineeStatus; }
+    public void setNomineeStatus(NomineeStatus v) { this.nomineeStatus = v; }
+    public Boolean getCompanyComplexOwnership() { return companyComplexOwnership; }
+    public void setCompanyComplexOwnership(Boolean v) { this.companyComplexOwnership = v; }
+    public Boolean getCompanyPersonalAssets() { return companyPersonalAssets; }
+    public void setCompanyPersonalAssets(Boolean v) { this.companyPersonalAssets = v; }
+    public Boolean getCompanyNewDeveloper() { return companyNewDeveloper; }
+    public void setCompanyNewDeveloper(Boolean v) { this.companyNewDeveloper = v; }
+    public TrustType getTrustType() { return trustType; }
+    public void setTrustType(TrustType v) { this.trustType = v; }
+    public Boolean getTrustDiscretionary() { return trustDiscretionary; }
+    public void setTrustDiscretionary(Boolean v) { this.trustDiscretionary = v; }
+    public TrustHoldingComplexity getTrustHoldingComplexity() { return trustHoldingComplexity; }
+    public void setTrustHoldingComplexity(TrustHoldingComplexity v) { this.trustHoldingComplexity = v; }
+    public String getSourceOfFunds() { return sourceOfFunds; }
+    public void setSourceOfFunds(String v) { this.sourceOfFunds = v; }
 }

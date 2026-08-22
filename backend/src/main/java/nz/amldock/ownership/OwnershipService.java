@@ -10,6 +10,7 @@ import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.deal.DealRiskService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.ownership.dto.CreateEdgeRequest;
@@ -49,6 +50,8 @@ public class OwnershipService {
     // one (extraction creates nodes through it), and a constructor cycle fails at startup.
     private final BeneficialOwnerRepository owners;
     private final DealBeneficialOwnerRepository ownerLinks;
+    // Repositories only inside DealRiskService, so this direction adds no constructor cycle.
+    private final DealRiskService risk;
 
     public OwnershipService(OwnershipStructureRepository structures,
                             OwnershipNodeRepository nodes,
@@ -57,7 +60,8 @@ public class OwnershipService {
                             FirmBranchRepository branches,
                             DealLifecycleService lifecycle,
                             BeneficialOwnerRepository owners,
-                            DealBeneficialOwnerRepository ownerLinks) {
+                            DealBeneficialOwnerRepository ownerLinks,
+                            DealRiskService risk) {
         this.structures = structures;
         this.nodes = nodes;
         this.edges = edges;
@@ -66,6 +70,7 @@ public class OwnershipService {
         this.lifecycle = lifecycle;
         this.owners = owners;
         this.ownerLinks = ownerLinks;
+        this.risk = risk;
     }
 
     /* ---------- queries ---------- */
@@ -104,8 +109,13 @@ public class OwnershipService {
         n.setReference(req.reference());
         n.setNotes(req.notes());
         applyNodeFields(n, req.dateOfBirth(), req.idDocumentType(), req.idDocumentNumber(), req.idDocumentCountry(),
-                req.nzbn(), req.companyNumber(), req.incorporationDate(), req.registeredOffice(),
+                req.businessNumber(), req.companyNumber(), req.incorporationDate(), req.registeredOffice(),
                 req.trustName(), req.trustDeedDocumentId(), req.settlorName(), req.extraJson());
+        applyEntityFields(n, req.jurisdictionCountry(), req.companyHasConstitution(),
+                req.nomineeStatus(), req.companyComplexOwnership(),
+                req.companyPersonalAssets(), req.companyNewDeveloper(),
+                req.trustType(), req.trustDiscretionary(), req.trustHoldingComplexity(),
+                req.sourceOfFunds());
 
         // Every individual has a person record, whether they arrived through a scanned ID or by
         // hand: the shared contact and background fields live there, so a node without one has
@@ -117,7 +127,9 @@ public class OwnershipService {
             applyPersonPatch(person, req.person());
         }
 
-        return NodeDto.from(nodes.save(n), person == null ? null : PersonDto.from(person));
+        NodeDto created = NodeDto.from(nodes.save(n), person == null ? null : PersonDto.from(person));
+        risk.recomputeFor(dealId);
+        return created;
     }
 
     @Transactional
@@ -133,7 +145,7 @@ public class OwnershipService {
         if (req.idDocumentType() != null) n.setIdDocumentType(req.idDocumentType());
         if (req.idDocumentNumber() != null) n.setIdDocumentNumber(req.idDocumentNumber());
         if (req.idDocumentCountry() != null) n.setIdDocumentCountry(req.idDocumentCountry());
-        if (req.nzbn() != null) n.setNzbn(req.nzbn());
+        if (req.businessNumber() != null) n.setBusinessNumber(req.businessNumber());
         if (req.companyNumber() != null) n.setCompanyNumber(req.companyNumber());
         if (req.incorporationDate() != null) n.setIncorporationDate(req.incorporationDate());
         if (req.registeredOffice() != null) n.setRegisteredOffice(req.registeredOffice());
@@ -146,6 +158,11 @@ public class OwnershipService {
         if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
         if (req.notes() != null) n.setNotes(req.notes());
         if (req.verificationNotes() != null) n.setVerificationNotes(req.verificationNotes());
+        applyEntityFields(n, req.jurisdictionCountry(), req.companyHasConstitution(),
+                req.nomineeStatus(), req.companyComplexOwnership(),
+                req.companyPersonalAssets(), req.companyNewDeveloper(),
+                req.trustType(), req.trustDiscretionary(), req.trustHoldingComplexity(),
+                req.sourceOfFunds());
 
         BeneficialOwner person = personFor(n);
         if (req.person() != null && person != null) {
@@ -158,6 +175,10 @@ public class OwnershipService {
                 n.setDisplayName(person.getFullName());
             }
         }
+        // Two of the company answers feed the deal's rating, so a node write is now one of the
+        // ways it can move. Runs unconditionally: working out whether this particular patch
+        // touched a risk-bearing field would be a second copy of the rule.
+        risk.recomputeFor(dealId);
         return NodeDto.from(n, person == null ? null : PersonDto.from(person));
     }
 
@@ -185,6 +206,11 @@ public class OwnershipService {
         Long personId = n.getBeneficialOwnerId();
         nodes.delete(n);
         if (personId != null) removePersonIfHandAdded(deal, personId);
+
+        // The deleted node may have been the only thing holding the deal at HIGH. Flushed first
+        // so the recompute's own query cannot still see the row.
+        nodes.flush();
+        risk.recomputeFor(dealId);
     }
 
     /**
@@ -493,14 +519,15 @@ public class OwnershipService {
 
     private void applyNodeFields(OwnershipNode n,
                                  java.time.LocalDate dob, String idType, String idNumber, String idCountry,
-                                 String nzbn, String companyNumber, java.time.LocalDate incorpDate, String regOffice,
+                                 String businessNumber, String companyNumber,
+                                 java.time.LocalDate incorpDate, String regOffice,
                                  String trustName, Long trustDeedDocId, String settlorName,
                                  String extraJson) {
         if (dob != null) n.setDateOfBirth(dob);
         if (idType != null) n.setIdDocumentType(idType);
         if (idNumber != null) n.setIdDocumentNumber(idNumber);
         if (idCountry != null) n.setIdDocumentCountry(idCountry);
-        if (nzbn != null) n.setNzbn(nzbn);
+        if (businessNumber != null) n.setBusinessNumber(businessNumber);
         if (companyNumber != null) n.setCompanyNumber(companyNumber);
         if (incorpDate != null) n.setIncorporationDate(incorpDate);
         if (regOffice != null) n.setRegisteredOffice(regOffice);
@@ -508,6 +535,32 @@ public class OwnershipService {
         if (trustDeedDocId != null) n.setTrustDeedDocumentId(trustDeedDocId);
         if (settlorName != null) n.setSettlorName(settlorName);
         if (extraJson != null) n.setExtraJson(extraJson);
+    }
+
+    /**
+     * Every entity-type field, applied the same way the rest of the patch is: only non-null
+     * values are written.
+     *
+     * <p>Not gated on the node type. Which fields a type shows is the form's business, and
+     * repeating that rule here would be a second copy of it, free to disagree with the first.
+     */
+    private static void applyEntityFields(OwnershipNode n,
+                                          String jurisdictionCountry, Boolean hasConstitution,
+                                          NomineeStatus nominee, Boolean complexOwnership,
+                                          Boolean personalAssets, Boolean newDeveloper,
+                                          TrustType trustType, Boolean discretionary,
+                                          TrustHoldingComplexity holdingComplexity,
+                                          String sourceOfFunds) {
+        if (jurisdictionCountry != null) n.setJurisdictionCountry(emptyToNull(jurisdictionCountry));
+        if (hasConstitution != null) n.setCompanyHasConstitution(hasConstitution);
+        if (nominee != null) n.setNomineeStatus(nominee);
+        if (complexOwnership != null) n.setCompanyComplexOwnership(complexOwnership);
+        if (personalAssets != null) n.setCompanyPersonalAssets(personalAssets);
+        if (newDeveloper != null) n.setCompanyNewDeveloper(newDeveloper);
+        if (trustType != null) n.setTrustType(trustType);
+        if (discretionary != null) n.setTrustDiscretionary(discretionary);
+        if (holdingComplexity != null) n.setTrustHoldingComplexity(holdingComplexity);
+        if (sourceOfFunds != null) n.setSourceOfFunds(emptyToNull(sourceOfFunds));
     }
 
     private UserPrincipal currentPrincipal() {

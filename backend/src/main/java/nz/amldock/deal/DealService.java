@@ -49,6 +49,7 @@ public class DealService {
     private final DealLifecycleService lifecycle;
     private final DealNoteService dealNotes;
     private final BeneficialOwnerService beneficialOwners;
+    private final DealRiskService risk;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -58,7 +59,8 @@ public class DealService {
                        UserRepository users,
                        DealLifecycleService lifecycle,
                        DealNoteService dealNotes,
-                       BeneficialOwnerService beneficialOwners) {
+                       BeneficialOwnerService beneficialOwners,
+                       DealRiskService risk) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -68,6 +70,7 @@ public class DealService {
         this.lifecycle = lifecycle;
         this.dealNotes = dealNotes;
         this.beneficialOwners = beneficialOwners;
+        this.risk = risk;
     }
 
     /* ---------- queries ---------- */
@@ -425,16 +428,14 @@ public class DealService {
     }
 
     /**
-     * The deal's risk position. Derived here rather than accepted from the client: a rating
-     * that disagrees with its own inputs would be an unfalsifiable AML record, and keeping the
-     * rule in one place makes it hold across every write path, present and future.
+     * The deal's risk position.
      *
-     * <p>OVERRIDE ratings were set deliberately by compliance, so the derivation leaves them
-     * alone.
+     * <p>The rule itself moved to {@link DealRiskService} in V35, when an ownership node's
+     * answers began to feed it: two call sites here are no longer the only ways a rating can
+     * change, and a rule with two homes would eventually disagree with itself.
      */
     private void applyRiskRating(Deal d) {
-        if (d.getRiskRatingSource() == RiskRatingSource.OVERRIDE) return;
-        d.setRiskRating(Boolean.TRUE.equals(d.getOnSoldQuickly()) ? RiskRating.HIGH : RiskRating.LOW);
+        risk.apply(d);
     }
 
     private static String orFallback(String preferred, String fallback) {

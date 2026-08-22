@@ -28,6 +28,12 @@ const formatBytes = (n) => {
 export function DocumentUploader({
   dealId,
   ownershipNodeId = null,
+  /**
+   * Document type values this node will accept, or undefined for no restriction. Narrows the
+   * picker only — the server enforces the same list in presignUpload, because a restriction
+   * that lives in a dropdown is a suggestion.
+   */
+  allowedTypes = undefined,
   canUpload = true,
   title = 'Documents',
   onViewDocument = null,
@@ -37,6 +43,9 @@ export function DocumentUploader({
   const qc = useQueryClient();
   const inputRef = useRef(null);
   const [documentType, setDocumentType] = useState('OTHER');
+  const typeOptions = allowedTypes
+    ? DOCUMENT_TYPES.filter((t) => allowedTypes.includes(t.value))
+    : DOCUMENT_TYPES;
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(null); // { name, phase, percent }
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -144,7 +153,7 @@ export function DocumentUploader({
               <InputLabel id="doc-type-label">Document type</InputLabel>
               <Select labelId="doc-type-label" label="Document type"
                       value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
-                {DOCUMENT_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+                {typeOptions.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
               </Select>
             </FormControl>
             <Button

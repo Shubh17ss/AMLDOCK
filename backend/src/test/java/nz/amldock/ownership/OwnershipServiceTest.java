@@ -1,5 +1,6 @@
 package nz.amldock.ownership;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import nz.amldock.beneficialowner.BeneficialOwner;
 import nz.amldock.beneficialowner.BeneficialOwnerRepository;
 import nz.amldock.beneficialowner.DealBeneficialOwner;
@@ -29,7 +30,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -64,6 +67,7 @@ class OwnershipServiceTest {
     @Mock DealLifecycleService lifecycle;
     @Mock BeneficialOwnerRepository owners;
     @Mock DealBeneficialOwnerRepository ownerLinks;
+    @Mock nz.amldock.deal.DealRiskService risk;
 
     OwnershipService service;
     Deal deal;
@@ -73,7 +77,7 @@ class OwnershipServiceTest {
     @BeforeEach
     void setUp() {
         service = new OwnershipService(structures, nodes, edges, deals, branches, lifecycle,
-                owners, ownerLinks);
+                owners, ownerLinks, risk);
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
@@ -275,6 +279,112 @@ class OwnershipServiceTest {
         verify(ownerLinks, never()).delete(any());
     }
 
+    /* ---------- the deal's risk follows the node (V35) ---------- */
+
+    @Test
+    void savingACompanyAnswerRecomputesTheDealsRisk() {
+        OwnershipNode company = node(2L, NodeType.PRIVATE_COMPANY, "Eriksson Holdings");
+        stubNodes(company);
+
+        service.updateNode(DEAL_ID, 2L, patchOf(Map.of("nomineeStatus", "YES")));
+
+        assertThat(company.getNomineeStatus()).isEqualTo(NomineeStatus.YES);
+        verify(risk).recomputeFor(DEAL_ID);
+    }
+
+    @Test
+    void theRecomputeRunsOnEverySaveNotJustRiskBearingOnes() {
+        // Deciding whether this particular patch touched a risk-bearing field would be a second
+        // copy of the rule, living somewhere the rule cannot see.
+        OwnershipNode company = node(2L, NodeType.PRIVATE_COMPANY, "Eriksson Holdings");
+        stubNodes(company);
+
+        service.updateNode(DEAL_ID, 2L, patchOf(Map.of("companyPersonalAssets", true)));
+
+        verify(risk).recomputeFor(DEAL_ID);
+    }
+
+    @Test
+    void deletingTheNodeThatRaisedTheRiskRecomputesToo() {
+        OwnershipNode company = node(2L, NodeType.PRIVATE_COMPANY, "Eriksson Holdings");
+        company.setNomineeStatus(NomineeStatus.YES);
+        stubNodes(company);
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of());
+        when(edges.findAllByChildNodeId(2L)).thenReturn(List.of());
+
+        service.deleteNode(DEAL_ID, 2L, false);
+
+        verify(risk).recomputeFor(DEAL_ID);
+    }
+
+    @Test
+    void theCompanyBlockRoundTripsThroughACreate() {
+        NodeDto created = service.createNode(DEAL_ID, JSON.convertValue(Map.of(
+                "nodeType", NodeType.PRIVATE_COMPANY,
+                "displayName", "Eriksson Holdings",
+                "jurisdictionCountry", "NZ",
+                "businessNumber", "9429039000123",
+                "companyNumber", "1234567",
+                "companyHasConstitution", true,
+                "nomineeStatus", "NOT_ASKED",
+                "companyComplexOwnership", false,
+                "companyNewDeveloper", true), CreateNodeRequest.class));
+
+        assertThat(created.jurisdictionCountry()).isEqualTo("NZ");
+        assertThat(created.businessNumber()).isEqualTo("9429039000123");
+        assertThat(created.companyNumber()).isEqualTo("1234567");
+        assertThat(created.companyHasConstitution()).isTrue();
+        assertThat(created.nomineeStatus()).isEqualTo(NomineeStatus.NOT_ASKED);
+        assertThat(created.companyNewDeveloper()).isTrue();
+        // No person record: only individuals get one.
+        assertThat(created.person()).isNull();
+    }
+
+    @Test
+    void theTrustBlockRoundTripsThroughACreate() {
+        NodeDto created = service.createNode(DEAL_ID, JSON.convertValue(Map.of(
+                "nodeType", NodeType.TRUST,
+                "displayName", "The Eriksson Family Trust",
+                "trustType", "FAMILY",
+                "trustDiscretionary", true,
+                "trustHoldingComplexity", "EXTENSIVE_DIVERSE_PORTFOLIO"), CreateNodeRequest.class));
+
+        assertThat(created.trustType()).isEqualTo(TrustType.FAMILY);
+        assertThat(created.trustDiscretionary()).isTrue();
+        assertThat(created.trustHoldingComplexity())
+                .isEqualTo(TrustHoldingComplexity.EXTENSIVE_DIVERSE_PORTFOLIO);
+        // Creating the node is one of the ways the deal's rating can move.
+        verify(risk).recomputeFor(DEAL_ID);
+    }
+
+    @Test
+    void aJurisdictionOnlyTypeRoundTripsThroughACreate() {
+        // Society, charity, agency and estate share one shape: a name and where they are
+        // governed from. None of them is incorporated, which is why the column is not named
+        // for incorporation any more.
+        NodeDto created = service.createNode(DEAL_ID, JSON.convertValue(Map.of(
+                "nodeType", NodeType.DECEASED_ESTATE,
+                "displayName", "Estate of A. Eriksson",
+                "jurisdictionCountry", "NZ"), CreateNodeRequest.class));
+
+        assertThat(created.jurisdictionCountry()).isEqualTo("NZ");
+        assertThat(created.person()).isNull();
+    }
+
+    @Test
+    void aPartnershipCarriesItsOwnSourceOfFunds() {
+        // Node-level: a partnership is not a person and has no beneficial_owner record for
+        // the person-level field to live on.
+        NodeDto created = service.createNode(DEAL_ID, JSON.convertValue(Map.of(
+                "nodeType", NodeType.PARTNERSHIP,
+                "displayName", "Eriksson & Co",
+                "sourceOfFunds", "Partner capital contributions",
+                "reference", "DEAL-2026-0001"), CreateNodeRequest.class));
+
+        assertThat(created.sourceOfFunds()).isEqualTo("Partner capital contributions");
+        assertThat(created.reference()).isEqualTo("DEAL-2026-0001");
+    }
+
     /* ---------- helpers ---------- */
 
     private OwnershipNode node(Long id, NodeType type, String name) {
@@ -299,14 +409,30 @@ class OwnershipServiceTest {
         return o;
     }
 
+    /**
+     * Requests are built from a map of the fields under test rather than positionally.
+     *
+     * <p>These records carry twenty-odd optional components and grow with every entity type
+     * worked through. A positional constructor call here silently shifts arguments the moment
+     * one is inserted, and names the fields nowhere — this reads as what it sets, and goes
+     * through the same deserialisation the controller does.
+     */
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private static CreateNodeRequest createRequest(NodeType type, String name) {
-        return new CreateNodeRequest(type, name, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null);
+        return JSON.convertValue(Map.of("nodeType", type, "displayName", name),
+                CreateNodeRequest.class);
     }
 
     private static UpdateNodeRequest patch(NodeType type, PersonPatch person) {
-        return new UpdateNodeRequest(type, null, null, null, null, null,
-                null, null, null, null, null, null, null, null,
-                null, null, person, null, null, null);
+        Map<String, Object> fields = new HashMap<>();
+        if (type != null) fields.put("nodeType", type);
+        if (person != null) fields.put("person", person);
+        return JSON.convertValue(fields, UpdateNodeRequest.class);
+    }
+
+    /** A patch that sets arbitrary named fields — used by the private-company cases. */
+    private static UpdateNodeRequest patchOf(Map<String, Object> fields) {
+        return JSON.convertValue(fields, UpdateNodeRequest.class);
     }
 }

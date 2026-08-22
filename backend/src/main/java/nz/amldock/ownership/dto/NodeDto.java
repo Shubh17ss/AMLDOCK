@@ -2,6 +2,9 @@ package nz.amldock.ownership.dto;
 
 import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NodeVerificationStatus;
+import nz.amldock.ownership.NomineeStatus;
+import nz.amldock.ownership.TrustHoldingComplexity;
+import nz.amldock.ownership.TrustType;
 import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.PersonRole;
 
@@ -27,7 +30,7 @@ public record NodeDto(
         String idDocumentNumber,
         String idDocumentCountry,
 
-        String nzbn,
+        String businessNumber,
         String companyNumber,
         LocalDate incorporationDate,
         String registeredOffice,
@@ -35,6 +38,18 @@ public record NodeDto(
         String trustName,
         Long trustDeedDocumentId,
         String settlorName,
+
+        String jurisdictionCountry,
+        Boolean companyHasConstitution,
+        NomineeStatus nomineeStatus,
+        Boolean companyComplexOwnership,
+        Boolean companyPersonalAssets,
+        Boolean companyNewDeveloper,
+
+        TrustType trustType,
+        Boolean trustDiscretionary,
+        TrustHoldingComplexity trustHoldingComplexity,
+        String sourceOfFunds,
 
         String extraJson,
         Long beneficialOwnerId,
@@ -55,8 +70,12 @@ public record NodeDto(
         return new NodeDto(
                 n.getId(), n.getOwnershipStructureId(), n.getNodeType(), n.getDisplayName(),
                 n.getDateOfBirth(), n.getIdDocumentType(), n.getIdDocumentNumber(), n.getIdDocumentCountry(),
-                n.getNzbn(), n.getCompanyNumber(), n.getIncorporationDate(), n.getRegisteredOffice(),
+                n.getBusinessNumber(), n.getCompanyNumber(), n.getIncorporationDate(), n.getRegisteredOffice(),
                 n.getTrustName(), n.getTrustDeedDocumentId(), n.getSettlorName(),
+                n.getJurisdictionCountry(), n.getCompanyHasConstitution(), n.getNomineeStatus(),
+                n.getCompanyComplexOwnership(), n.getCompanyPersonalAssets(), n.getCompanyNewDeveloper(),
+                n.getTrustType(), n.getTrustDiscretionary(), n.getTrustHoldingComplexity(),
+                n.getSourceOfFunds(),
                 n.getExtraJson(), n.getBeneficialOwnerId(), person,
                 n.getPersonRole(), n.getReference(), n.getVerificationStatus(),
                 n.getNotes(), n.getVerificationNotes(),

@@ -1,7 +1,80 @@
-import { Box, Divider, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
-import { ID_DOCUMENT_TYPES, NODE_TYPES, PERSON_ROLES } from '../../api/ownership.js';
+import {
+  Box, Divider, FormControl, FormControlLabel, FormLabel, InputLabel, MenuItem, Radio,
+  RadioGroup, Select, Stack, TextField, Typography,
+} from '@mui/material';
+import {
+  ID_DOCUMENT_TYPES, NODE_TYPES, NOMINEE_OPTIONS, PERSON_ROLES,
+  TRUST_HOLDING_COMPLEXITY, TRUST_TYPES,
+} from '../../api/ownership.js';
+import { CountrySelect } from '../../components/CountrySelect.jsx';
 import { PhoneField } from '../../components/PhoneField.jsx';
 import { tokens } from '../../theme/theme.js';
+
+/** The registration number's name changes with the jurisdiction; the field does not. */
+function businessNumberLabel(country) {
+  if (country === 'NZ') return 'New Zealand business number (NZBN)';
+  if (country === 'AU') return 'Australian business number (ABN)';
+  return 'Registration number';
+}
+
+const YES_NO = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
+
+/** What the node's display name is called, per type. It is the same column either way. */
+const NAME_LABEL = {
+  INDIVIDUAL: 'Name',
+  PRIVATE_COMPANY: 'Company name',
+  LISTED_COMPANY: 'Company name',
+  TRUSTEE_COMPANY: 'Company name',
+  TRUST: 'Trust name',
+  PARTNERSHIP: 'Partnership name',
+  LIMITED_PARTNERSHIP: 'Partnership name',
+  INCORPORATED_SOCIETY: 'Society name',
+  CHARITY: 'Charity name',
+  GOVERNMENT_AGENCY: 'Agency name',
+  DECEASED_ESTATE: 'Estate name',
+};
+
+/**
+ * Types whose only extra field is where they are governed from.
+ *
+ * They are asked for a jurisdiction rather than a country of incorporation: none of them is
+ * incorporated, and a deceased estate least of all.
+ */
+const JURISDICTION_ONLY = ['INCORPORATED_SOCIETY', 'CHARITY', 'GOVERNMENT_AGENCY', 'DECEASED_ESTATE'];
+
+/** Types that carry a free-text Reference. The rest have no use the user has named. */
+const WITH_REFERENCE = ['INDIVIDUAL', 'PARTNERSHIP'];
+
+/**
+ * One yes/no question, rendered inline.
+ *
+ * Takes `options` for the one question that has three answers — nominee director/shareholder,
+ * where "Not asked" is the default because a YES carries a risk consequence and a defaulted NO
+ * would be a negative answer nobody gave.
+ */
+function YesNoField({ label, value, onChange, options = YES_NO, helper }) {
+  const isTriState = options !== YES_NO;
+  // Radio values cross the DOM as strings, so booleans have to be mapped back on the way out.
+  const toValue = (raw) => (isTriState ? raw : raw === 'true');
+  const current = value === undefined || value === null
+    ? (isTriState ? options[0].value : false)
+    : value;
+
+  return (
+    <FormControl>
+      <FormLabel sx={{ fontSize: '0.875rem' }}>{label}</FormLabel>
+      <RadioGroup row value={String(current)} onChange={(e) => onChange(toValue(e.target.value))}>
+        {options.map((o) => (
+          <FormControlLabel key={String(o.value)} value={String(o.value)}
+                            control={<Radio size="small" />} label={o.label} />
+        ))}
+      </RadioGroup>
+      {helper && (
+        <Typography variant="caption" sx={{ color: tokens.muted, mt: -0.5 }}>{helper}</Typography>
+      )}
+    </FormControl>
+  );
+}
 
 /**
  * The per-type fields of an ownership node. `value` is the form-state object and `onChange`
@@ -30,7 +103,7 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
           </Select>
         </FormControl>
       )}
-      <TextField label={value.nodeType === 'INDIVIDUAL' ? 'Name' : 'Display name'}
+      <TextField label={NAME_LABEL[value.nodeType] ?? 'Display name'}
                  value={value.displayName ?? ''}
                  onChange={(e) => set({ displayName: e.target.value })} required />
 
@@ -101,34 +174,147 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
 
       {value.nodeType === 'PRIVATE_COMPANY' && (
         <>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField label="NZBN" value={value.nzbn ?? ''}
-                       onChange={(e) => set({ nzbn: e.target.value })} fullWidth />
-            <TextField label="Company number" value={value.companyNumber ?? ''}
-                       onChange={(e) => set({ companyNumber: e.target.value })} fullWidth />
-          </Stack>
-          <TextField label="Incorporation date" type="date" InputLabelProps={{ shrink: true }}
-                     value={value.incorporationDate ?? ''}
-                     onChange={(e) => set({ incorporationDate: e.target.value })} />
-          <TextField label="Registered office" value={value.registeredOffice ?? ''}
-                     onChange={(e) => set({ registeredOffice: e.target.value })} multiline minRows={2} />
+          <CountrySelect
+            label="Country of incorporation"
+            value={value.jurisdictionCountry ?? null}
+            onChange={(code) => set({ jurisdictionCountry: code })}
+          />
+
+          <TextField label="Incorporation number" value={value.companyNumber ?? ''}
+                     onChange={(e) => set({ companyNumber: e.target.value })} />
+
+          {/* One field, three names. The number a company is registered under is called
+              something different in each jurisdiction, but it is the same fact and the same
+              column — only the label follows the country. */}
+          <TextField label={businessNumberLabel(value.jurisdictionCountry)}
+                     value={value.businessNumber ?? ''}
+                     onChange={(e) => set({ businessNumber: e.target.value })} />
+
+          <YesNoField
+            label="Does the company have a constitution?"
+            value={value.companyHasConstitution}
+            onChange={(v) => set({ companyHasConstitution: v })}
+          />
+
+          <YesNoField
+            label="Nominee director / shareholder?"
+            value={value.nomineeStatus ?? 'NOT_ASKED'}
+            onChange={(v) => set({ nomineeStatus: v })}
+            options={NOMINEE_OPTIONS}
+            helper="Answering yes sets this deal's risk to High."
+          />
+
+          <YesNoField
+            label="Complex ownership structure?"
+            value={value.companyComplexOwnership}
+            onChange={(v) => set({ companyComplexOwnership: v })}
+            helper="Answering yes sets this deal's risk to High."
+          />
+
+          <YesNoField
+            label="Used for personal assets?"
+            value={value.companyPersonalAssets}
+            onChange={(v) => set({ companyPersonalAssets: v })}
+          />
+
+          <YesNoField
+            label="Is a new developer?"
+            value={value.companyNewDeveloper}
+            onChange={(v) => set({ companyNewDeveloper: v })}
+          />
         </>
       )}
 
       {value.nodeType === 'TRUST' && (
         <>
-          <TextField label="Trust name" value={value.trustName ?? ''}
-                     onChange={(e) => set({ trustName: e.target.value })} />
-          <TextField label="Settlor name" value={value.settlorName ?? ''}
-                     onChange={(e) => set({ settlorName: e.target.value })} />
-          <TextField label="Trust deed document ID" type="number" value={value.trustDeedDocumentId ?? ''}
-                     onChange={(e) => set({ trustDeedDocumentId: e.target.value ? Number(e.target.value) : null })}
-                     helperText="The trust deed PDF's id (link UI lands in M8)" />
+          <FormControl>
+            <InputLabel id="trust-type-label">Trust type</InputLabel>
+            <Select labelId="trust-type-label" label="Trust type"
+                    value={value.trustType ?? ''}
+                    onChange={(e) => set({ trustType: e.target.value || null })}>
+              <MenuItem value=""><em>Not stated</em></MenuItem>
+              {TRUST_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+            </Select>
+          </FormControl>
+
+          <YesNoField
+            label="Is the trust a discretionary trust?"
+            value={value.trustDiscretionary}
+            onChange={(v) => set({ trustDiscretionary: v })}
+          />
+
+          <FormControl>
+            <InputLabel id="trust-holding-label">Trust holding complexity</InputLabel>
+            <Select labelId="trust-holding-label" label="Trust holding complexity"
+                    value={value.trustHoldingComplexity ?? ''}
+                    onChange={(e) => set({ trustHoldingComplexity: e.target.value || null })}>
+              <MenuItem value=""><em>Not stated</em></MenuItem>
+              {TRUST_HOLDING_COMPLEXITY.map((t) => (
+                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+              ))}
+            </Select>
+            <Typography variant="caption" sx={{ color: tokens.muted, mt: 0.5 }}>
+              An extensive / diverse asset portfolio sets this deal's risk to High.
+            </Typography>
+          </FormControl>
         </>
       )}
 
-      {/* The remaining entity types carry display name and notes for now. Their own detail
-          forms follow the individual's shape — this one is the worked example. */}
+      {value.nodeType === 'TRUSTEE_COMPANY' && (
+        <>
+          <TextField label="Incorporation number" value={value.companyNumber ?? ''}
+                     onChange={(e) => set({ companyNumber: e.target.value })} />
+          {/* No country is asked of a trustee company, so the label cannot follow one. */}
+          <TextField label="NZBN or ABN" value={value.businessNumber ?? ''}
+                     onChange={(e) => set({ businessNumber: e.target.value })} />
+        </>
+      )}
+
+      {value.nodeType === 'LIMITED_PARTNERSHIP' && (
+        <>
+          <CountrySelect
+            label="Country of incorporation"
+            value={value.jurisdictionCountry ?? null}
+            onChange={(code) => set({ jurisdictionCountry: code })}
+          />
+          {/* The same stored answer a company gives about a nominee director or shareholder:
+              one question about whether an intermediary stands in for the real party. */}
+          <YesNoField
+            label="Nominee limited partner?"
+            value={value.nomineeStatus ?? 'NOT_ASKED'}
+            onChange={(v) => set({ nomineeStatus: v })}
+            options={NOMINEE_OPTIONS}
+            helper="Answering yes sets this deal's risk to High."
+          />
+        </>
+      )}
+
+      {value.nodeType === 'PARTNERSHIP' && (
+        <TextField label="Source of funds" value={value.sourceOfFunds ?? ''}
+                   onChange={(e) => set({ sourceOfFunds: e.target.value })}
+                   multiline minRows={2}
+                   placeholder="Where the partnership's money comes from, and how it was evidenced." />
+      )}
+
+      {value.nodeType === 'LISTED_COMPANY' && (
+        <>
+          <CountrySelect
+            label="Country of incorporation"
+            value={value.jurisdictionCountry ?? null}
+            onChange={(code) => set({ jurisdictionCountry: code })}
+          />
+          <TextField label="Incorporation number" value={value.companyNumber ?? ''}
+                     onChange={(e) => set({ companyNumber: e.target.value })} />
+        </>
+      )}
+
+      {JURISDICTION_ONLY.includes(value.nodeType) && (
+        <CountrySelect
+          label="Jurisdiction"
+          value={value.jurisdictionCountry ?? null}
+          onChange={(code) => set({ jurisdictionCountry: code })}
+        />
+      )}
 
       <TextField
         label="Notes"
@@ -140,12 +326,14 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
         helperText="Kept on this node. Not posted to the deal's timeline."
       />
 
-      <TextField
-        label="Reference"
-        value={value.reference ?? ''}
-        onChange={(e) => set({ reference: e.target.value })}
-        placeholder="Link to previous deal"
-      />
+      {WITH_REFERENCE.includes(value.nodeType) && (
+        <TextField
+          label="Reference"
+          value={value.reference ?? ''}
+          onChange={(e) => set({ reference: e.target.value })}
+          placeholder="Link to previous deal"
+        />
+      )}
     </Stack>
   );
 }
@@ -167,17 +355,55 @@ export function buildNodePayload(form) {
     idDocumentType: norm(form.idDocumentType),
     idDocumentNumber: norm(form.idDocumentNumber),
     idDocumentCountry: norm(form.idDocumentCountry),
-    nzbn: norm(form.nzbn),
     companyNumber: norm(form.companyNumber),
     incorporationDate: norm(form.incorporationDate),
     registeredOffice: norm(form.registeredOffice),
-    trustName: norm(form.trustName),
-    trustDeedDocumentId: norm(form.trustDeedDocumentId),
-    settlorName: norm(form.settlorName),
     personRole: norm(form.personRole),
-    reference: form.reference ?? '',
     notes: form.notes ?? '',
   };
+
+  // Both blocks are gated on the type that owns them. Sending the company answers for an
+  // individual would stamp "not asked" on a question nobody was ever going to pose to them.
+  if (form.nodeType === 'PRIVATE_COMPANY') {
+    payload.jurisdictionCountry = norm(form.jurisdictionCountry);
+    payload.businessNumber = norm(form.businessNumber);
+    payload.companyHasConstitution = form.companyHasConstitution ?? false;
+    payload.nomineeStatus = form.nomineeStatus || 'NOT_ASKED';
+    payload.companyComplexOwnership = form.companyComplexOwnership ?? false;
+    payload.companyPersonalAssets = form.companyPersonalAssets ?? false;
+    payload.companyNewDeveloper = form.companyNewDeveloper ?? false;
+  }
+
+  if (form.nodeType === 'TRUSTEE_COMPANY') {
+    payload.businessNumber = norm(form.businessNumber);
+  }
+
+  if (form.nodeType === 'LIMITED_PARTNERSHIP') {
+    payload.jurisdictionCountry = norm(form.jurisdictionCountry);
+    payload.nomineeStatus = form.nomineeStatus || 'NOT_ASKED';
+  }
+
+  if (form.nodeType === 'PARTNERSHIP') {
+    payload.sourceOfFunds = form.sourceOfFunds ?? '';
+  }
+
+  if (form.nodeType === 'LISTED_COMPANY') {
+    payload.jurisdictionCountry = norm(form.jurisdictionCountry);
+  }
+
+  if (JURISDICTION_ONLY.includes(form.nodeType)) {
+    payload.jurisdictionCountry = norm(form.jurisdictionCountry);
+  }
+
+  if (WITH_REFERENCE.includes(form.nodeType)) {
+    payload.reference = form.reference ?? '';
+  }
+
+  if (form.nodeType === 'TRUST') {
+    payload.trustType = norm(form.trustType);
+    payload.trustDiscretionary = form.trustDiscretionary ?? false;
+    payload.trustHoldingComplexity = norm(form.trustHoldingComplexity);
+  }
 
   if (form.nodeType === 'INDIVIDUAL') {
     const p = form.person ?? {};

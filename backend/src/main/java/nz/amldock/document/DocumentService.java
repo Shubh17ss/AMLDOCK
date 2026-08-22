@@ -95,6 +95,14 @@ public class DocumentService {
             if (!deal.getId().equals(structure.getDealId())) {
                 throw new BadRequestException("Ownership node does not belong to this deal");
             }
+            // Checked here, not only in the picker. A restriction that lives in a dropdown is a
+            // suggestion — this is the point every upload has to pass through.
+            if (!node.getNodeType().accepts(req.documentType())) {
+                throw new BadRequestException(
+                        "A " + node.getNodeType().name().replace('_', ' ').toLowerCase()
+                                + " does not accept " + req.documentType().name().replace('_', ' ').toLowerCase()
+                                + " documents");
+            }
             nodeId = node.getId();
         }
 

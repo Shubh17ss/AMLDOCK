@@ -56,6 +56,78 @@ export const PERSON_ROLES = [
 export const personRoleLabel = (value) =>
   PERSON_ROLES.find((r) => r.value === value)?.label ?? value ?? '—';
 
+/**
+ * What a node of each type will accept on its Documents tab.
+ *
+ * A type absent from this map has no restriction. Mirrors `NodeType.acceptedDocumentTypes()`,
+ * which is where it is enforced — this only narrows the picker.
+ */
+export const ACCEPTED_DOCUMENT_TYPES = {
+  TRUSTEE_COMPANY: ['COMPANY_CERT', 'COMPANY_EXTRACT', 'OTHER'],
+  LIMITED_PARTNERSHIP: [
+    'COMPANY_CERT', 'LIMITED_PARTNERSHIP_EXTRACT', 'PARTNERSHIP_STRUCTURE',
+    'PARTNERSHIP_AGREEMENT', 'BANK_STATEMENT', 'SOURCE_OF_FUNDS_WEALTH',
+    'FINANCIAL_STATEMENTS', 'REGISTRY_SEARCH_RESULT', 'WEB_SEARCH_RESULT', 'TAX_RETURN',
+    'PROOF_OF_ADDRESS', 'OTHER',
+  ],
+  PARTNERSHIP: [
+    'COMPANY_CERT', 'PARTNERSHIP_STRUCTURE', 'PARTNERSHIP_AGREEMENT', 'BANK_STATEMENT',
+    'SOURCE_OF_FUNDS_WEALTH', 'FINANCIAL_STATEMENTS', 'REGISTRY_SEARCH_RESULT',
+    'WEB_SEARCH_RESULT', 'TAX_RETURN', 'PROOF_OF_ADDRESS', 'OTHER',
+  ],
+  LISTED_COMPANY: [
+    'COMPANY_CERT', 'EXCHANGE_REGISTRATION_SEARCH_RESULT', 'GOVERNMENT_STATEMENT', 'OTHER',
+  ],
+  INCORPORATED_SOCIETY: [
+    'SOCIETY_RULES', 'BANK_STATEMENT', 'SOURCE_OF_FUNDS_WEALTH', 'FINANCIAL_STATEMENTS',
+    'REGISTRY_SEARCH_RESULT', 'OTHER',
+  ],
+  CHARITY: [
+    'CHARITIES_REGISTER_INFORMATION', 'BANK_STATEMENT', 'SOURCE_OF_FUNDS_WEALTH',
+    'FINANCIAL_STATEMENTS', 'OTHER',
+  ],
+  GOVERNMENT_AGENCY: ['REGISTRY_SEARCH_RESULT', 'OTHER'],
+  DECEASED_ESTATE: ['PROBATE_OR_WILL', 'OTHER'],
+  TRUST: [
+    'TRUST_DEED', 'AMENDMENTS_OR_VARIATIONS', 'TRUSTEES_RESOLUTION', 'BANK_STATEMENT',
+    'SOURCE_OF_FUNDS_WEALTH', 'FINANCIAL_STATEMENTS', 'REGISTRY_SEARCH_RESULT',
+    'WEB_SEARCH_RESULT', 'OTHER',
+  ],
+  PRIVATE_COMPANY: [
+    'COMPANY_CERT', 'COMPANY_EXTRACT', 'OWNERSHIP_STRUCTURE', 'COMPANY_CONSTITUTION',
+    'BANK_STATEMENT', 'SOURCE_OF_FUNDS_WEALTH', 'FINANCIAL_STATEMENTS', 'REGISTRY_SEARCH_RESULT',
+    'WEB_SEARCH_RESULT', 'TAX_RETURN', 'PROOF_OF_ADDRESS', 'OTHER',
+  ],
+};
+
+/**
+ * What a trust was set up to do. Risk-relevant in its own right, but nothing here changes
+ * the deal's rating — only TRUST_HOLDING_COMPLEXITY does that.
+ */
+export const TRUST_TYPES = [
+  { value: 'FAMILY', label: 'Family trust' },
+  { value: 'CHARITABLE', label: 'Charitable trust' },
+  { value: 'INVESTMENT', label: 'Investment trust' },
+  { value: 'TESTAMENTARY', label: 'Testamentary trust' },
+  { value: 'ASSET_PROTECTION', label: 'Asset protection trust' },
+  { value: 'SUPERANNUATION', label: 'Superannuation trust' },
+  { value: 'INHERITANCE_DEFINED_INTEREST', label: 'Inheritance / defined interest trust' },
+];
+
+/** How much the trust holds. The third band sets the deal to High. */
+export const TRUST_HOLDING_COMPLEXITY = [
+  { value: 'SINGLE_PROPERTY_ASSET', label: 'Single property asset' },
+  { value: 'MORE_THAN_ONE_PROPERTY_ASSET', label: 'More than one property asset' },
+  { value: 'EXTENSIVE_DIVERSE_PORTFOLIO', label: 'Extensive / diverse asset portfolio' },
+];
+
+/** The nominee question's three states — the only tri-state answer on the company form. */
+export const NOMINEE_OPTIONS = [
+  { value: 'NOT_ASKED', label: 'Not asked' },
+  { value: 'YES', label: 'Yes' },
+  { value: 'NO', label: 'No' },
+];
+
 export const EDGE_ROLES = [
   { value: 'TRUSTEE', label: 'Trustee' },
   { value: 'BENEFICIARY', label: 'Beneficiary' },
