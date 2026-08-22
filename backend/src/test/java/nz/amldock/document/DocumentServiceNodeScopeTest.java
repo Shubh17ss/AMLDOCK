@@ -3,6 +3,7 @@ package nz.amldock.document;
 import nz.amldock.audit.AuditService;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.deal.Deal;
+import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
 import nz.amldock.common.exception.BadRequestException;
@@ -67,7 +68,9 @@ class DocumentServiceNodeScopeTest {
     @Mock OwnershipStructureRepository ownershipStructures;
     @Mock UserRepository users;
     @Mock FileStorageService storage;
-    @Mock DealLifecycleService lifecycle;
+    // The real thing, not a mock: it has no dependencies, and the status rule these tests are
+    // about lives inside it. A mocked lifecycle made the delete cases pass vacuously.
+    final DealLifecycleService lifecycle = new DealLifecycleService();
     @Mock BeneficialOwnerService beneficialOwners;
     @Mock AuditService audit;
 
@@ -293,6 +296,62 @@ class DocumentServiceNodeScopeTest {
     private void assertRefuses(NodeType type, DocumentType doc) {
         assertThat(type.accepts(doc))
                 .as("%s should refuse %s", type, doc).isFalse();
+    }
+
+    /* ---------- deleting a document on a handed-over deal (the reviewer's window) ---------- */
+
+    @Test
+    void aComplianceOfficerMayDeleteADocumentOnAHandedOverDeal() {
+        // The case that was broken: uploading to a HANDOVER deal worked, deleting from it did
+        // not, because upload checked read scope and delete checked the author's edit window.
+        Document doc = someoneElsesDocument(DealStatus.HANDOVER);
+
+        service.delete(doc.getId());
+
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.DELETED);
+    }
+
+    @Test
+    void aComplianceOfficerMayNotDeleteADocumentOnAVerifiedDeal() {
+        // A signed-off deal is the boundary the widened window stops at.
+        Document doc = someoneElsesDocument(DealStatus.VERIFIED);
+
+        assertThatThrownBy(() -> service.delete(doc.getId()))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("cannot be edited");
+
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.ACTIVE);
+    }
+
+    @Test
+    void anAgentStillCannotDeleteSomebodyElsesDocument() {
+        // Widening the reviewer's window must not widen anyone else's.
+        Document doc = someoneElsesDocument(DealStatus.HANDOVER);
+        signedInAs(Role.AGENT, 99L);
+
+        assertThatThrownBy(() -> service.delete(doc.getId()))
+                .isInstanceOf(nz.amldock.common.exception.ForbiddenException.class)
+                .hasMessageContaining("Only the uploader");
+    }
+
+    /** An ACTIVE document uploaded by somebody else, on a deal in the given status. */
+    private Document someoneElsesDocument(DealStatus dealStatus) {
+        Deal deal = deals.findById(DEAL_ID).orElseThrow();
+        deal.setStatus(dealStatus);
+        deal.setCreatedByUserId(123L);
+
+        Document doc = doc(9L, "company-extract.pdf", Instant.now());
+        doc.setUploadedByUserId(123L);          // not the signed-in reviewer
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        return doc;
+    }
+
+    private void signedInAs(Role role, Long userId) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        new UserPrincipal(userId, "someone@firm.nz", "Someone",
+                                role, FIRM_ID, BRANCH_ID, true),
+                        null, List.of()));
     }
 
     /* ---------- helpers ---------- */

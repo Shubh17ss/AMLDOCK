@@ -61,8 +61,11 @@ public class OwnershipController {
         return node;
     }
 
+    // The same firm-level reviewers that may create and update a node may remove one. The
+    // previous gate let an AMLCO build an ownership structure and then refused to let them
+    // correct it, which is not a permission boundary so much as a dead end.
     @DeleteMapping("/nodes/{nodeId}")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
     public ResponseEntity<Void> deleteNode(@PathVariable Long dealId, @PathVariable Long nodeId,
                                            @RequestParam(defaultValue = "false") boolean force) {
         ownership.deleteNode(dealId, nodeId, force);
@@ -95,7 +98,7 @@ public class OwnershipController {
     }
 
     @DeleteMapping("/edges/{edgeId}")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
     public ResponseEntity<Void> deleteEdge(@PathVariable Long dealId, @PathVariable Long edgeId) {
         ownership.deleteEdge(dealId, edgeId);
         audit.record(AuditAction.EDGE_DELETED, "OwnershipEdge", edgeId, "Removed edge " + edgeId);

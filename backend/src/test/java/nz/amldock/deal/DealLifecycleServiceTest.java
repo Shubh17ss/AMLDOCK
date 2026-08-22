@@ -230,14 +230,59 @@ class DealLifecycleServiceTest {
                 .doesNotThrowAnyException();
     }
 
+    /**
+     * A reviewer works the deal after handover, so their editing window is the states where
+     * it sits with compliance. The rule this replaces stopped at NEW, which let an officer
+     * upload a document to a handed-over deal and then refused to let them delete it.
+     */
     @Test
-    void nothingPastNewIsEditable() {
-        for (DealStatus s : EnumSet.complementOf(EnumSet.of(DealStatus.NEW))) {
-            assertThatThrownBy(() -> lifecycle.assertEditable(dealIn(s), amlco, FIRM_A))
-                    .as("editing a %s deal", s)
-                    .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Revert it first");
+    void aReviewerMayEditThroughoutTheStatesTheDealSitsWithCompliance() {
+        for (DealStatus s : EnumSet.of(DealStatus.HANDOVER, DealStatus.REVIEW, DealStatus.ON_HOLD)) {
+            assertThatCode(() -> lifecycle.assertEditable(dealIn(s), amlco, FIRM_A))
+                    .as("compliance officer editing a %s deal", s)
+                    .doesNotThrowAnyException();
+            assertThatCode(() -> lifecycle.assertEditable(dealIn(s), seniorManager, FIRM_A))
+                    .as("senior manager editing a %s deal", s)
+                    .doesNotThrowAnyException();
         }
+    }
+
+    /**
+     * The two states carrying a compliance sign-off. Editing the evidence under one would
+     * make the sign-off untrue, so it takes a revert or an override — which puts the
+     * decision on the record.
+     */
+    @Test
+    void nobodyEditsASignedOffDeal() {
+        for (DealStatus s : EnumSet.of(DealStatus.VERIFIED, DealStatus.CLOSED)) {
+            for (UserPrincipal actor : java.util.List.of(amlco, seniorManager, broker)) {
+                assertThatThrownBy(() -> lifecycle.assertEditable(dealIn(s), actor, FIRM_A))
+                        .as("%s editing a %s deal", actor.role(), s)
+                        .isInstanceOf(BadRequestException.class)
+                        .hasMessageContaining("cannot be edited");
+            }
+        }
+    }
+
+    /**
+     * The author's window did not widen. Once handed over the deal is somebody else's to work
+     * on, and a broker editing underneath a review is the thing handover exists to stop.
+     */
+    @Test
+    void theBrokersEditingWindowIsStillNewOnly() {
+        for (DealStatus s : EnumSet.complementOf(EnumSet.of(DealStatus.NEW))) {
+            assertThatThrownBy(() -> lifecycle.assertEditable(dealIn(s), broker, FIRM_A))
+                    .as("broker editing a %s deal", s)
+                    .isInstanceOf(BadRequestException.class);
+        }
+    }
+
+    @Test
+    void aForeignReviewerIsStillRefusedOnAHandedOverDeal() {
+        // The widened window is per status, not per firm. Scope is checked first and
+        // separately, so relaxing one must not quietly relax the other.
+        assertThatThrownBy(() -> lifecycle.assertEditable(dealIn(DealStatus.HANDOVER), foreignAmlco, FIRM_A))
+                .isInstanceOf(ForbiddenException.class);
     }
 
     @Test

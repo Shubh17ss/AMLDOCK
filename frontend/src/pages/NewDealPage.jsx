@@ -21,7 +21,7 @@ import { Section4Risk } from '../features/deal/create/Section4Risk.jsx';
 import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor, isDealReviewer } from '../auth/roles.js';
-import { isEditable } from '../data/dealStatus.js';
+import { canEditContent } from '../data/dealStatus.js';
 import { tokens } from '../theme/theme.js';
 
 // Deal-status notifications sit top-centre so they read as a prominent, page-level result
@@ -230,8 +230,12 @@ export function NewDealPage() {
   // firm. Anyone else — or anyone still here after the deal moved on — goes to the read-only
   // view. The exact complement of DealDetailPage's redirect, so the two cannot loop.
   const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === deal?.createdByUserId;
-  const mayEdit = isOwnerAgent || isDealReviewer(user?.role);
-  if (isEditMode && deal && (!isEditable(deal.status) || !mayEdit)) {
+  // Status and role together: a reviewer may still open a handed-over deal, its author may
+  // not. Checking the status alone sent reviewers to the read-only view on every deal they
+  // were actually meant to be working on.
+  const mayEdit = (isOwnerAgent || isDealReviewer(user?.role))
+    && canEditContent(deal?.status, user?.role);
+  if (isEditMode && deal && !mayEdit) {
     return <Navigate to={`/deals/${resumeDealId}`} replace />;
   }
 

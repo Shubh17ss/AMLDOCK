@@ -262,14 +262,18 @@ public class DocumentService {
         Document d = documents.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
-        boolean elevated = actor.role() == Role.ROOT || actor.role() == Role.SENIOR_MANAGER;
+        // A firm-level reviewer may remove a document somebody else uploaded — they are the
+        // ones working through the file. ROOT joins them because it manages the platform.
+        boolean elevated = actor.role() == Role.ROOT || actor.role().isFirmLevel();
         if (!elevated && !actor.id().equals(d.getUploadedByUserId())) {
-            throw new ForbiddenException("Only the uploader, ROOT or a senior manager may delete this document");
+            throw new ForbiddenException(
+                    "Only the uploader, a compliance officer, a senior manager or ROOT may delete this document");
         }
-        // The uploader's right lapses once the deal moves on; the elevated roles' does not.
-        // assertEditable is the codebase's existing answer to "may this actor write to this
-        // deal" — reusing it beats a second, parallel rule that could drift from it.
-        if (!elevated && d.getDealId() != null) {
+        // Still status-checked for everyone firm-scoped: assertEditable is the codebase's
+        // answer to "may this actor write to this deal", and it now admits reviewers through
+        // HANDOVER, REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the
+        // firm check inside could never pass — that is the reason for the exemption, not rank.
+        if (actor.role() != Role.ROOT && d.getDealId() != null) {
             Deal deal = deals.findById(d.getDealId())
                     .orElseThrow(() -> new NotFoundException("Deal " + d.getDealId() + " not found"));
             Long firmId = branches.findById(deal.getFirmBranchId())

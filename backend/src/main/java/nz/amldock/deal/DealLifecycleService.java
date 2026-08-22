@@ -62,8 +62,31 @@ public class DealLifecycleService {
                                                     DealStatus.REVIEW,
                                                     DealStatus.ON_HOLD),  DealStatus.NEW,      Who.REVIEWER, true));
 
-    /** The only status in which a deal's content may be changed. */
+    /** The only status in which the broker who authored a deal may still change it. */
     public static final DealStatus EDITABLE_STATUS = DealStatus.NEW;
+
+    /**
+     * The statuses a firm-level reviewer may change a deal's content in.
+     *
+     * <p>Wider than the author's single status, because these are the states in which the
+     * deal is <em>sitting with compliance</em>: handed over, under review, or parked. A
+     * reviewer working through an ownership structure has to be able to correct and remove
+     * what they find, and bouncing the deal back to the broker to fix a typo is not a
+     * workflow, it is an obstacle.
+     *
+     * <p>VERIFIED and CLOSED are deliberately absent. Those carry a compliance sign-off, and
+     * quietly editing the evidence underneath one would make the sign-off untrue. Reverting
+     * or overriding first puts that decision on the record, which is the point.
+     */
+    public static final Set<DealStatus> REVIEWER_EDITABLE_STATUSES = EnumSet.of(
+            DealStatus.NEW, DealStatus.HANDOVER, DealStatus.REVIEW, DealStatus.ON_HOLD);
+
+    /** Whether this actor may change the content of a deal in this status. */
+    public static boolean canEditContent(DealStatus status, Role role) {
+        return isDecider(role)
+                ? REVIEWER_EDITABLE_STATUSES.contains(status)
+                : status == EDITABLE_STATUS;
+    }
 
     /* ---------- entry points ---------- */
 
@@ -118,16 +141,24 @@ public class DealLifecycleService {
     /**
      * May this actor change the deal's <em>content</em>?
      *
-     * <p>Two groups, and they differ for a reason: the broker who created it owns the answers
-     * and may correct them; an AMLCO or senior manager of the firm may correct them on the
-     * broker's behalf rather than bounce a deal back over a typo. Nobody else — including ROOT,
-     * which reads and deletes but does not author a firm's compliance records.
+     * <p>Two groups, and they differ twice over. The broker who created it owns the answers
+     * and may correct them, but only while the deal is still theirs — once handed over it is
+     * someone else's to work on. An AMLCO or senior manager of the firm may correct them
+     * throughout the states where the deal sits with compliance, because that is when they
+     * are doing the work. Nobody else — including ROOT, which reads and deletes but does not
+     * author a firm's compliance records.
+     *
+     * <p>The error names the statuses open to <em>this</em> actor. A reviewer told "only NEW
+     * deals may be edited" would reasonably conclude the feature was broken.
      */
     public void assertEditable(Deal deal, UserPrincipal actor, Long dealFirmId) {
         assertActor(deal, actor, dealFirmId, Who.EDITOR);
-        if (deal.getStatus() != EDITABLE_STATUS) {
-            throw new BadRequestException("Only " + EDITABLE_STATUS + " deals may be edited — this one is "
-                    + deal.getStatus() + ". Revert it first.");
+        if (!canEditContent(deal.getStatus(), actor.role())) {
+            String allowed = isDecider(actor.role())
+                    ? REVIEWER_EDITABLE_STATUSES.toString()
+                    : "[" + EDITABLE_STATUS + "]";
+            throw new BadRequestException("A deal in " + deal.getStatus() + " cannot be edited"
+                    + " — allowed from: " + allowed + ". Revert it first.");
         }
     }
 

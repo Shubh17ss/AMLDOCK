@@ -47,6 +47,21 @@ export const dealStatusDot = (s) => (s === 'ALL' ? tokens.muted : DEAL_STATUS_ME
 /** Content may only be changed while the deal is NEW. */
 export const isEditable = (s) => s === 'NEW';
 
+/**
+ * Whether this role may change a deal's content in this status.
+ *
+ * Mirrors `DealLifecycleService.canEditContent`. The broker who authored it edits while it
+ * is still theirs (NEW); a firm-level reviewer edits throughout the states where the deal
+ * sits with compliance, because that is when they are working on it. VERIFIED and CLOSED
+ * carry a sign-off and are closed to both — revert or override first.
+ */
+const REVIEWER_EDITABLE = ['NEW', 'HANDOVER', 'REVIEW', 'ON_HOLD'];
+
+export const canEditContent = (status, role) =>
+  (role === 'AML_COMPLIANCE_OFFICER' || role === 'SENIOR_MANAGER')
+    ? REVIEWER_EDITABLE.includes(status)
+    : isEditable(status);
+
 export const canHandover = (s) => s === 'NEW';
 export const canStartReview = (s) => s === 'HANDOVER';
 export const canHold = (s) => s === 'REVIEW';
