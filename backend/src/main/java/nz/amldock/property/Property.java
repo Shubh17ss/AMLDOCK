@@ -2,6 +2,8 @@ package nz.amldock.property;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -24,7 +26,11 @@ public class Property extends BaseEntity {
     @Column(name = "address_line2")
     private String addressLine2;
 
-    @Column(nullable = false, length = 3)
+    /**
+     * ISO 3166-1 alpha-2, copied from the deal's reporting entity (deal → branch → firm) by
+     * {@code DealService}. Not client-supplied — {@code PropertyInput} carries no country.
+     */
+    @Column(nullable = false, length = 2)
     private String country = "NZ";
 
     private String region;
@@ -40,6 +46,18 @@ public class Property extends BaseEntity {
 
     @Column(name = "land_area_sqm")
     private BigDecimal landAreaSqm;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "property_type", length = 32)
+    private PropertyType propertyType;
+
+    /**
+     * Reason-for-selling code. Deliberately a free string rather than an enum: the valid set
+     * depends on {@link #propertyType}, so a flat enum would validate nothing useful. The
+     * canonical list lives in frontend/src/data/propertyTypes.js.
+     */
+    @Column(name = "reason_for_selling", length = 64)
+    private String reasonForSelling;
 
     public Long getId() { return id; }
     public String getAddressLine1() { return addressLine1; }
@@ -62,4 +80,8 @@ public class Property extends BaseEntity {
     public void setLegalDescription(String v) { this.legalDescription = v; }
     public BigDecimal getLandAreaSqm() { return landAreaSqm; }
     public void setLandAreaSqm(BigDecimal v) { this.landAreaSqm = v; }
+    public PropertyType getPropertyType() { return propertyType; }
+    public void setPropertyType(PropertyType v) { this.propertyType = v; }
+    public String getReasonForSelling() { return reasonForSelling; }
+    public void setReasonForSelling(String v) { this.reasonForSelling = v; }
 }

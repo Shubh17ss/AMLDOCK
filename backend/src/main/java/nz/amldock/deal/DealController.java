@@ -7,9 +7,10 @@ import nz.amldock.client.dto.ClientInput;
 import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.DealListItemDto;
-import nz.amldock.deal.dto.DecideRequest;
+import nz.amldock.deal.dto.NoteRequest;
 import nz.amldock.deal.dto.OverrideRequest;
 import nz.amldock.deal.dto.UpdateDealRequest;
+import nz.amldock.dealnote.dto.DealNoteDto;
 import nz.amldock.property.dto.PropertyInput;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +29,23 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/deals")
 public class DealController {
+
+    /**
+     * Who may reach an editing or handover endpoint at all.
+     *
+     * <p>Wider than the roles that may actually succeed — {@code DealLifecycleService} decides
+     * that, scoped to the deal's own firm and its current status. These annotations only keep
+     * roles with no business here from getting as far as asking.
+     *
+     * <p>Compliance officers and senior managers are included because they may correct a NEW
+     * deal on the broker's behalf rather than bounce it back over a typo.
+     */
+    private static final String EDITOR_ROLES =
+            "hasAnyRole('AGENT','AGENT_PA','ADMIN','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')";
+
+    /** Firm-level reviewers. A deal is not assigned to one of them — any will do. */
+    private static final String REVIEWER_ROLES =
+            "hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')";
 
     private final DealService deals;
     private final AuditService audit;
@@ -54,72 +72,110 @@ public class DealController {
     public DealDto create(@Valid @RequestBody CreateDealRequest req) {
         Deal d = deals.create(req);
         audit.record(AuditAction.DEAL_CREATED, "Deal", d.getId(),
-                "Created draft deal " + d.getReference());
+                "Created deal " + d.getReference());
         return deals.toDtoAfterMutation(d);
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
-    public DealDto update(@PathVariable Long id, @RequestBody UpdateDealRequest req) {
+    @PreAuthorize(EDITOR_ROLES)
+    public DealDto update(@PathVariable Long id, @Valid @RequestBody UpdateDealRequest req) {
         Deal d = deals.update(id, req);
         return deals.toDtoAfterMutation(d);
     }
 
     @PatchMapping("/{id}/property")
-    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
+    @PreAuthorize(EDITOR_ROLES)
     public DealDto updateProperty(@PathVariable Long id, @RequestBody PropertyInput input) {
         deals.updateProperty(id, input);
         return deals.get(id);
     }
 
     @PatchMapping("/{id}/client")
-    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
+    @PreAuthorize(EDITOR_ROLES)
     public DealDto updateClient(@PathVariable Long id, @Valid @RequestBody ClientInput input) {
         deals.updateClient(id, input);
         return deals.get(id);
     }
 
+    /**
+     * ROOT and SENIOR_MANAGER may delete any deal in scope; the deal's author may delete only
+     * their own, and only while it is NEW. {@code DealService.assertCanDelete} draws that second
+     * line — this annotation only decides who gets as far as asking.
+     */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AGENT','AGENT_PA','ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         deals.delete(id);
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{id}/submit")
-    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
-    public DealDto submit(@PathVariable Long id) {
-        Deal d = deals.submit(id);
-        audit.record(AuditAction.DEAL_SUBMITTED, "Deal", d.getId(),
-                "Deal " + d.getReference() + " submitted for review");
-        return deals.toDtoAfterMutation(d);
+    /* ---------- lifecycle ---------- */
+    // One endpoint per verb rather than a generic /transition taking a target status. @PreAuthorize
+    // is per-method, so a generic endpoint would need the union of every role and then re-check
+    // inside — which is exactly how the annotation and the service drift apart. A generic endpoint
+    // accepting an arbitrary target is also what /override already is, and that is deliberately
+    // senior-manager-only.
+
+    @PostMapping("/{id}/handover")
+    @PreAuthorize(EDITOR_ROLES)
+    public DealDto handover(@PathVariable Long id) {
+        var r = deals.act(id, DealAction.HANDOVER, null);
+        audit.record(AuditAction.DEAL_HANDED_OVER, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " handed over to compliance");
+        return deals.toDtoAfterMutation(r.deal());
     }
 
-    @PostMapping("/{id}/assign")
-    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public DealDto assign(@PathVariable Long id) {
-        Deal d = deals.assign(id);
-        audit.record(AuditAction.DEAL_ASSIGNED, "Deal", d.getId(),
-                "Deal " + d.getReference() + " claimed for review");
-        return deals.toDtoAfterMutation(d);
+    @PostMapping("/{id}/start-review")
+    @PreAuthorize(REVIEWER_ROLES)
+    public DealDto startReview(@PathVariable Long id) {
+        var r = deals.act(id, DealAction.START_REVIEW, null);
+        audit.record(AuditAction.DEAL_REVIEW_STARTED, "Deal", r.deal().getId(),
+                "Review started on deal " + r.deal().getReference());
+        return deals.toDtoAfterMutation(r.deal());
     }
 
-    @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public DealDto approve(@PathVariable Long id, @Valid @RequestBody DecideRequest req) {
-        Deal d = deals.approve(id, req.notes());
-        audit.record(AuditAction.DEAL_APPROVED, "Deal", d.getId(),
-                "Deal " + d.getReference() + " approved");
-        return deals.toDtoAfterMutation(d);
+    @PostMapping("/{id}/hold")
+    @PreAuthorize(REVIEWER_ROLES)
+    public DealDto hold(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+        var r = deals.act(id, DealAction.HOLD, req.note());
+        audit.record(AuditAction.DEAL_PUT_ON_HOLD, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " put on hold from " + r.previousStatus());
+        return deals.toDtoAfterMutation(r.deal());
     }
 
-    @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public DealDto reject(@PathVariable Long id, @Valid @RequestBody DecideRequest req) {
-        Deal d = deals.reject(id, req.notes());
-        audit.record(AuditAction.DEAL_REJECTED, "Deal", d.getId(),
-                "Deal " + d.getReference() + " rejected");
-        return deals.toDtoAfterMutation(d);
+    @PostMapping("/{id}/verify")
+    @PreAuthorize(REVIEWER_ROLES)
+    public DealDto verify(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+        var r = deals.act(id, DealAction.VERIFY, req.note());
+        audit.record(AuditAction.DEAL_VERIFIED, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " verified");
+        return deals.toDtoAfterMutation(r.deal());
+    }
+
+    @PostMapping("/{id}/close")
+    @PreAuthorize(REVIEWER_ROLES)
+    public DealDto close(@PathVariable Long id) {
+        var r = deals.act(id, DealAction.CLOSE, null);
+        audit.record(AuditAction.DEAL_CLOSED, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " closed");
+        return deals.toDtoAfterMutation(r.deal());
+    }
+
+    /**
+     * Sends a deal back to the broker for changes.
+     *
+     * <p>The author roles are admitted here so a broker can recall their own deal from HANDOVER
+     * before anyone has looked at it. Once review has started, {@code assertRevert} allows only
+     * a reviewer — an early handover is the broker's mistake to undo, but sending a deal back
+     * mid-review is a compliance decision.
+     */
+    @PostMapping("/{id}/revert")
+    @PreAuthorize(EDITOR_ROLES)
+    public DealDto revert(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+        var r = deals.act(id, DealAction.REVERT, req.note());
+        audit.record(AuditAction.DEAL_REVERTED, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " reverted to NEW from " + r.previousStatus());
+        return deals.toDtoAfterMutation(r.deal());
     }
 
     @PostMapping("/{id}/override")
@@ -130,5 +186,23 @@ public class DealController {
                 "Deal " + result.deal().getReference()
                         + " overridden: " + result.previousStatus() + " → " + req.targetStatus());
         return deals.toDtoAfterMutation(result.deal());
+    }
+
+    /* ---------- notes timeline ---------- */
+    // No @PreAuthorize: a note is exactly as readable and writable as the deal it belongs to, and
+    // DealService runs assertCanRead on both paths. Annotating by role here would be a second,
+    // coarser rule that could only disagree with the first.
+
+    @GetMapping("/{id}/notes")
+    public List<DealNoteDto> notes(@PathVariable Long id) {
+        return deals.notes(id);
+    }
+
+    @PostMapping("/{id}/notes")
+    public List<DealNoteDto> addNote(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+        Deal d = deals.comment(id, req.note());
+        audit.record(AuditAction.DEAL_NOTE_ADDED, "Deal", d.getId(),
+                "Note added to deal " + d.getReference());
+        return deals.notes(id);
     }
 }

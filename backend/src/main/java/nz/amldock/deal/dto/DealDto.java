@@ -3,6 +3,8 @@ package nz.amldock.deal.dto;
 import nz.amldock.client.dto.ClientDto;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealStatus;
+import nz.amldock.deal.RiskRating;
+import nz.amldock.deal.RiskRatingSource;
 import nz.amldock.deal.TransactionType;
 import nz.amldock.property.dto.PropertyDto;
 
@@ -27,12 +29,23 @@ public record DealDto(
         String notes,
         Long createdByUserId,
         String createdByEmail,
-        Long assignedComplianceUserId,
-        String decisionNotes,
         Long decidedByUserId,
         Instant decidedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // V28 — appended rather than interleaved so the positional constructor calls below
+        // stay the only diff.
+        String transactionPurpose,
+        Boolean trustInvolved,
+        Boolean onSoldQuickly,
+        String foreignExposureCountry,
+        Boolean redFlagPresent,
+        BigDecimal valuationMin,
+        BigDecimal valuationMax,
+        RiskRating riskRating,
+        RiskRatingSource riskRatingSource,
+        // V29
+        Boolean clientRemote
 ) {
     public static DealDto from(Deal d, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
@@ -43,8 +56,12 @@ public record DealDto(
                 d.getPocName(), d.getPocRole(), d.getPocPhone(), d.getPocEmail(),
                 property, client, d.getNotes(),
                 d.getCreatedByUserId(), createdByEmail,
-                d.getAssignedComplianceUserId(), d.getDecisionNotes(),
                 d.getDecidedByUserId(), d.getDecidedAt(),
-                d.getCreatedAt(), d.getUpdatedAt());
+                d.getCreatedAt(), d.getUpdatedAt(),
+                d.getTransactionPurpose(), d.getTrustInvolved(), d.getOnSoldQuickly(),
+                d.getForeignExposureCountry(), d.getRedFlagPresent(),
+                d.getValuationMin(), d.getValuationMax(),
+                d.getRiskRating(), d.getRiskRatingSource(),
+                d.getClientRemote());
     }
 }

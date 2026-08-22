@@ -5,9 +5,24 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { tokens, fonts } from '../../theme/theme.js';
 import { useCurrency } from '../../dashboard/useCurrency.js';
+import { propertyTypeLabel, reasonForSellingLabel } from '../../data/propertyTypes.js';
+import { countryName } from '../../data/countries.js';
+import { IndividualsFromIds } from './IndividualsFromIds.jsx';
+import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
 
 const TXN_LABEL = { PURCHASE: 'Purchase', SALE: 'Sale' };
 const CLIENT_TYPE_LABEL = { INDIVIDUAL: 'Individual', ENTITY: 'Entity' };
+
+/**
+ * Booleans must reach Row as strings. Row renders `{value || '—'}`, so a raw `false` would
+ * print as "—" and read as unanswered — the opposite of a "No".
+ */
+const yesNo = (v) => (v == null ? null : v ? 'Yes' : 'No');
+
+const foreignExposureLabel = (code) => {
+  if (!code) return null;
+  return code === 'NONE' ? 'None' : countryName(code);
+};
 
 /**
  * The deal information a broker captured, laid out group-by-group in the same shape the
@@ -15,8 +30,12 @@ const CLIENT_TYPE_LABEL = { INDIVIDUAL: 'Individual', ENTITY: 'Entity' };
  * Every field is shown — blanks render as "—" so a reviewer can see what wasn't provided.
  * Collapsible so it doesn't crowd the reviewer's workspace.
  */
-export function DealCapturedInfo({ deal, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen);
+/**
+ * @param embedded true when this owns a whole tab — the collapse control goes, since a
+ *                 section you navigated to should not need opening.
+ */
+export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false }) {
+  const [open, setOpen] = useState(embedded ? true : defaultOpen);
   const money = useCurrency();
   const p = deal.property ?? {};
   const c = deal.client ?? {};
@@ -41,14 +60,16 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
               Deal information
             </Typography>
           </Box>
-          <IconButton
-            onClick={() => setOpen((o) => !o)}
-            aria-label={open ? 'Collapse deal information' : 'Expand deal information'}
-            aria-expanded={open}
-            sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease', flexShrink: 0 }}
-          >
-            <ExpandMoreIcon />
-          </IconButton>
+          {!embedded && (
+            <IconButton
+              onClick={() => setOpen((o) => !o)}
+              aria-label={open ? 'Collapse deal information' : 'Expand deal information'}
+              aria-expanded={open}
+              sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease', flexShrink: 0 }}
+            >
+              <ExpandMoreIcon />
+            </IconButton>
+          )}
         </Stack>
 
         {/* Glance line when collapsed — keeps the quick summary a reviewer had before */}
@@ -65,7 +86,7 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
               <Row label="Reporting entity" value={deal.firmName} />
               <Row label="Branch"      value={deal.branchName} />
               <Row label="Transaction" value={TXN_LABEL[deal.transactionType] ?? deal.transactionType} />
-              <Row label="Value"       value={deal.transactionValue != null ? money.formatWithCode(deal.transactionValue) : null} />
+              <Row label="Value"       value={money.dealRange(deal)} />
             </Group>
 
             <Group title="Point of contact">
@@ -76,13 +97,12 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
             </Group>
 
             <Group title="Property">
-              <Row label="Address"     value={p.addressLine1} />
-              <Row label="Address 2"   value={p.addressLine2} />
-              <Row label="Suburb"      value={p.suburb} />
-              <Row label="District"    value={p.district} />
-              <Row label="Region"      value={p.region} />
-              <Row label="Country"     value={p.country} />
-              <Row label="Postcode"    value={p.postcode} />
+              <Row label="Type"        value={p.propertyType ? propertyTypeLabel(p.propertyType) : null} />
+              <Row label="Reason"      value={p.reasonForSelling ? reasonForSellingLabel(p.propertyType, p.reasonForSelling) : null} />
+              {/* One address, as it was captured. Country is separate because it is a
+                  firm-derived compliance fact, not part of what the broker typed. */}
+              <Row label="Address"     value={formatPropertyAddress(p)} />
+              <Row label="Country"     value={p.country ? countryName(p.country) : null} />
               <Row label="Title ref"   value={p.titleReference} />
               <Row label="Land area"   value={p.landAreaSqm != null ? `${p.landAreaSqm} m²` : null} />
               <Row label="Legal desc." value={p.legalDescription} />
@@ -90,9 +110,25 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
 
             <Group title="Client">
               <Row label="Name"  value={c.displayName} />
-              <Row label="Type"  value={CLIENT_TYPE_LABEL[c.clientType] ?? c.clientType} />
+              {/* Established during the ownership-structure review — the broker scans IDs of
+                  natural persons and is never asked to classify the owning entity. */}
+              <Row label="Type"  value={c.clientType ? (CLIENT_TYPE_LABEL[c.clientType] ?? c.clientType) : 'Pending review'} />
               <Row label="Email" value={c.email} />
               <Row label="Phone" value={c.phone} />
+              <IndividualsFromIds dealId={deal.id} dense />
+            </Group>
+
+            <Group title="Transaction & risk">
+              <Row label="Risk rating" value={deal.riskRating
+                ? `${deal.riskRating}${deal.riskRatingSource === 'OVERRIDE' ? ' (set by compliance)' : ''}`
+                : 'Not assessed'} />
+              <Row label="Red flag"    value={yesNo(deal.redFlagPresent)} />
+              <Row label="Purpose"     value={deal.transactionPurpose} />
+              <Row label="Trust in ownership" value={yesNo(deal.trustInvolved)} />
+              <Row label="On-sold quickly"    value={yesNo(deal.onSoldQuickly)} />
+              <Row label="Foreign exposure"   value={foreignExposureLabel(deal.foreignExposureCountry)} />
+              <Row label="Min value"   value={deal.valuationMin != null ? money.formatWithCode(deal.valuationMin) : null} />
+              <Row label="Max value"   value={deal.valuationMax != null ? money.formatWithCode(deal.valuationMax) : null} />
             </Group>
           </Grid>
         </Collapse>

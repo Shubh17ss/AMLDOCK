@@ -2,6 +2,7 @@ package nz.amldock.document;
 
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
+import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
@@ -43,6 +44,7 @@ public class DocumentService {
     private final UserRepository users;
     private final FileStorageService storage;
     private final DealLifecycleService lifecycle;
+    private final BeneficialOwnerService beneficialOwners;
     private final AuditService audit;
     private final long maxBytes;
     private final Duration uploadTtl;
@@ -56,6 +58,7 @@ public class DocumentService {
                            UserRepository users,
                            FileStorageService storage,
                            DealLifecycleService lifecycle,
+                           BeneficialOwnerService beneficialOwners,
                            AuditService audit,
                            @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
                            @Value("${S3_UPLOAD_TTL_MINUTES:5}") long uploadTtlMinutes,
@@ -68,6 +71,7 @@ public class DocumentService {
         this.users = users;
         this.storage = storage;
         this.lifecycle = lifecycle;
+        this.beneficialOwners = beneficialOwners;
         this.audit = audit;
         this.maxBytes = maxBytes;
         this.uploadTtl = Duration.ofMinutes(uploadTtlMinutes);
@@ -91,6 +95,14 @@ public class DocumentService {
             if (!deal.getId().equals(structure.getDealId())) {
                 throw new BadRequestException("Ownership node does not belong to this deal");
             }
+            // Checked here, not only in the picker. A restriction that lives in a dropdown is a
+            // suggestion — this is the point every upload has to pass through.
+            if (!node.getNodeType().accepts(req.documentType())) {
+                throw new BadRequestException(
+                        "A " + node.getNodeType().name().replace('_', ' ').toLowerCase()
+                                + " does not accept " + req.documentType().name().replace('_', ' ').toLowerCase()
+                                + " documents");
+            }
             nodeId = node.getId();
         }
 
@@ -105,8 +117,15 @@ public class DocumentService {
         d.setStatus(DocumentStatus.PENDING);
         d.setDealId(deal.getId());
         d.setOwnershipNodeId(nodeId);
+        // Carried from the request so confirmUpload knows whether this scan joins an existing
+        // person (the back of a card) or starts a new one.
+        d.setBeneficialOwnerId(req.beneficialOwnerId());
+        d.setIdSide(req.idSide());
         d.setUploadedByUserId(actor.id());
-        d.setOcrStatus(OcrStatus.NOT_APPLICABLE); // M5 sets PENDING for DL/PASSPORT
+        // Stays NOT_APPLICABLE until the bytes are provably in S3 — confirmUpload promotes
+        // OCR-eligible types to PENDING. Queueing here instead would fill the pending index
+        // with abandoned presigns whose objects never arrived.
+        d.setOcrStatus(OcrStatus.NOT_APPLICABLE);
         Document saved = documents.save(d);
 
         String url = storage.presignUpload(key, req.contentType(), uploadTtl);
@@ -141,7 +160,34 @@ public class DocumentService {
         audit.record(AuditAction.DOCUMENT_UPLOADED, "Document", doc.getId(),
                 "Uploaded " + doc.getOriginalFilename() + " for deal " + doc.getDealId());
 
-        // M5 will hook OCR dispatch here for DL/PASSPORT.
+        // Queue identity documents for extraction. The object is confirmed present in S3 by this
+        // point, so anything in the queue is genuinely processable.
+        //
+        // This write is the whole reason the queue lives in the database: it commits in the same
+        // transaction as the document going ACTIVE, so the work item and the row it refers to can
+        // never disagree. See ScheduledIdExtractionDispatcher, which drains it.
+        // A document attached to an ownership node is filed against a person who is already in
+        // the structure — evidence about them, not the discovery of someone new. Without this,
+        // a reviewer attaching a passport on a node's Documents tab creates a *second*
+        // individual on the deal, which is the opposite of what attaching it to a node means.
+        // It is also why an ID added there is never read: there is no person record for
+        // extraction to write into, so the Textract call would be spend with nowhere to land.
+        boolean filedAgainstNode = doc.getOwnershipNodeId() != null;
+
+        if (doc.getDocumentType().isOcrEligible() && !filedAgainstNode) {
+            doc.setOcrStatus(OcrStatus.PENDING);
+
+            // The individual exists from here, not from a successful extraction. A broker who
+            // scans an ID sees a person appear straight away, and still does when Textract
+            // cannot read the card — an unreadable scan is still evidence someone was presented.
+            if (doc.getBeneficialOwnerId() == null) {
+                doc.setBeneficialOwnerId(beneficialOwners.createProvisional(doc).getId());
+            }
+            // A scan with no side named is the front; a back is only ever explicit.
+            if (doc.getIdSide() == null) {
+                doc.setIdSide(IdSide.FRONT);
+            }
+        }
 
         return toDto(doc);
     }
@@ -153,6 +199,16 @@ public class DocumentService {
                 .stream().map(this::toDto).toList();
     }
 
+    /**
+     * Everything filed against one node, and — for an individual — the ID scans of the person
+     * behind it.
+     *
+     * <p>The two sets exist for different reasons and are joined here rather than at either
+     * source. Node documents are what a reviewer attached while working on this node; the
+     * person's scans are what the broker photographed, and they are linked to the <em>person</em>
+     * so they follow them across deals. Showing only the first left the tab empty on every
+     * extraction-created individual, which is most of them.
+     */
     @Transactional(readOnly = true)
     public List<DocumentDto> listForNode(Long nodeId) {
         OwnershipNode node = ownershipNodes.findById(nodeId)
@@ -161,8 +217,20 @@ public class DocumentService {
                 .orElseThrow(() -> new NotFoundException("Ownership structure not found"));
         // Reuse the deal-level read permission check so firm-user / broker scoping is honoured.
         mustLoadDealForRead(structure.getDealId());
-        return documents.findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(node.getId(), DocumentStatus.ACTIVE)
-                .stream().map(this::toDto).toList();
+
+        List<Document> found = new java.util.ArrayList<>(
+                documents.findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(node.getId(), DocumentStatus.ACTIVE));
+
+        if (node.getBeneficialOwnerId() != null) {
+            java.util.Set<Long> seen = found.stream().map(Document::getId)
+                    .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
+            // A document can legitimately be on both — the dedupe is on identity, not position.
+            documents.findAllByBeneficialOwnerIdAndStatus(node.getBeneficialOwnerId(), DocumentStatus.ACTIVE)
+                    .stream().filter(d -> seen.add(d.getId())).forEach(found::add);
+            found.sort(java.util.Comparator.comparing(Document::getCreatedAt).reversed());
+        }
+
+        return found.stream().map(this::toDto).toList();
     }
 
     @Transactional(readOnly = true)
@@ -181,14 +249,36 @@ public class DocumentService {
         return new DownloadUrlResponse(url, (int) downloadTtl.toSeconds());
     }
 
-    /** Deletes are restricted to ROOT and SENIOR_MANAGER (gated by @PreAuthorize on the controller). */
+    /**
+     * Deletes a document.
+     *
+     * <p>Open to ROOT and SENIOR_MANAGER for any document, and to the <em>uploader</em> for their
+     * own. That second case is not a loosening for its own sake: the deal form's own remove
+     * buttons (IdScanList, ValuationField) call this endpoint as the broker, so without it an
+     * agent could not clear a mis-scanned ID they had just taken.
+     */
     @Transactional
     public void delete(Long id) {
         Document d = documents.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
-        if (actor.role() != Role.ROOT && actor.role() != Role.SENIOR_MANAGER) {
-            throw new ForbiddenException("Only ROOT or a senior manager may delete a document");
+        // A firm-level reviewer may remove a document somebody else uploaded — they are the
+        // ones working through the file. ROOT joins them because it manages the platform.
+        boolean elevated = actor.role() == Role.ROOT || actor.role().isFirmLevel();
+        if (!elevated && !actor.id().equals(d.getUploadedByUserId())) {
+            throw new ForbiddenException(
+                    "Only the uploader, a compliance officer, a senior manager or ROOT may delete this document");
+        }
+        // Still status-checked for everyone firm-scoped: assertEditable is the codebase's
+        // answer to "may this actor write to this deal", and it now admits reviewers through
+        // HANDOVER, REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the
+        // firm check inside could never pass — that is the reason for the exemption, not rank.
+        if (actor.role() != Role.ROOT && d.getDealId() != null) {
+            Deal deal = deals.findById(d.getDealId())
+                    .orElseThrow(() -> new NotFoundException("Deal " + d.getDealId() + " not found"));
+            Long firmId = branches.findById(deal.getFirmBranchId())
+                    .map(FirmBranch::getRealEstateFirmId).orElse(null);
+            lifecycle.assertEditable(deal, actor, firmId);
         }
         if (d.getStatus() == DocumentStatus.DELETED) return;
 
@@ -196,6 +286,10 @@ public class DocumentService {
         d.setStatus(DocumentStatus.DELETED);
         audit.record(AuditAction.DOCUMENT_DELETED, "Document", d.getId(),
                 "Deleted " + d.getOriginalFilename());
+
+        // The person goes only with their last remaining image — removing one side of a card
+        // leaves someone who was still presented, evidenced by the other side.
+        beneficialOwners.removeIfOrphaned(d.getBeneficialOwnerId());
     }
 
     /* ---------- helpers ---------- */

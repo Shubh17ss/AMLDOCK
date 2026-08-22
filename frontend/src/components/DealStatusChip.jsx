@@ -1,13 +1,7 @@
 import { Chip } from '@mui/material';
+import { dealStatusColor, dealStatusLabel } from '../data/dealStatus.js';
 
-const COLOR_BY_STATUS = {
-  DRAFT: 'default',
-  SUBMITTED: 'info',
-  UNDER_REVIEW: 'warning',
-  APPROVED: 'success',
-  REJECTED: 'error',
-};
-
-export function DealStatusChip({ status }) {
-  return <Chip size="small" label={status} color={COLOR_BY_STATUS[status] ?? 'default'} />;
+/** A deal's lifecycle position. Reads "In review", never "UNDER_REVIEW". */
+export function DealStatusChip({ status, size = 'small' }) {
+  return <Chip size={size} label={dealStatusLabel(status)} color={dealStatusColor(status)} />;
 }

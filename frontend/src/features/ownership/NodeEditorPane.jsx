@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Chip, Divider, FormControl, FormControlLabel, FormLabel,
-  IconButton, InputLabel, MenuItem, Paper, Radio, RadioGroup, Select, Stack, Tab,
-  Tabs, TextField, Tooltip, Typography,
+  Radio, RadioGroup, Stack, TextField, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { EDGE_ROLES } from '../../api/ownership.js';
+import { ACCEPTED_DOCUMENT_TYPES } from '../../api/ownership.js';
 import { listNodeDocuments, uploadToS3 } from '../../api/documents.js';
 import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
 import { VoiceClip } from '../../components/VoiceClip.jsx';
+import { DocumentViewerDialog } from '../../components/DocumentViewerDialog.jsx';
+import { DealDocumentList } from '../deal/review/DealDocumentList.jsx';
+import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
 import { tokens } from '../../theme/theme.js';
 
 // Three user-facing manual states mapped onto the existing backend enum.
@@ -29,15 +31,21 @@ const VERIFICATION_OPTIONS = [
  *   - delete the node (with cascade confirm if it has edges)
  * Documents and Verifications tabs are placeholders for M8 / M9.
  */
-export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealId, onViewDocument }) {
-  const [tab, setTab] = useState(0);
+export function NodeEditorPane({
+  tree, selectedNodeId, useTree, onCleared, dealId,
+  /** Which panel to show. Owned by NodeDrawer, which draws the tab strip. */
+  tab = 'details',
+}) {
   const [form, setForm] = useState(null);
-  const [edgeForm, setEdgeForm] = useState({ percentage: '', role: '' });
+  const [edgeForm, setEdgeForm] = useState({ percentage: '' });
   const [verification, setVerification] = useState({ status: 'IN_PROGRESS', notes: '' });
   const [verificationVoice, setVerificationVoice] = useState(null); // Blob | null
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [verificationSaved, setVerificationSaved] = useState(false);
+  // The document open in the viewer, or null. Held whole rather than by id: both lists
+  // already have the row in hand, and re-finding it would mean each knowing about the other.
+  const [viewingDoc, setViewingDoc] = useState(null);
   const qc = useQueryClient();
 
   const selected = useMemo(
@@ -60,14 +68,33 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
         idDocumentType: selected.idDocumentType ?? '',
         idDocumentNumber: selected.idDocumentNumber ?? '',
         idDocumentCountry: selected.idDocumentCountry ?? '',
-        nzbn: selected.nzbn ?? '',
+        businessNumber: selected.businessNumber ?? '',
+        jurisdictionCountry: selected.jurisdictionCountry ?? null,
+        companyHasConstitution: selected.companyHasConstitution ?? false,
+        nomineeStatus: selected.nomineeStatus ?? 'NOT_ASKED',
+        sourceOfFunds: selected.sourceOfFunds ?? '',
+        companyComplexOwnership: selected.companyComplexOwnership ?? false,
+        companyPersonalAssets: selected.companyPersonalAssets ?? false,
+        companyNewDeveloper: selected.companyNewDeveloper ?? false,
         companyNumber: selected.companyNumber ?? '',
         incorporationDate: selected.incorporationDate ?? '',
         registeredOffice: selected.registeredOffice ?? '',
-        trustName: selected.trustName ?? '',
-        trustDeedDocumentId: selected.trustDeedDocumentId ?? '',
-        settlorName: selected.settlorName ?? '',
+        trustType: selected.trustType ?? '',
+        trustDiscretionary: selected.trustDiscretionary ?? false,
+        trustHoldingComplexity: selected.trustHoldingComplexity ?? '',
+        personRole: selected.personRole ?? '',
+        reference: selected.reference ?? '',
         notes: selected.notes ?? '',
+        // The shared record behind an individual. Absent on every entity type.
+        person: selected.person
+          ? {
+            email: selected.person.email ?? '',
+            phoneCountry: selected.person.phoneCountry ?? null,
+            phoneNumber: selected.person.phoneNumber ?? '',
+            occupation: selected.person.occupation ?? '',
+            sourceOfFunds: selected.person.sourceOfFunds ?? '',
+          }
+          : null,
       });
       setVerification({
         status: selected.verificationStatus ?? 'IN_PROGRESS',
@@ -85,34 +112,21 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   const nodeDocsQ = useQuery({
     queryKey: ['documents', 'node', selectedNodeId],
     queryFn: () => listNodeDocuments(selectedNodeId),
-    enabled: Boolean(selectedNodeId) && tab === 2,
+    enabled: Boolean(selectedNodeId) && tab === 'verification',
   });
   const nodeVoiceNotes = (nodeDocsQ.data ?? []).filter((d) => d.documentType === 'VOICE_NOTE');
 
   useEffect(() => {
-    if (incomingEdge) {
-      setEdgeForm({
-        percentage: incomingEdge.percentage ?? '',
-        role: incomingEdge.role ?? '',
-      });
-    } else {
-      setEdgeForm({ percentage: '', role: '' });
-    }
+    setEdgeForm({ percentage: incomingEdge?.percentage ?? '' });
   }, [incomingEdge?.id]);
 
-  if (!selected || !form) {
-    return (
-      <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
-        <Typography sx={{ color: tokens.muted }} variant="body2">
-          Select a node from the tree to view or edit its details.
-        </Typography>
-      </Paper>
-    );
-  }
+  if (!selected || !form) return null;
 
   const saveDetails = async () => {
     setError(null);
     try {
+      // The deal is refetched too — useOwnershipTree invalidates it on every node write, since
+      // the answers on this form feed its risk rating.
       await useTree.updateNode.mutateAsync({ nodeId: selected.id, payload: buildNodePayload(form) });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save');
@@ -165,9 +179,11 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
     try {
       await useTree.updateEdge.mutateAsync({
         edgeId: incomingEdge.id,
+        // No role in the payload. updateEdge reads a null role as "leave alone", so a role
+        // captured before this field went away stays on the edge rather than being cleared by an
+        // unrelated save.
         payload: {
           percentage: edgeForm.percentage === '' ? null : Number(edgeForm.percentage),
-          role: edgeForm.role || null,
         },
       });
     } catch (err) {
@@ -211,48 +227,27 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
-          {selected.displayName}
-        </Typography>
-        <Chip size="small" label={selected.nodeType.replaceAll('_', ' ').toLowerCase()} variant="outlined" />
-        <Tooltip title="Delete node">
-          <IconButton size="small" color="error" onClick={handleDelete} disabled={deleting}>
-            <DeleteOutlineIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Stack>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tab label="Details" />
-        <Tab label="Documents" />
-        <Tab label="Verifications" />
-      </Tabs>
-
+    <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
-      {tab === 0 && (
-        <Stack spacing={3} sx={{ overflowY: 'auto' }}>
+      {/* None of the tabs below scrolls on its own. This pane used to be a fixed-height panel and
+          kept the scrolling; inside the drawer the body already scrolls, and an `overflow` box here
+          clips whatever sits above its content edge — which is exactly where an outlined field
+          draws its floating label. That was the chopped heading on each tab's first field. */}
+      {tab === 'details' && (
+        <Stack spacing={3}>
           <NodeFormFields value={form} onChange={setForm} includeTypeSelector={false} />
 
           {incomingEdge && (
             <>
               <Divider />
               <Typography variant="subtitle2">Link from parent</Typography>
-              <Stack direction="row" spacing={2}>
-                <TextField label="Percentage" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }}
-                           value={edgeForm.percentage}
-                           onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
-                           sx={{ width: 180 }} />
-                <FormControl sx={{ minWidth: 200 }}>
-                  <InputLabel id="edge-role-label">Role</InputLabel>
-                  <Select labelId="edge-role-label" label="Role" value={edgeForm.role}
-                          onChange={(e) => setEdgeForm((p) => ({ ...p, role: e.target.value }))}>
-                    <MenuItem value=""><em>None</em></MenuItem>
-                    {EDGE_ROLES.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Stack>
+              {/* Percentage only. The edge used to carry a Link role as well, which was a second
+                  answer to the question Type already asks on the node itself. */}
+              <TextField label="Percentage" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }}
+                         value={edgeForm.percentage}
+                         onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
+                         sx={{ width: 180 }} />
               <Stack direction="row" spacing={1}>
                 <Button size="small" variant="outlined" onClick={saveEdge}
                         disabled={useTree.updateEdge.isPending}>Save link</Button>
@@ -263,28 +258,69 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
           )}
 
           <Divider />
-          <Box>
+          <Stack direction="row" spacing={1} alignItems="center">
             <Button variant="contained" startIcon={<SaveIcon />} onClick={saveDetails}
                     disabled={useTree.updateNode.isPending}>
               {useTree.updateNode.isPending ? 'Saving…' : 'Save details'}
             </Button>
-          </Box>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button size="small" color="error" startIcon={<DeleteOutlineIcon />}
+                    onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Removing…' : 'Remove from structure'}
+            </Button>
+          </Stack>
         </Stack>
       )}
 
-      {tab === 1 && (
-        <Box sx={{ overflowY: 'auto' }}>
+      {tab === 'documents' && (
+        <Stack spacing={1.5}>
+          {/* The list below includes the ID scans the broker captured — those are linked to the
+              person, not to this node, and were invisible here until now. */}
+          {selected.nodeType === 'INDIVIDUAL' && (
+            <Typography variant="caption" sx={{ color: tokens.muted }}>
+              Includes the ID scans captured for this person. Anything added here is filed as
+              evidence against this node — an ID uploaded here is not read automatically, and
+              does not create a second individual.
+            </Typography>
+          )}
           <DocumentUploader
             dealId={dealId}
             ownershipNodeId={selected.id}
+            allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
+            compact
             title={`Documents on ${selected.displayName}`}
-            onViewDocument={onViewDocument}
+            onViewDocument={(id) => {
+              // The node's own rows open the same viewer as the deal list below. One viewer,
+              // two ways in — the alternative is two that drift.
+              const found = (nodeDocsQ.data ?? []).find((d) => d.id === id);
+              if (found) setViewingDoc(found);
+            }}
           />
-        </Box>
+
+          {/* The deal's whole document set. It used to have a third of the review screen to
+              itself and opened on whichever file happened to be first; now it is a list, and
+              reading one is a deliberate act. */}
+          <Divider />
+          <DealDocumentList dealId={dealId} onOpen={setViewingDoc} />
+        </Stack>
       )}
 
-      {tab === 2 && (
-        <Stack spacing={3} sx={{ overflowY: 'auto' }}>
+      {(tab === 'echecks' || tab === 'pep') && (
+        <ParkedPanel title={tab === 'echecks' ? 'Electronic checks' : 'Politically exposed person'}>
+          {tab === 'echecks'
+            ? 'Identity and address verification against external registers will run from here, with each result kept against this node as evidence.'
+            : 'PEP and sanctions screening for this party will show here, along with what was matched and who cleared it.'}
+        </ParkedPanel>
+      )}
+
+      <DocumentViewerDialog
+        open={Boolean(viewingDoc)}
+        doc={viewingDoc}
+        onClose={() => setViewingDoc(null)}
+      />
+
+      {tab === 'verification' && (
+        <Stack spacing={3}>
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Manual verification</Typography>
             <Typography variant="caption" sx={{ color: tokens.muted }}>
@@ -362,6 +398,6 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
           )}
         </Stack>
       )}
-    </Paper>
+    </Box>
   );
 }

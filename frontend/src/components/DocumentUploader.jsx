@@ -11,8 +11,8 @@ import DownloadIcon from '@mui/icons-material/Download';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
-  DOCUMENT_TYPES, deleteDocument, fetchDownloadUrl, listDealDocuments,
-  listNodeDocuments, uploadToS3,
+  AUDIO_DOCUMENT_TYPES, DOCUMENT_TYPES, deleteDocument, documentTypeLabel, fetchDownloadUrl,
+  listDealDocuments, listNodeDocuments, uploadToS3,
 } from '../api/documents.js';
 import { CameraCaptureDialog } from './CameraCaptureDialog.jsx';
 import { tokens } from '../theme/theme.js';
@@ -28,6 +28,18 @@ const formatBytes = (n) => {
 export function DocumentUploader({
   dealId,
   ownershipNodeId = null,
+  /**
+   * Document type values this node will accept, or undefined for no restriction. Narrows the
+   * picker only — the server enforces the same list in presignUpload, because a restriction
+   * that lives in a dropdown is a suggestion.
+   */
+  allowedTypes = undefined,
+  /**
+   * Lay out for a narrow container. MUI's breakpoints watch the viewport, so inside a 480px
+   * drawer on a 1500px screen every `sm:` rule still fires and the table runs off the edge.
+   * This is the container query the component cannot ask for itself.
+   */
+  compact = false,
   canUpload = true,
   title = 'Documents',
   onViewDocument = null,
@@ -37,6 +49,9 @@ export function DocumentUploader({
   const qc = useQueryClient();
   const inputRef = useRef(null);
   const [documentType, setDocumentType] = useState('OTHER');
+  const typeOptions = allowedTypes
+    ? DOCUMENT_TYPES.filter((t) => allowedTypes.includes(t.value))
+    : DOCUMENT_TYPES;
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(null); // { name, phase, percent }
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -103,8 +118,17 @@ export function DocumentUploader({
   // Optionally drop voice notes — some screens surface them separately (e.g. a Broker
   // notes card) and don't want them repeated in the document table.
   const rows = (listQ.data ?? []).filter(
-    (d) => !(hideVoiceNotes && d.documentType === 'VOICE_NOTE'),
+    (d) => !(hideVoiceNotes && AUDIO_DOCUMENT_TYPES.includes(d.documentType)),
   );
+
+  /**
+   * A node's list also carries the ID scans of the person behind it, which live on the person
+   * rather than on the node. Those are not deletable from here: removing the last one takes the
+   * person — and the node being edited — with it, which is not what a delete icon on a document
+   * row looks like it will do. The broker's ID list is where that action reads as what it is.
+   */
+  const isDeletableHere = (d) =>
+    !isNodeScoped || d.ownershipNodeId === ownershipNodeId;
 
   const handleDownload = async (id) => {
     try {
@@ -118,24 +142,26 @@ export function DocumentUploader({
   return (
     <Stack spacing={2}>
       <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        justifyContent={{ sm: 'space-between' }}
-        alignItems={{ sm: 'center' }}
-        spacing={{ xs: 1.5, sm: 0 }}
+        direction={compact ? 'column' : { xs: 'column', sm: 'row' }}
+        justifyContent={compact ? undefined : { sm: 'space-between' }}
+        alignItems={compact ? 'stretch' : { sm: 'center' }}
+        spacing={compact ? 1.5 : { xs: 1.5, sm: 0 }}
       >
         <Typography variant="subtitle1">{title}</Typography>
         {canUpload && (
           <Stack
-            direction={{ xs: 'column', sm: 'row' }}
+            direction={compact ? 'column' : { xs: 'column', sm: 'row' }}
             spacing={1.5}
-            alignItems={{ sm: 'center' }}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
+            alignItems={compact ? 'stretch' : { sm: 'center' }}
+            sx={{ width: compact ? '100%' : { xs: '100%', sm: 'auto' } }}
           >
-            <FormControl size="small" sx={{ minWidth: { sm: 200 }, width: { xs: '100%', sm: 'auto' } }}>
+            <FormControl size="small"
+                         sx={{ minWidth: compact ? 0 : { sm: 200 },
+                               width: compact ? '100%' : { xs: '100%', sm: 'auto' } }}>
               <InputLabel id="doc-type-label">Document type</InputLabel>
               <Select labelId="doc-type-label" label="Document type"
                       value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
-                {DOCUMENT_TYPES.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+                {typeOptions.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
               </Select>
             </FormControl>
             <Button
@@ -194,7 +220,11 @@ export function DocumentUploader({
       <TableContainer
         component={Paper}
         variant="outlined"
-        sx={scrollTable ? { maxHeight: 420 } : undefined}
+        sx={{
+          ...(scrollTable ? { maxHeight: 420 } : null),
+          // Wide content scrolls inside its own box; the panel around it never does.
+          overflowX: 'auto',
+        }}
       >
         <Table size="small" stickyHeader={scrollTable}>
           <TableHead>
@@ -210,8 +240,16 @@ export function DocumentUploader({
           <TableBody>
             {rows.map((d) => (
               <TableRow key={d.id}>
-                <TableCell>{d.originalFilename}</TableCell>
-                <TableCell><Chip size="small" label={d.documentType} /></TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <span>{d.originalFilename}</span>
+                    {d.idSide && (
+                      <Chip size="small" variant="outlined"
+                            label={d.idSide === 'BACK' ? 'back' : 'front'} />
+                    )}
+                  </Stack>
+                </TableCell>
+                <TableCell><Chip size="small" label={documentTypeLabel(d.documentType)} /></TableCell>
                 <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
                 <TableCell>{d.uploadedByEmail ?? '—'}</TableCell>
                 <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
@@ -228,7 +266,7 @@ export function DocumentUploader({
                       <DownloadIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  {canUpload && (
+                  {canUpload && (isDeletableHere(d) ? (
                     <Tooltip title="Delete">
                       <IconButton size="small"
                                   onClick={() => deleteMut.mutate(d.id)}
@@ -236,7 +274,15 @@ export function DocumentUploader({
                         <DeleteOutlineIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                  )}
+                  ) : (
+                    <Tooltip title="This is an ID scan from the deal form. Remove it there — deleting the last one removes the person.">
+                      <span>
+                        <IconButton size="small" disabled>
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  ))}
                 </TableCell>
               </TableRow>
             ))}

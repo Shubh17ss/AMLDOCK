@@ -4,61 +4,60 @@ import {
   DialogTitle, FormControl, InputLabel, MenuItem, Select, Stack, TextField,
 } from '@mui/material';
 
-const STATUSES = ['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
+import { DEAL_STATUSES as STATUSES, dealStatusLabel } from '../../data/dealStatus.js';
 
-export function DecideDialog({ open, mode, dealReference, onClose, onSubmit, submitting }) {
-  const [notes, setNotes] = useState('');
+/**
+ * Asks for the note a status change needs, then runs it.
+ *
+ * One component for hold / verify / revert — they differ only in wording and button colour, and
+ * every one of them writes a note to the deal's timeline. The 3-character floor matches the
+ * server's (DealLifecycleService.requireNote) so the dialog fails fast rather than round-tripping.
+ */
+export function StatusNoteDialog({
+  open, title, prompt, confirmLabel, confirmColor = 'primary',
+  label = 'Note', onClose, onSubmit, submitting,
+}) {
+  const [note, setNote] = useState('');
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (open) { setNotes(''); setError(null); }
+    if (open) { setNote(''); setError(null); }
   }, [open]);
-
-  const isApprove = mode === 'approve';
-  const verb = isApprove ? 'Approve' : 'Reject';
 
   const submit = async (e) => {
     e.preventDefault();
-    if (notes.trim().length < 3) {
-      setError('Notes must be at least 3 characters');
-      return;
-    }
+    if (note.trim().length < 3) { setError('Please write at least 3 characters'); return; }
     try {
-      await onSubmit(notes.trim());
+      await onSubmit(note.trim());
     } catch (err) {
-      setError(err.response?.data?.message || `Failed to ${verb.toLowerCase()}`);
+      setError(err.response?.data?.message || 'That didn’t go through. Try again.');
     }
   };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <Box component="form" onSubmit={submit}>
-        <DialogTitle>{verb} {dealReference}</DialogTitle>
+        <DialogTitle>{title}</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            {isApprove
-              ? 'Add notes describing what you verified. The broker and firm user will see these notes.'
-              : 'Explain why this deal is being rejected. The broker and firm user will see these notes.'}
-          </DialogContentText>
+          {prompt && <DialogContentText sx={{ mb: 2 }}>{prompt}</DialogContentText>}
           <TextField
             autoFocus
-            label="Decision notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            label={label}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
             multiline
-            minRows={5}
+            minRows={4}
             fullWidth
             required
-            helperText={`${notes.length} characters`}
+            helperText={`${note.length} characters`}
           />
           {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} disabled={submitting}>Cancel</Button>
-          <Button type="submit" variant="contained"
-                  color={isApprove ? 'success' : 'error'}
-                  disabled={submitting || notes.trim().length < 3}>
-            {submitting ? `${verb.replace(/e$/, 'ing')}…` : verb}
+          <Button type="submit" variant="contained" color={confirmColor}
+                  disabled={submitting || note.trim().length < 3}>
+            {submitting ? 'Working…' : confirmLabel}
           </Button>
         </DialogActions>
       </Box>
@@ -97,8 +96,8 @@ export function OverrideDialog({ open, deal, onClose, onSubmit, submitting }) {
         <DialogTitle>Override deal status</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Force this deal to a different status. The reason will be prefixed into the deal's
-            decision notes for audit. Use sparingly — every override is logged.
+            Force this deal to a different status, ignoring the normal order. The reason is
+            written to the deal's timeline and the audit log. Use sparingly.
           </DialogContentText>
           <Stack spacing={2}>
             <FormControl required>
@@ -106,7 +105,7 @@ export function OverrideDialog({ open, deal, onClose, onSubmit, submitting }) {
               <Select labelId="target-status-label" label="Target status"
                       value={targetStatus} onChange={(e) => setTargetStatus(e.target.value)}>
                 {STATUSES.filter((s) => s !== deal?.status).map((s) => (
-                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                  <MenuItem key={s} value={s}>{dealStatusLabel(s)}</MenuItem>
                 ))}
               </Select>
             </FormControl>

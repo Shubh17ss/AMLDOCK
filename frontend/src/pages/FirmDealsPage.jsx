@@ -6,10 +6,11 @@ import { DealsTable } from '../components/DealsTable.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { StatusPills } from '../components/StatusPills.jsx';
+import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
 
-const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
+
 
 export function FirmDealsPage() {
   const [status, setStatus] = useState('ALL');

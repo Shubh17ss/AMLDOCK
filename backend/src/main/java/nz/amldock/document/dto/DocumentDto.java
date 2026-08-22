@@ -3,6 +3,7 @@ package nz.amldock.document.dto;
 import nz.amldock.document.Document;
 import nz.amldock.document.DocumentStatus;
 import nz.amldock.document.DocumentType;
+import nz.amldock.document.IdSide;
 import nz.amldock.document.OcrStatus;
 
 import java.math.BigDecimal;
@@ -17,6 +18,8 @@ public record DocumentDto(
         DocumentStatus status,
         Long dealId,
         Long ownershipNodeId,
+        Long beneficialOwnerId,
+        IdSide idSide,
         Long uploadedByUserId,
         String uploadedByEmail,
         OcrStatus ocrStatus,
@@ -30,6 +33,7 @@ public record DocumentDto(
     public static DocumentDto from(Document d, String uploaderEmail) {
         return new DocumentDto(d.getId(), d.getOriginalFilename(), d.getContentType(), d.getSizeBytes(),
                 d.getDocumentType(), d.getStatus(), d.getDealId(), d.getOwnershipNodeId(),
+                d.getBeneficialOwnerId(), d.getIdSide(),
                 d.getUploadedByUserId(), uploaderEmail,
                 d.getOcrStatus(), d.getOcrProvider(), d.getOcrFields(), d.getOcrConfidence(),
                 d.getOcrCompletedAt(), d.getCreatedAt(), d.getUpdatedAt());

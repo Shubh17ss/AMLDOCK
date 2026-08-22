@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useDashboardScope } from './DashboardScope.jsx';
 import {
   currencyFor, formatMoney, formatMoneyCompact, formatMoneyWithCode,
+  formatMoneyRange, formatMoneyRangeCompact, formatMoneyRangeWithCode,
 } from '../utils/formatters.js';
 
 /**
@@ -31,6 +32,14 @@ export function useCurrency() {
       format: (value) => formatMoney(value, country),
       formatWithCode: (value) => formatMoneyWithCode(value, country),
       formatCompact: (value) => formatMoneyCompact(value, country),
+      // Deal worth is a min–max range; `fallback` renders pre-range deals from their
+      // single transactionValue.
+      formatRange: (min, max, fallback) => formatMoneyRange(min, max, country, fallback),
+      formatRangeCompact: (min, max, fallback) => formatMoneyRangeCompact(min, max, country, fallback),
+      formatRangeWithCode: (min, max, fallback) => formatMoneyRangeWithCode(min, max, country, fallback),
+      /** Convenience for a deal row: reads the range off the DTO, falling back per above. */
+      dealRange: (d) => formatMoneyRange(d?.valuationMin, d?.valuationMax, country, d?.transactionValue),
+      dealRangeCompact: (d) => formatMoneyRangeCompact(d?.valuationMin, d?.valuationMax, country, d?.transactionValue),
     };
   }, [country]);
 }

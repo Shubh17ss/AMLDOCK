@@ -9,6 +9,8 @@ import App from './App.jsx';
 import './styles/fonts.css';
 // Light/dark palette variables — the tokens in theme.js are var() refs into this.
 import './styles/theme-vars.css';
+// Styles the AddressFinder widget's own markup — see the file for why it needs !important.
+import './styles/addressfinder.css';
 // Country flag glyphs (SVG-in-CSS) for the Overseas Jurisdiction picker.
 import 'flag-icons/css/flag-icons.min.css';
 import { theme } from './theme/theme.js';

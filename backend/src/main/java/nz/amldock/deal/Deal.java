@@ -53,15 +53,60 @@ public class Deal extends BaseEntity {
     @Column(name = "created_by_user_id", nullable = false)
     private Long createdByUserId;
 
-    @Column(name = "assigned_compliance_user_id")
-    private Long assignedComplianceUserId;
-
-    @Column(name = "decision_notes", columnDefinition = "text")
-    private String decisionNotes;
-
-    /** General deal-level notes from the broker (set in the wizard's review step). */
+    /**
+     * The broker's own note (section 4 of the deal form). Editable while the deal is NEW, and
+     * rendered as the opening entry of the deal's notes timeline — see DealNoteService, which
+     * synthesises that entry rather than copying this into deal_note.
+     */
     @Column(name = "notes", columnDefinition = "text")
     private String notes;
+
+    /* ---------- broker's compliance answers (V28, sections 2 and 4) ---------- */
+
+    /** Why the transaction is happening, in the broker's own words (section 2). */
+    @Column(name = "transaction_purpose", columnDefinition = "text")
+    private String transactionPurpose;
+
+    @Column(name = "trust_involved")
+    private Boolean trustInvolved;
+
+    /** Drives the risk rating — see {@link DealService}. */
+    @Column(name = "on_sold_quickly")
+    private Boolean onSoldQuickly;
+
+    /**
+     * ISO 3166-1 alpha-2, or the literal {@code "NONE"} for "asked, and there is none".
+     * {@code null} means not answered yet — a distinct compliance fact worth keeping.
+     */
+    @Column(name = "foreign_exposure_country", length = 4)
+    private String foreignExposureCountry;
+
+    @Column(name = "red_flag_present")
+    private Boolean redFlagPresent;
+
+    /**
+     * Whether the broker has met the client face to face (V29, section 3). Captured to trigger
+     * remote identity verification later; deliberately not an input to the risk rating — see
+     * {@code DealService.applyRiskRating}.
+     */
+    @Column(name = "client_remote")
+    private Boolean clientRemote;
+
+    /** Broker's valuation range, in the reporting entity's own currency. */
+    @Column(name = "valuation_min")
+    private BigDecimal valuationMin;
+
+    @Column(name = "valuation_max")
+    private BigDecimal valuationMax;
+
+    /** Derived server-side; never accepted from the client. Null on pre-V28 deals. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "risk_rating", length = 16)
+    private RiskRating riskRating;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "risk_rating_source", nullable = false, length = 16)
+    private RiskRatingSource riskRatingSource = RiskRatingSource.DERIVED;
 
     @Column(name = "decided_by_user_id")
     private Long decidedByUserId;
@@ -94,14 +139,30 @@ public class Deal extends BaseEntity {
     public void setPocEmail(String v) { this.pocEmail = v; }
     public Long getCreatedByUserId() { return createdByUserId; }
     public void setCreatedByUserId(Long v) { this.createdByUserId = v; }
-    public Long getAssignedComplianceUserId() { return assignedComplianceUserId; }
-    public void setAssignedComplianceUserId(Long v) { this.assignedComplianceUserId = v; }
-    public String getDecisionNotes() { return decisionNotes; }
-    public void setDecisionNotes(String v) { this.decisionNotes = v; }
     public String getNotes() { return notes; }
     public void setNotes(String v) { this.notes = v; }
     public Long getDecidedByUserId() { return decidedByUserId; }
     public void setDecidedByUserId(Long v) { this.decidedByUserId = v; }
     public Instant getDecidedAt() { return decidedAt; }
     public void setDecidedAt(Instant v) { this.decidedAt = v; }
+    public String getTransactionPurpose() { return transactionPurpose; }
+    public void setTransactionPurpose(String v) { this.transactionPurpose = v; }
+    public Boolean getTrustInvolved() { return trustInvolved; }
+    public void setTrustInvolved(Boolean v) { this.trustInvolved = v; }
+    public Boolean getOnSoldQuickly() { return onSoldQuickly; }
+    public void setOnSoldQuickly(Boolean v) { this.onSoldQuickly = v; }
+    public String getForeignExposureCountry() { return foreignExposureCountry; }
+    public void setForeignExposureCountry(String v) { this.foreignExposureCountry = v; }
+    public Boolean getRedFlagPresent() { return redFlagPresent; }
+    public void setRedFlagPresent(Boolean v) { this.redFlagPresent = v; }
+    public Boolean getClientRemote() { return clientRemote; }
+    public void setClientRemote(Boolean v) { this.clientRemote = v; }
+    public BigDecimal getValuationMin() { return valuationMin; }
+    public void setValuationMin(BigDecimal v) { this.valuationMin = v; }
+    public BigDecimal getValuationMax() { return valuationMax; }
+    public void setValuationMax(BigDecimal v) { this.valuationMax = v; }
+    public RiskRating getRiskRating() { return riskRating; }
+    public void setRiskRating(RiskRating v) { this.riskRating = v; }
+    public RiskRatingSource getRiskRatingSource() { return riskRatingSource; }
+    public void setRiskRatingSource(RiskRatingSource v) { this.riskRatingSource = v; }
 }

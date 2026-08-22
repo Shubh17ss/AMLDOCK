@@ -1,0 +1,76 @@
+/*
+ * AddressFinder suggestion list.
+ *
+ * The widget is a third-party script that renders its own list and offers no configuration for
+ * width, alignment or appearance — only class names (list_class / item_class / hover_class /
+ * empty_class), which AddressFinderField.jsx uses to add the `amldock-af-*` hooks below.
+ *
+ * Two things here look like over-engineering and are not:
+ *
+ *   1. `!important` on the geometry. The widget writes left/top/width as *inline* styles via its
+ *      own _applyStyle(), and an inline style beats any stylesheet rule that isn't !important.
+ *
+ *   2. The doubled `.af_list.amldock-af-list` selectors, and `!important` on the row rules. The
+ *      widget injects its own stylesheet at runtime from its CDN — cross-origin, so it can't be
+ *      read back through CSSOM to see what it declares. Empirically its list rules lose to two
+ *      classes but its *item* rules still win, so those are the ones that need forcing. Checked
+ *      against the running widget, not guessed.
+ *
+ * The list is appended to the field's wrapper (the `container` option), which is
+ * position: relative, so `left: 0; right: 0` here means "the width of the input".
+ */
+
+.af_list.amldock-af-list {
+  /* Geometry — fights the widget's inline styles. */
+  left: 0 !important;
+  right: 0 !important;
+  width: auto !important;
+  top: 100% !important;
+
+  position: absolute;
+  z-index: 1200;
+  margin: 4px 0 0;
+  padding: 4px;
+  box-sizing: border-box;
+  max-height: 320px;
+  overflow-y: auto;
+  list-style: none;
+
+  background-color: var(--cl-tile);
+  border: 1px solid var(--cl-hairline);
+  border-radius: 12px;
+  box-shadow: var(--cl-shadow-md);
+}
+
+.af_item.amldock-af-item {
+  padding: 9px 12px !important;
+  border: none !important;   /* kills the widget's row separators; the spacing reads better */
+  border-radius: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: var(--cl-ink);
+}
+
+/* The widget sets hover_class on keyboard navigation as well as pointer hover, so arrowing
+   through the list highlights the same way as moving the mouse. */
+.af_item.amldock-af-item:hover,
+.af_item.amldock-af-hover {
+  background-color: var(--cl-hover);
+}
+
+/* The widget emboldens the matched substring. */
+.af_item.amldock-af-item b,
+.af_item.amldock-af-item strong {
+  font-weight: 700;
+  color: var(--cl-ink);
+}
+
+.af_empty.amldock-af-empty {
+  padding: 10px 12px;
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  font-size: 0.82rem;
+  color: var(--cl-muted);
+}

@@ -14,7 +14,14 @@ export function useOwnershipTree(dealId) {
     enabled: Boolean(dealId),
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: key });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: key });
+    // The deal too, not just the tree. From V35 a node's answers feed the deal's risk rating,
+    // so any node write can move the chip at the top of the review screen. Centralised here
+    // rather than at each call site: create, update and delete can all change it, and one of
+    // them being forgotten is exactly the bug this replaces.
+    if (dealId) qc.invalidateQueries({ queryKey: ['deals', dealId] });
+  };
 
   const createNodeMut = useMutation({ mutationFn: (payload) => createNode(dealId, payload), onSuccess: invalidate });
   const updateNodeMut = useMutation({

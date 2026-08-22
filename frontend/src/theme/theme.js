@@ -48,6 +48,33 @@ export const shadows = {
   glassHover: 'var(--cl-shadow-glass-hover)',
 };
 
+/**
+ * Motion, in one place so the surfaces that animate together cannot drift apart.
+ *
+ * Two durations only. `swift` is for something appearing where you are already looking — a tab
+ * panel, a hover state; `enter` is for something arriving from off-screen and needs the longer
+ * beat to read as a movement rather than a flash.
+ *
+ * `ease` is the decelerating curve a panel travels on: fast off the mark, settling slowly. Used
+ * for anything with distance to cover.
+ */
+export const motion = {
+  swift: '180ms',
+  enter: '280ms',
+  ease:  'cubic-bezier(0.32, 0.72, 0, 1)',
+  /**
+   * Wrap any animated rule in this so a reader who asked for less motion gets none. Returns the
+   * sx block unchanged, plus a reduced-motion override that removes the transition entirely.
+   */
+  respectful: (sx) => ({
+    ...sx,
+    '@media (prefers-reduced-motion: reduce)': {
+      transition: 'none',
+      animation: 'none',
+    },
+  }),
+};
+
 // Typography roles.
 export const fonts = {
   display: '"FK Grotesk Trial", "Plus Jakarta Sans", system-ui, sans-serif',

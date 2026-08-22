@@ -6,8 +6,9 @@ import PeopleIcon from '@mui/icons-material/People';
 import { listDeals } from '../../api/deals.js';
 import { listUsers } from '../../api/users.js';
 import {
-  Bento, HeroTile, StatTile, ListTile, ActionTile, BentoTile, Eyebrow, SkeletonTiles, STATUS_META,
+  Bento, HeroTile, StatTile, ListTile, ActionTile, BentoTile, Eyebrow, SkeletonTiles,
 } from '../../components/bento/Bento.jsx';
+import { dealStatusDot } from '../../data/dealStatus.js';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { roleLabel } from '../../auth/roles.js';
@@ -15,7 +16,9 @@ import { useCurrency } from '../../dashboard/useCurrency.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
 const byUpdated = (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt);
-const sum = (deals) => deals.reduce((t, d) => t + (d.transactionValue || 0), 0);
+// Deal worth is a min-max range, so totals take the upper bound — the conservative read
+// for AML value thresholds. Pre-V28 deals only have the single transactionValue.
+const sum = (deals) => deals.reduce((t, d) => t + (d.valuationMax ?? d.transactionValue ?? 0), 0);
 const withinDays = (iso, days) => iso && (Date.now() - new Date(iso)) / 86400000 <= days;
 
 export function BranchDashboard() {
@@ -27,10 +30,10 @@ export function BranchDashboard() {
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load your branch. Refresh to try again.</Alert>;
   if (dealsQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
   const users = usersQ.data ?? [];
-  const submitted = deals.filter((d) => d.status === 'SUBMITTED');
-  const underReview = deals.filter((d) => d.status === 'UNDER_REVIEW');
-  const approvedRecent = deals.filter((d) => d.status === 'APPROVED' && withinDays(d.updatedAt, 30));
-  const inMotion = submitted.length + underReview.length;
+  const handover = deals.filter((d) => d.status === 'HANDOVER');
+  const underReview = deals.filter((d) => d.status === 'REVIEW');
+  const verifiedRecent = deals.filter((d) => d.status === 'VERIFIED' && withinDays(d.updatedAt, 30));
+  const inMotion = handover.length + underReview.length;
   const activeUsers = users.filter((u) => u.active);
   const recent = [...deals].sort(byUpdated).slice(0, 5);
 
@@ -45,7 +48,7 @@ export function BranchDashboard() {
         eyebrow="BRANCH · LIVE"
         value={inMotion}
         label={inMotion === 1 ? 'deal in motion' : 'deals in motion'}
-        caption={`${money.formatCompact(sum([...submitted, ...underReview]))} moving through review`}
+        caption={`${money.formatCompact(sum([...handover, ...underReview]))} moving through review`}
         action={
           <Box component={RouterLink} to="/firm/deals"
                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, bgcolor: '#fff', color: tokens.blue,
@@ -57,8 +60,8 @@ export function BranchDashboard() {
 
       <StatTile index={1} eyebrow="BRANCH DEALS" value={deals.length} label="All-time" to="/firm/deals" />
       <StatTile index={2} eyebrow="TEAM" dot={tokens.blue} value={activeUsers.length} label="Active users" to="/branch-users" />
-      <StatTile index={3} eyebrow="SUBMITTED" cols={2} dot={STATUS_META.SUBMITTED.c} value={submitted.length}
-                label="Waiting for a reviewer to claim" color={submitted.length ? tokens.submitted : undefined} to="/firm/deals" />
+      <StatTile index={3} eyebrow="HANDOVER" cols={2} dot={dealStatusDot('HANDOVER')} value={handover.length}
+                label="Waiting for compliance to start" color={handover.length ? tokens.submitted : undefined} to="/firm/deals" />
 
       <ListTile
         index={4}
@@ -84,10 +87,10 @@ export function BranchDashboard() {
         </Box>
       </BentoTile>
 
-      <StatTile index={6} eyebrow="IN REVIEW" dot={STATUS_META.UNDER_REVIEW.c} value={underReview.length}
+      <StatTile index={6} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={underReview.length}
                 label="Under compliance" color={underReview.length ? tokens.review : undefined} to="/firm/deals" />
-      <StatTile index={7} eyebrow="APPROVED · 30D" dot={STATUS_META.APPROVED.c} value={approvedRecent.length}
-                label="Cleared this month" color={approvedRecent.length ? tokens.approved : undefined} to="/firm/deals" />
+      <StatTile index={7} eyebrow="VERIFIED · 30D" dot={dealStatusDot('VERIFIED')} value={verifiedRecent.length}
+                label="Cleared this month" color={verifiedRecent.length ? tokens.approved : undefined} to="/firm/deals" />
 
       <ActionTile
         index={8}

@@ -38,3 +38,6 @@ backend/logs/
 
 #remove .claude file
 .claude
+
+
+infra

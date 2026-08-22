@@ -72,6 +72,40 @@ function trim(n) {
   return (Math.round(n * 10) / 10).toString();
 }
 
+// ── Valuation ranges ──────────────────────────────────────────────────────────────
+// A deal's worth is captured as the broker's min–max estimate rather than a single figure,
+// so every money surface renders a range. `fallback` carries transactionValue for deals
+// created before the range existed; those still show one number, which is what they hold.
+
+/** Range of the two bounds that are present, e.g. "$800,000 – $900,000". */
+export function formatMoneyRange(min, max, country, fallback = null) {
+  return buildRange(min, max, fallback, (v) => formatMoney(v, country));
+}
+
+/** Compact range for dense tiles and cards, e.g. "$800K – $900K". */
+export function formatMoneyRangeCompact(min, max, country, fallback = null) {
+  return buildRange(min, max, fallback, (v) => formatMoneyCompact(v, country));
+}
+
+/** Range carrying its currency code, e.g. "NZD $800,000 – $900,000". */
+export function formatMoneyRangeWithCode(min, max, country, fallback = null) {
+  const range = buildRange(min, max, fallback, (v) => formatMoney(v, country));
+  if (range === '—') return range;
+  return `${currencyFor(country).code} ${range}`;
+}
+
+function buildRange(min, max, fallback, fmt) {
+  // An equal pair is one number the broker happened to enter twice — showing "$X – $X"
+  // reads as a mistake rather than as precision.
+  if (min != null && max != null) {
+    return Number(min) === Number(max) ? fmt(min) : `${fmt(min)} – ${fmt(max)}`;
+  }
+  if (max != null) return `up to ${fmt(max)}`;
+  if (min != null) return `from ${fmt(min)}`;
+  if (fallback != null) return fmt(fallback);
+  return '—';
+}
+
 /** Short date, e.g. "21 Jun 2026". */
 export function formatDate(iso) {
   if (!iso) return '—';

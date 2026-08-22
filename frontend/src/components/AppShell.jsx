@@ -27,6 +27,9 @@ const TITLE_BY_PATH_PREFIX = [
 ];
 
 function titleFor(pathname) {
+  // The deal id sits in the middle of /deals/:id/edit, so this one can't be expressed as a
+  // prefix like the rest of the table.
+  if (/^\/deals\/\d+\/edit\/?$/.test(pathname)) return 'Edit deal';
   const match = TITLE_BY_PATH_PREFIX.find(([prefix]) => pathname.startsWith(prefix));
   if (match) return match[1];
   return moduleTitleFor(pathname) ?? 'AML·DOCK';

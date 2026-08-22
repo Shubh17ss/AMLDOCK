@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert, Box, Button, FormControl, IconButton, InputLabel, MenuItem, Paper,
@@ -7,40 +7,39 @@ import {
   TableRow, Tooltip, Typography,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import { assignDeal, listDeals } from '../api/deals.js';
+import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { DEAL_REVIEWER_ROLES } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
+import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
-import { useToast } from '../components/ToastProvider.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { StatusPills } from '../components/StatusPills.jsx';
+import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, isReviewable } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
 
-const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
 const DEFAULT_STATUS = 'ALL';
 
 /**
- * Deals — the full deal list with a status filter (formerly the compliance queue
- * at /queue). Firm/branch narrowing comes from the sidebar scope selector, so the
- * list always matches the workspace scope. Claim and review actions appear only
- * for reviewers (and ROOT).
+ * Deals — the full deal list with a status filter. Firm/branch narrowing comes from the sidebar
+ * scope selector, so the list always matches the workspace scope.
+ *
+ * There is no claim step: a deal belongs to the firm's compliance function rather than to one
+ * officer, so the review workspace is open to any reviewer from handover onward.
  */
 export function DealsPage() {
-  const qc = useQueryClient();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { showToast } = useToast();
   const { firm, branch } = useDashboardScope();
   const money = useCurrency();
   const [status, setStatus] = useState(DEFAULT_STATUS);
-  const [actionError, setActionError] = useState(null);
 
-  const canReview = Boolean(user) && ['ROOT', ...DEAL_REVIEWER_ROLES].includes(user.role);
+  // ROOT is deliberately absent: the review workspace is guarded by DEAL_REVIEWER_ROLES, so
+  // offering ROOT a way in only leads to a redirect, and it could never act there anyway.
+  const canReview = Boolean(user) && DEAL_REVIEWER_ROLES.includes(user.role);
 
   // The backend enforces role scope regardless; ROOT and firm-level reviewers get
   // real firm/branch filtering from these params.
@@ -55,26 +54,12 @@ export function DealsPage() {
   // Belt-and-braces: also narrow client-side by the scope's firm/branch names.
   const deals = useScopedDeals(dealsQ.data);
 
-  const claimMut = useMutation({
-    mutationFn: (id) => assignDeal(id),
-    onSuccess: (deal) => {
-      qc.invalidateQueries({ queryKey: ['deals'] });
-      showToast({ severity: 'success', message: `Claimed ${deal.reference ?? `#${deal.id}`}` });
-      navigate(`/deals/${deal.id}/review`);
-    },
-    onError: (e) => {
-      const msg = e.response?.data?.message || 'Failed to claim';
-      setActionError(msg);
-      showToast({ severity: 'error', message: msg });
-    },
-  });
-
   return (
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
           `${deals.length} ${deals.length === 1 ? 'deal' : 'deals'}`,
-          status === 'ALL' ? 'all statuses' : status.replace('_', ' ').toLowerCase(),
+          status === 'ALL' ? 'all statuses' : dealStatusLabel(status).toLowerCase(),
           firm?.name,
           branch?.name,
         ].filter(Boolean).join(' · ')}
@@ -89,13 +74,12 @@ export function DealsPage() {
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <InputLabel id="status-label">Status</InputLabel>
           <Select labelId="status-label" label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUSES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+            {STATUSES.map((s) => <MenuItem key={s} value={s}>{dealStatusLabel(s)}</MenuItem>)}
           </Select>
         </FormControl>
       </Stack>
 
       {dealsQ.isError && <Alert severity="error">Failed to load deals.</Alert>}
-      {actionError && <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>}
 
       {/* Mobile: card list */}
       <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 1.5 }}>
@@ -111,13 +95,7 @@ export function DealsPage() {
           </Box>
         )}
         {deals.map((d) => (
-          <DealCard
-            key={d.id}
-            deal={d}
-            onClaim={canReview && d.status === 'SUBMITTED' ? claimMut.mutate : undefined}
-            onReview={canReview && d.status === 'UNDER_REVIEW' ? true : undefined}
-            claimPending={claimMut.isPending}
-          />
+          <DealCard key={d.id} deal={d} onReview={canReview || undefined} />
         ))}
       </Box>
 
@@ -131,6 +109,7 @@ export function DealsPage() {
                 <TableRow>
                   <TableCell>Reference</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Risk</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Value ({money.code})</TableCell>
                   <TableCell>Reporting entity</TableCell>
@@ -146,21 +125,16 @@ export function DealsPage() {
                   <TableRow key={d.id} hover>
                     <TableCell>{d.reference ?? `#${d.id}`}</TableCell>
                     <TableCell><DealStatusChip status={d.status} /></TableCell>
+                    <TableCell><RiskRatingChip rating={d.riskRating} /></TableCell>
                     <TableCell>{d.transactionType}</TableCell>
-                    <TableCell>{money.format(d.transactionValue)}</TableCell>
+                    <TableCell>{money.dealRange(d)}</TableCell>
                     <TableCell>{d.firmName ?? '—'}</TableCell>
                     <TableCell>{d.branchName ?? '—'}</TableCell>
                     <TableCell>{d.clientDisplayName ?? '—'}</TableCell>
                     <TableCell>{d.propertyAddress ?? '—'}</TableCell>
                     <TableCell>{d.updatedAt ? new Date(d.updatedAt).toLocaleString() : '—'}</TableCell>
                     <TableCell align="right">
-                      {canReview && d.status === 'SUBMITTED' && (
-                        <Button size="small" variant="contained" startIcon={<PlayArrowIcon />}
-                          onClick={() => claimMut.mutate(d.id)} disabled={claimMut.isPending}>
-                          Claim
-                        </Button>
-                      )}
-                      {canReview && d.status === 'UNDER_REVIEW' && (
+                      {canReview && isReviewable(d.status) && (
                         <Button size="small" variant="outlined" onClick={() => navigate(`/deals/${d.id}/review`)}>
                           Open review
                         </Button>

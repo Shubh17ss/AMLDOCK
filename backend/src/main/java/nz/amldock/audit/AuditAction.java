@@ -15,11 +15,24 @@ public enum AuditAction {
     USER_WELCOME_EMAIL_FAILED,
     ROLE_CHANGED,
     DEAL_CREATED,
-    DEAL_SUBMITTED,
-    DEAL_ASSIGNED,
-    DEAL_APPROVED,
-    DEAL_REJECTED,
+    // The lifecycle verbs (V29). One per DealAction, plus the free-comment case. The column has
+    // no DB CHECK, but it is mapped @Enumerated(STRING), so a value dropped from this enum
+    // throws when an old row is read — V29 remaps the four names this set replaced.
+    DEAL_HANDED_OVER,
+    DEAL_REVIEW_STARTED,
+    DEAL_PUT_ON_HOLD,
+    DEAL_VERIFIED,
+    DEAL_CLOSED,
+    DEAL_REVERTED,
+    DEAL_NOTE_ADDED,
     DEAL_OVERRIDDEN,
+    /**
+     * The derived rating moved because something outside the deal changed — today, an ownership
+     * node answering one of the risk-raising questions. Deal edits are already covered by
+     * DEAL_UPDATED; this exists so a rating that changes with no deal edit still has a cause on
+     * the record.
+     */
+    DEAL_RISK_CHANGED,
     NODE_CREATED,
     NODE_UPDATED,
     NODE_DELETED,

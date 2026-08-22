@@ -29,7 +29,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtFilter;
     private final AuditReadOnlyFilter auditReadOnlyFilter;
 
-    @Value("${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://amldock.vercel.app}")
+    @Value("${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://amldock.vercel.app,https://amldock-git-development-shubh17ss-projects.vercel.app}")
     private String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter, AuditReadOnlyFilter auditReadOnlyFilter) {

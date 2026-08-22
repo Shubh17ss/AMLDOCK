@@ -31,7 +31,7 @@ export function DealRow({ deal, to }) {
       <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
         <DealStatusChip status={deal.status} />
         <Typography sx={{ mt: 0.4, fontFamily: fonts.mono, fontSize: '0.72rem', color: tokens.muted }}>
-          {money.formatCompact(deal.transactionValue)}
+          {money.dealRangeCompact(deal)}
         </Typography>
       </Box>
     </Box>

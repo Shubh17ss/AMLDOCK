@@ -9,11 +9,12 @@ import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { StatusPills } from '../components/StatusPills.jsx';
+import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { tokens, shadows } from '../theme/theme.js';
 
-const STATUSES = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
+
 
 export function MyDealsPage() {
   const [status, setStatus] = useState('ALL');
@@ -56,7 +57,7 @@ export function MyDealsPage() {
           />
         )}
         {isFiltered && (
-          <MobileEmpty icon="🔍" title="No results" description={`No deals with status "${status.toLowerCase()}".`} />
+          <MobileEmpty icon="🔍" title="No results" description={`No deals with status "${dealStatusLabel(status).toLowerCase()}".`} />
         )}
         {deals.map((d) => (
           <DealCard key={d.id} deal={d} />

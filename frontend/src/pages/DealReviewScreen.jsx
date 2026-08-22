@@ -1,38 +1,47 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Paper, Stack, Tab, Tabs, Typography,
-  useMediaQuery, useTheme,
+  Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
-import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
-import EditNoteIcon from '@mui/icons-material/EditNote';
-import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
-import { approveDeal, assignDeal, getDeal, overrideDeal, rejectDeal } from '../api/deals.js';
+import { closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, startDealReview, verifyDeal } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { isDealReviewer } from '../auth/roles.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
+import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
-import { NodeEditorPane } from '../features/ownership/NodeEditorPane.jsx';
 import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
 import { AttachToParentDialog } from '../features/ownership/AttachToParentDialog.jsx';
-import { PdfViewerPane } from '../features/ownership/PdfViewerPane.jsx';
 import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
-import { BrokerNotesCard } from '../features/deal/BrokerNotesCard.jsx';
-import { DecideDialog, OverrideDialog } from '../features/deal/DecisionDialogs.jsx';
+import { NodeDrawer } from '../features/deal/review/NodeDrawer.jsx';
+import { ReviewTabPanel } from '../features/deal/review/ReviewTabPanel.jsx';
+import { ParkedPanel } from '../features/deal/review/ParkedPanel.jsx';
+import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
+import { DealStatusDialog } from '../features/deal/DealStatusDialog.jsx';
 import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
 import { DealCapturedInfo } from '../features/deal/DealCapturedInfo.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
-import { tokens, shadows } from '../theme/theme.js';
+import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
+import { canStartReview, dealStatusLabel, transitionsFrom } from '../data/dealStatus.js';
 
-const NEU_BASE   = tokens.tile;
-const NEU_ACCENT = tokens.blue;
-const NEU_MUTED  = tokens.muted;
-const EXT_SM     = shadows.sm;
-const INSET_SM   = 'inset 0 1px 2px rgba(16,24,40,0.06)';
+/**
+ * The six faces of a deal under review.
+ *
+ * <p>Order is the reviewer's order: the structure is the work, so it opens first; the two parked
+ * sections sit next to it because that is where they will belong; and the three reference
+ * surfaces — what was captured, what was said, what happened — come after.
+ */
+const TABS = [
+  { value: 'structure', label: 'Structure' },
+  { value: 'echecks', label: 'eChecks' },
+  { value: 'risk', label: 'Risk' },
+  { value: 'details', label: 'Details' },
+  { value: 'notes', label: 'Notes' },
+  { value: 'audit', label: 'Audit trail' },
+];
+
+const TAB_VALUES = TABS.map((t) => t.value);
 
 export function DealReviewScreen() {
   const { id } = useParams();
@@ -42,17 +51,23 @@ export function DealReviewScreen() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const money = useCurrency();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const [selectedNodeId, setSelectedNodeId]     = useState(null);
-  const [selectedDocumentId, setSelectedDocumentId] = useState(null);
-  const [addDialog, setAddDialog]               = useState(null);
-  const [attachNodeId, setAttachNodeId]         = useState(null);
-  const [decideMode, setDecideMode]             = useState(null);
-  const [overrideOpen, setOverrideOpen]         = useState(false);
-  const [actionError, setActionError]           = useState(null);
-  const [mobileTab, setMobileTab]               = useState('docs');
+  // The tab lives in the URL so a reload keeps your place and a link can point at one. An
+  // unknown or missing value falls back rather than rendering nothing.
+  const [params, setParams] = useSearchParams();
+  const requested = params.get('tab');
+  const tab = TAB_VALUES.includes(requested) ? requested : 'structure';
+  const setTab = (next) => {
+    const merged = new URLSearchParams(params);
+    merged.set('tab', next);
+    setParams(merged, { replace: true });
+  };
+
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [addDialog, setAddDialog]           = useState(null);
+  const [attachNodeId, setAttachNodeId]     = useState(null);
+  const [statusOpen, setStatusOpen]         = useState(false);
+  const [actionError, setActionError]       = useState(null);
 
   const dealQ = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
   const tree  = useOwnershipTree(dealId);
@@ -64,37 +79,48 @@ export function DealReviewScreen() {
     qc.invalidateQueries({ queryKey: ['deals', 'firm'] });
   };
 
-  const claimMut = useMutation({
-    mutationFn: () => assignDeal(dealId),
-    onSuccess: () => { invalidate(); showToast({ severity: 'success', message: 'Claimed for review' }); },
-    onError: (e) => {
-      const msg = e.response?.data?.message || 'Failed to claim';
-      setActionError(msg);
-      showToast({ severity: 'error', message: msg });
-    },
-  });
+  /** What each move is called once it has happened, and how loudly to say it. */
+  const SAID = {
+    start:    { message: 'Review started', severity: 'success' },
+    verify:   { message: 'Deal verified', severity: 'success' },
+    hold:     { message: 'Deal put on hold', severity: 'warning' },
+    revert:   { message: 'Sent back to the broker', severity: 'warning' },
+    close:    { message: 'Deal closed', severity: 'success' },
+  };
 
-  const decideMut = useMutation({
-    mutationFn: ({ mode, notes }) =>
-      (mode === 'approve' ? approveDeal(dealId, notes) : rejectDeal(dealId, notes)),
+  /**
+   * Every status change, through one mutation.
+   *
+   * <p>There were four, and between them they were the six buttons this screen used to carry.
+   * They only ever differed in which endpoint they hit, so the dialog picks the row and this
+   * reads the row's `action`.
+   */
+  const statusMut = useMutation({
+    mutationFn: ({ transition, reason }) => {
+      switch (transition.action) {
+        case 'start':  return startDealReview(dealId);
+        case 'hold':   return holdDeal(dealId, reason);
+        case 'verify': return verifyDeal(dealId, reason);
+        case 'revert': return revertDeal(dealId, reason);
+        case 'close':  return closeDeal(dealId);
+        default:       return overrideDeal(dealId, transition.to, reason);
+      }
+    },
     onSuccess: (_, vars) => {
       invalidate();
-      setDecideMode(null);
-      showToast({
-        severity: vars.mode === 'approve' ? 'success' : 'warning',
-        message: `Deal ${vars.mode === 'approve' ? 'approved' : 'rejected'}`,
-      });
-      navigate('/cdd/deals');
+      qc.invalidateQueries({ queryKey: ['dealNotes', dealId] });
+      setStatusOpen(false);
+      setActionError(null);
+      const said = SAID[vars.transition.action]
+        ?? { message: `Status overridden to ${dealStatusLabel(vars.transition.to)}`, severity: 'warning' };
+      showToast(said);
+      // Verifying and sending back both end this reviewer's involvement for now; a hold does not,
+      // so it stays on the deal.
+      if (vars.transition.action === 'verify' || vars.transition.action === 'revert') {
+        navigate('/cdd/deals');
+      }
     },
-  });
-
-  const overrideMut = useMutation({
-    mutationFn: ({ targetStatus, reason }) => overrideDeal(dealId, targetStatus, reason),
-    onSuccess: (_, vars) => {
-      invalidate();
-      setOverrideOpen(false);
-      showToast({ severity: 'warning', message: `Status overridden to ${vars.targetStatus}` });
-    },
+    onError: (e) => setActionError(e.response?.data?.message || 'Could not update the status'),
   });
 
   if (dealQ.isLoading) {
@@ -106,241 +132,145 @@ export function DealReviewScreen() {
 
   const deal        = dealQ.data;
   const isFirstNode = !tree.tree || tree.tree.nodes.length === 0;
-  const canClaim    = deal.status === 'SUBMITTED';
-  const isUnderReview = deal.status === 'UNDER_REVIEW';
-  const isOverrider = user?.role === 'SENIOR_MANAGER';
-  const canDecide   = isUnderReview;
-  const canOverride = isOverrider && deal.status !== 'DRAFT';
+  const startable   = canStartReview(deal.status);
+  const inReview    = deal.status === 'REVIEW';
+  const showOverride = user?.role === 'SENIOR_MANAGER';
 
-  // Switch to node tab automatically when a node is selected on mobile
-  const handleSelectNode = (nodeId) => {
-    setSelectedNodeId(nodeId);
-    if (isMobile && nodeId) setMobileTab('node');
-  };
+  const selectedNode = tree.tree?.nodes.find((n) => n.id === selectedNodeId) ?? null;
+
+  // Whether the deal has anywhere to go. A closed deal has not, and there is no sense offering a
+  // button that opens onto nothing.
+  const canUpdateStatus = transitionsFrom(deal.status).length > 0 || showOverride;
 
   return (
-    // Let the page scroll instead of trapping everything in one viewport-height flexbox —
-    // that clipped the info cards and squeezed the workspace panels on shorter screens.
     <Stack spacing={2}>
-
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      {isMobile ? (
-        <MobileHeader
-          deal={deal}
-          canClaim={canClaim}
-          canDecide={canDecide}
-          canOverride={canOverride}
-          claimMut={claimMut}
-          onReject={() => setDecideMode('reject')}
-          onApprove={() => setDecideMode('approve')}
-          onOverride={() => setOverrideOpen(true)}
-          onBack={() => navigate('/cdd/deals')}
-        />
-      ) : (
-        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/cdd/deals')}>
+      <Stack spacing={1.5}>
+        <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/cdd/deals')} size="small">
             Back to queue
           </Button>
           <Box sx={{ flexGrow: 1 }} />
-          <Typography variant="h6">{deal.reference ?? `Deal #${deal.id}`}</Typography>
+          <Typography sx={{ fontFamily: fonts.display, fontSize: '1.1rem', color: tokens.ink }}>
+            {deal.reference ?? `Deal #${deal.id}`}
+          </Typography>
           <DealStatusChip status={deal.status} />
+          <RiskRatingChip rating={deal.riskRating} hideWhenUnset />
           <Chip label={deal.transactionType} size="small" variant="outlined" />
-          {deal.transactionValue != null && (
-            <Chip label={money.formatWithCode(deal.transactionValue)} size="small" variant="outlined" />
-          )}
-          {canClaim && (
-            <Button variant="contained" onClick={() => claimMut.mutate()} disabled={claimMut.isPending}>
-              {claimMut.isPending ? 'Claiming…' : 'Claim for review'}
-            </Button>
-          )}
-          {canDecide && (
-            <>
-              <Button variant="outlined" color="error" onClick={() => setDecideMode('reject')}>Reject</Button>
-              <Button
-                variant="contained"
-                sx={{
-                  backgroundColor: '#2E8B57',
-                  '&:hover': {
-                    backgroundColor: '#2d905a',
-                  },
-                }}
-                onClick={() => setDecideMode('approve')}
-              >
-                Approve
-              </Button>
-            </>
-          )}
-          {canOverride && (
-            <Button variant="outlined" color="warning" onClick={() => setOverrideOpen(true)}>Override</Button>
+          {(deal.valuationMin != null || deal.valuationMax != null || deal.transactionValue != null) && (
+            <Chip label={`${money.code} ${money.dealRange(deal)}`} size="small" variant="outlined" />
           )}
         </Stack>
-      )}
+
+        {/* One button. It used to be up to six verbs, and "Verify" beside an ownership tree read
+            as an action on the tree rather than on the deal. */}
+        {canUpdateStatus && (
+          <Stack direction="row" justifyContent="flex-end">
+            <Button variant="contained" size="small" onClick={() => setStatusOpen(true)}>
+              Update status
+            </Button>
+          </Stack>
+        )}
+      </Stack>
 
       {actionError && (
         <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>
       )}
 
-      {!isUnderReview && !canClaim && (
+      {!inReview && !startable && (
         <Alert severity="info" sx={{ py: 0.5 }}>
-          This deal is <strong>{deal.status}</strong>. Ownership edits are best made while UNDER_REVIEW.
+          This deal is <strong>{dealStatusLabel(deal.status)}</strong>. Ownership edits are best
+          made while it is in review.
         </Alert>
       )}
 
-      <DealCapturedInfo deal={deal} />
+      {/* ── Tabs ────────────────────────────────────────────────────────── */}
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{
+          borderBottom: `1px solid ${tokens.hairline}`,
+          minHeight: 44,
+          '& .MuiTab-root': {
+            minHeight: 44,
+            textTransform: 'none',
+            fontSize: '0.9rem',
+            fontFamily: fonts.body,
+          },
+        }}
+      >
+        {TABS.map((t) => (
+          <Tab
+            key={t.value}
+            value={t.value}
+            label={t.label}
+            id={`deal-tab-${t.value}`}
+            aria-controls={`deal-panel-${t.value}`}
+          />
+        ))}
+      </Tabs>
 
-      {isDealReviewer(user?.role) && (
-        <BrokerNotesCard deal={deal} />
-      )}
+      {/* ── Panels ──────────────────────────────────────────────────────── */}
+      <ReviewTabPanel value="structure" current={tab}>
+        {tree.loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
+        ) : tree.error ? (
+          <Alert severity="error">Failed to load the ownership structure.</Alert>
+        ) : (
+          <OwnershipTreeBuilder
+            tree={tree.tree}
+            deal={deal}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={setSelectedNodeId}
+            onAddRoot={() => setAddDialog({ parentNodeId: null })}
+            onAddChild={(parentNodeId) => setAddDialog({ parentNodeId })}
+            onSetRoot={(nodeId) => tree.setRoot.mutate(nodeId)}
+            onAttachDetached={setAttachNodeId}
+          />
+        )}
+      </ReviewTabPanel>
 
-      <DealAuditPanel dealId={dealId} />
+      <ReviewTabPanel value="echecks" current={tab}>
+        <ParkedPanel title="Electronic checks">
+          Identity, address and register checks for every party on this deal will run here, with
+          each result kept as evidence against the party it belongs to.
+        </ParkedPanel>
+      </ReviewTabPanel>
 
-      {/* ── Main panel area ──────────────────────────────────────────────── */}
-      {isMobile ? (
-        /* Mobile: tabs switching between the three panels */
-        <Stack spacing={0}>
-          <Box
-            sx={{
-              borderRadius: 3,
-              boxShadow: INSET_SM,
-              p: 0.5,
-              display: 'flex',
-              gap: 0.5,
-            }}
-          >
-            {[
-              { value: 'docs', label: 'Documents', icon: <ArticleOutlinedIcon sx={{ fontSize: 18 }} /> },
-              { value: 'tree', label: 'Ownership', icon: <AccountTreeOutlinedIcon sx={{ fontSize: 18 }} /> },
-              { value: 'node', label: 'Node', icon: <EditNoteIcon sx={{ fontSize: 18 }} />, disabled: !selectedNodeId },
-            ].map((tab) => (
-              <Box
-                key={tab.value}
-                onClick={() => !tab.disabled && setMobileTab(tab.value)}
-                sx={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 0.75,
-                  py: 1,
-                  borderRadius: 2.5,
-                  cursor: tab.disabled ? 'not-allowed' : 'pointer',
-                  opacity: tab.disabled ? 0.4 : 1,
-                  transition: 'box-shadow 0.25s ease, color 0.25s ease',
-                  boxShadow: mobileTab === tab.value ? EXT_SM : 'none',
-                  color: mobileTab === tab.value ? NEU_ACCENT : NEU_MUTED,
-                  backgroundColor: NEU_BASE,
-                  userSelect: 'none',
-                }}
-              >
-                {tab.icon}
-                <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>{tab.label}</Typography>
-              </Box>
-            ))}
-          </Box>
+      <ReviewTabPanel value="risk" current={tab}>
+        <ParkedPanel title="Risk assessment">
+          The rating in the header is derived from the deal's answers and its ownership structure.
+          The workings behind it — every factor, and what a reviewer decided about each — will be
+          shown here.
+        </ParkedPanel>
+      </ReviewTabPanel>
 
-          <Box sx={{ mt: 1.5 }}>
-            {mobileTab === 'docs' && (
-              <Box sx={{ height: '62vh', borderRadius: 2, overflow: 'hidden', boxShadow: INSET_SM }}>
-                <PdfViewerPane
-                  dealId={dealId}
-                  selectedDocumentId={selectedDocumentId}
-                  onSelectDocument={setSelectedDocumentId}
-                />
-              </Box>
-            )}
+      <ReviewTabPanel value="details" current={tab}>
+        <DealCapturedInfo deal={deal} embedded />
+      </ReviewTabPanel>
 
-            {mobileTab === 'tree' && (
-              <Box sx={{ borderRadius: 2, p: 2, boxShadow: INSET_SM, minHeight: 300, maxHeight: '62vh', overflow: 'auto' }}>
-                {tree.loading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
-                ) : tree.error ? (
-                  <Alert severity="error">Failed to load ownership tree.</Alert>
-                ) : (
-                  <OwnershipTreeBuilder
-                    tree={tree.tree}
-                    selectedNodeId={selectedNodeId}
-                    onSelectNode={handleSelectNode}
-                    onAddRoot={() => setAddDialog({ parentNodeId: null })}
-                    onAddChild={(parentNodeId) => setAddDialog({ parentNodeId })}
-                    onSetRoot={(nodeId) => tree.setRoot.mutate(nodeId)}
-                    onAttachDetached={setAttachNodeId}
-                  />
-                )}
-              </Box>
-            )}
+      <ReviewTabPanel value="notes" current={tab}>
+        <DealNotesTimeline dealId={dealId} status={deal.status} />
+      </ReviewTabPanel>
 
-            {mobileTab === 'node' && (
-              <Box sx={{ borderRadius: 2, overflow: 'hidden', height: '62vh', minHeight: 360 }}>
-                <NodeEditorPane
-                  tree={tree.tree}
-                  selectedNodeId={selectedNodeId}
-                  useTree={tree}
-                  onCleared={() => { setSelectedNodeId(null); setMobileTab('tree'); }}
-                  dealId={dealId}
-                  onViewDocument={(docId) => { setSelectedDocumentId(docId); setMobileTab('docs'); }}
-                />
-              </Box>
-            )}
-          </Box>
-        </Stack>
-      ) : (
-        /* Desktop: resizable 3-panel layout — its own bounded height with a floor so the
-           panels stay usable regardless of how tall the info cards above grow. */
-        <Box sx={{ height: 'calc(100vh - 160px)', minHeight: 560, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-          <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
-            <Panel defaultSize={36} minSize={20}>
-              <Box sx={{ height: '100%', p: 1, overflow: 'hidden' }}>
-                <PdfViewerPane
-                  dealId={dealId}
-                  selectedDocumentId={selectedDocumentId}
-                  onSelectDocument={setSelectedDocumentId}
-                />
-              </Box>
-            </Panel>
+      <ReviewTabPanel value="audit" current={tab}>
+        <DealAuditPanel dealId={dealId} embedded />
+      </ReviewTabPanel>
 
-            <PanelResizeHandle><DragHandle /></PanelResizeHandle>
+      {/* ── The selected owner ──────────────────────────────────────────── */}
+      <NodeDrawer
+        open={Boolean(selectedNode)}
+        node={selectedNode}
+        tree={tree.tree}
+        useTree={tree}
+        dealId={dealId}
+        onClose={() => setSelectedNodeId(null)}
+      />
 
-            <Panel defaultSize={34} minSize={22}>
-              <Box sx={{ height: '100%', p: 1, overflow: 'auto' }}>
-                <Paper variant="outlined" sx={{ p: 2, minHeight: '100%' }}>
-                  {tree.loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
-                  ) : tree.error ? (
-                    <Alert severity="error">Failed to load ownership tree.</Alert>
-                  ) : (
-                    <OwnershipTreeBuilder
-                      tree={tree.tree}
-                      selectedNodeId={selectedNodeId}
-                      onSelectNode={setSelectedNodeId}
-                      onAddRoot={() => setAddDialog({ parentNodeId: null })}
-                      onAddChild={(parentNodeId) => setAddDialog({ parentNodeId })}
-                      onSetRoot={(nodeId) => tree.setRoot.mutate(nodeId)}
-                      onAttachDetached={setAttachNodeId}
-                    />
-                  )}
-                </Paper>
-              </Box>
-            </Panel>
-
-            <PanelResizeHandle><DragHandle /></PanelResizeHandle>
-
-            <Panel defaultSize={30} minSize={22}>
-              <Box sx={{ height: '100%', p: 1, overflow: 'hidden' }}>
-                <NodeEditorPane
-                  tree={tree.tree}
-                  selectedNodeId={selectedNodeId}
-                  useTree={tree}
-                  onCleared={() => setSelectedNodeId(null)}
-                  dealId={dealId}
-                  onViewDocument={(docId) => setSelectedDocumentId(docId)}
-                />
-              </Box>
-            </Panel>
-          </PanelGroup>
-        </Box>
-      )}
-
-      {/* ── Dialogs ──────────────────────────────────────────────────────── */}
+      {/* ── Dialogs ─────────────────────────────────────────────────────── */}
       <AddNodeDialog
         open={Boolean(addDialog)}
         onClose={() => setAddDialog(null)}
@@ -350,23 +280,17 @@ export function DealReviewScreen() {
           : null}
         isFirstNode={isFirstNode}
         useTree={tree}
+        // Straight into the panel that asks for everything the picker no longer does.
+        onCreated={setSelectedNodeId}
       />
 
-      <DecideDialog
-        open={Boolean(decideMode)}
-        mode={decideMode}
-        dealReference={deal.reference ?? `#${deal.id}`}
-        onClose={() => setDecideMode(null)}
-        submitting={decideMut.isPending}
-        onSubmit={(notes) => decideMut.mutateAsync({ mode: decideMode, notes })}
-      />
-
-      <OverrideDialog
-        open={overrideOpen}
+      <DealStatusDialog
+        open={statusOpen}
         deal={deal}
-        onClose={() => setOverrideOpen(false)}
-        submitting={overrideMut.isPending}
-        onSubmit={(targetStatus, reason) => overrideMut.mutateAsync({ targetStatus, reason })}
+        canOverride={showOverride}
+        onClose={() => setStatusOpen(false)}
+        submitting={statusMut.isPending}
+        onSubmit={(transition, reason) => statusMut.mutateAsync({ transition, reason })}
       />
 
       <AttachToParentDialog
@@ -377,73 +301,5 @@ export function DealReviewScreen() {
         onClose={() => setAttachNodeId(null)}
       />
     </Stack>
-  );
-}
-
-/* ── Mobile-specific header ─────────────────────────────────────────────── */
-function MobileHeader({ deal, canClaim, canDecide, canOverride, claimMut, onReject, onApprove, onOverride, onBack }) {
-  const hasActions = canClaim || canDecide || canOverride;
-  return (
-    <Stack spacing={1.5}>
-      {/* Row 1: back + reference */}
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={onBack}
-          size="small"
-          sx={{ flexShrink: 0 }}
-        >
-          Queue
-        </Button>
-        <Box sx={{ flexGrow: 1 }} />
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, textAlign: 'right', lineHeight: 1.2 }}>
-          {deal.reference ?? `Deal #${deal.id}`}
-        </Typography>
-      </Stack>
-
-      {/* Row 2: status chips */}
-      <Stack direction="row" spacing={1} flexWrap="wrap">
-        <DealStatusChip status={deal.status} />
-        <Chip label={deal.transactionType} size="small" />
-        {deal.transactionValue != null && (
-          <Chip label={money.formatWithCode(deal.transactionValue)} size="small" />
-        )}
-      </Stack>
-
-      {/* Row 3: action buttons (full-width, equal split) */}
-      {hasActions && (
-        <Stack direction="row" spacing={1}>
-          {canClaim && (
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={() => claimMut.mutate()}
-              disabled={claimMut.isPending}
-            >
-              {claimMut.isPending ? 'Claiming…' : 'Claim'}
-            </Button>
-          )}
-          {canDecide && (
-            <>
-              <Button variant="outlined" color="error" fullWidth onClick={onReject}>Reject</Button>
-              <Button variant="contained" sx={{backgroundColor:'#2E8B57'}} fullWidth onClick={onApprove}>Approve</Button>
-            </>
-          )}
-          {canOverride && (
-            <Button variant="outlined" color="warning" fullWidth onClick={onOverride}>Override</Button>
-          )}
-        </Stack>
-      )}
-    </Stack>
-  );
-}
-
-/* ── Desktop drag handle ─────────────────────────────────────────────────── */
-function DragHandle() {
-  return (
-    <Box sx={{
-      width: 6, height: '100%', bgcolor: 'divider',
-      cursor: 'col-resize', '&:hover': { bgcolor: 'primary.main' },
-    }} />
   );
 }
