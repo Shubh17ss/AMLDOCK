@@ -132,7 +132,11 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose }) {
           flexGrow: 1,
           overflowY: 'auto',
           px: 2.5,
-          py: 2.5,
+          // An outlined field draws its shrunk label about 9px above its own border box, and a
+          // scroll container clips whatever sits above its content edge. Every tab starts with
+          // one of these, so the top gets more room than the bottom needs.
+          pt: 3.5,
+          pb: 2.5,
           // Keyed on the tab so switching re-runs the entrance — the same quiet rise the deal
           // panels use, so the two tab strips behave alike.
           animation: `nodePanelIn ${motion.swift} ${motion.ease} both`,

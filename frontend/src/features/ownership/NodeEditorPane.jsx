@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Divider, FormControl, FormControlLabel, FormLabel,
+  Alert, Box, Button, Chip, Divider, FormControl, FormControlLabel, FormLabel,
   InputLabel, MenuItem, Radio, RadioGroup, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -12,7 +12,8 @@ import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
 import { VoiceClip } from '../../components/VoiceClip.jsx';
-import { PdfViewerPane } from './PdfViewerPane.jsx';
+import { DocumentViewerDialog } from '../../components/DocumentViewerDialog.jsx';
+import { DealDocumentList } from '../deal/review/DealDocumentList.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
 import { tokens } from '../../theme/theme.js';
 
@@ -31,7 +32,7 @@ const VERIFICATION_OPTIONS = [
  * Documents and Verifications tabs are placeholders for M8 / M9.
  */
 export function NodeEditorPane({
-  tree, selectedNodeId, useTree, onCleared, dealId, onViewDocument,
+  tree, selectedNodeId, useTree, onCleared, dealId,
   /** Which panel to show. Owned by NodeDrawer, which draws the tab strip. */
   tab = 'details',
 }) {
@@ -42,8 +43,9 @@ export function NodeEditorPane({
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [verificationSaved, setVerificationSaved] = useState(false);
-  // Local to the drawer: the deal-level PDF panel used to own this, and it went with it.
-  const [viewingDocumentId, setViewingDocumentId] = useState(null);
+  // The document open in the viewer, or null. Held whole rather than by id: both lists
+  // already have the row in hand, and re-finding it would mean each knowing about the other.
+  const [viewingDoc, setViewingDoc] = useState(null);
   const qc = useQueryClient();
 
   const selected = useMemo(
@@ -298,20 +300,19 @@ export function NodeEditorPane({
             allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
             compact
             title={`Documents on ${selected.displayName}`}
-            onViewDocument={onViewDocument}
+            onViewDocument={(id) => {
+              // The node's own rows open the same viewer as the deal list below. One viewer,
+              // two ways in — the alternative is two that drift.
+              const found = (nodeDocsQ.data ?? []).find((d) => d.id === id);
+              if (found) setViewingDoc(found);
+            }}
           />
 
-          {/* The deal's whole document set, readable here. It used to have a third of the review
-              screen to itself; a reviewer reads a document while working one node, so this is
-              where it belongs. */}
+          {/* The deal's whole document set. It used to have a third of the review screen to
+              itself and opened on whichever file happened to be first; now it is a list, and
+              reading one is a deliberate act. */}
           <Divider />
-          <Box sx={{ height: 420, borderRadius: 2, overflow: 'hidden', border: `1px solid ${tokens.hairline}` }}>
-            <PdfViewerPane
-              dealId={dealId}
-              selectedDocumentId={viewingDocumentId}
-              onSelectDocument={setViewingDocumentId}
-            />
-          </Box>
+          <DealDocumentList dealId={dealId} onOpen={setViewingDoc} />
         </Stack>
       )}
 
@@ -322,6 +323,12 @@ export function NodeEditorPane({
             : 'PEP and sanctions screening for this party will show here, along with what was matched and who cleared it.'}
         </ParkedPanel>
       )}
+
+      <DocumentViewerDialog
+        open={Boolean(viewingDoc)}
+        doc={viewingDoc}
+        onClose={() => setViewingDoc(null)}
+      />
 
       {tab === 'verification' && (
         <Stack spacing={3} sx={{ overflowY: 'auto' }}>
