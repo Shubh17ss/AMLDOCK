@@ -1,6 +1,5 @@
 import {
-  Box, Divider, FormControl, FormControlLabel, FormLabel, InputLabel, MenuItem, Radio,
-  RadioGroup, Select, Stack, TextField, Typography,
+  Box, Divider, FormControl, FormLabel, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import {
   ID_DOCUMENT_TYPES, NODE_TYPES, NOMINEE_OPTIONS, PERSON_ROLES,
@@ -8,7 +7,7 @@ import {
 } from '../../api/ownership.js';
 import { CountrySelect } from '../../components/CountrySelect.jsx';
 import { PhoneField } from '../../components/PhoneField.jsx';
-import { tokens } from '../../theme/theme.js';
+import { tokens, motion } from '../../theme/theme.js';
 
 /** The registration number's name changes with the jurisdiction; the field does not. */
 function businessNumberLabel(country) {
@@ -46,33 +45,81 @@ const JURISDICTION_ONLY = ['INCORPORATED_SOCIETY', 'CHARITY', 'GOVERNMENT_AGENCY
 const WITH_REFERENCE = ['INDIVIDUAL', 'PARTNERSHIP'];
 
 /**
- * One yes/no question, rendered inline.
+ * One yes/no question as a segmented control.
  *
- * Takes `options` for the one question that has three answers — nominee director/shareholder,
+ * <p>Two or three buttons in a track rather than radios: the answer stays legible at arm's
+ * length, which matters on the phone a reviewer is often holding, and the whole control is a
+ * single tap target per option rather than a dot to hit.
+ *
+ * <p>Takes `options` for the one question that has three answers — nominee director/shareholder,
  * where "Not asked" is the default because a YES carries a risk consequence and a defaulted NO
  * would be a negative answer nobody gave.
  */
 function YesNoField({ label, value, onChange, options = YES_NO, helper }) {
   const isTriState = options !== YES_NO;
-  // Radio values cross the DOM as strings, so booleans have to be mapped back on the way out.
-  const toValue = (raw) => (isTriState ? raw : raw === 'true');
   const current = value === undefined || value === null
     ? (isTriState ? options[0].value : false)
     : value;
 
   return (
-    <FormControl>
-      <FormLabel sx={{ fontSize: '0.875rem' }}>{label}</FormLabel>
-      <RadioGroup row value={String(current)} onChange={(e) => onChange(toValue(e.target.value))}>
-        {options.map((o) => (
-          <FormControlLabel key={String(o.value)} value={String(o.value)}
-                            control={<Radio size="small" />} label={o.label} />
-        ))}
-      </RadioGroup>
+    <Box>
+      <FormLabel
+        component="legend"
+        sx={{ fontSize: '0.8rem', color: tokens.ink, display: 'block', mb: 0.75 }}
+      >
+        {label}
+      </FormLabel>
+      <Box
+        role="radiogroup"
+        aria-label={label}
+        sx={{
+          display: 'inline-flex',
+          p: 0.375,
+          gap: 0.375,
+          borderRadius: 2,
+          border: `1px solid ${tokens.hairline}`,
+          backgroundColor: tokens.tileRaised,
+          maxWidth: '100%',
+        }}
+      >
+        {options.map((o) => {
+          const selected = String(o.value) === String(current);
+          return (
+            <Box
+              key={String(o.value)}
+              role="radio"
+              aria-checked={selected}
+              tabIndex={0}
+              onClick={() => onChange(o.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(o.value); }
+              }}
+              sx={motion.respectful({
+                px: 2.5,
+                py: 0.75,
+                borderRadius: 1.5,
+                cursor: 'pointer',
+                userSelect: 'none',
+                fontSize: '0.85rem',
+                fontWeight: selected ? 600 : 400,
+                color: selected ? '#fff' : tokens.muted,
+                backgroundColor: selected ? tokens.blue : 'transparent',
+                transition: `background-color ${motion.swift} ease, color ${motion.swift} ease`,
+                '&:hover': { backgroundColor: selected ? tokens.blue : tokens.hover },
+                '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
+              })}
+            >
+              {o.label}
+            </Box>
+          );
+        })}
+      </Box>
       {helper && (
-        <Typography variant="caption" sx={{ color: tokens.muted, mt: -0.5 }}>{helper}</Typography>
+        <Typography variant="caption" sx={{ color: tokens.muted, display: 'block', mt: 0.5 }}>
+          {helper}
+        </Typography>
       )}
-    </FormControl>
+    </Box>
   );
 }
 

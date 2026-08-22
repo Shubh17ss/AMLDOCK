@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Divider, FormControl, FormControlLabel, FormLabel,
-  IconButton, InputLabel, MenuItem, Paper, Radio, RadioGroup, Select, Stack, Tab,
-  Tabs, TextField, Tooltip, Typography,
+  Alert, Box, Button, Divider, FormControl, FormControlLabel, FormLabel,
+  InputLabel, MenuItem, Radio, RadioGroup, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveIcon from '@mui/icons-material/Save';
@@ -13,6 +12,8 @@ import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
 import { VoiceClip } from '../../components/VoiceClip.jsx';
+import { PdfViewerPane } from './PdfViewerPane.jsx';
+import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
 import { tokens } from '../../theme/theme.js';
 
 // Three user-facing manual states mapped onto the existing backend enum.
@@ -29,8 +30,11 @@ const VERIFICATION_OPTIONS = [
  *   - delete the node (with cascade confirm if it has edges)
  * Documents and Verifications tabs are placeholders for M8 / M9.
  */
-export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealId, onViewDocument }) {
-  const [tab, setTab] = useState(0);
+export function NodeEditorPane({
+  tree, selectedNodeId, useTree, onCleared, dealId, onViewDocument,
+  /** Which panel to show. Owned by NodeDrawer, which draws the tab strip. */
+  tab = 'details',
+}) {
   const [form, setForm] = useState(null);
   const [edgeForm, setEdgeForm] = useState({ percentage: '', role: '' });
   const [verification, setVerification] = useState({ status: 'IN_PROGRESS', notes: '' });
@@ -38,6 +42,8 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [verificationSaved, setVerificationSaved] = useState(false);
+  // Local to the drawer: the deal-level PDF panel used to own this, and it went with it.
+  const [viewingDocumentId, setViewingDocumentId] = useState(null);
   const qc = useQueryClient();
 
   const selected = useMemo(
@@ -104,7 +110,7 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   const nodeDocsQ = useQuery({
     queryKey: ['documents', 'node', selectedNodeId],
     queryFn: () => listNodeDocuments(selectedNodeId),
-    enabled: Boolean(selectedNodeId) && tab === 2,
+    enabled: Boolean(selectedNodeId) && tab === 'verification',
   });
   const nodeVoiceNotes = (nodeDocsQ.data ?? []).filter((d) => d.documentType === 'VOICE_NOTE');
 
@@ -119,15 +125,7 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
     }
   }, [incomingEdge?.id]);
 
-  if (!selected || !form) {
-    return (
-      <Paper variant="outlined" sx={{ p: 3, height: '100%' }}>
-        <Typography sx={{ color: tokens.muted }} variant="body2">
-          Select a node from the tree to view or edit its details.
-        </Typography>
-      </Paper>
-    );
-  }
+  if (!selected || !form) return null;
 
   const saveDetails = async () => {
     setError(null);
@@ -232,27 +230,10 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
-          {selected.displayName}
-        </Typography>
-        <Chip size="small" label={selected.nodeType.replaceAll('_', ' ').toLowerCase()} variant="outlined" />
-        <Tooltip title="Delete node">
-          <IconButton size="small" color="error" onClick={handleDelete} disabled={deleting}>
-            <DeleteOutlineIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Stack>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tab label="Details" />
-        <Tab label="Documents" />
-        <Tab label="Verifications" />
-      </Tabs>
-
+    <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
-      {tab === 0 && (
+      {tab === 'details' && (
         <Stack spacing={3} sx={{ overflowY: 'auto' }}>
           <NodeFormFields value={form} onChange={setForm} includeTypeSelector={false} />
 
@@ -286,16 +267,21 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
           )}
 
           <Divider />
-          <Box>
+          <Stack direction="row" spacing={1} alignItems="center">
             <Button variant="contained" startIcon={<SaveIcon />} onClick={saveDetails}
                     disabled={useTree.updateNode.isPending}>
               {useTree.updateNode.isPending ? 'Saving…' : 'Save details'}
             </Button>
-          </Box>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button size="small" color="error" startIcon={<DeleteOutlineIcon />}
+                    onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Removing…' : 'Remove from structure'}
+            </Button>
+          </Stack>
         </Stack>
       )}
 
-      {tab === 1 && (
+      {tab === 'documents' && (
         <Stack spacing={1.5} sx={{ overflowY: 'auto' }}>
           {/* The list below includes the ID scans the broker captured — those are linked to the
               person, not to this node, and were invisible here until now. */}
@@ -310,13 +296,34 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
             dealId={dealId}
             ownershipNodeId={selected.id}
             allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
+            compact
             title={`Documents on ${selected.displayName}`}
             onViewDocument={onViewDocument}
           />
+
+          {/* The deal's whole document set, readable here. It used to have a third of the review
+              screen to itself; a reviewer reads a document while working one node, so this is
+              where it belongs. */}
+          <Divider />
+          <Box sx={{ height: 420, borderRadius: 2, overflow: 'hidden', border: `1px solid ${tokens.hairline}` }}>
+            <PdfViewerPane
+              dealId={dealId}
+              selectedDocumentId={viewingDocumentId}
+              onSelectDocument={setViewingDocumentId}
+            />
+          </Box>
         </Stack>
       )}
 
-      {tab === 2 && (
+      {(tab === 'echecks' || tab === 'pep') && (
+        <ParkedPanel title={tab === 'echecks' ? 'Electronic checks' : 'Politically exposed person'}>
+          {tab === 'echecks'
+            ? 'Identity and address verification against external registers will run from here, with each result kept against this node as evidence.'
+            : 'PEP and sanctions screening for this party will show here, along with what was matched and who cleared it.'}
+        </ParkedPanel>
+      )}
+
+      {tab === 'verification' && (
         <Stack spacing={3} sx={{ overflowY: 'auto' }}>
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Manual verification</Typography>
@@ -395,6 +402,6 @@ export function NodeEditorPane({ tree, selectedNodeId, useTree, onCleared, dealI
           )}
         </Stack>
       )}
-    </Paper>
+    </Box>
   );
 }

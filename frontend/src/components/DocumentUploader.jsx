@@ -34,6 +34,12 @@ export function DocumentUploader({
    * that lives in a dropdown is a suggestion.
    */
   allowedTypes = undefined,
+  /**
+   * Lay out for a narrow container. MUI's breakpoints watch the viewport, so inside a 480px
+   * drawer on a 1500px screen every `sm:` rule still fires and the table runs off the edge.
+   * This is the container query the component cannot ask for itself.
+   */
+  compact = false,
   canUpload = true,
   title = 'Documents',
   onViewDocument = null,
@@ -136,20 +142,22 @@ export function DocumentUploader({
   return (
     <Stack spacing={2}>
       <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        justifyContent={{ sm: 'space-between' }}
-        alignItems={{ sm: 'center' }}
-        spacing={{ xs: 1.5, sm: 0 }}
+        direction={compact ? 'column' : { xs: 'column', sm: 'row' }}
+        justifyContent={compact ? undefined : { sm: 'space-between' }}
+        alignItems={compact ? 'stretch' : { sm: 'center' }}
+        spacing={compact ? 1.5 : { xs: 1.5, sm: 0 }}
       >
         <Typography variant="subtitle1">{title}</Typography>
         {canUpload && (
           <Stack
-            direction={{ xs: 'column', sm: 'row' }}
+            direction={compact ? 'column' : { xs: 'column', sm: 'row' }}
             spacing={1.5}
-            alignItems={{ sm: 'center' }}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
+            alignItems={compact ? 'stretch' : { sm: 'center' }}
+            sx={{ width: compact ? '100%' : { xs: '100%', sm: 'auto' } }}
           >
-            <FormControl size="small" sx={{ minWidth: { sm: 200 }, width: { xs: '100%', sm: 'auto' } }}>
+            <FormControl size="small"
+                         sx={{ minWidth: compact ? 0 : { sm: 200 },
+                               width: compact ? '100%' : { xs: '100%', sm: 'auto' } }}>
               <InputLabel id="doc-type-label">Document type</InputLabel>
               <Select labelId="doc-type-label" label="Document type"
                       value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
@@ -212,7 +220,11 @@ export function DocumentUploader({
       <TableContainer
         component={Paper}
         variant="outlined"
-        sx={scrollTable ? { maxHeight: 420 } : undefined}
+        sx={{
+          ...(scrollTable ? { maxHeight: 420 } : null),
+          // Wide content scrolls inside its own box; the panel around it never does.
+          overflowX: 'auto',
+        }}
       >
         <Table size="small" stickyHeader={scrollTable}>
           <TableHead>

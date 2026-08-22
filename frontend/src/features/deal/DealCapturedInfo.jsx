@@ -30,8 +30,12 @@ const foreignExposureLabel = (code) => {
  * Every field is shown — blanks render as "—" so a reviewer can see what wasn't provided.
  * Collapsible so it doesn't crowd the reviewer's workspace.
  */
-export function DealCapturedInfo({ deal, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen);
+/**
+ * @param embedded true when this owns a whole tab — the collapse control goes, since a
+ *                 section you navigated to should not need opening.
+ */
+export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false }) {
+  const [open, setOpen] = useState(embedded ? true : defaultOpen);
   const money = useCurrency();
   const p = deal.property ?? {};
   const c = deal.client ?? {};
@@ -56,14 +60,16 @@ export function DealCapturedInfo({ deal, defaultOpen = true }) {
               Deal information
             </Typography>
           </Box>
-          <IconButton
-            onClick={() => setOpen((o) => !o)}
-            aria-label={open ? 'Collapse deal information' : 'Expand deal information'}
-            aria-expanded={open}
-            sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease', flexShrink: 0 }}
-          >
-            <ExpandMoreIcon />
-          </IconButton>
+          {!embedded && (
+            <IconButton
+              onClick={() => setOpen((o) => !o)}
+              aria-label={open ? 'Collapse deal information' : 'Expand deal information'}
+              aria-expanded={open}
+              sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease', flexShrink: 0 }}
+            >
+              <ExpandMoreIcon />
+            </IconButton>
+          )}
         </Stack>
 
         {/* Glance line when collapsed — keeps the quick summary a reviewer had before */}

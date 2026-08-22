@@ -114,6 +114,9 @@ export const TRUST_TYPES = [
   { value: 'INHERITANCE_DEFINED_INTEREST', label: 'Inheritance / defined interest trust' },
 ];
 
+export const trustTypeLabel = (value) =>
+  TRUST_TYPES.find((t) => t.value === value)?.label ?? value ?? '';
+
 /** How much the trust holds. The third band sets the deal to High. */
 export const TRUST_HOLDING_COMPLEXITY = [
   { value: 'SINGLE_PROPERTY_ASSET', label: 'Single property asset' },
