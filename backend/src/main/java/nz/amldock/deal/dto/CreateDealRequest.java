@@ -44,6 +44,7 @@ public record CreateDealRequest(
         /* ---------- section 4: risk and valuation ---------- */
 
         Boolean redFlagPresent,
+        String redFlag,
         @PositiveOrZero BigDecimal valuationMin,
         @PositiveOrZero BigDecimal valuationMax,
 

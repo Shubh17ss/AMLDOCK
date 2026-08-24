@@ -249,7 +249,7 @@ class DealServiceRiskAndPatchTest {
     void aClientWithNoTypeIsAccepted() {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null, null, null, null),
                 new ClientInput("Jane Marsh", null, null, null));
 
@@ -263,7 +263,7 @@ class DealServiceRiskAndPatchTest {
     void aClientTypeIsStillStoredWhenOneIsGiven() {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 new ClientInput("Marsh Family Trust", ClientType.ENTITY, null, null));
 
         service.create(req);
@@ -276,7 +276,7 @@ class DealServiceRiskAndPatchTest {
     private CreateDealRequest request(Boolean onSoldQuickly) {
         return new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                "Retiring overseas", false, onSoldQuickly, "NONE", false, false, null, null,
+                "Retiring overseas", false, onSoldQuickly, "NONE", false, false, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
                         null, PropertyType.RESIDENTIAL, "RETIREMENT"),
                 new ClientInput("Jane Marsh", null, null, null));
@@ -303,7 +303,7 @@ class DealServiceRiskAndPatchTest {
     }
 
     /**
-     * UpdateDealRequest is a 15-field positional record, so tests build one through a small
+     * UpdateDealRequest is a 17-field positional record, so tests build one through a small
      * builder rather than counting nulls at every call site.
      */
     private UpdateDealRequest update(java.util.function.UnaryOperator<Patch> fn) {
@@ -311,7 +311,7 @@ class DealServiceRiskAndPatchTest {
     }
 
     static final class Patch {
-        String notes, transactionPurpose, foreignExposureCountry;
+        String notes, transactionPurpose, foreignExposureCountry, redFlag;
         Boolean trustInvolved, onSoldQuickly, redFlagPresent;
         BigDecimal valuationMin, valuationMax;
 
@@ -321,13 +321,14 @@ class DealServiceRiskAndPatchTest {
         Patch trustInvolved(Boolean v) { this.trustInvolved = v; return this; }
         Patch onSoldQuickly(Boolean v) { this.onSoldQuickly = v; return this; }
         Patch redFlagPresent(Boolean v) { this.redFlagPresent = v; return this; }
+        Patch redFlag(String v) { this.redFlag = v; return this; }
         Patch valuationMin(BigDecimal v) { this.valuationMin = v; return this; }
         Patch valuationMax(BigDecimal v) { this.valuationMax = v; return this; }
 
         UpdateDealRequest build() {
             return new UpdateDealRequest(null, null, null, null, null, null, null, notes,
                     transactionPurpose, trustInvolved, onSoldQuickly, foreignExposureCountry,
-                    null, redFlagPresent, valuationMin, valuationMax);
+                    null, redFlagPresent, redFlag, valuationMin, valuationMax);
         }
     }
 

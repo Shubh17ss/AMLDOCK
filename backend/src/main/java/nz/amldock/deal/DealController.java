@@ -31,7 +31,7 @@ import java.util.List;
 public class DealController {
 
     /**
-     * Who may reach an editing or handover endpoint at all.
+     * Who may reach an editing or submission endpoint at all.
      *
      * <p>Wider than the roles that may actually succeed — {@code DealLifecycleService} decides
      * that, scoped to the deal's own firm and its current status. These annotations only keep
@@ -116,21 +116,12 @@ public class DealController {
     // accepting an arbitrary target is also what /override already is, and that is deliberately
     // senior-manager-only.
 
-    @PostMapping("/{id}/handover")
+    @PostMapping("/{id}/submit")
     @PreAuthorize(EDITOR_ROLES)
-    public DealDto handover(@PathVariable Long id) {
-        var r = deals.act(id, DealAction.HANDOVER, null);
-        audit.record(AuditAction.DEAL_HANDED_OVER, "Deal", r.deal().getId(),
-                "Deal " + r.deal().getReference() + " handed over to compliance");
-        return deals.toDtoAfterMutation(r.deal());
-    }
-
-    @PostMapping("/{id}/start-review")
-    @PreAuthorize(REVIEWER_ROLES)
-    public DealDto startReview(@PathVariable Long id) {
-        var r = deals.act(id, DealAction.START_REVIEW, null);
-        audit.record(AuditAction.DEAL_REVIEW_STARTED, "Deal", r.deal().getId(),
-                "Review started on deal " + r.deal().getReference());
+    public DealDto submit(@PathVariable Long id) {
+        var r = deals.act(id, DealAction.SUBMIT, null);
+        audit.record(AuditAction.DEAL_SUBMITTED_FOR_REVIEW, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " submitted to compliance for review");
         return deals.toDtoAfterMutation(r.deal());
     }
 
@@ -164,10 +155,9 @@ public class DealController {
     /**
      * Sends a deal back to the broker for changes.
      *
-     * <p>The author roles are admitted here so a broker can recall their own deal from HANDOVER
-     * before anyone has looked at it. Once review has started, {@code assertRevert} allows only
-     * a reviewer — an early handover is the broker's mistake to undo, but sending a deal back
-     * mid-review is a compliance decision.
+     * <p>A compliance decision, and only theirs: a submitted deal is already being worked on, so
+     * there is no window in which the broker could pull it back unnoticed. The annotation is the
+     * wider editor set only so the rejection comes from the lifecycle service, which can say why.
      */
     @PostMapping("/{id}/revert")
     @PreAuthorize(EDITOR_ROLES)

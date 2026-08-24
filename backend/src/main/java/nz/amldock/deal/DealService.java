@@ -203,6 +203,7 @@ public class DealService {
         d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         d.setClientRemote(req.clientRemote());
         d.setRedFlagPresent(req.redFlagPresent());
+        d.setRedFlag(redFlagFor(req.redFlagPresent(), req.redFlag()));
         d.setValuationMin(req.valuationMin());
         d.setValuationMax(req.valuationMax());
         d.setCreatedByUserId(actor.id());
@@ -241,6 +242,11 @@ public class DealService {
         }
         if (req.clientRemote() != null) d.setClientRemote(req.clientRemote());
         if (req.redFlagPresent() != null) d.setRedFlagPresent(req.redFlagPresent());
+        if (req.redFlag() != null) d.setRedFlag(blankToNull(req.redFlag()));
+        // "No red flag" and "this red flag" cannot both be true. Answering the boolean No clears
+        // whichever flag was named before it, so the pair can never contradict itself on the
+        // record — checked against the merged state, since either half may arrive alone.
+        if (Boolean.FALSE.equals(d.getRedFlagPresent())) d.setRedFlag(null);
         if (req.valuationMin() != null) d.setValuationMin(req.valuationMin());
         if (req.valuationMax() != null) d.setValuationMax(req.valuationMax());
         // Against the merged state, not the request — a PATCH carrying only one bound must
@@ -418,6 +424,16 @@ public class DealService {
     /** "" means "clear this field"; null means "leave it alone". */
     private static String blankToNull(String v) {
         return (v == null || v.isBlank()) ? null : v;
+    }
+
+    /**
+     * The named red flag, but only when the deal admits to having one.
+     *
+     * <p>Storing a flag against {@code redFlagPresent = false} would put a contradiction on the
+     * compliance record, and the answer that carries weight is the boolean — so it wins.
+     */
+    private static String redFlagFor(Boolean present, String redFlag) {
+        return Boolean.TRUE.equals(present) ? blankToNull(redFlag) : null;
     }
 
     private static void validateValuationRange(BigDecimal min, BigDecimal max) {

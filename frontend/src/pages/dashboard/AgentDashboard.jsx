@@ -26,7 +26,7 @@ export function AgentDashboard() {
   // ON_HOLD sits with compliance too, but it is waiting on *this broker* to act, so it is
   // counted alongside their own in-progress work rather than as something in flight.
   const mine = deals.filter((d) => d.status === 'NEW' || d.status === 'ON_HOLD');
-  const inReview = deals.filter((d) => d.status === 'HANDOVER' || d.status === 'REVIEW');
+  const inReview = deals.filter((d) => d.status === 'REVIEW');
   const verified = deals.filter((d) => d.status === 'VERIFIED' || d.status === 'CLOSED');
   const open = mine.length + inReview.length;
   const recent = [...deals].sort(byUpdated).slice(0, 5);

@@ -5,7 +5,7 @@ import { SectionCard, FieldGroup } from './SectionShell.jsx';
 import { tokens } from '../../../theme/theme.js';
 
 /**
- * Section 3 — the people behind the deal.
+ * Section 4 — the people behind the deal.
  *
  * Two different things, kept apart on purpose. The ID scans are of natural persons and feed
  * identity verification. The key contact is who the firm actually calls about this deal.
@@ -13,7 +13,7 @@ import { tokens } from '../../../theme/theme.js';
  * individual) is established by admin/AMLCo during the ownership-structure review. Until then
  * the contact's name stands in as the deal's label so lists are readable.
  */
-export function Section3Identity({ form, setField, dealId, idDocuments, onUploaded, onRemoved }) {
+export function Section4Identity({ form, setField, dealId, idDocuments, onUploaded, onRemoved }) {
   return (
     <SectionCard
       title="Client identity"

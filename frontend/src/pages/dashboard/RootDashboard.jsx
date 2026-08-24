@@ -76,8 +76,8 @@ export function RootDashboard() {
 
       <StatTile index={5} eyebrow="ACTIVE ENTITIES" dot={tokens.approved} value={activeFirms}
                 label={`${firms.length - activeFirms} inactive`} to="/settings/reporting-entities" />
-      <StatTile index={6} eyebrow="HANDOVER" dot={dealStatusDot('HANDOVER')} value={count('HANDOVER')}
-                label="Awaiting review" color={count('HANDOVER') ? tokens.submitted : undefined} to="/cdd/deals" />
+      <StatTile index={6} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={count('REVIEW')}
+                label="With compliance" color={count('REVIEW') ? tokens.review : undefined} to="/cdd/deals" />
 
       <ActionTile
         index={7}

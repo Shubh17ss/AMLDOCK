@@ -1,7 +1,5 @@
 import { useEffect } from 'react';
 import { FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
-import { AddressFinderField } from '../../../components/AddressFinderField.jsx';
-import { useFirmCountry } from '../../../hooks/useFirmCountry.js';
 import { CountrySelect } from '../../../components/CountrySelect.jsx';
 import { VoiceRecorderField } from '../../../components/VoiceRecorderField.jsx';
 import { RiskRatingChip } from '../../../components/RiskRatingChip.jsx';
@@ -12,12 +10,15 @@ import { YesNoField } from './YesNoField.jsx';
 import { tokens } from '../../../theme/theme.js';
 
 /**
- * Section 2 — the property and why it's being sold.
+ * Section 3 — what the property is, and why it's being sold.
  *
  * This is where the AML signal actually lives: the reason for selling, whether a trust sits in
  * the beneficial ownership, whether the property is being flipped, and any foreign exposure.
+ *
+ * It sits after the deal exists, so none of it blocks getting the file open — a broker can
+ * leave at the address and come back to these answers.
  */
-export function Section2Property({ form, setNested, setField, setGroup, voiceBlob, onVoiceChange }) {
+export function Section3Details({ form, setNested, setField, voiceBlob, onVoiceChange }) {
   const propertyType = form.property.propertyType;
   const reasons = reasonsForPropertyType(propertyType);
 
@@ -33,25 +34,11 @@ export function Section2Property({ form, setNested, setField, setGroup, voiceBlo
 
   const previewRisk = previewRiskRating(form);
 
-  // Which address database to search. A resumed deal already carries the country the server
-  // stamped on its property — prefer it, because the deal's own reporting entity is the
-  // authority, not whoever happens to be looking at it.
-  const { country: firmCountry } = useFirmCountry();
-  const country = form.property.country || firmCountry;
-
   return (
     <SectionCard
-      title="The property"
-      subtitle="Where it is, what it is, and why your client is selling."
+      title="Property details"
+      subtitle="What it is, and why your client is selling."
     >
-      <FieldGroup title="Address">
-        <AddressFinderField
-          value={form.property}
-          onChange={setGroup('property')}
-          country={country}
-        />
-      </FieldGroup>
-
       <FieldGroup title="Classification">
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <FormControl fullWidth required>

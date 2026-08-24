@@ -13,9 +13,7 @@ package nz.amldock.deal;
 public enum DealStatus {
     /** The broker is still working on it. The only status in which a deal may be edited. */
     NEW,
-    /** The broker has finished and passed it to compliance. */
-    HANDOVER,
-    /** Compliance is working on it. */
+    /** The broker has submitted it and compliance is working on it. */
     REVIEW,
     /** Parked — the only negative outcome. Exits by reverting to NEW. */
     ON_HOLD,

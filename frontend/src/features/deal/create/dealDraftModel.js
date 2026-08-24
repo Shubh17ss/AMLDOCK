@@ -26,25 +26,29 @@ export const EMPTY_FORM = {
   // Section 1
   clientRole: '',            // 'VENDOR' | 'PURCHASER'
 
-  // Section 2
+  // Section 2 (address) and section 3 (the rest of the property) share one nested group,
+  // because they are one record on the server however the form splits the asking.
   property: {
     addressLine1: '', addressLine2: '', suburb: '', district: '', region: '',
     postcode: '',
     propertyType: '', reasonForSelling: '',
   },
+
+  // Section 3
   transactionPurpose: '',
   trustInvolved: null,       // null = unanswered, distinct from false
   onSoldQuickly: null,
   foreignExposureCountry: '', // '' = unanswered, 'NONE' = asked and there is none
 
-  // Section 3
+  // Section 4
   clientRemote: null,       // null = unanswered, distinct from "no"
   contactName: '',
   contactEmail: '',
   contactPhone: '',
 
-  // Section 4
+  // Section 5
   redFlagPresent: null,
+  redFlag: '',              // a RedFlag enum name; only meaningful when redFlagPresent is true
   valuationMin: '',
   valuationMax: '',
   notes: '',
@@ -62,6 +66,9 @@ export function buildDealPatch(form) {
     foreignExposureCountry: form.foreignExposureCountry,
     clientRemote: form.clientRemote,
     redFlagPresent: form.redFlagPresent,
+    // Sent even when blank: the API reads "" as "clear this", which is what answering No means
+    // for a flag named earlier. The server clears it too — this just keeps the form honest.
+    redFlag: form.redFlagPresent === true ? form.redFlag : '',
     valuationMin: num(form.valuationMin),
     valuationMax: num(form.valuationMax),
     notes: form.notes,
@@ -143,8 +150,11 @@ export function dtoToForm(dto) {
     contactEmail: dto.pocEmail ?? '',
     contactPhone: dto.pocPhone ?? '',
     redFlagPresent: dto.redFlagPresent ?? null,
-    valuationMin: dto.valuationMin ?? '',
-    valuationMax: dto.valuationMax ?? '',
+    redFlag: dto.redFlag ?? '',
+    // ValuationField stores digits only and formats for display, so a number from the API
+    // has to arrive as its digit string rather than as a number.
+    valuationMin: dto.valuationMin == null ? '' : String(dto.valuationMin),
+    valuationMax: dto.valuationMax == null ? '' : String(dto.valuationMax),
     notes: dto.notes ?? '',
   };
 }
@@ -160,21 +170,27 @@ export function sectionGaps(section, form) {
   if (section === 1) {
     if (!form.clientRole) gaps.push('Choose whether your client is the vendor or the purchaser');
   }
+  // Section 2 is the one that creates the deal, so it asks for the least a deal can be
+  // identified by. Everything the old section 2 also demanded has moved to section 3, where it
+  // no longer stands between the broker and a saved record.
   if (section === 2) {
+    if (!form.property.addressLine1) gaps.push('Property address');
+  }
+  if (section === 3) {
     const p = form.property;
-    if (!p.addressLine1) gaps.push('Property address');
     if (!p.propertyType) gaps.push('Property type');
     if (!p.reasonForSelling) gaps.push('Reason for selling');
     if (form.trustInvolved == null) gaps.push('Whether a trust is involved in beneficial ownership');
     if (form.onSoldQuickly == null) gaps.push('Whether the property is being on-sold quickly');
     if (!form.foreignExposureCountry) gaps.push('Foreign exposure (choose "None" if there is none)');
   }
-  if (section === 3) {
+  if (section === 4) {
     if (form.clientRemote == null) gaps.push('Whether the client is remote');
     if (!form.contactName) gaps.push('Key contact name');
   }
-  if (section === 4) {
+  if (section === 5) {
     if (form.redFlagPresent == null) gaps.push('Whether there is a red flag');
+    if (form.redFlagPresent === true && !form.redFlag) gaps.push('Which red flag you saw');
     const min = num(form.valuationMin);
     const max = num(form.valuationMax);
     if (min != null && max != null && max < min) {

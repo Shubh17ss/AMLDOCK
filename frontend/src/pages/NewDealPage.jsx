@@ -6,7 +6,7 @@ import {
   Stack, Step, StepLabel, Stepper,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import { deleteDeal, handoverDeal } from '../api/deals.js';
+import { deleteDeal, submitDealForReview } from '../api/deals.js';
 import { ID_DOCUMENT_TYPES, listDealDocuments, uploadToS3 } from '../api/documents.js';
 import { LoadingOverlay } from '../components/LoadingOverlay.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
@@ -15,27 +15,35 @@ import { useDealDraft } from '../features/deal/create/useDealDraft.js';
 import { sectionGaps } from '../features/deal/create/dealDraftModel.js';
 import { SectionProgress, SaveStateChip } from '../features/deal/create/SectionShell.jsx';
 import { Section1ClientType } from '../features/deal/create/Section1ClientType.jsx';
-import { Section2Property } from '../features/deal/create/Section2Property.jsx';
-import { Section3Identity } from '../features/deal/create/Section3Identity.jsx';
-import { Section4Risk } from '../features/deal/create/Section4Risk.jsx';
-import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
+import { Section2Address } from '../features/deal/create/Section2Address.jsx';
+import { Section3Details } from '../features/deal/create/Section3Details.jsx';
+import { Section4Identity } from '../features/deal/create/Section4Identity.jsx';
+import { Section5Risk } from '../features/deal/create/Section5Risk.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor, isDealReviewer } from '../auth/roles.js';
 import { canEditContent } from '../data/dealStatus.js';
 import { tokens } from '../theme/theme.js';
 
-// Deal-status notifications sit top-centre so they read as a prominent, page-level result
-// rather than an incidental corner toast.
-const TOP_CENTER = { vertical: 'top', horizontal: 'center' };
+const SECTIONS = ['Your client', 'The property', 'Property details', 'Client identity', 'Risk & valuation'];
 
-const SECTIONS = ['Your client', 'The property', 'Client identity', 'Risk & valuation'];
+/** Where section 2's Create button leaves the broker: their own list, with the new deal on it. */
+const AFTER_CREATE = '/my-deals';
+
+/** Editing an existing deal opens here — sections 1 and 2 are already answered. */
+const FIRST_EDIT_SECTION = 2;
 
 /**
  * The broker's deal-creation form.
  *
- * Four sections, saved to the server as the broker moves through them. The draft is created at
- * the section 2 → 3 boundary because sections 3 and 4 upload documents, which need a dealId to
- * attach to — earlier would leave an orphan draft behind every abandoned page load.
+ * Five sections, saved to the server as the broker moves through them. The deal is created at
+ * the end of section 2, off the client role and the property address alone: that is the least a
+ * deal can be identified by, and asking for more before anything is saved is what made brokers
+ * abandon the form half-finished. Creating there also means sections 3 onward have a dealId to
+ * hang document uploads on.
+ *
+ * Section 2 therefore ends the *creation* run — the broker is told the deal exists and sent to
+ * their list. Coming back to it opens at section 3, which is where the unanswered questions
+ * start.
  *
  * Firm and branch aren't asked for: agents may only create deals on the branch they're
  * assigned to, and the API derives it from the caller.
@@ -57,7 +65,9 @@ export function NewDealPage() {
   const draft = useDealDraft({ resumeDealId });
   const { form, setField, setNested, setGroup, dealId, deal, saveState, error, setError } = draft;
 
-  const [section, setSection] = useState(0);
+  // A resumed deal opens at section 3: sections 1 and 2 are what created it, and re-asking
+  // them is exactly the friction this split removes. They stay reachable with Back.
+  const [section, setSection] = useState(resumeDealId ? FIRST_EDIT_SECTION : 0);
   const [documents, setDocuments] = useState([]);
   const [purposeBlob, setPurposeBlob] = useState(null);
   const [notesBlob, setNotesBlob] = useState(null);
@@ -107,9 +117,6 @@ export function NewDealPage() {
     return () => clearInterval(timer);
   }, [dealId, extractionInFlight]);
 
-  const minEvidence = documents.find((d) => d.documentType === 'VALUATION_MIN_EVIDENCE');
-  const maxEvidence = documents.find((d) => d.documentType === 'VALUATION_MAX_EVIDENCE');
-
   /**
    * Voice blobs live in browser state until their section is left — VoiceRecorderField hands
    * over a Blob and leaves uploading to the caller. Flushing at the section boundary rather
@@ -132,19 +139,43 @@ export function NewDealPage() {
     setBusy(true);
     setError(null);
     try {
-      // Section 2 → 3 is where the deal becomes real, because section 3 uploads.
-      if (section === 1) {
-        const id = await draft.ensureDraft();
-        if (!id) return;
-        await flushVoice(purposeBlob, 'VOICE_NOTE_PURPOSE', id).then(() => setPurposeBlob(null));
-      } else if (dealId) {
-        await draft.saveNow();
+      // Nothing here creates a deal - that is section 2's Create button and nowhere else, so
+      // stepping past section 1 on a fresh form leaves no record behind.
+      if (dealId) await draft.saveNow();
+      // The purpose recorder lives in section 3, so its blob flushes on the way out of it.
+      if (section === 2) {
+        await flushVoice(purposeBlob, 'VOICE_NOTE_PURPOSE', dealId).then(() => setPurposeBlob(null));
       }
       setSection((s) => s + 1);
     } catch {
       // useDealDraft has already surfaced the message; staying put is the right response.
     } finally {
       setBusy(false);
+    }
+  };
+
+  /**
+   * Section 2's primary action, on a form that has not created its deal yet.
+   *
+   * The deal is created and the broker leaves — they are told it exists and sent to their list,
+   * rather than being walked through four more sections before anything is theirs to come back
+   * to. Everything after this is editing a real record.
+   */
+  const handleCreate = async () => {
+    if (!canAdvance) { setShowGaps(true); return; }
+    setOverlay({ title: 'Creating the deal', subText: 'Saving the property and opening the file…' });
+    try {
+      const id = await draft.ensureDraft();
+      if (!id) return;
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      showToast({ severity: 'success', message: 'Deal created — open it to carry on' });
+      navigate(AFTER_CREATE);
+    } catch (e) {
+      const msg = e.response?.data?.message || 'Could not create the deal';
+      setError(msg);
+      showToast({ severity: 'error', message: msg });
+    } finally {
+      setOverlay(null);
     }
   };
 
@@ -165,7 +196,7 @@ export function NewDealPage() {
   const handleSubmit = async () => {
     if (!canAdvance) { setShowGaps(true); return; }
     setOverlay({
-      title: 'Handing over',
+      title: 'Submitting for review',
       subText: 'Saving your answers, uploading attachments and passing the deal to compliance…',
     });
     try {
@@ -173,14 +204,14 @@ export function NewDealPage() {
       if (!id) return;
       await flushVoice(notesBlob, 'VOICE_NOTE', id);
       setNotesBlob(null);
-      await handoverDeal(id);
+      await submitDealForReview(id);
       queryClient.invalidateQueries({ queryKey: ['deals'] });
-      showToast({ severity: 'success', message: 'Deal handed over to compliance', anchorOrigin: TOP_CENTER });
+      showToast({ severity: 'success', message: 'Deal submitted for review' });
       navigate(`/deals/${id}`);
     } catch (e) {
-      const msg = e.response?.data?.message || 'Could not hand the deal over';
+      const msg = e.response?.data?.message || 'Could not submit the deal for review';
       setError(msg);
-      showToast({ severity: 'error', message: msg, anchorOrigin: TOP_CENTER });
+      showToast({ severity: 'error', message: msg });
     } finally {
       setOverlay(null);
     }
@@ -212,7 +243,6 @@ export function NewDealPage() {
           severity: 'error',
           message: e.response?.data?.message
             || (isEditMode ? 'Could not delete the deal' : 'Could not discard the draft'),
-          anchorOrigin: TOP_CENTER,
         });
         setOverlay(null);
         return;
@@ -240,6 +270,10 @@ export function NewDealPage() {
   }
 
   const isLast = section === SECTIONS.length - 1;
+  // Section 2 ends the creation run, but only on a form that has not created its deal yet.
+  // Once one exists — in edit mode, or after stepping back — it is an ordinary Next, so the
+  // address stays correctable without creating a second deal.
+  const isCreateStep = section === 1 && !dealId;
 
   return (
     <Stack spacing={3}>
@@ -270,17 +304,19 @@ export function NewDealPage() {
         <Section1ClientType form={form} setField={setField} locked={Boolean(dealId)} />
       )}
       {section === 1 && (
-        <Section2Property
+        <Section2Address form={form} setGroup={setGroup} />
+      )}
+      {section === 2 && (
+        <Section3Details
           form={form}
           setField={setField}
           setNested={setNested}
-          setGroup={setGroup}
           voiceBlob={purposeBlob}
           onVoiceChange={setPurposeBlob}
         />
       )}
-      {section === 2 && (
-        <Section3Identity
+      {section === 3 && (
+        <Section4Identity
           form={form}
           setField={setField}
           dealId={dealId}
@@ -289,15 +325,10 @@ export function NewDealPage() {
           onRemoved={handleRemoved}
         />
       )}
-      {section === 3 && (
-        <Section4Risk
+      {section === 4 && (
+        <Section5Risk
           form={form}
           setField={setField}
-          dealId={dealId}
-          minEvidence={minEvidence}
-          maxEvidence={maxEvidence}
-          onUploaded={handleUploaded}
-          onRemoved={handleRemoved}
           voiceBlob={notesBlob}
           onVoiceChange={setNotesBlob}
         />
@@ -316,10 +347,9 @@ export function NewDealPage() {
 
       {isLast && deal?.reference && (
         <Alert severity="info">
-          Handing over moves <strong>{deal.reference}</strong> to <strong>Handover</strong> and
+          Submitting moves <strong>{deal.reference}</strong> to <strong>In review</strong> and
           locks it from further edits. It's already saved, so you can leave and finish later from{' '}
-          <strong>My deals</strong> — and if you hand it over too early you can recall it from the
-          deal's page.
+          <strong>My deals</strong> — once it is with compliance, only they can send it back.
         </Alert>
       )}
 
@@ -362,22 +392,16 @@ export function NewDealPage() {
           </Button>
           <Button
             variant="contained"
-            onClick={isLast ? handleSubmit : goNext}
+            onClick={isLast ? handleSubmit : isCreateStep ? handleCreate : goNext}
             // Not disabled on incomplete input — clicking says what's missing, which beats a
             // dead button the broker has to reverse-engineer.
             disabled={busy || purchaserBlocked}
             sx={{ flex: { xs: 1, sm: 'unset' } }}
           >
-            {busy ? 'Saving…' : isLast ? 'Hand over' : 'Next'}
+            {busy ? 'Saving…' : isLast ? 'Submit for review' : isCreateStep ? 'Create' : 'Next'}
           </Button>
         </Stack>
       </Stack>
-
-      {/* The reason a deal came back is on its timeline, and the broker needs it in front of
-          them while they act on it — not one navigation away. */}
-      {isEditMode && dealId && (
-        <DealNotesTimeline dealId={dealId} status={deal?.status} />
-      )}
 
       {/* fullWidth + xs so the card is the same centred shape on a phone as on a desktop, rather
           than a narrow box shrink-wrapped to whichever sentence it happens to be showing. */}

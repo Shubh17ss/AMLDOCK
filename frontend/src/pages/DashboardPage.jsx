@@ -86,24 +86,23 @@ export function DashboardPage() {
         </Box>
       </Box>
 
-      {/* One boxed panel per section, stacked. A deep-blue identity rail on the left
-          (~30%) carries the section's glyph; the module cards sit in a grid beside it. */}
+      {/* One boxed panel per section, stacked. A deep-blue identity bar runs across the top
+          carrying the section's name and glyph; the module cards sit in a single row beneath it
+          that scrolls sideways rather than wrapping. */}
       {groups.map((group, gi) => (
         <Box
           key={group.group}
           sx={{
             display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            // A section, not a row: ~70% of the canvas with real height, centred to the
-            // *viewport* rather than the content column. The column starts after the 260px
-            // sidebar, so true centre needs the left margin shrunk by half of that (130px).
-            // Margins can't go negative, so on screens too narrow to absorb the shift the
-            // panel simply rests at the column's left edge — it can never slide under the
-            // sidebar the way an offset could.
+            flexDirection: 'column',
+            // A section, not a row: ~70% of the canvas, centred to the *viewport* rather than
+            // the content column. The column starts after the 260px sidebar, so true centre
+            // needs the left margin shrunk by half of that (130px). Margins can't go negative,
+            // so on screens too narrow to absorb the shift the panel simply rests at the
+            // column's left edge — it can never slide under the sidebar the way an offset could.
             width: { xs: '100%', md: '70%' },
             ml: { xs: 0, md: 'max(0px, calc(15% - 130px))' },
             mr: { xs: 0, md: 'auto' },
-            minHeight: { md: 340 },
             borderRadius: '22px',
             overflow: 'hidden',
             border: `1px solid ${tokens.hairline}`,
@@ -123,102 +122,117 @@ export function DashboardPage() {
             '@media (prefers-reduced-motion: reduce)': { opacity: 1, animation: 'none' },
           }}
         >
-          {/* ── Identity rail ─────────────────────────────────────────────── */}
+          {/* ── Identity bar ──────────────────────────────────────────────── */}
+          {/* Deliberately short. It names the section and gets out of the way — the cards are
+              what the page is for, and a full-height rail was spending a third of the panel
+              saying one word. */}
           <Box
             component={RouterLink}
             to={group.to}
             aria-label={`Open ${group.title}`}
             sx={{
               position: 'relative',
-              width: { xs: '100%', md: '30%' },
-              flexShrink: 0,
-              display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-              gap: 3,
-              p: { xs: 2.5, md: 3.5 },
-              minHeight: { md: 340 },
+              display: 'flex', alignItems: 'center', gap: { xs: 1.5, md: 2 },
+              px: { xs: 2, md: 2.5 },
+              py: { xs: 1.5, md: 1.75 },
               textDecoration: 'none',
               color: '#fff',
               background: `
-                radial-gradient(420px 260px at 110% -20%, rgba(255,255,255,0.20), transparent 60%),
-                radial-gradient(360px 240px at -20% 120%, rgba(10,31,55,0.45), transparent 62%),
-                linear-gradient(140deg, ${tokens.blue} 0%, ${tokens.blueDark} 100%)
+                radial-gradient(420px 200px at 100% -60%, rgba(255,255,255,0.20), transparent 60%),
+                radial-gradient(360px 200px at -10% 180%, rgba(10,31,55,0.45), transparent 62%),
+                linear-gradient(110deg, ${tokens.blue} 0%, ${tokens.blueDark} 100%)
               `,
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), inset -1px 0 0 rgba(10,31,55,0.18)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(10,31,55,0.18)',
               transition: 'filter 0.25s ease',
               '&:hover': { filter: 'brightness(1.06)' },
               '&:hover .rail-arrow': { transform: 'translateX(3px)' },
-              '&:hover .rail-hero': { transform: 'scale(1.05)' },
+              '&:hover .rail-hero': { transform: 'scale(1.06)' },
             }}
           >
-            {/* Header text, top-left. */}
-            <Box>
+            {/* The glyph shrinks to a chip and sits inline, leading the name. */}
+            <Box
+              className="rail-hero"
+              sx={{
+                width: 38, height: 38, flexShrink: 0,
+                borderRadius: '12px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                backgroundColor: 'rgba(255,255,255,0.16)',
+                boxShadow: `
+                  inset 0 1px 0 rgba(255,255,255,0.38),
+                  inset 0 0 0 1px rgba(255,255,255,0.14)
+                `,
+                transition: 'transform 0.4s cubic-bezier(0.22,1,0.36,1)',
+                '& svg': { fontSize: 21, color: '#fff' },
+              }}
+            >
+              {group.icon}
+            </Box>
+
+            <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography sx={{
-                fontFamily: fonts.mono, fontSize: '0.62rem', fontWeight: 700,
-                letterSpacing: '0.18em', textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.72)',
-              }}>
-                Section {String(gi + 1).padStart(2, '0')} · {String(group.items.length).padStart(2, '0')} module{group.items.length === 1 ? '' : 's'}
-              </Typography>
-              <Typography sx={{
-                mt: 0.75, fontFamily: fonts.display, fontWeight: 800,
-                fontSize: { xs: '1.25rem', md: '1.45rem' }, letterSpacing: '-0.02em',
-                lineHeight: 1.15, color: '#fff',
+                fontFamily: fonts.display, fontWeight: 800,
+                fontSize: { xs: '1.02rem', md: '1.12rem' }, letterSpacing: '-0.02em',
+                lineHeight: 1.2, color: '#fff',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {group.title}
               </Typography>
-            </Box>
-
-            {/* The section glyph is the hero — centred, sized to the rail's height. */}
-            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Box
-                className="rail-hero"
-                sx={{
-                  width: { xs: 96, md: 96 }, height: { xs: 96, md: 96 },
-                  borderRadius: { xs: '24px', md: '32px' },
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: 'rgba(255,255,255,0.14)',
-                  boxShadow: `
-                    inset 0 1px 0 rgba(255,255,255,0.38),
-                    inset 0 0 0 1px rgba(255,255,255,0.14),
-                    0 18px 40px -12px rgba(10,31,55,0.55)
-                  `,
-                  backdropFilter: 'blur(6px)',
-                  transition: 'transform 0.4s cubic-bezier(0.22,1,0.36,1)',
-                  '& svg': { fontSize: { xs: 48, md: 48 }, color: '#fff' },
-                }}
-              >
-                {group.icon}
-              </Box>
+              <Typography sx={{
+                fontFamily: fonts.mono, fontSize: '0.6rem', fontWeight: 700,
+                letterSpacing: '0.16em', textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.68)',
+              }}>
+                Section {String(gi + 1).padStart(2, '0')} · {String(group.items.length).padStart(2, '0')} module{group.items.length === 1 ? '' : 's'}
+              </Typography>
             </Box>
 
             <Typography sx={{
-              position: 'relative',
-              fontFamily: fonts.mono, fontSize: '0.68rem', fontWeight: 700,
+              flexShrink: 0,
+              fontFamily: fonts.mono, fontSize: '0.64rem', fontWeight: 700,
               letterSpacing: '0.14em', textTransform: 'uppercase',
               color: 'rgba(255,255,255,0.85)',
               display: 'inline-flex', alignItems: 'center', gap: 0.75,
             }}>
-              Open section
+              {/* The word is noise on a phone; the arrow still says it. */}
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Open section</Box>
               <Box component="span" className="rail-arrow"
-                   sx={{ transition: 'transform 0.25s ease', fontSize: '1.05em' }}>
+                   sx={{ transition: 'transform 0.25s ease', fontSize: '1.15em' }}>
                 ›
               </Box>
             </Typography>
           </Box>
 
           {/* ── Module cards ──────────────────────────────────────────────── */}
+          {/* One row, always. A section's modules are a set you scan across, so they scroll
+              sideways rather than wrapping into a second row that changes the panel's height
+              with the window width. Scrollbar hidden the same way StatusPills does it. */}
           <Box sx={{
-            flex: 1, minWidth: 0,
-            p: { xs: 2, md: 3 },
-            display: 'grid',
+            minWidth: 0,
+            p: { xs: 2, md: 2.5 },
+            display: 'flex',
+            flexWrap: 'nowrap',
+            overflowX: 'auto',
             gap: { xs: 1.5, md: 2 },
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(250px, 1fr))' },
-            // Centred in the tall panel, so a one-row section doesn't pool at the top.
-            alignContent: 'center',
+            scrollSnapType: 'x proximity',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            '&::-webkit-scrollbar': { display: 'none' },
           }}>
             {group.items.map((item) => (
-              <ModuleCard key={item.id} label={item.label} to={item.to} index={cardIndex++}
-                          {...(reviewPropsFor(item) ?? {})} />
+              // The width lives on the wrapper: ModuleCard sits on BentoTile, which sizes itself
+              // with `gridColumn: span`, and that means nothing inside a flex row.
+              <Box
+                key={item.id}
+                sx={{
+                  flex: '0 0 auto',
+                  width: { xs: 232, md: 258 },
+                  display: 'flex',
+                  scrollSnapAlign: 'start',
+                }}
+              >
+                <ModuleCard label={item.label} to={item.to} index={cardIndex++}
+                            {...(reviewPropsFor(item) ?? {})} />
+              </Box>
             ))}
           </Box>
         </Box>

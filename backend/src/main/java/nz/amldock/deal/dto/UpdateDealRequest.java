@@ -30,6 +30,7 @@ public record UpdateDealRequest(
         String foreignExposureCountry,
         Boolean clientRemote,
         Boolean redFlagPresent,
+        String redFlag,
         @PositiveOrZero BigDecimal valuationMin,
         @PositiveOrZero BigDecimal valuationMax
 ) {}

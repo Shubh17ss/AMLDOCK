@@ -1,34 +1,40 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  Alert, Box, Button, FormControl, IconButton, InputLabel, MenuItem, Paper,
-  Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Tooltip, Typography,
+  Alert, Box, Button, IconButton, Paper, Stack, Tab, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Tabs, Tooltip, Typography,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { DEAL_REVIEWER_ROLES } from '../auth/roles.js';
+import { DEAL_REVIEWER_ROLES, isDealAuthor, isDealReviewer } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { DealCard } from '../components/DealCard.jsx';
-import { StatusPills } from '../components/StatusPills.jsx';
-import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, isReviewable } from '../data/dealStatus.js';
+import { SearchField, matchesSearch } from '../components/SearchField.jsx';
+import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, isEditable, isReviewable } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
 
 const DEFAULT_STATUS = 'ALL';
 
 /**
- * Deals — the full deal list with a status filter. Firm/branch narrowing comes from the sidebar
- * scope selector, so the list always matches the workspace scope.
+ * Deals — the full deal list, filtered by status tabs and searched by property.
+ *
+ * The two filters work differently on purpose. Status is a server parameter, because it narrows
+ * the set the server would otherwise send in full. The property search is client-side over that
+ * result: the address is already on every row, so searching it costs one pass over an array
+ * rather than a round trip per keystroke.
+ *
+ * Firm/branch narrowing comes from the sidebar scope selector, so the list always matches the
+ * workspace scope.
  *
  * There is no claim step: a deal belongs to the firm's compliance function rather than to one
- * officer, so the review workspace is open to any reviewer from handover onward.
+ * officer, so the review workspace is open to any reviewer from submission onward.
  */
 export function DealsPage() {
   const navigate = useNavigate();
@@ -36,6 +42,7 @@ export function DealsPage() {
   const { firm, branch } = useDashboardScope();
   const money = useCurrency();
   const [status, setStatus] = useState(DEFAULT_STATUS);
+  const [query, setQuery] = useState('');
 
   // ROOT is deliberately absent: the review workspace is guarded by DEAL_REVIEWER_ROLES, so
   // offering ROOT a way in only leads to a redirect, and it could never act there anyway.
@@ -52,7 +59,22 @@ export function DealsPage() {
     queryFn: () => listDeals(params),
   });
   // Belt-and-braces: also narrow client-side by the scope's firm/branch names.
-  const deals = useScopedDeals(dealsQ.data);
+  const scoped = useScopedDeals(dealsQ.data);
+  const deals = useMemo(
+    () => scoped.filter((d) => matchesSearch(query, d.propertyAddress)),
+    [scoped, query],
+  );
+
+  /**
+   * Where a row goes when you open it.
+   *
+   * A NEW deal is unfinished, and the thing to do with an unfinished deal is finish it — so for
+   * anyone who may edit it, opening one lands on the form rather than on a read-only page with
+   * an Edit button. Everything else opens its detail view.
+   */
+  const mayEdit = isDealAuthor(user?.role) || isDealReviewer(user?.role);
+  const openPathFor = (d) =>
+    (isEditable(d.status) && mayEdit ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
 
   return (
     <Stack spacing={2.5}>
@@ -60,24 +82,40 @@ export function DealsPage() {
         eyebrow={[
           `${deals.length} ${deals.length === 1 ? 'deal' : 'deals'}`,
           status === 'ALL' ? 'all statuses' : dealStatusLabel(status).toLowerCase(),
+          query.trim() ? `matching "${query.trim()}"` : null,
           firm?.name,
           branch?.name,
         ].filter(Boolean).join(' · ')}
         title="Deals"
       />
 
-      {/* Status filter — pills on mobile, select on desktop. Firm/branch come from the sidebar scope. */}
-      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-        <StatusPills value={status} onChange={setStatus} options={STATUSES} />
-      </Box>
-      <Stack direction="row" spacing={2} sx={{ display: { xs: 'none', md: 'flex' } }}>
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel id="status-label">Status</InputLabel>
-          <Select labelId="status-label" label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUSES.map((s) => <MenuItem key={s} value={s}>{dealStatusLabel(s)}</MenuItem>)}
-          </Select>
-        </FormControl>
-      </Stack>
+      {/* One status at a time, as tabs. Scrollable rather than responsive-by-breakpoint: the
+          same control works on a phone, so there is one filter here instead of two that could
+          drift apart. Firm/branch still come from the sidebar scope. */}
+      <Tabs
+        value={status}
+        onChange={(_, v) => setStatus(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{
+          minHeight: 40,
+          borderBottom: `1px solid ${tokens.hairline}`,
+          '& .MuiTab-root': {
+            minHeight: 40, textTransform: 'none', fontWeight: 600,
+            fontSize: '0.82rem', color: tokens.muted,
+          },
+          '& .Mui-selected': { color: tokens.blue },
+        }}
+      >
+        {STATUSES.map((s) => <Tab key={s} value={s} label={dealStatusLabel(s)} />)}
+      </Tabs>
+
+      <SearchField
+        value={query}
+        onChange={setQuery}
+        placeholder="Search by property…"
+      />
 
       {dealsQ.isError && <Alert severity="error">Failed to load deals.</Alert>}
 
@@ -91,11 +129,11 @@ export function DealsPage() {
           }}>
             <Typography sx={{ fontSize: '1.5rem', mb: 1 }}>📁</Typography>
             <Typography sx={{ fontWeight: 700, color: tokens.ink }}>No deals</Typography>
-            <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>No deals match this filter.</Typography>
+            <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>No deals match these filters.</Typography>
           </Box>
         )}
         {deals.map((d) => (
-          <DealCard key={d.id} deal={d} onReview={canReview || undefined} />
+          <DealCard key={d.id} deal={d} onReview={canReview || undefined} canEdit={mayEdit} />
         ))}
       </Box>
 
@@ -112,8 +150,7 @@ export function DealsPage() {
                   <TableCell>Risk</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Value ({money.code})</TableCell>
-                  <TableCell>Reporting entity</TableCell>
-                  <TableCell>Branch</TableCell>
+                  {/* <TableCell>Reporting entity</TableCell> */}
                   <TableCell>Client</TableCell>
                   <TableCell>Property</TableCell>
                   <TableCell>Updated</TableCell>
@@ -128,8 +165,7 @@ export function DealsPage() {
                     <TableCell><RiskRatingChip rating={d.riskRating} /></TableCell>
                     <TableCell>{d.transactionType}</TableCell>
                     <TableCell>{money.dealRange(d)}</TableCell>
-                    <TableCell>{d.firmName ?? '—'}</TableCell>
-                    <TableCell>{d.branchName ?? '—'}</TableCell>
+                    {/* <TableCell>{d.firmName ?? '—'}</TableCell> */}
                     <TableCell>{d.clientDisplayName ?? '—'}</TableCell>
                     <TableCell>{d.propertyAddress ?? '—'}</TableCell>
                     <TableCell>{d.updatedAt ? new Date(d.updatedAt).toLocaleString() : '—'}</TableCell>
@@ -139,8 +175,8 @@ export function DealsPage() {
                           Open review
                         </Button>
                       )}
-                      <Tooltip title="Open detail">
-                        <IconButton size="small" onClick={() => navigate(`/deals/${d.id}`)}>
+                      <Tooltip title={isEditable(d.status) && mayEdit ? 'Continue this deal' : 'Open detail'}>
+                        <IconButton size="small" onClick={() => navigate(openPathFor(d))}>
                           <OpenInNewIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>

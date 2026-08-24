@@ -15,7 +15,7 @@ import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { propertyTypeLabel, reasonForSellingLabel } from '../data/propertyTypes.js';
 import { countryName } from '../data/countries.js';
 import { formatPropertyAddress } from '../data/addressFinderMeta.js';
-import { canBrokerRevert, canRevert, isEditable, isReviewable } from '../data/dealStatus.js';
+import { canRevert, isEditable, isReviewable } from '../data/dealStatus.js';
 import { DocumentUploader } from '../components/DocumentUploader.jsx';
 import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
 import { IndividualsFromIds } from '../features/deal/IndividualsFromIds.jsx';
@@ -82,10 +82,10 @@ export function DealDetailPage() {
     return <Navigate to={`/deals/${deal.id}/edit`} replace />;
   }
 
-  // A broker may pull back their own deal from handover; past that, only a reviewer sends it
-  // back. Mirrors DealLifecycleService.assertRevert.
-  const mayRevert = canRevert(deal.status)
-    && (isDealReviewer(user?.role) || (isOwnerAgent && canBrokerRevert(deal.status)));
+  // Sending a deal back is a compliance decision. With no staging status there is no window in
+  // which the broker could recall it unnoticed, so the author's own revert is gone.
+  // Mirrors DealLifecycleService.RULES.
+  const mayRevert = canRevert(deal.status) && isDealReviewer(user?.role);
 
   return (
     /* Centered, max-width container */

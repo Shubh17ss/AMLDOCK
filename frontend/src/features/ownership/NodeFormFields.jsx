@@ -29,6 +29,13 @@ const JURISDICTION_ONLY = ['INCORPORATED_SOCIETY', 'CHARITY', 'GOVERNMENT_AGENCY
 const WITH_REFERENCE = ['INDIVIDUAL', 'PARTNERSHIP'];
 
 /**
+ * Every owner type is asked where its money comes from — but an individual is asked it on their
+ * person record, which is shared across deals, rather than on this node. So the node-level field
+ * renders for everyone except them, and nobody is asked twice.
+ */
+const SOURCE_OF_WEALTH_ON_NODE = (nodeType) => Boolean(nodeType) && nodeType !== 'INDIVIDUAL';
+
+/**
  * One yes/no question as a segmented control.
  *
  * <p>Two or three buttons in a track rather than radios: the answer stays legible at arm's
@@ -256,6 +263,15 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
             </Select>
           </FormControl>
 
+          {/* Where the trust is governed from. A trust is not incorporated anywhere, so this is
+              a jurisdiction rather than a country of incorporation — same question the societies
+              and estates in JURISDICTION_ONLY are asked, and the same column behind it. */}
+          <CountrySelect
+            label="Jurisdiction"
+            value={value.jurisdictionCountry ?? null}
+            onChange={(code) => set({ jurisdictionCountry: code })}
+          />
+
           <YesNoField
             label="Is the trust a discretionary trust?"
             value={value.trustDiscretionary}
@@ -308,13 +324,6 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
         </>
       )}
 
-      {value.nodeType === 'PARTNERSHIP' && (
-        <TextField label="Source of funds" value={value.sourceOfFunds ?? ''}
-                   onChange={(e) => set({ sourceOfFunds: e.target.value })}
-                   multiline minRows={2}
-                   placeholder="Where the partnership's money comes from, and how it was evidenced." />
-      )}
-
       {value.nodeType === 'LISTED_COMPANY' && (
         <>
           <CountrySelect
@@ -332,6 +341,17 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
           label="Jurisdiction"
           value={value.jurisdictionCountry ?? null}
           onChange={(code) => set({ jurisdictionCountry: code })}
+        />
+      )}
+
+      {SOURCE_OF_WEALTH_ON_NODE(value.nodeType) && (
+        <TextField
+          label="Source of wealth"
+          value={value.sourceOfFunds ?? ''}
+          onChange={(e) => set({ sourceOfFunds: e.target.value })}
+          multiline
+          minRows={2}
+          placeholder="Where this entity's money comes from, and how it was evidenced."
         />
       )}
 
@@ -405,10 +425,6 @@ export function buildNodePayload(form) {
     payload.nomineeStatus = form.nomineeStatus || 'NOT_ASKED';
   }
 
-  if (form.nodeType === 'PARTNERSHIP') {
-    payload.sourceOfFunds = form.sourceOfFunds ?? '';
-  }
-
   if (form.nodeType === 'LISTED_COMPANY') {
     payload.jurisdictionCountry = norm(form.jurisdictionCountry);
   }
@@ -423,8 +439,15 @@ export function buildNodePayload(form) {
 
   if (form.nodeType === 'TRUST') {
     payload.trustType = norm(form.trustType);
+    payload.jurisdictionCountry = norm(form.jurisdictionCountry);
     payload.trustDiscretionary = form.trustDiscretionary ?? false;
     payload.trustHoldingComplexity = norm(form.trustHoldingComplexity);
+  }
+
+  // Asked of every entity, so sent for every entity. '' rather than null where blank, because
+  // the backend reads null as "leave alone" and the field has to be clearable.
+  if (SOURCE_OF_WEALTH_ON_NODE(form.nodeType)) {
+    payload.sourceOfFunds = form.sourceOfFunds ?? '';
   }
 
   if (form.nodeType === 'INDIVIDUAL') {

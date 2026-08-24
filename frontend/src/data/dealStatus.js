@@ -4,17 +4,18 @@
 // (backend/src/main/java/nz/amldock/deal/). The server is authoritative and rejects anything
 // these predicates let through — they exist only to decide which buttons render.
 //
-//   NEW ──handover──▶ HANDOVER ──start review──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
-//    ▲                    │                        │
-//    │                    │                        └──hold──▶ ON_HOLD
-//    └────────revert──────┴────────────────────────────────────────┘
+//   NEW ──submit──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
+//    ▲                │
+//    │                └──hold──▶ ON_HOLD
+//    └──────revert────┴──────────────┘
 //
-// There is no rejected state: a deal that cannot pass sits in ON_HOLD, or goes back to NEW for
-// the broker to fix. ON_HOLD's only exit is back to NEW.
+// There is no staging status between the broker and compliance: submitting hands the deal
+// straight to review. There is no rejected state either — a deal that cannot pass sits in
+// ON_HOLD, or goes back to NEW for the broker to fix. ON_HOLD's only exit is back to NEW.
 
 import { tokens } from '../theme/theme.js';
 
-export const DEAL_STATUSES = ['NEW', 'HANDOVER', 'REVIEW', 'ON_HOLD', 'VERIFIED', 'CLOSED'];
+export const DEAL_STATUSES = ['NEW', 'REVIEW', 'ON_HOLD', 'VERIFIED', 'CLOSED'];
 
 /** Status filter options, with the all-statuses sentinel first. */
 export const DEAL_STATUS_FILTERS = ['ALL', ...DEAL_STATUSES];
@@ -30,7 +31,6 @@ export const DEAL_STATUS_FILTERS = ['ALL', ...DEAL_STATUSES];
  */
 export const DEAL_STATUS_META = {
   NEW:      { label: 'New',       chip: 'default', dot: tokens.draft },
-  HANDOVER: { label: 'Handover',  chip: 'info',    dot: tokens.submitted },
   REVIEW:   { label: 'In review', chip: 'warning', dot: tokens.review },
   ON_HOLD:  { label: 'On hold',   chip: 'error',   dot: tokens.rejected },
   VERIFIED: { label: 'Verified',  chip: 'success', dot: tokens.approved },
@@ -55,7 +55,7 @@ export const isEditable = (s) => s === 'NEW';
  * sits with compliance, because that is when they are working on it. VERIFIED and CLOSED
  * carry a sign-off and are closed to both — revert or override first.
  */
-const REVIEWER_EDITABLE = ['NEW', 'HANDOVER', 'REVIEW', 'ON_HOLD'];
+const REVIEWER_EDITABLE = ['NEW', 'REVIEW', 'ON_HOLD'];
 
 export const canEditContent = (status, role) =>
   (role === 'AML_COMPLIANCE_OFFICER' || role === 'SENIOR_MANAGER')
@@ -66,7 +66,7 @@ export const canEditContent = (status, role) =>
  * Every status change a reviewer can make, as a table.
  *
  * <p>Mirrors `DealLifecycleService.RULES`, `noteRequired` included — that is the server's own
- * column, and the Update status dialog reads it to decide whether to ask for a reason. Handover
+ * column, and the Update status dialog reads it to decide whether to ask for a reason. Submit
  * is absent on purpose: it is the submit action of the broker's create form, not a status a
  * reviewer picks off a list.
  *
@@ -74,10 +74,6 @@ export const canEditContent = (status, role) =>
  * the deal lands on, because "Verified" alone is exactly the button this table replaced.
  */
 export const STATUS_TRANSITIONS = [
-  {
-    to: 'REVIEW', from: ['HANDOVER'], action: 'start', noteRequired: false,
-    blurb: 'Take this deal on. It stays with compliance until you decide.',
-  },
   {
     to: 'VERIFIED', from: ['REVIEW'], action: 'verify', noteRequired: true,
     blurb: 'Compliance sign-off. Record what you checked — it is kept against the deal.',
@@ -87,7 +83,7 @@ export const STATUS_TRANSITIONS = [
     blurb: "Parked with compliance. Say what you're waiting on; the broker sees it on the timeline.",
   },
   {
-    to: 'NEW', from: ['HANDOVER', 'REVIEW', 'ON_HOLD'], action: 'revert', noteRequired: true,
+    to: 'NEW', from: ['REVIEW', 'ON_HOLD'], action: 'revert', noteRequired: true,
     blurb: 'Back to the broker for changes. Say what needs doing — they see it on the timeline.',
   },
   {
@@ -104,24 +100,15 @@ export const transitionsFrom = (status) =>
 const allows = (action, status) =>
   STATUS_TRANSITIONS.some((t) => t.action === action && t.from.includes(status));
 
-export const canHandover = (s) => s === 'NEW';
-export const canStartReview = (s) => allows('start', s);
+/** The broker's own action: hand the finished deal to compliance. */
+export const canSubmit = (s) => s === 'NEW';
 export const canHold = (s) => allows('hold', s);
 export const canVerify = (s) => allows('verify', s);
 export const canClose = (s) => allows('close', s);
 export const canRevert = (s) => allows('revert', s);
 
-/**
- * Whether the broker may revert it themselves.
- *
- * Only from HANDOVER, and only their own deal: pulling back an early handover is the broker's
- * mistake to undo, but once review has started, sending a deal back is a compliance decision.
- * Mirrors DealLifecycleService.assertRevert.
- */
-export const canBrokerRevert = (s) => s === 'HANDOVER';
-
-/** The reviewer workspace is useful from handover onward, decided or not. */
+/** The reviewer workspace is useful from submission onward, decided or not. */
 export const isReviewable = (s) => Boolean(s) && s !== 'NEW';
 
 /** Deals still needing compliance attention — what a reviewer's queue tiles count. */
-export const isOpenForReview = (s) => s === 'HANDOVER' || s === 'REVIEW' || s === 'ON_HOLD';
+export const isOpenForReview = (s) => s === 'REVIEW' || s === 'ON_HOLD';

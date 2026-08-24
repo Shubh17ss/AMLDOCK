@@ -55,8 +55,9 @@ export const MODULE_GROUPS = [
     ],
   },
   {
-    // The CDD header opens the CDD Register — the role-aware stats dashboard.
-    group: 'CDD', slug: 'cdd', to: CDD_REGISTER_PATH, title: 'CDD Register',
+    // The CDD header opens the CDD Register — the role-aware stats dashboard. `title` is the
+    // heading the dashboard rail and the app bar both show; `group` stays the short sidebar label.
+    group: 'CDD', slug: 'cdd', to: CDD_REGISTER_PATH, title: 'Client due diligence',
     icon: <VerifiedUserRoundedIcon />,
     items: [
       { id: 'deals',             label: 'Listing Register',  to: DEALS_PATH,               icon: <BusinessCenterIcon />,
@@ -67,7 +68,7 @@ export const MODULE_GROUPS = [
         blurb: 'Track listings cleared with incomplete due diligence and their remediation.' },
       { id: 'peps',              label: 'PEPs',              to: '/cdd/peps',              icon: <GavelIcon />,
         blurb: 'Screen and record politically exposed persons found across your customers.' },
-      { id: 'overseas-residents', label: 'Overseas Residents', to: '/cdd/overseas-residents', icon: <PublicIcon />,
+      { id: 'overseas-residents', label: 'Overseas Residents Register', to: '/cdd/overseas-residents', icon: <PublicIcon />,
         blurb: 'Enhanced due diligence for customers residing outside New Zealand.' },
     ],
   },

@@ -8,16 +8,14 @@ package nz.amldock.deal;
  * Adding a verb means adding a row, not a method with its own checks.
  */
 public enum DealAction {
-    /** NEW → HANDOVER. The broker has finished. */
-    HANDOVER,
-    /** HANDOVER → REVIEW. Assigns the deal to nobody; any reviewer in the firm may still act. */
-    START_REVIEW,
+    /** NEW → REVIEW. The broker has finished and the deal passes straight to compliance. */
+    SUBMIT,
     /** REVIEW → ON_HOLD. Note required. */
     HOLD,
     /** REVIEW → VERIFIED. Note required. */
     VERIFY,
     /** VERIFIED → CLOSED. */
     CLOSE,
-    /** HANDOVER | REVIEW | ON_HOLD → NEW, handing edit rights back to the broker. Note required. */
+    /** REVIEW | ON_HOLD → NEW, handing edit rights back to the broker. Note required. */
     REVERT
 }

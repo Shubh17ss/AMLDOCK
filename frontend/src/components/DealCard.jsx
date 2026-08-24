@@ -2,7 +2,7 @@ import { Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
 import { RiskRatingChip } from './RiskRatingChip.jsx';
-import { isReviewable } from '../data/dealStatus.js';
+import { isEditable, isReviewable } from '../data/dealStatus.js';
 import { tokens, shadows } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -17,17 +17,25 @@ const EXT_SM     = shadows.sm;
 /**
  * `onReview` opts the card into the reviewer affordances. There is no claim step any more — a
  * deal belongs to the firm's compliance function, so anyone with rights can open the workspace
- * from the moment it is handed over.
+ * from the moment it is submitted.
+ *
+ * `canEdit` says whether the viewer may still change an unfinished deal. When they can, a NEW
+ * deal opens straight into the form: it is unfinished, and finishing it is the only thing to do
+ * with it. The read-only detail page would just be an extra click on the way there.
  */
-export function DealCard({ deal, onReview }) {
+export function DealCard({ deal, onReview, canEdit }) {
   const navigate = useNavigate();
   const money = useCurrency();
+
+  const openPath = canEdit && isEditable(deal.status)
+    ? `/deals/${deal.id}/edit`
+    : `/deals/${deal.id}`;
 
   const handleCardClick = () => {
     if (onReview && isReviewable(deal.status)) {
       navigate(`/deals/${deal.id}/review`);
     } else {
-      navigate(`/deals/${deal.id}`);
+      navigate(openPath);
     }
   };
 
@@ -123,7 +131,7 @@ export function DealCard({ deal, onReview }) {
               Open review →
             </ActionButton>
           )}
-          <ActionButton onClick={() => navigate(`/deals/${deal.id}`)}>
+          <ActionButton onClick={() => navigate(openPath)}>
             View
           </ActionButton>
         </Box>

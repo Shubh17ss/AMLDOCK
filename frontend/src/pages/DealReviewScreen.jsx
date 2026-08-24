@@ -5,7 +5,7 @@ import {
   Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, startDealReview, verifyDeal } from '../api/deals.js';
+import { closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, verifyDeal } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
@@ -23,7 +23,7 @@ import { DealCapturedInfo } from '../features/deal/DealCapturedInfo.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
-import { canStartReview, dealStatusLabel, transitionsFrom } from '../data/dealStatus.js';
+import { dealStatusLabel, transitionsFrom } from '../data/dealStatus.js';
 
 /**
  * The six faces of a deal under review.
@@ -81,7 +81,6 @@ export function DealReviewScreen() {
 
   /** What each move is called once it has happened, and how loudly to say it. */
   const SAID = {
-    start:    { message: 'Review started', severity: 'success' },
     verify:   { message: 'Deal verified', severity: 'success' },
     hold:     { message: 'Deal put on hold', severity: 'warning' },
     revert:   { message: 'Sent back to the broker', severity: 'warning' },
@@ -98,7 +97,6 @@ export function DealReviewScreen() {
   const statusMut = useMutation({
     mutationFn: ({ transition, reason }) => {
       switch (transition.action) {
-        case 'start':  return startDealReview(dealId);
         case 'hold':   return holdDeal(dealId, reason);
         case 'verify': return verifyDeal(dealId, reason);
         case 'revert': return revertDeal(dealId, reason);
@@ -132,7 +130,6 @@ export function DealReviewScreen() {
 
   const deal        = dealQ.data;
   const isFirstNode = !tree.tree || tree.tree.nodes.length === 0;
-  const startable   = canStartReview(deal.status);
   const inReview    = deal.status === 'REVIEW';
   const showOverride = user?.role === 'SENIOR_MANAGER';
 
@@ -177,7 +174,7 @@ export function DealReviewScreen() {
         <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>
       )}
 
-      {!inReview && !startable && (
+      {!inReview && (
         <Alert severity="info" sx={{ py: 0.5 }}>
           This deal is <strong>{dealStatusLabel(deal.status)}</strong>. Ownership edits are best
           made while it is in review.

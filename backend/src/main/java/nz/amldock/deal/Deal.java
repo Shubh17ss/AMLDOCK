@@ -85,6 +85,14 @@ public class Deal extends BaseEntity {
     private Boolean redFlagPresent;
 
     /**
+     * Which red flag, when {@link #redFlagPresent} is true. A {@code RedFlag} enum name, stored
+     * as a plain string with no CHECK constraint so the option list can grow without a migration
+     * — the same arrangement suspicious_activity.red_flag uses, and the same enum behind both.
+     */
+    @Column(name = "red_flag", length = 64)
+    private String redFlag;
+
+    /**
      * Whether the broker has met the client face to face (V29, section 3). Captured to trigger
      * remote identity verification later; deliberately not an input to the risk rating — see
      * {@code DealService.applyRiskRating}.
@@ -155,6 +163,9 @@ public class Deal extends BaseEntity {
     public void setForeignExposureCountry(String v) { this.foreignExposureCountry = v; }
     public Boolean getRedFlagPresent() { return redFlagPresent; }
     public void setRedFlagPresent(Boolean v) { this.redFlagPresent = v; }
+
+    public String getRedFlag() { return redFlag; }
+    public void setRedFlag(String v) { this.redFlag = v; }
     public Boolean getClientRemote() { return clientRemote; }
     public void setClientRemote(Boolean v) { this.clientRemote = v; }
     public BigDecimal getValuationMin() { return valuationMin; }

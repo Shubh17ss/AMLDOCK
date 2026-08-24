@@ -298,13 +298,13 @@ class DocumentServiceNodeScopeTest {
                 .as("%s should refuse %s", type, doc).isFalse();
     }
 
-    /* ---------- deleting a document on a handed-over deal (the reviewer's window) ---------- */
+    /* ---------- deleting a document on a submitted deal (the reviewer's window) ---------- */
 
     @Test
-    void aComplianceOfficerMayDeleteADocumentOnAHandedOverDeal() {
-        // The case that was broken: uploading to a HANDOVER deal worked, deleting from it did
+    void aComplianceOfficerMayDeleteADocumentOnASubmittedDeal() {
+        // The case that was broken: uploading to a submitted deal worked, deleting from it did
         // not, because upload checked read scope and delete checked the author's edit window.
-        Document doc = someoneElsesDocument(DealStatus.HANDOVER);
+        Document doc = someoneElsesDocument(DealStatus.REVIEW);
 
         service.delete(doc.getId());
 
@@ -326,7 +326,7 @@ class DocumentServiceNodeScopeTest {
     @Test
     void anAgentStillCannotDeleteSomebodyElsesDocument() {
         // Widening the reviewer's window must not widen anyone else's.
-        Document doc = someoneElsesDocument(DealStatus.HANDOVER);
+        Document doc = someoneElsesDocument(DealStatus.REVIEW);
         signedInAs(Role.AGENT, 99L);
 
         assertThatThrownBy(() -> service.delete(doc.getId()))
