@@ -85,6 +85,14 @@ export const FINANCE_MODULE_IDS = ['management-reports', 'intl-fund-transfers'];
 // Privilege groups used by route guards / page checks.
 export const DEAL_AUTHOR_ROLES = ['AGENT', 'AGENT_PA', 'ADMIN'];
 export const DEAL_REVIEWER_ROLES = ['AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+// Who may *open* a deal, which is wider than who authors one and deliberately a separate list.
+// Authorship carries rights that outlive creation — editing a NEW deal, submitting it, deleting
+// your own — and a sales manager or compliance officer starting a file does not acquire those.
+// Mirrors DealLifecycleService.canCreateDeal. ROOT is absent because it belongs to no firm, and
+// AUDIT because it writes nothing anywhere.
+export const DEAL_CREATOR_ROLES = [
+  ...DEAL_AUTHOR_ROLES, 'SALES_MANAGER', ...DEAL_REVIEWER_ROLES,
+];
 export const DELETE_ROLES = ['ROOT', 'SENIOR_MANAGER'];
 // Who may set a document register's review date / mark it complete.
 export const REVIEW_MANAGER_ROLES = ['ROOT', 'SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER'];
@@ -129,6 +137,7 @@ export const TRAINING_ASSIGNABLE_ROLES = [
 export const canBeAssignedTraining = (role) => TRAINING_ASSIGNABLE_ROLES.includes(role);
 
 export const isDealAuthor = (role) => DEAL_AUTHOR_ROLES.includes(role);
+export const canCreateDeal = (role) => DEAL_CREATOR_ROLES.includes(role);
 export const isDealReviewer = (role) => DEAL_REVIEWER_ROLES.includes(role);
 export const canDelete = (role) => DELETE_ROLES.includes(role);
 export const canManageReview = (role) => REVIEW_MANAGER_ROLES.includes(role);

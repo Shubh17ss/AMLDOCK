@@ -10,7 +10,7 @@ import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
-  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
+  DEAL_AUTHOR_ROLES, DEAL_CREATOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
   FINANCE_SECTION_ROLES, AUDIT_LOG_ROLES,
   TRAINING_ASSIGNABLE_ROLES,
 } from '../auth/roles.js';
@@ -36,7 +36,6 @@ import { MyDealsPage } from '../pages/MyDealsPage.jsx';
 import { DealsPage } from '../pages/DealsPage.jsx';
 import { FirmDealsPage } from '../pages/FirmDealsPage.jsx';
 import { NewDealPage } from '../pages/NewDealPage.jsx';
-import { DealDetailPage } from '../pages/DealDetailPage.jsx';
 import { DealReviewScreen } from '../pages/DealReviewScreen.jsx';
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 
@@ -167,23 +166,23 @@ export function AppRoutes() {
             <MyDealsPage />
           </ProtectedRoute>
         } />
+        {/* Wider than DEAL_AUTHOR_ROLES: a sales manager or compliance officer may open a deal
+            without thereby becoming its author. See roles.js DEAL_CREATOR_ROLES. */}
         <Route path="/deals/new" element={
-          <ProtectedRoute roles={DEAL_AUTHOR_ROLES}>
+          <ProtectedRoute roles={DEAL_CREATOR_ROLES}>
             <NewDealPage />
           </ProtectedRoute>
         } />
-        <Route path="/deals/:id" element={<DealDetailPage />} />
+        {/* One address for a deal. No role guard: every authenticated role may look at a deal,
+            and what they may *change* is decided inside DealReviewScreen by role and status —
+            a guard here could only answer the coarser question of who gets to read it. */}
+        <Route path="/deals/:id" element={<DealReviewScreen />} />
         {/* Both role groups: a compliance officer may correct a NEW deal on the broker's
             behalf, so DEAL_AUTHOR_ROLES alone would lock them out at the router. The real
             authority is NewDealPage's own mayEdit check and, behind it, assertEditable. */}
         <Route path="/deals/:id/edit" element={
           <ProtectedRoute roles={[...DEAL_AUTHOR_ROLES, ...DEAL_REVIEWER_ROLES]}>
             <NewDealPage />
-          </ProtectedRoute>
-        } />
-        <Route path="/deals/:id/review" element={
-          <ProtectedRoute roles={DEAL_REVIEWER_ROLES}>
-            <DealReviewScreen />
           </ProtectedRoute>
         } />
 
@@ -194,7 +193,7 @@ export function AppRoutes() {
         } />
         <Route path="/firm/deals/:id" element={
           <ProtectedRoute roles={['SALES_MANAGER', ...DEAL_REVIEWER_ROLES, 'ROOT']}>
-            <DealDetailPage />
+            <DealReviewScreen />
           </ProtectedRoute>
         } />
 

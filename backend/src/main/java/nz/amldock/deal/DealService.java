@@ -146,23 +146,30 @@ public class DealService {
     @Transactional
     public Deal create(CreateDealRequest req) {
         UserPrincipal actor = currentPrincipal();
-        if (!DealLifecycleService.isDealAuthor(actor.role())) {
-            throw new BadRequestException("Only agents may create deals");
+        if (!DealLifecycleService.canCreateDeal(actor.role())) {
+            throw new BadRequestException("This role may not create deals");
         }
-        // Agents can only create deals for the branch they're assigned to, so the request
-        // needn't name it — the deal form omits it entirely. A value that disagrees is still
-        // rejected rather than silently ignored.
-        if (actor.firmBranchId() == null) {
-            throw new ForbiddenException("You are not assigned to a branch — ask an administrator");
-        }
+        // Branch-level staff create on the branch they're assigned to, so the request needn't
+        // name it — the deal form omits it for them entirely. Firm-level staff have no branch of
+        // their own, so for them the form asks and the value is required here.
         Long branchId = req.firmBranchId() == null ? actor.firmBranchId() : req.firmBranchId();
+        if (branchId == null) {
+            throw new BadRequestException("Choose the branch this deal belongs to");
+        }
         FirmBranch branch = branches.findById(branchId)
                 .orElseThrow(() -> new BadRequestException("Branch " + branchId + " not found"));
         if (!branch.isActive()) {
             throw new BadRequestException("Branch is inactive");
         }
-        if (!actor.firmBranchId().equals(branch.getId())) {
-            throw new ForbiddenException("You can only create deals on your assigned branch");
+        if (actor.firmBranchId() != null) {
+            // Assigned to a branch: that branch and no other, whatever the request asked for.
+            if (!actor.firmBranchId().equals(branch.getId())) {
+                throw new ForbiddenException("You can only create deals on your assigned branch");
+            }
+        } else if (actor.realEstateFirmId() == null
+                || !actor.realEstateFirmId().equals(branch.getRealEstateFirmId())) {
+            // Firm-level: any branch of their own reporting entity, and nobody else's.
+            throw new ForbiddenException("You can only create deals within your own firm");
         }
         validateValuationRange(req.valuationMin(), req.valuationMax());
 

@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
-  Alert, Box, Button, IconButton, Paper, Stack, Tab, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, Tabs, Tooltip, Typography,
+  Alert, Box, Button, Paper, Stack, Tab, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Tabs, Typography,
 } from '@mui/material';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { DEAL_REVIEWER_ROLES, isDealAuthor, isDealReviewer } from '../auth/roles.js';
+import { canCreateDeal, isDealAuthor, isDealReviewer } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
@@ -16,7 +16,7 @@ import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { SearchField, matchesSearch } from '../components/SearchField.jsx';
-import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, isEditable, isReviewable } from '../data/dealStatus.js';
+import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, isEditable } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
 
@@ -43,10 +43,6 @@ export function DealsPage() {
   const money = useCurrency();
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [query, setQuery] = useState('');
-
-  // ROOT is deliberately absent: the review workspace is guarded by DEAL_REVIEWER_ROLES, so
-  // offering ROOT a way in only leads to a redirect, and it could never act there anyway.
-  const canReview = Boolean(user) && DEAL_REVIEWER_ROLES.includes(user.role);
 
   // The backend enforces role scope regardless; ROOT and firm-level reviewers get
   // real firm/branch filtering from these params.
@@ -111,11 +107,28 @@ export function DealsPage() {
         {STATUSES.map((s) => <Tab key={s} value={s} label={dealStatusLabel(s)} />)}
       </Tabs>
 
-      <SearchField
-        value={query}
-        onChange={setQuery}
-        placeholder="Search by property…"
-      />
+      {/* Search and the create action share a row: the field is capped at 320px and does not
+          grow, so the button sits at the far right without either being pushed off a phone —
+          hence the wrap rather than a fixed row. */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ flexWrap: 'wrap', gap: 1.5 }}
+      >
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search by property…"
+        />
+        {/* Guarded, not decorative: this list is open to every role, including ones the server
+            refuses to let create a deal at all — an ungated button would bounce them to /app. */}
+        {canCreateDeal(user?.role) && (
+          <Button variant="contained" component={RouterLink} to="/deals/new" startIcon={<AddIcon />}>
+            Create Deal
+          </Button>
+        )}
+      </Stack>
 
       {dealsQ.isError && <Alert severity="error">Failed to load deals.</Alert>}
 
@@ -133,7 +146,7 @@ export function DealsPage() {
           </Box>
         )}
         {deals.map((d) => (
-          <DealCard key={d.id} deal={d} onReview={canReview || undefined} canEdit={mayEdit} />
+          <DealCard key={d.id} deal={d} canEdit={mayEdit} />
         ))}
       </Box>
 
@@ -170,16 +183,16 @@ export function DealsPage() {
                     <TableCell>{d.propertyAddress ?? '—'}</TableCell>
                     <TableCell>{d.updatedAt ? new Date(d.updatedAt).toLocaleString() : '—'}</TableCell>
                     <TableCell align="right">
-                      {canReview && isReviewable(d.status) && (
-                        <Button size="small" variant="outlined" onClick={() => navigate(`/deals/${d.id}/review`)}>
-                          Open review
-                        </Button>
-                      )}
-                      <Tooltip title={isEditable(d.status) && mayEdit ? 'Continue this deal' : 'Open detail'}>
-                        <IconButton size="small" onClick={() => navigate(openPathFor(d))}>
-                          <OpenInNewIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {/* One way in, labelled. `secondary` is the theme's ink-on-canvas button —
+                          black here, and it inverts with the rest of the surface in dark mode. */}
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="secondary"
+                        onClick={() => navigate(openPathFor(d))}
+                      >
+                        View
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

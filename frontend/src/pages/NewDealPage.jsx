@@ -45,8 +45,10 @@ const FIRST_EDIT_SECTION = 2;
  * their list. Coming back to it opens at section 3, which is where the unanswered questions
  * start.
  *
- * Firm and branch aren't asked for: agents may only create deals on the branch they're
- * assigned to, and the API derives it from the caller.
+ * The firm isn't asked for, and nor is the branch for most people: branch-level staff may only
+ * create deals on the branch they're assigned to, and the API derives it from the caller. Only
+ * firm-level staff — a compliance officer or senior manager, who belong to no single branch —
+ * are asked, in section 1.
  */
 const ID_DOCUMENT_TYPE_VALUES = new Set(ID_DOCUMENT_TYPES.map((t) => t.value));
 
@@ -76,7 +78,10 @@ export function NewDealPage() {
   const [showGaps, setShowGaps] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const gaps = sectionGaps(section + 1, form);
+  // Firm-level staff have no branch for the server to derive, so section 1 asks them for one and
+  // will not let them past without it.
+  const branchRequired = Boolean(user && !user.firmBranchId && user.realEstateFirmId);
+  const gaps = sectionGaps(section + 1, form, { branchRequired });
   const purchaserBlocked = form.clientRole === 'PURCHASER';
   const canAdvance = gaps.length === 0 && !purchaserBlocked;
 
@@ -258,7 +263,7 @@ export function NewDealPage() {
 
   // Editing is only possible while a deal is NEW, and only by its broker or a reviewer of the
   // firm. Anyone else — or anyone still here after the deal moved on — goes to the read-only
-  // view. The exact complement of DealDetailPage's redirect, so the two cannot loop.
+  // view. The exact complement of DealReviewScreen's redirect, so the two cannot loop.
   const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === deal?.createdByUserId;
   // Status and role together: a reviewer may still open a handed-over deal, its author may
   // not. Checking the status alone sent reviewers to the read-only view on every deal they
@@ -301,7 +306,13 @@ export function NewDealPage() {
       </Box>
 
       {section === 0 && (
-        <Section1ClientType form={form} setField={setField} locked={Boolean(dealId)} />
+        <Section1ClientType
+          form={form}
+          setField={setField}
+          locked={Boolean(dealId)}
+          branchRequired={branchRequired}
+          firmId={user?.realEstateFirmId ?? null}
+        />
       )}
       {section === 1 && (
         <Section2Address form={form} setGroup={setGroup} />

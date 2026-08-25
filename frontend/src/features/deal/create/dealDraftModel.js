@@ -25,6 +25,9 @@ export const CLIENT_ROLE_BY_TRANSACTION_TYPE = {
 export const EMPTY_FORM = {
   // Section 1
   clientRole: '',            // 'VENDOR' | 'PURCHASER'
+  // Only asked of firm-level staff, who have no branch of their own for the server to derive.
+  // '' for everyone else, and the API reads that as "use mine". See BranchField.
+  firmBranchId: '',
 
   // Section 2 (address) and section 3 (the rest of the property) share one nested group,
   // because they are one record on the server however the form splits the asking.
@@ -80,6 +83,33 @@ export function buildDealPatch(form) {
   };
 }
 
+/**
+ * The subset of the deal a reviewer may change from the deal drawer.
+ *
+ * Narrower than buildDealPatch on purpose, and the narrowing is load-bearing rather than tidy.
+ * The drawer's form does not render the key contact or "client is remote" — those belong to the
+ * client, which the ownership review owns — and this API reads "" as *clear this field*. Reusing
+ * buildDealPatch from a form that does not show those fields would blank the key contact on every
+ * save. Fields left out are left alone.
+ *
+ * transactionType and firmBranchId are absent for the same reason buildDealPatch omits
+ * firmBranchId: a deal's type and its branch are decided once, at creation.
+ */
+export function buildDealDetailsPatch(form) {
+  return {
+    transactionPurpose: form.transactionPurpose,
+    trustInvolved: form.trustInvolved,
+    onSoldQuickly: form.onSoldQuickly,
+    foreignExposureCountry: form.foreignExposureCountry,
+    redFlagPresent: form.redFlagPresent,
+    // Sent blank when the answer is No, which is how the API clears a flag named earlier.
+    redFlag: form.redFlagPresent === true ? form.redFlag : '',
+    valuationMin: num(form.valuationMin),
+    valuationMax: num(form.valuationMax),
+    notes: form.notes,
+  };
+}
+
 /** Everything stored on the property. */
 export function buildPropertyPatch(form) {
   const p = form.property;
@@ -111,7 +141,12 @@ export function buildClientPatch(form) {
   };
 }
 
-/** The create payload: the same three groups, in the shape POST /deals expects. */
+/**
+ * The create payload: the same three groups, in the shape POST /deals expects.
+ *
+ * `firmBranchId` rides along only on create — a deal's branch is decided once and the update
+ * endpoints have no business changing it, which is why buildDealPatch does not carry it.
+ */
 export function buildCreatePayload(form) {
   const { pocName, pocEmail, pocPhone, ...deal } = buildDealPatch(form);
   return {
@@ -119,6 +154,10 @@ export function buildCreatePayload(form) {
     pocName,
     pocEmail,
     pocPhone,
+    // null, not '': the server reads null as "derive it from me" and rejects an unusable value.
+    firmBranchId: form.firmBranchId === '' || form.firmBranchId == null
+      ? null
+      : Number(form.firmBranchId),
     property: buildPropertyPatch(form),
     client: buildClientPatch(form),
   };
@@ -165,10 +204,13 @@ export function dtoToForm(dto) {
  * Returns a list of human-readable gaps rather than a boolean, so the form can say what is
  * missing instead of just disabling the button and leaving them to guess.
  */
-export function sectionGaps(section, form) {
+export function sectionGaps(section, form, { branchRequired = false } = {}) {
   const gaps = [];
   if (section === 1) {
     if (!form.clientRole) gaps.push('Choose whether your client is the vendor or the purchaser');
+    // Asked here rather than at the create step so a firm-level user is told on the screen that
+    // carries the field, not two sections later by a button that will not move.
+    if (branchRequired && !form.firmBranchId) gaps.push('Which branch this deal belongs to');
   }
   // Section 2 is the one that creates the deal, so it asks for the least a deal can be
   // identified by. Everything the old section 2 also demanded has moved to section 3, where it

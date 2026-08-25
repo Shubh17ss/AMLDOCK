@@ -175,6 +175,26 @@ public class DealLifecycleService {
         return role == Role.AGENT || role == Role.AGENT_PA || role == Role.ADMIN;
     }
 
+    /**
+     * Who may open a new deal.
+     *
+     * <p>Deliberately wider than {@link #isDealAuthor} and deliberately separate from it. Authorship
+     * carries rights that outlive creation — editing a NEW deal, submitting it, deleting one's own —
+     * and a sales manager or compliance officer starting a file on a broker's behalf is not meant to
+     * acquire those. Widening {@code isDealAuthor} instead would have granted all of them silently.
+     *
+     * <p>The branch-level roles create on their own branch, which {@code DealService.create} derives
+     * from them. The firm-level roles have no branch of their own, so they must name one and it must
+     * belong to their firm. ROOT is absent because it has no firm either, and AUDIT because it writes
+     * nothing anywhere.
+     */
+    static boolean canCreateDeal(Role role) {
+        return isDealAuthor(role)
+                || role == Role.SALES_MANAGER
+                || role == Role.AML_COMPLIANCE_OFFICER
+                || role == Role.SENIOR_MANAGER;
+    }
+
     /** Firm-level reviewers. A deal is no longer tied to one of them — any will do. */
     static boolean isDecider(Role role) {
         return role == Role.AML_COMPLIANCE_OFFICER || role == Role.SENIOR_MANAGER;

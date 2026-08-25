@@ -2,7 +2,7 @@ import { Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
 import { RiskRatingChip } from './RiskRatingChip.jsx';
-import { isEditable, isReviewable } from '../data/dealStatus.js';
+import { isEditable } from '../data/dealStatus.js';
 import { tokens, shadows } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -15,15 +15,14 @@ const EXT        = shadows.md;
 const EXT_SM     = shadows.sm;
 
 /**
- * `onReview` opts the card into the reviewer affordances. There is no claim step any more — a
- * deal belongs to the firm's compliance function, so anyone with rights can open the workspace
- * from the moment it is submitted.
- *
  * `canEdit` says whether the viewer may still change an unfinished deal. When they can, a NEW
  * deal opens straight into the form: it is unfinished, and finishing it is the only thing to do
- * with it. The read-only detail page would just be an extra click on the way there.
+ * with it. The detail page would just be an extra click on the way there.
+ *
+ * There is one destination now — a deal has a single address, and what the viewer may do once
+ * they are there is decided on the page by role and status, not by which link they took.
  */
-export function DealCard({ deal, onReview, canEdit }) {
+export function DealCard({ deal, canEdit }) {
   const navigate = useNavigate();
   const money = useCurrency();
 
@@ -31,13 +30,7 @@ export function DealCard({ deal, onReview, canEdit }) {
     ? `/deals/${deal.id}/edit`
     : `/deals/${deal.id}`;
 
-  const handleCardClick = () => {
-    if (onReview && isReviewable(deal.status)) {
-      navigate(`/deals/${deal.id}/review`);
-    } else {
-      navigate(openPath);
-    }
-  };
+  const handleCardClick = () => navigate(openPath);
 
   return (
     <Box
@@ -99,7 +92,7 @@ export function DealCard({ deal, onReview, canEdit }) {
       )}
 
       {/* Row 4: meta chips */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: onReview ? 2 : 0 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
         {/* Standalone pill with no header to name the currency, so it carries the code. */}
         {(deal.valuationMin != null || deal.valuationMax != null || deal.transactionValue != null) && (
           <MetaPill>
@@ -120,22 +113,13 @@ export function DealCard({ deal, onReview, canEdit }) {
         </Box>
       </Box>
 
-      {/* Queue actions */}
-      {onReview && (
-        <Box
-          onClick={(e) => e.stopPropagation()}
-          sx={{ display: 'flex', gap: 1.5 }}
-        >
-          {isReviewable(deal.status) && (
-            <ActionButton onClick={() => navigate(`/deals/${deal.id}/review`)} accent>
-              Open review →
-            </ActionButton>
-          )}
-          <ActionButton onClick={() => navigate(openPath)}>
-            View
-          </ActionButton>
-        </Box>
-      )}
+      {/* The card is clickable in full; the button is here for anyone who reads a card as a
+          block of text and looks for the control. */}
+      <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', gap: 1.5 }}>
+        <ActionButton onClick={() => navigate(openPath)}>
+          View
+        </ActionButton>
+      </Box>
     </Box>
   );
 }

@@ -67,8 +67,13 @@ public class DealController {
         return deals.get(id);
     }
 
+    /**
+     * Wider than the roles that author a deal — see {@code DealLifecycleService.canCreateDeal}.
+     * Creating one is not the same grant as editing, submitting or deleting it.
+     */
     @PostMapping
-    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN')")
+    @PreAuthorize("hasAnyRole('AGENT','AGENT_PA','ADMIN','SALES_MANAGER',"
+            + "'AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public DealDto create(@Valid @RequestBody CreateDealRequest req) {
         Deal d = deals.create(req);
         audit.record(AuditAction.DEAL_CREATED, "Deal", d.getId(),

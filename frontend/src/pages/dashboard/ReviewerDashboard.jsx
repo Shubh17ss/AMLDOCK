@@ -5,7 +5,7 @@ import InboxIcon from '@mui/icons-material/Inbox';
 import BusinessIcon from '@mui/icons-material/Business';
 import { listDeals } from '../../api/deals.js';
 import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles } from '../../components/bento/Bento.jsx';
-import { dealStatusDot, isReviewable } from '../../data/dealStatus.js';
+import { dealStatusDot } from '../../data/dealStatus.js';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
@@ -69,7 +69,7 @@ export function ReviewerDashboard() {
         title="Next deals to review"
         to="/cdd/deals"
         items={awaitingItems}
-        renderItem={(d) => <DealRow deal={d} to={isReviewable(d.status) ? `/deals/${d.id}/review` : `/deals/${d.id}`} />}
+        renderItem={(d) => <DealRow deal={d} />}
         empty="Nothing awaiting review."
       />
 

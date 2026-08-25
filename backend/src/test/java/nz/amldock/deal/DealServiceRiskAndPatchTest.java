@@ -63,7 +63,7 @@ class DealServiceRiskAndPatchTest {
 
     DealService service;
 
-    /** An agent in firm 1, branch 10 — the only shape of user that may create a deal. */
+    /** An agent in firm 1, branch 10. Who else may create a deal is DealCreateAuthorizationTest. */
     final UserPrincipal agent =
             new UserPrincipal(7L, "agent@firm.com", null, Role.AGENT, 1L, 10L, true);
 
