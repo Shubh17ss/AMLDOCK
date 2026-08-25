@@ -27,6 +27,26 @@ const joinNote = (base, spoken) => {
   return /\s$/.test(base) ? base + spoken : `${base} ${spoken}`;
 };
 
+/**
+ * What each Web Speech error code means to a broker who just tapped a mic and got nothing.
+ *
+ * react-speech-recognition acts on `not-allowed` and drops every other code on the floor, so
+ * without this a refused session is indistinguishable from a dead button — which is exactly how
+ * it looked the first time this ran on a deployed URL rather than localhost.
+ *
+ * `aborted` maps to null deliberately: it is what stopping normally and unmounting both raise,
+ * and reporting it would cry wolf on every successful use.
+ */
+const ERROR_MESSAGES = {
+  'not-allowed': 'Microphone access is blocked. Allow it from the padlock in the address bar, then reload.',
+  'service-not-allowed': 'This browser refused its speech service. It usually means the page is inside a frame that disallows the microphone, or is not being served over HTTPS.',
+  'audio-capture': 'No microphone was found on this device.',
+  network: 'Could not reach the speech service. Check the connection and try again.',
+  'no-speech': 'Nothing was heard — try again, closer to the microphone.',
+  'language-not-supported': 'This browser cannot dictate in this language.',
+  aborted: null,
+};
+
 export function DictationField({ value, onChange, language = 'en-NZ', ...textFieldProps }) {
   const {
     finalTranscript,
@@ -42,6 +62,7 @@ export function DictationField({ value, onChange, language = 'en-NZ', ...textFie
   // says whether *this* field started the session, so an idle one can never splice someone
   // else's dictation into its own value.
   const [mine, setMine] = useState(false);
+  const [micError, setMicError] = useState(null);
   const mineRef = useRef(false);
   // What the field held at the anchor point. Everything dictated is written as base + speech,
   // never appended to the live value: finalTranscript is cumulative for the session, so
@@ -60,6 +81,13 @@ export function DictationField({ value, onChange, language = 'en-NZ', ...textFie
   onChangeRef.current = onChange;
 
   const active = mine && listening;
+  // An unrecognised code still gets said out loud — silence is what made this hard to diagnose
+  // in the first place. `aborted` maps to null, which reads as "nothing worth reporting".
+  const errorMessage = micError && !active
+    ? (micError in ERROR_MESSAGES
+      ? ERROR_MESSAGES[micError]
+      : `Dictation stopped unexpectedly (${micError}).`)
+    : null;
 
   // Only finalised speech is committed. The interim text churns every couple of hundred
   // milliseconds with half-recognised words — writing that to form state would re-render the
@@ -93,7 +121,27 @@ export function DictationField({ value, onChange, language = 'en-NZ', ...textFie
   // also keep the tab's microphone indicator lit after the broker has navigated away.
   useEffect(() => () => { if (mineRef.current) SpeechRecognition.abortListening(); }, []);
 
+  // Chained onto the recogniser's own handler rather than assigning over it — the library
+  // installs `onError` there to catch `not-allowed`, and replacing it would take that with us.
+  // Everything else it ignores, which is why a refused session used to leave the mic sitting
+  // there looking idle.
+  useEffect(() => {
+    const recognition = SpeechRecognition.getRecognition();
+    if (!recognition) return undefined;
+    const librarysHandler = recognition.onerror;
+    recognition.onerror = (event) => {
+      librarysHandler?.call(recognition, event);
+      const code = event?.error ?? 'unknown';
+      // Logged as well as shown: the message is written for a broker, the code is what a
+      // developer needs when this only reproduces on a deployed URL.
+      console.warn('[dictation] speech recognition error:', code, event);
+      if (mineRef.current) setMicError(code);
+    };
+    return () => { recognition.onerror = librarysHandler; };
+  }, []);
+
   const handleStart = () => {
+    setMicError(null);
     resetTranscript();
     baseRef.current = valueRef.current ?? '';
     lastRef.current = '';
@@ -104,6 +152,12 @@ export function DictationField({ value, onChange, language = 'en-NZ', ...textFie
       // than throwing.
       continuous: browserSupportsContinuousListening,
       language,
+    }).catch((e) => {
+      // A rejection here is the session never opening at all, which onerror does not cover.
+      console.warn('[dictation] could not start listening:', e);
+      setMicError('start-failed');
+      mineRef.current = false;
+      setMine(false);
     });
   };
 
@@ -197,6 +251,10 @@ export function DictationField({ value, onChange, language = 'en-NZ', ...textFie
           <Typography variant="caption" sx={{ color: tokens.muted }}>
             Dictation isn't available in this browser — use Chrome or Edge, or record a voice
             note below.
+          </Typography>
+        ) : errorMessage ? (
+          <Typography variant="caption" role="status" sx={{ color: tokens.rejected }}>
+            {errorMessage}
           </Typography>
         ) : active && (
           <>
