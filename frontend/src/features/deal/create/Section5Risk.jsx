@@ -1,4 +1,5 @@
-import { Alert, Collapse, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Collapse, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material';
+import { DictationField } from '../../../components/DictationField.jsx';
 import { VoiceRecorderField } from '../../../components/VoiceRecorderField.jsx';
 import { useCurrency } from '../../../dashboard/useCurrency.js';
 import { RED_FLAGS } from '../../../data/redFlags.js';
@@ -87,13 +88,11 @@ export function Section5Risk({
       </FieldGroup>
 
       <FieldGroup title="Deal notes">
-        <TextField
+        <DictationField
           label="Add relevant notes"
           value={form.notes}
           onChange={setField('notes')}
-          multiline
           minRows={4}
-          fullWidth
           placeholder="e.g. Vendor's solicitor will send the trust deed amendment by Friday."
         />
         <VoiceRecorderField

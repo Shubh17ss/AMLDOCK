@@ -378,16 +378,20 @@ export function NewDealPage() {
           </Button>
         </Box>
 
-        <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'stretch', sm: 'flex-end' }}>
-          {/* Everything autosaves, so leaving is not losing — an editor needs a way out that
-              isn't "hand over" or "delete". */}
-          {isEditMode && (
-            <Button onClick={() => navigate(`/deals/${resumeDealId}`)} disabled={busy}
-                    sx={{ flex: { xs: 1, sm: 'unset' } }}>
-              Done
-            </Button>
-          )}
-          <Button onClick={goBack} disabled={section === 0 || busy} sx={{ flex: { xs: 1, sm: 'unset' } }}>
+        {/* Back and the primary action, and nothing else. On the last section the two share a
+            two-column grid so "Submit for review" carries the same weight as Back rather than
+            reading as the longer of two options. `inline-grid` rather than `grid`: the main
+            column has no maxWidth, so a stretching grid would make both buttons half a screen
+            wide on a desktop. */}
+        <Box
+          sx={{
+            display: { xs: 'grid', sm: isLast ? 'inline-grid' : 'flex' },
+            gridTemplateColumns: '1fr 1fr',
+            gap: 1.5,
+            justifyContent: { sm: 'flex-end' },
+          }}
+        >
+          <Button onClick={goBack} disabled={section === 0 || busy}>
             Back
           </Button>
           <Button
@@ -396,11 +400,10 @@ export function NewDealPage() {
             // Not disabled on incomplete input — clicking says what's missing, which beats a
             // dead button the broker has to reverse-engineer.
             disabled={busy || purchaserBlocked}
-            sx={{ flex: { xs: 1, sm: 'unset' } }}
           >
             {busy ? 'Saving…' : isLast ? 'Submit for review' : isCreateStep ? 'Create' : 'Next'}
           </Button>
-        </Stack>
+        </Box>
       </Stack>
 
       {/* fullWidth + xs so the card is the same centred shape on a phone as on a desktop, rather

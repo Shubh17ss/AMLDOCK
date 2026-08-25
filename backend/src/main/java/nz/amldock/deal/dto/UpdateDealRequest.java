@@ -26,7 +26,7 @@ public record UpdateDealRequest(
         String transactionPurpose,
         Boolean trustInvolved,
         Boolean onSoldQuickly,
-        @Pattern(regexp = "NONE|[A-Z]{2}", message = "Must be 'NONE' or an ISO alpha-2 country code")
+        @Pattern(regexp = "(NONE|[A-Z]{2})?", message = "Must be 'NONE' or an ISO alpha-2 country code")
         String foreignExposureCountry,
         Boolean clientRemote,
         Boolean redFlagPresent,
