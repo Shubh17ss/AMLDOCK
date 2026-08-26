@@ -1,4 +1,6 @@
-import { AppBar, Box, Drawer, IconButton, Stack, Toolbar, Tooltip, Typography } from '@mui/material';
+import {
+  AppBar, Box, CircularProgress, Drawer, IconButton, Stack, Toolbar, Tooltip, Typography,
+} from '@mui/material';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
@@ -8,7 +10,8 @@ import { UserMenu } from './UserMenu.jsx';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { BottomNav } from './BottomNav.jsx';
 import { moduleTitleFor } from '../navigation/moduleRegistry.jsx';
-import { DashboardScopeProvider } from '../dashboard/DashboardScope.jsx';
+import { DashboardScopeProvider, useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import { ScopeRequiredDialog } from '../dashboard/ScopeRequiredDialog.jsx';
 import { ColorModeProvider, useColorMode } from '../theme/ColorMode.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 
@@ -189,17 +192,43 @@ export function AppShell() {
             '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
           }} />
           <Box sx={{ position: 'relative', zIndex: 1 }}>
-            <Outlet />
+            <ScopedOutlet />
           </Box>
         </Box>
       </Box>
 
       {/* Bottom nav — mobile only */}
       <BottomNav />
+
+      {/* Blocks everything until a single entity and branch are chosen. */}
+      <ScopeRequiredDialog />
     </Box>
     </DashboardScopeProvider>
     </ColorModeProvider>
   );
+}
+
+/**
+ * The page, once there is a scope to render it in.
+ *
+ * <p>Holding the route back matters as much as showing the dialog: nearly every page fires its
+ * queries on mount, and roughly a dozen dialogs post `realEstateFirmId` straight from the scope.
+ * Letting them mount behind the backdrop would send exactly the unscoped requests this change
+ * exists to stop, and the user cannot see the result anyway.
+ *
+ * <p>Lives here rather than in AppShell itself because AppShell renders the provider and so sits
+ * outside it.
+ */
+function ScopedOutlet() {
+  const { scopeComplete } = useDashboardScope();
+  if (!scopeComplete) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+  return <Outlet />;
 }
 
 function roleDisplay(role) {

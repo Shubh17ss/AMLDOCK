@@ -1,8 +1,7 @@
 import { Alert, Box, Stack, Typography } from '@mui/material';
 import SellIcon from '@mui/icons-material/Sell';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import { SectionCard, FieldGroup } from './SectionShell.jsx';
-import { BranchField } from './BranchField.jsx';
+import { SectionCard } from './SectionShell.jsx';
 import { tokens, fonts, shadows } from '../../../theme/theme.js';
 
 const ROLES = [
@@ -27,11 +26,7 @@ const ROLES = [
  * PURCHASE deals exactly as it always has, so shipping that path later touches nothing but
  * this file and section 2.
  */
-export function Section1ClientType({
-  form, setField, locked = false,
-  /** Firm-level staff have no branch to derive, so they are asked. See BranchField. */
-  branchRequired = false, firmId = null,
-}) {
+export function Section1ClientType({ form, setField, locked = false }) {
   return (
     <SectionCard
       title="Who is your client?"
@@ -83,17 +78,6 @@ export function Section1ClientType({
           vendor one. Pick <strong>Vendor</strong> to carry on, or come back for this deal once
           the purchaser path ships.
         </Alert>
-      )}
-
-      {/* Hidden once the deal exists: its branch was fixed at creation and is not editable. */}
-      {branchRequired && !locked && (
-        <FieldGroup title="Branch">
-          <BranchField
-            firmId={firmId}
-            value={form.firmBranchId}
-            onChange={setField('firmBranchId')}
-          />
-        </FieldGroup>
       )}
 
       {locked && (

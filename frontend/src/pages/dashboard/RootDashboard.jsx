@@ -13,7 +13,6 @@ import {
   Bento, HeroTile, StatTile, ListTile, ActionTile, DistributionTile, SkeletonTiles,
 } from '../../components/bento/Bento.jsx';
 import { DEAL_STATUSES, dealStatusDot, dealStatusLabel } from '../../data/dealStatus.js';
-import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
 import { timeAgo } from '../../utils/formatters.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
@@ -23,7 +22,11 @@ export function RootDashboard() {
   const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const auditQ = useQuery({ queryKey: ['audit', { size: 8 }], queryFn: () => searchAudit({ size: 8 }) });
 
-  const deals = useScopedDeals(dealsQ.data);
+  // Deliberately NOT scoped. Every other dashboard narrows to the selected branch, but this one
+  // is the platform view: its hero counts "deals on the platform" and captions that with the firm
+  // and user totals. Narrowing the numerator to one branch while the caption still spans every
+  // entity would not be a filter, it would be a wrong number.
+  const deals = dealsQ.data ?? [];
 
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load platform data. Refresh to try again.</Alert>;
   if (dealsQ.isLoading || firmsQ.isLoading || usersQ.isLoading) return <Bento><SkeletonTiles /></Bento>;

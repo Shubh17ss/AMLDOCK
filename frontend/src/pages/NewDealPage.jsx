@@ -78,10 +78,7 @@ export function NewDealPage() {
   const [showGaps, setShowGaps] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Firm-level staff have no branch for the server to derive, so section 1 asks them for one and
-  // will not let them past without it.
-  const branchRequired = Boolean(user && !user.firmBranchId && user.realEstateFirmId);
-  const gaps = sectionGaps(section + 1, form, { branchRequired });
+  const gaps = sectionGaps(section + 1, form);
   const purchaserBlocked = form.clientRole === 'PURCHASER';
   const canAdvance = gaps.length === 0 && !purchaserBlocked;
 
@@ -314,8 +311,6 @@ export function NewDealPage() {
           form={form}
           setField={setField}
           locked={Boolean(dealId)}
-          branchRequired={branchRequired}
-          firmId={user?.realEstateFirmId ?? null}
         />
       )}
       {section === 1 && (

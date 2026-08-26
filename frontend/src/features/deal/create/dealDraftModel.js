@@ -25,9 +25,6 @@ export const CLIENT_ROLE_BY_TRANSACTION_TYPE = {
 export const EMPTY_FORM = {
   // Section 1
   clientRole: '',            // 'VENDOR' | 'PURCHASER'
-  // Only asked of firm-level staff, who have no branch of their own for the server to derive.
-  // '' for everyone else, and the API reads that as "use mine". See BranchField.
-  firmBranchId: '',
 
   // Section 2 (address) and section 3 (the rest of the property) share one nested group,
   // because they are one record on the server however the form splits the asking.
@@ -146,8 +143,15 @@ export function buildClientPatch(form) {
  *
  * `firmBranchId` rides along only on create — a deal's branch is decided once and the update
  * endpoints have no business changing it, which is why buildDealPatch does not carry it.
+ *
+ * <p>It arrives as an argument rather than off the form because it is not an answer anyone gave:
+ * the branch is the workspace the user is already in, taken from the dashboard scope. The form
+ * used to ask firm-level staff for it, back when they could be working no branch in particular.
+ * Keeping a copy in form state would be a second source of truth that nothing reads back —
+ * `dtoToForm` never rehydrated it and both patch builders omit it — and would go stale the moment
+ * the scope changed mid-form.
  */
-export function buildCreatePayload(form) {
+export function buildCreatePayload(form, branchId) {
   const { pocName, pocEmail, pocPhone, ...deal } = buildDealPatch(form);
   return {
     ...deal,
@@ -155,9 +159,7 @@ export function buildCreatePayload(form) {
     pocEmail,
     pocPhone,
     // null, not '': the server reads null as "derive it from me" and rejects an unusable value.
-    firmBranchId: form.firmBranchId === '' || form.firmBranchId == null
-      ? null
-      : Number(form.firmBranchId),
+    firmBranchId: branchId == null ? null : Number(branchId),
     property: buildPropertyPatch(form),
     client: buildClientPatch(form),
   };
@@ -204,13 +206,10 @@ export function dtoToForm(dto) {
  * Returns a list of human-readable gaps rather than a boolean, so the form can say what is
  * missing instead of just disabling the button and leaving them to guess.
  */
-export function sectionGaps(section, form, { branchRequired = false } = {}) {
+export function sectionGaps(section, form) {
   const gaps = [];
   if (section === 1) {
     if (!form.clientRole) gaps.push('Choose whether your client is the vendor or the purchaser');
-    // Asked here rather than at the create step so a firm-level user is told on the screen that
-    // carries the field, not two sections later by a button that will not move.
-    if (branchRequired && !form.firmBranchId) gaps.push('Which branch this deal belongs to');
   }
   // Section 2 is the one that creates the deal, so it asks for the least a deal can be
   // identified by. Everything the old section 2 also demanded has moved to section 3, where it

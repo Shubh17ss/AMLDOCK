@@ -3,6 +3,7 @@ import { createDeal, getDeal, updateDeal, updateDealClient, updateDealProperty }
 import {
   EMPTY_FORM, buildClientPatch, buildCreatePayload, buildDealPatch, buildPropertyPatch, dtoToForm,
 } from './dealDraftModel.js';
+import { useDashboardScope } from '../../../dashboard/DashboardScope.jsx';
 
 /**
  * Owns the deal-creation form's state and its persistence.
@@ -20,6 +21,7 @@ import {
  *     = useDealDraft({ resumeDealId });
  */
 export function useDealDraft({ resumeDealId = null } = {}) {
+  const { branch } = useDashboardScope();
   const [form, setForm] = useState(EMPTY_FORM);
   const [dealId, setDealId] = useState(null);
   const [deal, setDeal] = useState(null);        // last DealDto the server returned
@@ -32,6 +34,13 @@ export function useDealDraft({ resumeDealId = null } = {}) {
   formRef.current = form;
   const dealIdRef = useRef(dealId);
   dealIdRef.current = dealId;
+  // The branch a created deal belongs to, taken from the workspace scope rather than asked for.
+  // Through a ref like the two above, deliberately: runSave is a useCallback with empty deps and
+  // saveNow/ensureDraft hang off its identity, so closing over the value — or adding it to the
+  // dep array — would rebuild the whole chain and re-arm the autosave effect every time the
+  // scope changed.
+  const branchIdRef = useRef(null);
+  branchIdRef.current = branch?.id ?? null;
   // Serialises saves: a debounced autosave and a section advance can fire together, and two
   // concurrent PATCH sequences would race to decide which response is "current".
   const inFlightRef = useRef(Promise.resolve());
@@ -87,7 +96,7 @@ export function useDealDraft({ resumeDealId = null } = {}) {
     try {
       let dto;
       if (!id) {
-        dto = await createDeal(buildCreatePayload(current));
+        dto = await createDeal(buildCreatePayload(current, branchIdRef.current));
         setDealId(dto.id);
         dealIdRef.current = dto.id;
       } else {
