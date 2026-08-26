@@ -262,8 +262,12 @@ export function NewDealPage() {
   }
 
   // Editing is only possible while a deal is NEW, and only by its broker or a reviewer of the
-  // firm. Anyone else — or anyone still here after the deal moved on — goes to the read-only
-  // view. The exact complement of DealReviewScreen's redirect, so the two cannot loop.
+  // firm. Anyone else — or anyone still here after the deal moved on — goes to the deal page.
+  //
+  // Deliberately wider than DealReviewScreen's redirect, which now sends only the owning broker
+  // here. A reviewer is no longer routed to this form, but is not turned away from it either: the
+  // form is still the only place the sections behind the deal's creation can be revisited, and
+  // because the redirect no longer reaches for reviewers, admitting them here cannot loop.
   const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === deal?.createdByUserId;
   // Status and role together: a reviewer may still open a handed-over deal, its author may
   // not. Checking the status alone sent reviewers to the read-only view on every deal they

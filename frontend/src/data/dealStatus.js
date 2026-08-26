@@ -66,14 +66,26 @@ export const canEditContent = (status, role) =>
  * Every status change a reviewer can make, as a table.
  *
  * <p>Mirrors `DealLifecycleService.RULES`, `noteRequired` included — that is the server's own
- * column, and the Update status dialog reads it to decide whether to ask for a reason. Submit
- * is absent on purpose: it is the submit action of the broker's create form, not a status a
- * reviewer picks off a list.
+ * column, and the Update status dialog reads it to decide whether to ask for a reason. Submit was
+ * once absent, on the grounds that it belonged to the broker's create form rather than to a list a
+ * reviewer picks from. That stopped being true when a reviewer's NEW deals started opening on the
+ * review screen instead of in the form: without this row the deal has nowhere to go, and a
+ * compliance officer gets no Update status button at all.
+ *
+ * <p>The table says where a deal may go, not who may take it there. DealReviewScreen gates the
+ * whole dialog on `isDealReviewer`, and the broker's own Submit is section 5 of their form. Drop
+ * that role gate on the grounds that "the table already knows" and a broker gets a second submit
+ * path beside the wizard's — one that skips the section validation the wizard runs first.
  *
  * <p>`blurb` is what the reviewer reads beside each status. It says what the status means and who
  * the deal lands on, because "Verified" alone is exactly the button this table replaced.
  */
 export const STATUS_TRANSITIONS = [
+  {
+    to: 'REVIEW', from: ['NEW'], action: 'submit', noteRequired: false,
+    blurb: 'Hands the deal to compliance. The broker does this from their form; a reviewer '
+      + 'working the deal here does it from this list.',
+  },
   {
     to: 'VERIFIED', from: ['REVIEW'], action: 'verify', noteRequired: true,
     blurb: 'Compliance sign-off. Record what you checked — it is kept against the deal.',
@@ -101,7 +113,7 @@ const allows = (action, status) =>
   STATUS_TRANSITIONS.some((t) => t.action === action && t.from.includes(status));
 
 /** The broker's own action: hand the finished deal to compliance. */
-export const canSubmit = (s) => s === 'NEW';
+export const canSubmit = (s) => allows('submit', s);
 export const canHold = (s) => allows('hold', s);
 export const canVerify = (s) => allows('verify', s);
 export const canClose = (s) => allows('close', s);

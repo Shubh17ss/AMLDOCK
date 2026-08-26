@@ -2,7 +2,6 @@ import { Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
 import { RiskRatingChip } from './RiskRatingChip.jsx';
-import { isEditable } from '../data/dealStatus.js';
 import { tokens, shadows } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -15,9 +14,10 @@ const EXT        = shadows.md;
 const EXT_SM     = shadows.sm;
 
 /**
- * `canEdit` says whether the viewer may still change an unfinished deal. When they can, a NEW
- * deal opens straight into the form: it is unfinished, and finishing it is the only thing to do
- * with it. The detail page would just be an extra click on the way there.
+ * `canEdit` says whether this viewer opens *this* deal in the form — that is, whether they are the
+ * broker who owns it and it is still unfinished. The list computes it, because the answer needs
+ * both the status and who created the deal, and the list already holds the viewer. A card given no
+ * `canEdit` links to the deal page, which is the right default for every other reader.
  *
  * There is one destination now — a deal has a single address, and what the viewer may do once
  * they are there is decided on the page by role and status, not by which link they took.
@@ -26,9 +26,7 @@ export function DealCard({ deal, canEdit }) {
   const navigate = useNavigate();
   const money = useCurrency();
 
-  const openPath = canEdit && isEditable(deal.status)
-    ? `/deals/${deal.id}/edit`
-    : `/deals/${deal.id}`;
+  const openPath = canEdit ? `/deals/${deal.id}/edit` : `/deals/${deal.id}`;
 
   const handleCardClick = () => navigate(openPath);
 

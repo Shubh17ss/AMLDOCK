@@ -5,7 +5,7 @@ import { DealStatusChip } from './DealStatusChip.jsx';
 import { RiskRatingChip } from './RiskRatingChip.jsx';
 import { isEditable } from '../data/dealStatus.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { isDealAuthor, isDealReviewer } from '../auth/roles.js';
+import { isDealAuthor } from '../auth/roles.js';
 import { fonts } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -18,12 +18,14 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
   const money = useCurrency();
   const { user } = useAuth();
 
-  // A NEW deal is unfinished, and finishing it is the only thing to do with one — so for anyone
-  // who may edit it, opening a NEW deal lands on the form (at the first unanswered section)
-  // rather than on a read-only page with an Edit button on it.
-  const mayEdit = isDealAuthor(user?.role) || isDealReviewer(user?.role);
-  const openPathFor = (d) =>
-    (mayEdit && isEditable(d.status) ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
+  // Only the broker who owns an unfinished deal wants the form: finishing it is the one thing to
+  // do with their own half-written deal, and it opens at the first unanswered section. Everyone
+  // else — reviewers included — wants the deal page, where the ownership structure is.
+  //
+  // One predicate, read by both the link and the tooltip below, so the two cannot drift apart.
+  const opensForm = (d) => isEditable(d.status)
+    && isDealAuthor(user?.role) && user?.userId === d.createdByUserId;
+  const openPathFor = (d) => (opensForm(d) ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
 
   if (deals.length === 0) {
     return (
@@ -68,7 +70,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
               <TableCell>{d.createdByEmail ?? '—'}</TableCell>
               <TableCell sx={{ color: tokens.muted }}>{timeAgo(d.updatedAt)}</TableCell>
               <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                <Tooltip title={mayEdit && isEditable(d.status) ? 'Continue this deal' : 'Open'}>
+                <Tooltip title={opensForm(d) ? 'Continue this deal' : 'Open'}>
                   <IconButton size="small" onClick={() => navigate(openPathFor(d))}>
                     <OpenInNewIcon fontSize="small" />
                   </IconButton>

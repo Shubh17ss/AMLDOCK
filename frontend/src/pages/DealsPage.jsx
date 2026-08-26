@@ -8,7 +8,7 @@ import {
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { canCreateDeal, isDealAuthor, isDealReviewer } from '../auth/roles.js';
+import { canCreateDeal, isDealAuthor } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
@@ -64,13 +64,16 @@ export function DealsPage() {
   /**
    * Where a row goes when you open it.
    *
-   * A NEW deal is unfinished, and the thing to do with an unfinished deal is finish it — so for
-   * anyone who may edit it, opening one lands on the form rather than on a read-only page with
-   * an Edit button. Everything else opens its detail view.
+   * Only the broker who owns an unfinished deal wants the form: the thing to do with their own
+   * half-written deal is finish it. Everyone else — reviewers included — wants the deal page,
+   * where the ownership structure is and where the record is editable in the drawer.
+   *
+   * The author test carries the owner check the page guards have always made. Without it a broker
+   * opening a colleague's NEW deal was linked to the form only to be bounced straight back.
    */
-  const mayEdit = isDealAuthor(user?.role) || isDealReviewer(user?.role);
-  const openPathFor = (d) =>
-    (isEditable(d.status) && mayEdit ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
+  const opensForm = (d) => isEditable(d.status)
+    && isDealAuthor(user?.role) && user?.userId === d.createdByUserId;
+  const openPathFor = (d) => (opensForm(d) ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
 
   return (
     <Stack spacing={2.5}>
@@ -146,7 +149,7 @@ export function DealsPage() {
           </Box>
         )}
         {deals.map((d) => (
-          <DealCard key={d.id} deal={d} canEdit={mayEdit} />
+          <DealCard key={d.id} deal={d} canEdit={opensForm(d)} />
         ))}
       </Box>
 

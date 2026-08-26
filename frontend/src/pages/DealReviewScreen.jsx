@@ -5,7 +5,9 @@ import {
   Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, verifyDeal } from '../api/deals.js';
+import {
+  closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, submitDealForReview, verifyDeal,
+} from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canOverride, canWrite, isDealAuthor, isDealReviewer } from '../auth/roles.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
@@ -85,6 +87,7 @@ export function DealReviewScreen() {
 
   /** What each move is called once it has happened, and how loudly to say it. */
   const SAID = {
+    submit:   { message: 'Sent to compliance for review', severity: 'success' },
     verify:   { message: 'Deal verified', severity: 'success' },
     hold:     { message: 'Deal put on hold', severity: 'warning' },
     revert:   { message: 'Sent back to the broker', severity: 'warning' },
@@ -101,6 +104,7 @@ export function DealReviewScreen() {
   const statusMut = useMutation({
     mutationFn: ({ transition, reason }) => {
       switch (transition.action) {
+        case 'submit': return submitDealForReview(dealId);
         case 'hold':   return holdDeal(dealId, reason);
         case 'verify': return verifyDeal(dealId, reason);
         case 'revert': return revertDeal(dealId, reason);
@@ -136,10 +140,12 @@ export function DealReviewScreen() {
   const isFirstNode = !tree.tree || tree.tree.nodes.length === 0;
   const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === deal.createdByUserId;
 
-  // A NEW deal is unfinished, and finishing it is what the form is for. Whoever may change it
-  // gets the form rather than this screen. NewDealPage holds the exact complement of this
-  // condition — change one without the other and the two routes bounce off each other.
-  if (isEditable(deal.status) && (isOwnerAgent || isDealReviewer(user?.role))) {
+  // A NEW deal in the broker's hands is unfinished, and finishing it is what the form is for — so
+  // its author still gets the form rather than this screen. A reviewer does not: the work they do
+  // on a NEW deal is the ownership structure, which exists only here, and the deal's own record is
+  // editable in the drawer beside it. NewDealPage's guard is deliberately wider than this one, so
+  // a reviewer who asks for the form by name still gets it and the two routes cannot bounce.
+  if (isEditable(deal.status) && isOwnerAgent) {
     return <Navigate to={`/deals/${deal.id}/edit`} replace />;
   }
 
