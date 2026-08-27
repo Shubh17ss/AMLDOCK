@@ -221,12 +221,18 @@ export function DashboardPage() {
             {group.items.map((item) => (
               // The width lives on the wrapper: ModuleCard sits on BentoTile, which sizes itself
               // with `gridColumn: span`, and that means nothing inside a flex row.
+              //
+              // Which is why the tile is told to fill this box. Left to itself a flex child is
+              // sized by its content, so the wrapper held the width while the card inside it grew
+              // or shrank to fit its title — "Compliance Programme" came out visibly wider than
+              // "Annual Report" beside it.
               <Box
                 key={item.id}
                 sx={{
                   flex: '0 0 auto',
                   width: { xs: 232, md: 258 },
                   display: 'flex',
+                  '& > *': { flex: 1, minWidth: 0 },
                   scrollSnapAlign: 'start',
                 }}
               >
