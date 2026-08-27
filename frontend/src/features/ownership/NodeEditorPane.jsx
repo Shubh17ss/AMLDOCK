@@ -13,6 +13,7 @@ import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
 import { VoiceClip } from '../../components/VoiceClip.jsx';
 import { DocumentViewerDialog } from '../../components/DocumentViewerDialog.jsx';
+import { useToast } from '../../components/ToastProvider.jsx';
 import { DealDocumentList } from '../deal/review/DealDocumentList.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
 import { tokens } from '../../theme/theme.js';
@@ -47,7 +48,7 @@ export function NodeEditorPane({
   const [verificationVoice, setVerificationVoice] = useState(null); // Blob | null
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [verificationSaved, setVerificationSaved] = useState(false);
+  const { showToast } = useToast();
   // The document open in the viewer, or null. Held whole rather than by id: both lists
   // already have the row in hand, and re-finding it would mean each knowing about the other.
   const [viewingDoc, setViewingDoc] = useState(null);
@@ -107,7 +108,6 @@ export function NodeEditorPane({
       });
       setVerificationVoice(null);
       setError(null);
-      setVerificationSaved(false);
     } else {
       setForm(null);
     }
@@ -133,6 +133,7 @@ export function NodeEditorPane({
       // The deal is refetched too — useOwnershipTree invalidates it on every node write, since
       // the answers on this form feed its risk rating.
       await useTree.updateNode.mutateAsync({ nodeId: selected.id, payload: buildNodePayload(form) });
+      showToast({ severity: 'success', message: 'Deal updated' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save');
     }
@@ -140,7 +141,6 @@ export function NodeEditorPane({
 
   const saveVerification = async () => {
     setError(null);
-    setVerificationSaved(false);
     try {
       // 1) Status + text notes
       await useTree.updateNode.mutateAsync({
@@ -172,7 +172,7 @@ export function NodeEditorPane({
         if (dealId) qc.invalidateQueries({ queryKey: ['documents', dealId] });
       }
 
-      setVerificationSaved(true);
+      showToast({ severity: 'success', message: 'Deal updated' });
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to update verification');
     }
@@ -191,6 +191,7 @@ export function NodeEditorPane({
           percentage: edgeForm.percentage === '' ? null : Number(edgeForm.percentage),
         },
       });
+      showToast({ severity: 'success', message: 'Deal updated' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update edge');
     }
@@ -357,7 +358,7 @@ export function NodeEditorPane({
             <RadioGroup
               aria-labelledby="verification-status-label"
               value={verification.status}
-              onChange={(e) => { setVerification((v) => ({ ...v, status: e.target.value })); setVerificationSaved(false); }}
+              onChange={(e) => { setVerification((v) => ({ ...v, status: e.target.value })); }}
             >
               {VERIFICATION_OPTIONS.map((opt) => (
                 <FormControlLabel
@@ -380,7 +381,7 @@ export function NodeEditorPane({
           <TextField
             label="Verification notes"
             value={verification.notes ?? ''}
-            onChange={(e) => { setVerification((v) => ({ ...v, notes: e.target.value })); setVerificationSaved(false); }}
+            onChange={(e) => { setVerification((v) => ({ ...v, notes: e.target.value })); }}
             multiline
             minRows={4}
             placeholder="What did you check? Which document or call confirmed it? Anything that should be defensible later."
@@ -391,16 +392,10 @@ export function NodeEditorPane({
           {!readOnly && (
             <VoiceRecorderField
               value={verificationVoice}
-              onChange={(blob) => { setVerificationVoice(blob); setVerificationSaved(false); }}
+              onChange={(blob) => { setVerificationVoice(blob); }}
               label="Voice rationale (optional)"
               helper="Record a short voice note. Uploaded on Save verification — until then it stays local."
             />
-          )}
-
-          {verificationSaved && (
-            <Alert severity="success" onClose={() => setVerificationSaved(false)}>
-              Verification updated.
-            </Alert>
           )}
 
           {!readOnly && (
