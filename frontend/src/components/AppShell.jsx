@@ -1,8 +1,6 @@
 import {
-  AppBar, Box, CircularProgress, Drawer, IconButton, Stack, Toolbar, Tooltip, Typography,
+  AppBar, Box, CircularProgress, Drawer, Stack, Toolbar, Typography,
 } from '@mui/material';
-import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
-import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { SidebarNav } from './SidebarNav.jsx';
@@ -12,7 +10,7 @@ import { BottomNav } from './BottomNav.jsx';
 import { moduleTitleFor } from '../navigation/moduleRegistry.jsx';
 import { DashboardScopeProvider, useDashboardScope } from '../dashboard/DashboardScope.jsx';
 import { ScopeRequiredDialog } from '../dashboard/ScopeRequiredDialog.jsx';
-import { ColorModeProvider, useColorMode } from '../theme/ColorMode.jsx';
+import { ColorModeProvider } from '../theme/ColorMode.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 
 const SIDEBAR_WIDTH = 260;
@@ -36,20 +34,6 @@ function titleFor(pathname) {
   const match = TITLE_BY_PATH_PREFIX.find(([prefix]) => pathname.startsWith(prefix));
   if (match) return match[1];
   return moduleTitleFor(pathname) ?? 'AML·DOCK';
-}
-
-/** Sun/moon toggle in the app bar — dashboard-only, hence inside ColorModeProvider. */
-function ColorModeToggle() {
-  const { mode, toggle } = useColorMode();
-  const dark = mode === 'dark';
-  return (
-    <Tooltip title={dark ? 'Light mode' : 'Dark mode'}>
-      <IconButton onClick={toggle} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
-        {dark ? <LightModeOutlinedIcon sx={{ fontSize: 20 }} />
-              : <DarkModeOutlinedIcon sx={{ fontSize: 20 }} />}
-      </IconButton>
-    </Tooltip>
-  );
 }
 
 export function AppShell() {
@@ -161,7 +145,6 @@ export function AppShell() {
                 {pageTitle}
               </Typography>
             </Stack>
-            <ColorModeToggle />
             <UserMenu compact />
           </Toolbar>
         </AppBar>
