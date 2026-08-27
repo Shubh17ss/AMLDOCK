@@ -33,6 +33,8 @@ import { canAccessAllModules, FINANCE_MODULE_IDS, AUDIT_LOG_ROLES } from '../aut
 export const DASHBOARD_PATH = '/dashboard';
 export const CDD_REGISTER_PATH = '/cdd';
 export const DEALS_PATH = '/cdd/deals';
+export const BENEFICIAL_OWNERS_PATH = '/cdd/beneficial-owners';
+export const OVERSEAS_RESIDENTS_PATH = '/cdd/overseas-residents';
 export const INTL_FUND_TRANSACTIONS_PATH = '/monitoring/international-fund-transaction-register';
 export const SUSPICIOUS_ACTIVITIES_PATH = '/monitoring/suspicious-activities';
 export const STAFF_TRAINING_PATH = '/aml-training/staff-training';
@@ -62,13 +64,13 @@ export const MODULE_GROUPS = [
     items: [
       { id: 'deals',             label: 'Listing Register',  to: DEALS_PATH,               icon: <BusinessCenterIcon />,
         blurb: 'Every listing and its customer due diligence, from capture through approval.' },
-      { id: 'beneficial-owners', label: 'Beneficial Owners', to: '/cdd/beneficial-owners', icon: <AccountTreeIcon />,
+      { id: 'beneficial-owners', label: 'Beneficial Owners', to: BENEFICIAL_OWNERS_PATH, icon: <AccountTreeIcon />,
         blurb: 'Map ownership structures and identify who ultimately controls each customer.' },
       { id: 'cdd-exceptions',    label: 'CDD Exceptions',    to: '/cdd/cdd-exceptions',    icon: <RuleIcon />,
         blurb: 'Track listings cleared with incomplete due diligence and their remediation.' },
       { id: 'peps',              label: 'PEPs',              to: '/cdd/peps',              icon: <GavelIcon />,
         blurb: 'Screen and record politically exposed persons found across your customers.' },
-      { id: 'overseas-residents', label: 'Overseas Residents Register', to: '/cdd/overseas-residents', icon: <PublicIcon />,
+      { id: 'overseas-residents', label: 'Overseas Residents Register', to: OVERSEAS_RESIDENTS_PATH, icon: <PublicIcon />,
         blurb: 'Enhanced due diligence for customers residing outside New Zealand.' },
     ],
   },
@@ -176,6 +178,8 @@ export const SECTION_LANDING_GROUPS = MODULE_GROUPS.filter((g) => g.to !== CDD_R
 export const IMPLEMENTED_PATHS = [
   CDD_REGISTER_PATH,
   DEALS_PATH,
+  BENEFICIAL_OWNERS_PATH,
+  OVERSEAS_RESIDENTS_PATH,
   '/documents/risk-assessment',
   '/documents/compliance-programme',
   '/documents/annual-report',

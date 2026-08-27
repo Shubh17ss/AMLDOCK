@@ -85,8 +85,24 @@ public class DealService {
 
     /* ---------- queries ---------- */
 
+    /**
+     * Every deal the caller may read, narrowed by their role.
+     *
+     * <p>The requested firm and branch are <em>overwritten</em> by whatever the actor's own role
+     * pins, not merely intersected with it — an agent asking for a branch still gets only their own
+     * deals. This is the set-level twin of {@link DealLifecycleService#assertCanRead}: use that one
+     * for a single deal, this one for a list, because asserting per row would throw on the first
+     * deal outside the caller's scope instead of leaving it out.
+     *
+     * <p>Shared with the individuals register, which reaches people through their deals and so
+     * inherits exactly this rule. A second transcription of it would be a second thing to keep
+     * right.
+     *
+     * <p>A switch with no default, so a new role fails to compile here rather than defaulting into
+     * whichever branch happens to be last.
+     */
     @Transactional(readOnly = true)
-    public List<DealListItemDto> list(DealStatus status, Long firmIdFilter, Long branchIdFilter) {
+    public List<Deal> readableDeals(DealStatus status, Long firmIdFilter, Long branchIdFilter) {
         UserPrincipal actor = currentPrincipal();
 
         Long effectiveCreator = null;
@@ -103,7 +119,12 @@ public class DealService {
             case FINANCE -> throw new ForbiddenException("Deals are outside the finance role");
         }
 
-        List<Deal> results = deals.search(status, effectiveCreator, effectiveFirm, effectiveBranch);
+        return deals.search(status, effectiveCreator, effectiveFirm, effectiveBranch);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DealListItemDto> list(DealStatus status, Long firmIdFilter, Long branchIdFilter) {
+        List<Deal> results = readableDeals(status, firmIdFilter, branchIdFilter);
         if (results.isEmpty()) return List.of();
 
         // Bulk-resolve lookups
@@ -505,7 +526,10 @@ public class DealService {
         return fallback;
     }
 
-    private static String formatAddress(Property p) {
+    /** Public rather than private: the individuals register, in its own package, shows the same
+     *  one-liner, and a second copy of "address, suburb, district, region" would be a second thing
+     *  to keep in step. */
+    public static String formatAddress(Property p) {
         StringBuilder sb = new StringBuilder();
         appendPart(sb, p.getAddressLine1());
         appendPart(sb, p.getSuburb());

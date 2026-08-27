@@ -166,8 +166,29 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
             </Typography>
           </Box>
 
+          {/* Not defaulted to the reporting entity's country, unlike the dial code below it.
+              A dial code is a convenience the user overtypes; where someone lives is a CDD answer,
+              and one nobody has given must stay blank rather than arrive pre-agreed. The Overseas
+              Residents register reads this and cannot tell a default from an answer. */}
+          <CountrySelect
+            label="Country of residence"
+            value={person.countryOfResidence ?? null}
+            onChange={(code) => setPerson({ countryOfResidence: code })}
+          />
+
           <TextField label="Email address" type="email" value={person.email ?? ''}
                      onChange={(e) => setPerson({ email: e.target.value })} />
+
+          {/* The node's own column, not the person's. Extraction keeps the two in step through
+              refreshExtractedIndividual, and reading one while writing the other would make an
+              edit look like it had not taken.
+
+              The ID document's own type, number and country used to be asked for here. They are
+              facts about a document, and the document is one tab across — asking twice invites two
+              answers. */}
+          <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
+                     value={value.dateOfBirth ?? ''}
+                     onChange={(e) => set({ dateOfBirth: e.target.value })} />
 
           <PhoneField
             value={{ country: person.phoneCountry ?? null, number: person.phoneNumber ?? '' }}
@@ -182,19 +203,6 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
                      onChange={(e) => setPerson({ sourceOfFunds: e.target.value })}
                      multiline minRows={2}
                      placeholder="Salary, sale of a property, inheritance — and how it was evidenced." />
-
-          <Divider />
-
-          {/* The node's own column, not the person's. Extraction keeps the two in step through
-              refreshExtractedIndividual, and reading one while writing the other would make an
-              edit look like it had not taken.
-
-              The ID document's own type, number and country used to be asked for here. They are
-              facts about a document, and the document is one tab across — asking twice invites two
-              answers. */}
-          <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
-                     value={value.dateOfBirth ?? ''}
-                     onChange={(e) => set({ dateOfBirth: e.target.value })} />
         </>
       )}
 
@@ -461,6 +469,9 @@ export function buildNodePayload(form) {
       phoneNumber: p.phoneNumber ?? '',
       occupation: p.occupation ?? '',
       sourceOfFunds: p.sourceOfFunds ?? '',
+      // '' rather than null for the same reason as the fields above: applyPersonPatch reads null
+      // as "leave alone", so a null here would make the country picker impossible to clear.
+      countryOfResidence: p.countryOfResidence ?? '',
     };
   }
   return payload;

@@ -490,6 +490,9 @@ public class OwnershipService {
         if (patch.phoneNumber() != null) person.setPhoneNumber(emptyToNull(patch.phoneNumber()));
         if (patch.occupation() != null) person.setOccupation(emptyToNull(patch.occupation()));
         if (patch.sourceOfFunds() != null) person.setSourceOfFunds(emptyToNull(patch.sourceOfFunds()));
+        if (patch.countryOfResidence() != null) {
+            person.setCountryOfResidence(emptyToNull(patch.countryOfResidence()));
+        }
     }
 
     private static String emptyToNull(String v) {

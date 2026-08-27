@@ -99,6 +99,7 @@ export function NodeEditorPane({
             phoneNumber: selected.person.phoneNumber ?? '',
             occupation: selected.person.occupation ?? '',
             sourceOfFunds: selected.person.sourceOfFunds ?? '',
+            countryOfResidence: selected.person.countryOfResidence ?? null,
           }
           : null,
       });

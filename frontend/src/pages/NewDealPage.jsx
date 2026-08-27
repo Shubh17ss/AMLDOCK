@@ -30,12 +30,15 @@ const SECTIONS = ['Your client', 'The property', 'Property details', 'Client ide
 /**
  * Where leaving this form lands you — creating, discarding or deleting alike.
  *
- * The deals register rather than /my-deals, which is guarded by DEAL_AUTHOR_ROLES: creation opened
- * to the wider DEAL_CREATOR_ROLES, so a sales manager or compliance officer finishing this form
- * was bounced /my-deals -> /app -> /dashboard and landed on the module hub with a "deal created"
- * toast and no deal in sight. This path carries no role guard, so nobody can be bounced off it.
+ * A broker has a personal list and belongs back on it, with the deal they just made at the top.
+ * Nobody else can go there: /my-deals is guarded by DEAL_AUTHOR_ROLES, while creation is open to
+ * the wider DEAL_CREATOR_ROLES, so sending a sales manager or compliance officer to it bounced
+ * them /my-deals -> /app -> /dashboard onto the module hub with a "deal created" toast and no deal
+ * in sight. They get the register instead, which carries no role guard at all.
  */
-const AFTER_CREATE = DEALS_PATH;
+const MY_DEALS_PATH = '/my-deals';
+
+const afterCreateFor = (role) => (isDealAuthor(role) ? MY_DEALS_PATH : DEALS_PATH);
 
 /** Editing an existing deal opens here — sections 1 and 2 are already answered. */
 const FIRST_EDIT_SECTION = 2;
@@ -179,7 +182,7 @@ export function NewDealPage() {
       if (!id) return;
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       showToast({ severity: 'success', message: 'Deal created — open it to carry on' });
-      navigate(AFTER_CREATE);
+      navigate(afterCreateFor(user?.role));
     } catch (e) {
       const msg = e.response?.data?.message || 'Could not create the deal';
       setError(msg);
@@ -236,7 +239,7 @@ export function NewDealPage() {
    * typed, so there is nothing to lose and a prompt would only be in the way.
    */
   const requestDiscard = () => {
-    if (!dealId && !draft.isDirty()) { navigate(AFTER_CREATE); return; }
+    if (!dealId && !draft.isDirty()) { navigate(afterCreateFor(user?.role)); return; }
     setConfirmDelete(true);
   };
 
@@ -259,7 +262,7 @@ export function NewDealPage() {
       }
       setOverlay(null);
     }
-    navigate(AFTER_CREATE);
+    navigate(afterCreateFor(user?.role));
   };
 
   if (draft.loadingResume) {

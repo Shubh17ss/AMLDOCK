@@ -76,6 +76,13 @@ public class BeneficialOwner extends BaseEntity {
     @Column(name = "source_of_funds", columnDefinition = "text")
     private String sourceOfFunds;
 
+    /**
+     * Where this person lives, ISO 3166-1 alpha-2. Null means nobody has been asked — which the
+     * Overseas Residents register must not read as "lives here".
+     */
+    @Column(name = "country_of_residence", length = 2)
+    private String countryOfResidence;
+
     public Long getId() { return id; }
     public Long getRealEstateFirmId() { return realEstateFirmId; }
     public void setRealEstateFirmId(Long v) { this.realEstateFirmId = v; }
@@ -99,4 +106,6 @@ public class BeneficialOwner extends BaseEntity {
     public void setOccupation(String v) { this.occupation = v; }
     public String getSourceOfFunds() { return sourceOfFunds; }
     public void setSourceOfFunds(String v) { this.sourceOfFunds = v; }
+    public String getCountryOfResidence() { return countryOfResidence; }
+    public void setCountryOfResidence(String v) { this.countryOfResidence = v; }
 }
