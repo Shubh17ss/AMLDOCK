@@ -10,6 +10,7 @@ import { AddressFinderField } from '../../../components/AddressFinderField.jsx';
 import { CountrySelect } from '../../../components/CountrySelect.jsx';
 import { DictationField } from '../../../components/DictationField.jsx';
 import { RiskRatingChip } from '../../../components/RiskRatingChip.jsx';
+import { useToast } from '../../../components/ToastProvider.jsx';
 import { useCurrency } from '../../../dashboard/useCurrency.js';
 import { useFirmCountry } from '../../../hooks/useFirmCountry.js';
 import { PROPERTY_TYPES, reasonsForPropertyType } from '../../../data/propertyTypes.js';
@@ -38,10 +39,10 @@ export function DealDetailsForm({ deal, dealId, form, setForm, dirty, onSaved, r
   const qc = useQueryClient();
   const money = useCurrency();
   const { country: firmCountry } = useFirmCountry();
+  const { showToast } = useToast();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [saved, setSaved] = useState(false);
   const [showGaps, setShowGaps] = useState(false);
 
   // `form` is owned by the drawer, not by this component. The drawer's body is keyed on the tab
@@ -50,19 +51,16 @@ export function DealDetailsForm({ deal, dealId, form, setForm, dirty, onSaved, r
 
   const setField = (key) => (eOrValue) => {
     const v = eOrValue?.target ? eOrValue.target.value : eOrValue;
-    setSaved(false);
     setForm((f) => ({ ...f, [key]: v }));
   };
 
   const setNested = (group, key) => (eOrValue) => {
     const v = eOrValue?.target ? eOrValue.target.value : eOrValue;
-    setSaved(false);
     setForm((f) => ({ ...f, [group]: { ...f[group], [key]: v } }));
   };
 
   /** The address field emits the whole property object at once. */
   const setProperty = (next) => {
-    setSaved(false);
     setForm((f) => ({ ...f, property: { ...f.property, ...next } }));
   };
 
@@ -108,7 +106,7 @@ export function DealDetailsForm({ deal, dealId, form, setForm, dirty, onSaved, r
       // would otherwise go on showing the state before the answer.
       qc.invalidateQueries({ queryKey: ['ownership', dealId] });
       onSaved?.(dto);
-      setSaved(true);
+      showToast({ severity: 'success', message: 'Deal updated' });
     } catch (e) {
       setError(e.response?.data?.message || 'Could not save these details');
     } finally {
@@ -285,9 +283,6 @@ export function DealDetailsForm({ deal, dealId, form, setForm, dirty, onSaved, r
       )}
 
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
-      {saved && !dirty && (
-        <Alert severity="success" onClose={() => setSaved(false)}>Details saved.</Alert>
-      )}
 
       {!readOnly && (
         <Box>
