@@ -12,8 +12,12 @@ import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
+import nz.amldock.audit.AuditAction;
+import nz.amldock.audit.AuditService;
 import nz.amldock.dealnote.DealNoteService;
 import nz.amldock.dealnote.dto.DealNoteDto;
+import nz.amldock.ownership.OwnershipNode;
+import nz.amldock.ownership.OwnershipService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
@@ -50,6 +54,8 @@ public class DealService {
     private final DealNoteService dealNotes;
     private final BeneficialOwnerService beneficialOwners;
     private final DealRiskService risk;
+    private final OwnershipService ownership;
+    private final AuditService audit;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -60,7 +66,9 @@ public class DealService {
                        DealLifecycleService lifecycle,
                        DealNoteService dealNotes,
                        BeneficialOwnerService beneficialOwners,
-                       DealRiskService risk) {
+                       DealRiskService risk,
+                       OwnershipService ownership,
+                       AuditService audit) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -71,6 +79,8 @@ public class DealService {
         this.dealNotes = dealNotes;
         this.beneficialOwners = beneficialOwners;
         this.risk = risk;
+        this.ownership = ownership;
+        this.audit = audit;
     }
 
     /* ---------- queries ---------- */
@@ -220,6 +230,11 @@ public class DealService {
         // Generate human reference now that we have an id
         int year = OffsetDateTime.now(ZoneOffset.UTC).getYear();
         saved.setReference(String.format("DEAL-%d-%04d", year, saved.getId()));
+
+        // Rarely reached from the form, which creates the deal at the end of section 2 and only
+        // asks about trusts in section 3 — but POST /deals accepts the field, so an API client
+        // can answer it here. Leaving it out would make the rule depend on which door you came in.
+        if (Boolean.TRUE.equals(req.trustInvolved())) recordImpliedTrust(saved.getId());
         return saved;
     }
 
@@ -242,6 +257,12 @@ public class DealService {
         if (req.pocEmail() != null) d.setPocEmail(blankToNull(req.pocEmail()));
         if (req.notes() != null) d.setNotes(blankToNull(req.notes()));
         if (req.transactionPurpose() != null) d.setTransactionPurpose(blankToNull(req.transactionPurpose()));
+        // Against the stored value, and before the setter: the create form autosaves on every
+        // section move, so this PATCH re-sends trustInvolved: true many times per deal. Only the
+        // edge from "not asked" or "no" implies a node; a repeat of the same answer implies
+        // nothing. Three-state field — null means not asked — hence Boolean.TRUE.equals.
+        boolean trustJustAdded = Boolean.TRUE.equals(req.trustInvolved())
+                && !Boolean.TRUE.equals(d.getTrustInvolved());
         if (req.trustInvolved() != null) d.setTrustInvolved(req.trustInvolved());
         if (req.onSoldQuickly() != null) d.setOnSoldQuickly(req.onSoldQuickly());
         if (req.foreignExposureCountry() != null) {
@@ -260,7 +281,25 @@ public class DealService {
         // still be checked against the bound already stored.
         validateValuationRange(d.getValuationMin(), d.getValuationMax());
         applyRiskRating(d);
+        if (trustJustAdded) recordImpliedTrust(d.getId());
         return d;
+    }
+
+    /**
+     * Puts the trust the deal just declared onto its ownership structure.
+     *
+     * <p>Audited here rather than inside OwnershipService: that whole package records from its
+     * controller, and this node has no controller behind it. The deal package already audits a
+     * derived change from the service that derives it — see DealRiskService recording
+     * DEAL_RISK_CHANGED — and an implied node is the same kind of event. A node appearing in an
+     * AML file with no trail is worse than one a person put there.
+     */
+    private void recordImpliedTrust(Long dealId) {
+        OwnershipNode node = ownership.attachImpliedTrust(dealId);
+        if (node == null) return;   // the deal already had a trust on it
+        audit.record(AuditAction.NODE_CREATED, "OwnershipNode", node.getId(),
+                "Added TRUST node \"" + node.getDisplayName() + "\" to deal " + dealId
+                        + " because the deal answered yes to a trust in the beneficial ownership");
     }
 
     @Transactional

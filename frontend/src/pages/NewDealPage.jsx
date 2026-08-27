@@ -13,6 +13,7 @@ import { PageHeader } from '../components/PageHeader.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { useDealDraft } from '../features/deal/create/useDealDraft.js';
 import { sectionGaps } from '../features/deal/create/dealDraftModel.js';
+import { DEALS_PATH } from '../navigation/moduleRegistry.jsx';
 import { SectionProgress, SaveStateChip } from '../features/deal/create/SectionShell.jsx';
 import { Section1ClientType } from '../features/deal/create/Section1ClientType.jsx';
 import { Section2Address } from '../features/deal/create/Section2Address.jsx';
@@ -26,8 +27,15 @@ import { tokens } from '../theme/theme.js';
 
 const SECTIONS = ['Your client', 'The property', 'Property details', 'Client identity', 'Risk & valuation'];
 
-/** Where section 2's Create button leaves the broker: their own list, with the new deal on it. */
-const AFTER_CREATE = '/my-deals';
+/**
+ * Where leaving this form lands you — creating, discarding or deleting alike.
+ *
+ * The deals register rather than /my-deals, which is guarded by DEAL_AUTHOR_ROLES: creation opened
+ * to the wider DEAL_CREATOR_ROLES, so a sales manager or compliance officer finishing this form
+ * was bounced /my-deals -> /app -> /dashboard and landed on the module hub with a "deal created"
+ * toast and no deal in sight. This path carries no role guard, so nobody can be bounced off it.
+ */
+const AFTER_CREATE = DEALS_PATH;
 
 /** Editing an existing deal opens here — sections 1 and 2 are already answered. */
 const FIRST_EDIT_SECTION = 2;
@@ -41,9 +49,9 @@ const FIRST_EDIT_SECTION = 2;
  * abandon the form half-finished. Creating there also means sections 3 onward have a dealId to
  * hang document uploads on.
  *
- * Section 2 therefore ends the *creation* run — the broker is told the deal exists and sent to
- * their list. Coming back to it opens at section 3, which is where the unanswered questions
- * start.
+ * Section 2 therefore ends the *creation* run — whoever is filling it in is told the deal exists
+ * and sent to the deals register. Coming back to it opens at section 3, which is where the
+ * unanswered questions start.
  *
  * The firm isn't asked for, and nor is the branch for most people: branch-level staff may only
  * create deals on the branch they're assigned to, and the API derives it from the caller. Only
@@ -228,7 +236,7 @@ export function NewDealPage() {
    * typed, so there is nothing to lose and a prompt would only be in the way.
    */
   const requestDiscard = () => {
-    if (!dealId && !draft.isDirty()) { navigate('/my-deals'); return; }
+    if (!dealId && !draft.isDirty()) { navigate(AFTER_CREATE); return; }
     setConfirmDelete(true);
   };
 
@@ -251,7 +259,7 @@ export function NewDealPage() {
       }
       setOverlay(null);
     }
-    navigate('/my-deals');
+    navigate(AFTER_CREATE);
   };
 
   if (draft.loadingResume) {
@@ -359,7 +367,7 @@ export function NewDealPage() {
         <Alert severity="info">
           Submitting moves <strong>{deal.reference}</strong> to <strong>In review</strong> and
           locks it from further edits. It's already saved, so you can leave and finish later from{' '}
-          <strong>My deals</strong> — once it is with compliance, only they can send it back.
+          <strong>Deals</strong> — once it is with compliance, only they can send it back.
         </Alert>
       )}
 

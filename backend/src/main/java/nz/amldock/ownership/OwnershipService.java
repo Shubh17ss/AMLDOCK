@@ -348,6 +348,53 @@ public class OwnershipService {
         return nodes.save(n);
     }
 
+    /* ---------- answer-driven creation ---------- */
+
+    /** The name a trust carries until someone tells us what it is actually called. */
+    public static final String UNNAMED_TRUST = "NAME NOT PROVIDED";
+
+    /**
+     * Creates the TRUST node implied by a deal answering "yes, a trust is involved".
+     *
+     * <p><strong>No permission check, deliberately</strong> — the same reasoning as
+     * {@link #attachExtractedIndividual}. The answer that triggers this is usually the broker's,
+     * given in the create form, and {@code createNode} is gated to compliance officers and senior
+     * managers. Routing an agent's answer through it would fail; widening that endpoint so it
+     * would not is a far larger grant than this needs. The caller has already passed
+     * {@code mustFindEditable} on the deal. Do not call this from a controller.
+     *
+     * <p>Named rather than left blank because {@code display_name} is NOT NULL — and a name that
+     * says what is missing asks the next reader for exactly the thing that is missing, which
+     * "Unknown" would not.
+     *
+     * <p>Roots itself only on an empty structure, where a trust that owns the property is the
+     * likeliest reading and there is nothing to displace. Otherwise it stands detached and the
+     * reviewer attaches it, the same state a scanned ID lands in and one the tree already has a
+     * band for.
+     *
+     * @return the node created, or {@code null} if this deal already has a trust on it
+     */
+    @Transactional
+    public OwnershipNode attachImpliedTrust(Long dealId) {
+        OwnershipStructure structure = structures.findByDealId(dealId)
+                .orElseGet(() -> createEmptyStructure(dealId));
+
+        List<OwnershipNode> existing = nodes.findAllByOwnershipStructureIdOrderByIdAsc(structure.getId());
+        // Belt and braces with the caller's transition check: that one stops the repeat saves the
+        // create form makes on every section move, this one stops everything else.
+        if (existing.stream().anyMatch(n -> n.getNodeType() == NodeType.TRUST)) return null;
+
+        OwnershipNode n = new OwnershipNode();
+        n.setOwnershipStructureId(structure.getId());
+        n.setNodeType(NodeType.TRUST);
+        n.setDisplayName(UNNAMED_TRUST);
+        n.setVerificationStatus(NodeVerificationStatus.NOT_STARTED);
+        OwnershipNode saved = nodes.save(n);
+
+        if (existing.isEmpty()) structure.setRootNodeId(saved.getId());
+        return saved;
+    }
+
     /**
      * Updates the node standing for a person once extraction has read their card.
      *
