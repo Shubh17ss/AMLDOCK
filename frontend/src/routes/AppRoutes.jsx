@@ -10,7 +10,7 @@ import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
-  DEAL_AUTHOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
+  DEAL_AUTHOR_ROLES, DEAL_CREATOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
   FINANCE_SECTION_ROLES, AUDIT_LOG_ROLES,
   TRAINING_ASSIGNABLE_ROLES,
 } from '../auth/roles.js';
@@ -20,6 +20,7 @@ import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
 import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
 import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
+  BENEFICIAL_OWNERS_PATH, OVERSEAS_RESIDENTS_PATH,
   SUSPICIOUS_ACTIVITIES_PATH, STAFF_TRAINING_PATH, MY_TRAINING_PATH, SECTION_LANDING_GROUPS,
   FINANCE_PATHS, AUDIT_LOG_PATH,
 } from '../navigation/moduleRegistry.jsx';
@@ -34,9 +35,10 @@ import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
 import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
 import { MyDealsPage } from '../pages/MyDealsPage.jsx';
 import { DealsPage } from '../pages/DealsPage.jsx';
+import { BeneficialOwnersPage } from '../pages/cdd/BeneficialOwnersPage.jsx';
+import { OverseasResidentsPage } from '../pages/cdd/OverseasResidentsPage.jsx';
 import { FirmDealsPage } from '../pages/FirmDealsPage.jsx';
 import { NewDealPage } from '../pages/NewDealPage.jsx';
-import { DealDetailPage } from '../pages/DealDetailPage.jsx';
 import { DealReviewScreen } from '../pages/DealReviewScreen.jsx';
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 
@@ -66,6 +68,11 @@ export function AppRoutes() {
 
         {/* Deals — the full deal list with filters (formerly the /queue compliance queue) */}
         <Route path={DEALS_PATH} element={<DealsPage />} />
+        {/* The two people-registers. Unguarded like the rest of the CDD section: who may see
+            which individuals is decided by the server narrowing the deals behind them, not by
+            which roles can open the page. */}
+        <Route path={BENEFICIAL_OWNERS_PATH} element={<BeneficialOwnersPage />} />
+        <Route path={OVERSEAS_RESIDENTS_PATH} element={<OverseasResidentsPage />} />
 
         {/* Section landings — clicking a menu section header shows a card per module in it,
             each with its review status. The CDD landing is the stats dashboard instead, so
@@ -167,23 +174,23 @@ export function AppRoutes() {
             <MyDealsPage />
           </ProtectedRoute>
         } />
+        {/* Wider than DEAL_AUTHOR_ROLES: a sales manager or compliance officer may open a deal
+            without thereby becoming its author. See roles.js DEAL_CREATOR_ROLES. */}
         <Route path="/deals/new" element={
-          <ProtectedRoute roles={DEAL_AUTHOR_ROLES}>
+          <ProtectedRoute roles={DEAL_CREATOR_ROLES}>
             <NewDealPage />
           </ProtectedRoute>
         } />
-        <Route path="/deals/:id" element={<DealDetailPage />} />
+        {/* One address for a deal. No role guard: every authenticated role may look at a deal,
+            and what they may *change* is decided inside DealReviewScreen by role and status —
+            a guard here could only answer the coarser question of who gets to read it. */}
+        <Route path="/deals/:id" element={<DealReviewScreen />} />
         {/* Both role groups: a compliance officer may correct a NEW deal on the broker's
             behalf, so DEAL_AUTHOR_ROLES alone would lock them out at the router. The real
             authority is NewDealPage's own mayEdit check and, behind it, assertEditable. */}
         <Route path="/deals/:id/edit" element={
           <ProtectedRoute roles={[...DEAL_AUTHOR_ROLES, ...DEAL_REVIEWER_ROLES]}>
             <NewDealPage />
-          </ProtectedRoute>
-        } />
-        <Route path="/deals/:id/review" element={
-          <ProtectedRoute roles={DEAL_REVIEWER_ROLES}>
-            <DealReviewScreen />
           </ProtectedRoute>
         } />
 
@@ -194,7 +201,7 @@ export function AppRoutes() {
         } />
         <Route path="/firm/deals/:id" element={
           <ProtectedRoute roles={['SALES_MANAGER', ...DEAL_REVIEWER_ROLES, 'ROOT']}>
-            <DealDetailPage />
+            <DealReviewScreen />
           </ProtectedRoute>
         } />
 

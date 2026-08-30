@@ -13,6 +13,7 @@ import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
 import { VoiceClip } from '../../components/VoiceClip.jsx';
 import { DocumentViewerDialog } from '../../components/DocumentViewerDialog.jsx';
+import { useToast } from '../../components/ToastProvider.jsx';
 import { DealDocumentList } from '../deal/review/DealDocumentList.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
 import { tokens } from '../../theme/theme.js';
@@ -35,6 +36,11 @@ export function NodeEditorPane({
   tree, selectedNodeId, useTree, onCleared, dealId,
   /** Which panel to show. Owned by NodeDrawer, which draws the tab strip. */
   tab = 'details',
+  /**
+   * Read-only viewers still see the whole owner — what has been recorded about them and what
+   * evidence is filed — they just cannot change any of it.
+   */
+  readOnly = false,
 }) {
   const [form, setForm] = useState(null);
   const [edgeForm, setEdgeForm] = useState({ percentage: '' });
@@ -42,7 +48,7 @@ export function NodeEditorPane({
   const [verificationVoice, setVerificationVoice] = useState(null); // Blob | null
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [verificationSaved, setVerificationSaved] = useState(false);
+  const { showToast } = useToast();
   // The document open in the viewer, or null. Held whole rather than by id: both lists
   // already have the row in hand, and re-finding it would mean each knowing about the other.
   const [viewingDoc, setViewingDoc] = useState(null);
@@ -93,6 +99,7 @@ export function NodeEditorPane({
             phoneNumber: selected.person.phoneNumber ?? '',
             occupation: selected.person.occupation ?? '',
             sourceOfFunds: selected.person.sourceOfFunds ?? '',
+            countryOfResidence: selected.person.countryOfResidence ?? null,
           }
           : null,
       });
@@ -102,7 +109,6 @@ export function NodeEditorPane({
       });
       setVerificationVoice(null);
       setError(null);
-      setVerificationSaved(false);
     } else {
       setForm(null);
     }
@@ -128,6 +134,7 @@ export function NodeEditorPane({
       // The deal is refetched too — useOwnershipTree invalidates it on every node write, since
       // the answers on this form feed its risk rating.
       await useTree.updateNode.mutateAsync({ nodeId: selected.id, payload: buildNodePayload(form) });
+      showToast({ severity: 'success', message: 'Deal updated' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save');
     }
@@ -135,7 +142,6 @@ export function NodeEditorPane({
 
   const saveVerification = async () => {
     setError(null);
-    setVerificationSaved(false);
     try {
       // 1) Status + text notes
       await useTree.updateNode.mutateAsync({
@@ -167,7 +173,7 @@ export function NodeEditorPane({
         if (dealId) qc.invalidateQueries({ queryKey: ['documents', dealId] });
       }
 
-      setVerificationSaved(true);
+      showToast({ severity: 'success', message: 'Deal updated' });
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to update verification');
     }
@@ -186,6 +192,7 @@ export function NodeEditorPane({
           percentage: edgeForm.percentage === '' ? null : Number(edgeForm.percentage),
         },
       });
+      showToast({ severity: 'success', message: 'Deal updated' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update edge');
     }
@@ -235,7 +242,15 @@ export function NodeEditorPane({
           clips whatever sits above its content edge — which is exactly where an outlined field
           draws its floating label. That was the chopped heading on each tab's first field. */}
       {tab === 'details' && (
-        <Stack spacing={3}>
+        // A disabled <fieldset> natively disables every control inside it. That reaches
+        // NodeFormFields' inputs without threading a `disabled` prop through each of them, and
+        // it cannot be got around by a control this file does not know about.
+        <Stack
+          spacing={3}
+          component="fieldset"
+          disabled={readOnly}
+          sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}
+        >
           <NodeFormFields value={form} onChange={setForm} includeTypeSelector={false} />
 
           {incomingEdge && (
@@ -257,18 +272,22 @@ export function NodeEditorPane({
             </>
           )}
 
-          <Divider />
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Button variant="contained" startIcon={<SaveIcon />} onClick={saveDetails}
-                    disabled={useTree.updateNode.isPending}>
-              {useTree.updateNode.isPending ? 'Saving…' : 'Save details'}
-            </Button>
-            <Box sx={{ flexGrow: 1 }} />
-            <Button size="small" color="error" startIcon={<DeleteOutlineIcon />}
-                    onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Removing…' : 'Remove from structure'}
-            </Button>
-          </Stack>
+          {!readOnly && (
+            <>
+              <Divider />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Button variant="contained" startIcon={<SaveIcon />} onClick={saveDetails}
+                        disabled={useTree.updateNode.isPending}>
+                  {useTree.updateNode.isPending ? 'Saving…' : 'Save details'}
+                </Button>
+                <Box sx={{ flexGrow: 1 }} />
+                <Button size="small" color="error" startIcon={<DeleteOutlineIcon />}
+                        onClick={handleDelete} disabled={deleting}>
+                  {deleting ? 'Removing…' : 'Remove from structure'}
+                </Button>
+              </Stack>
+            </>
+          )}
         </Stack>
       )}
 
@@ -288,6 +307,7 @@ export function NodeEditorPane({
             ownershipNodeId={selected.id}
             allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
             compact
+            canUpload={!readOnly}
             title={`Documents on ${selected.displayName}`}
             onViewDocument={(id) => {
               // The node's own rows open the same viewer as the deal list below. One viewer,
@@ -320,7 +340,12 @@ export function NodeEditorPane({
       />
 
       {tab === 'verification' && (
-        <Stack spacing={3}>
+        <Stack
+          spacing={3}
+          component="fieldset"
+          disabled={readOnly}
+          sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}
+        >
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Manual verification</Typography>
             <Typography variant="caption" sx={{ color: tokens.muted }}>
@@ -334,7 +359,7 @@ export function NodeEditorPane({
             <RadioGroup
               aria-labelledby="verification-status-label"
               value={verification.status}
-              onChange={(e) => { setVerification((v) => ({ ...v, status: e.target.value })); setVerificationSaved(false); }}
+              onChange={(e) => { setVerification((v) => ({ ...v, status: e.target.value })); }}
             >
               {VERIFICATION_OPTIONS.map((opt) => (
                 <FormControlLabel
@@ -357,35 +382,35 @@ export function NodeEditorPane({
           <TextField
             label="Verification notes"
             value={verification.notes ?? ''}
-            onChange={(e) => { setVerification((v) => ({ ...v, notes: e.target.value })); setVerificationSaved(false); }}
+            onChange={(e) => { setVerification((v) => ({ ...v, notes: e.target.value })); }}
             multiline
             minRows={4}
             placeholder="What did you check? Which document or call confirmed it? Anything that should be defensible later."
           />
 
-          <VoiceRecorderField
-            value={verificationVoice}
-            onChange={(blob) => { setVerificationVoice(blob); setVerificationSaved(false); }}
-            label="Voice rationale (optional)"
-            helper="Record a short voice note. Uploaded on Save verification — until then it stays local."
-          />
-
-          {verificationSaved && (
-            <Alert severity="success" onClose={() => setVerificationSaved(false)}>
-              Verification updated.
-            </Alert>
+          {/* Hidden rather than disabled: a recorder that cannot record reads as broken, and
+              the saved clips below are the part a read-only viewer actually wants. */}
+          {!readOnly && (
+            <VoiceRecorderField
+              value={verificationVoice}
+              onChange={(blob) => { setVerificationVoice(blob); }}
+              label="Voice rationale (optional)"
+              helper="Record a short voice note. Uploaded on Save verification — until then it stays local."
+            />
           )}
 
-          <Box>
-            <Button
-              variant="contained"
-              startIcon={<SaveIcon />}
-              onClick={saveVerification}
-              disabled={useTree.updateNode.isPending}
-            >
-              {useTree.updateNode.isPending ? 'Saving…' : 'Save verification'}
-            </Button>
-          </Box>
+          {!readOnly && (
+            <Box>
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={saveVerification}
+                disabled={useTree.updateNode.isPending}
+              >
+                {useTree.updateNode.isPending ? 'Saving…' : 'Save verification'}
+              </Button>
+            </Box>
+          )}
 
           {nodeVoiceNotes.length > 0 && (
             <>

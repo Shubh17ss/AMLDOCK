@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, startDealReview, verifyDeal } from '../api/deals.js';
+import {
+  closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, submitDealForReview, verifyDeal,
+} from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { canOverride, canWrite, isDealAuthor, isDealReviewer } from '../auth/roles.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
@@ -14,19 +17,17 @@ import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
 import { AttachToParentDialog } from '../features/ownership/AttachToParentDialog.jsx';
 import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
 import { NodeDrawer } from '../features/deal/review/NodeDrawer.jsx';
+import { DealDrawer } from '../features/deal/review/DealDrawer.jsx';
 import { ReviewTabPanel } from '../features/deal/review/ReviewTabPanel.jsx';
 import { ParkedPanel } from '../features/deal/review/ParkedPanel.jsx';
-import { DealNotesTimeline } from '../features/deal/DealNotesTimeline.jsx';
 import { DealStatusDialog } from '../features/deal/DealStatusDialog.jsx';
-import { DealAuditPanel } from '../features/deal/DealAuditPanel.jsx';
-import { DealCapturedInfo } from '../features/deal/DealCapturedInfo.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
-import { canStartReview, dealStatusLabel, transitionsFrom } from '../data/dealStatus.js';
+import { canEditContent, dealStatusLabel, isEditable, transitionsFrom } from '../data/dealStatus.js';
 
 /**
- * The six faces of a deal under review.
+ * The three faces of a deal under review.
  *
  * <p>Order is the reviewer's order: the structure is the work, so it opens first; the two parked
  * sections sit next to it because that is where they will belong; and the three reference
@@ -36,9 +37,6 @@ const TABS = [
   { value: 'structure', label: 'Structure' },
   { value: 'echecks', label: 'eChecks' },
   { value: 'risk', label: 'Risk' },
-  { value: 'details', label: 'Details' },
-  { value: 'notes', label: 'Notes' },
-  { value: 'audit', label: 'Audit trail' },
 ];
 
 const TAB_VALUES = TABS.map((t) => t.value);
@@ -48,7 +46,12 @@ export function DealReviewScreen() {
   const dealId = Number(id);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { user } = useAuth();
+
+  // This screen answers to two addresses. Sending a firm-level viewer back to the CDD register
+  // would drop them into a list they did not come from.
+  const listPath = pathname.startsWith('/firm/') ? '/firm/deals' : '/cdd/deals';
   const { showToast } = useToast();
   const money = useCurrency();
 
@@ -64,6 +67,9 @@ export function DealReviewScreen() {
   };
 
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+  // The deal's own record — Details, Notes and the audit trail — opened from the property at the
+  // head of the structure rather than from a tab beside it.
+  const [dealDrawerOpen, setDealDrawerOpen] = useState(false);
   const [addDialog, setAddDialog]           = useState(null);
   const [attachNodeId, setAttachNodeId]     = useState(null);
   const [statusOpen, setStatusOpen]         = useState(false);
@@ -81,7 +87,7 @@ export function DealReviewScreen() {
 
   /** What each move is called once it has happened, and how loudly to say it. */
   const SAID = {
-    start:    { message: 'Review started', severity: 'success' },
+    submit:   { message: 'Sent to compliance for review', severity: 'success' },
     verify:   { message: 'Deal verified', severity: 'success' },
     hold:     { message: 'Deal put on hold', severity: 'warning' },
     revert:   { message: 'Sent back to the broker', severity: 'warning' },
@@ -98,7 +104,7 @@ export function DealReviewScreen() {
   const statusMut = useMutation({
     mutationFn: ({ transition, reason }) => {
       switch (transition.action) {
-        case 'start':  return startDealReview(dealId);
+        case 'submit': return submitDealForReview(dealId);
         case 'hold':   return holdDeal(dealId, reason);
         case 'verify': return verifyDeal(dealId, reason);
         case 'revert': return revertDeal(dealId, reason);
@@ -117,7 +123,7 @@ export function DealReviewScreen() {
       // Verifying and sending back both end this reviewer's involvement for now; a hold does not,
       // so it stays on the deal.
       if (vars.transition.action === 'verify' || vars.transition.action === 'revert') {
-        navigate('/cdd/deals');
+        navigate(listPath);
       }
     },
     onError: (e) => setActionError(e.response?.data?.message || 'Could not update the status'),
@@ -132,22 +138,45 @@ export function DealReviewScreen() {
 
   const deal        = dealQ.data;
   const isFirstNode = !tree.tree || tree.tree.nodes.length === 0;
-  const startable   = canStartReview(deal.status);
-  const inReview    = deal.status === 'REVIEW';
-  const showOverride = user?.role === 'SENIOR_MANAGER';
+  const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === deal.createdByUserId;
+
+  // A NEW deal in the broker's hands is unfinished, and finishing it is what the form is for — so
+  // its author still gets the form rather than this screen. A reviewer does not: the work they do
+  // on a NEW deal is the ownership structure, which exists only here, and the deal's own record is
+  // editable in the drawer beside it. NewDealPage's guard is deliberately wider than this one, so
+  // a reviewer who asks for the form by name still gets it and the two routes cannot bounce.
+  if (isEditable(deal.status) && isOwnerAgent) {
+    return <Navigate to={`/deals/${deal.id}/edit`} replace />;
+  }
+
+  /**
+   * Whether this viewer may change anything on this deal.
+   *
+   * Until now the answer was "you reached this URL, so yes" — the route was reviewer-only and
+   * the screen carried no check of its own. Now that a deal has one address, everyone arrives
+   * here and the question has to be asked properly: the author or a firm reviewer, in a status
+   * that still allows content changes, and never the auditor, who reads every screen in the
+   * product and writes to none.
+   */
+  const mayEdit = (isOwnerAgent || isDealReviewer(user?.role))
+    && canEditContent(deal.status, user?.role)
+    && canWrite(user?.role);
+
+  const showOverride = canOverride(user?.role);
 
   const selectedNode = tree.tree?.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
-  // Whether the deal has anywhere to go. A closed deal has not, and there is no sense offering a
-  // button that opens onto nothing.
-  const canUpdateStatus = transitionsFrom(deal.status).length > 0 || showOverride;
+  // Whether the deal has anywhere to go, and whether this viewer is the one to take it there.
+  // The role test used to be the router's job.
+  const canUpdateStatus = isDealReviewer(user?.role)
+    && (transitionsFrom(deal.status).length > 0 || showOverride);
 
   return (
     <Stack spacing={2}>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <Stack spacing={1.5}>
         <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/cdd/deals')} size="small">
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(listPath)} size="small">
             Back to queue
           </Button>
           <Box sx={{ flexGrow: 1 }} />
@@ -177,10 +206,10 @@ export function DealReviewScreen() {
         <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>
       )}
 
-      {!inReview && !startable && (
+      {!mayEdit && (
         <Alert severity="info" sx={{ py: 0.5 }}>
-          This deal is <strong>{dealStatusLabel(deal.status)}</strong>. Ownership edits are best
-          made while it is in review.
+          This deal is <strong>{dealStatusLabel(deal.status)}</strong> and is read-only for you.
+          You can see everything on it; changing it is not yours to do from here.
         </Alert>
       )}
 
@@ -224,11 +253,16 @@ export function DealReviewScreen() {
             tree={tree.tree}
             deal={deal}
             selectedNodeId={selectedNodeId}
-            onSelectNode={setSelectedNodeId}
+            onSelectNode={(nodeId) => { setDealDrawerOpen(false); setSelectedNodeId(nodeId); }}
             onAddRoot={() => setAddDialog({ parentNodeId: null })}
             onAddChild={(parentNodeId) => setAddDialog({ parentNodeId })}
             onSetRoot={(nodeId) => tree.setRoot.mutate(nodeId)}
             onAttachDetached={setAttachNodeId}
+            readOnly={!mayEdit}
+            // Two right-hand drawers open at once would stack two backdrops on each other, so
+            // opening either closes the other.
+            onOpenDeal={() => { setSelectedNodeId(null); setDealDrawerOpen(true); }}
+            dealSelected={dealDrawerOpen}
           />
         )}
       </ReviewTabPanel>
@@ -248,17 +282,17 @@ export function DealReviewScreen() {
         </ParkedPanel>
       </ReviewTabPanel>
 
-      <ReviewTabPanel value="details" current={tab}>
-        <DealCapturedInfo deal={deal} embedded />
-      </ReviewTabPanel>
-
-      <ReviewTabPanel value="notes" current={tab}>
-        <DealNotesTimeline dealId={dealId} status={deal.status} />
-      </ReviewTabPanel>
-
-      <ReviewTabPanel value="audit" current={tab}>
-        <DealAuditPanel dealId={dealId} embedded />
-      </ReviewTabPanel>
+      {/* ── The deal itself ─────────────────────────────────────────────── */}
+      <DealDrawer
+        open={dealDrawerOpen}
+        deal={deal}
+        dealId={dealId}
+        onClose={() => setDealDrawerOpen(false)}
+        readOnly={!mayEdit}
+        // Commenting is not editing — a reviewer may still add a note to a deal they can no
+        // longer change. Only the auditor, who writes nothing anywhere, is kept out.
+        canComment={canWrite(user?.role)}
+      />
 
       {/* ── The selected owner ──────────────────────────────────────────── */}
       <NodeDrawer
@@ -268,6 +302,7 @@ export function DealReviewScreen() {
         useTree={tree}
         dealId={dealId}
         onClose={() => setSelectedNodeId(null)}
+        readOnly={!mayEdit}
       />
 
       {/* ── Dialogs ─────────────────────────────────────────────────────── */}

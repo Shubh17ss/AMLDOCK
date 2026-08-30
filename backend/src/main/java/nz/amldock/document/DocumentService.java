@@ -271,7 +271,7 @@ public class DocumentService {
         }
         // Still status-checked for everyone firm-scoped: assertEditable is the codebase's
         // answer to "may this actor write to this deal", and it now admits reviewers through
-        // HANDOVER, REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the
+        // REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the
         // firm check inside could never pass — that is the reason for the exemption, not rank.
         if (actor.role() != Role.ROOT && d.getDealId() != null) {
             Deal deal = deals.findById(d.getDealId())

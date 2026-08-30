@@ -39,7 +39,11 @@ export function ModuleCard({
       ariaLabel={label}
       sx={{
         p: { xs: 2.5, md: 3 },
-        minHeight: { xs: 180, md: 210 },
+        // Fixed, not a minimum. A minimum let a card with a two-line title grow, and since every
+        // card in a row stretches to the tallest, one long label made a whole section taller than
+        // the one above it. The title below reserves its two lines whether it needs them or not,
+        // so this height fits the longest label in the registry with nothing to spare.
+        height: { xs: 180, md: 210 },
         // Status chip pops with the card lift. Motion-safe wrapper (rather than a
         // reduce guard) so this key can't collide with BentoTile's own media block.
         '@media (prefers-reduced-motion: no-preference)': {
@@ -49,7 +53,17 @@ export function ModuleCard({
     >
       {/* Title + status */}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: '0.98rem', color: tokens.ink, lineHeight: 1.25, minWidth: 0 }}>
+        <Typography sx={{
+          fontWeight: 700, fontSize: '0.98rem', color: tokens.ink, lineHeight: 1.25, minWidth: 0,
+          // Two lines, always: reserved when the label is short so the metrics below start at the
+          // same y on every card, and clamped when it is long so a third line cannot push the
+          // card taller than its neighbours. 2.5em is the two lines at this line-height.
+          minHeight: '2.5em',
+          display: '-webkit-box',
+          WebkitBoxOrient: 'vertical',
+          WebkitLineClamp: 2,
+          overflow: 'hidden',
+        }}>
           {label}
         </Typography>
         {/* Tinted wash chip lifts the status icon off the glass for contrast. */}

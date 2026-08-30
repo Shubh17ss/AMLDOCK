@@ -30,10 +30,12 @@ export function BranchDashboard() {
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load your branch. Refresh to try again.</Alert>;
   if (dealsQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
   const users = usersQ.data ?? [];
-  const handover = deals.filter((d) => d.status === 'HANDOVER');
   const underReview = deals.filter((d) => d.status === 'REVIEW');
+  const onHold = deals.filter((d) => d.status === 'ON_HOLD');
   const verifiedRecent = deals.filter((d) => d.status === 'VERIFIED' && withinDays(d.updatedAt, 30));
-  const inMotion = handover.length + underReview.length;
+  // Everything sitting with compliance, decided or not - a parked deal is still in motion,
+  // because somebody still has to move it.
+  const inMotion = underReview.length + onHold.length;
   const activeUsers = users.filter((u) => u.active);
   const recent = [...deals].sort(byUpdated).slice(0, 5);
 
@@ -48,7 +50,7 @@ export function BranchDashboard() {
         eyebrow="BRANCH · LIVE"
         value={inMotion}
         label={inMotion === 1 ? 'deal in motion' : 'deals in motion'}
-        caption={`${money.formatCompact(sum([...handover, ...underReview]))} moving through review`}
+        caption={`${money.formatCompact(sum([...underReview, ...onHold]))} moving through review`}
         action={
           <Box component={RouterLink} to="/firm/deals"
                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, bgcolor: '#fff', color: tokens.blue,
@@ -60,8 +62,8 @@ export function BranchDashboard() {
 
       <StatTile index={1} eyebrow="BRANCH DEALS" value={deals.length} label="All-time" to="/firm/deals" />
       <StatTile index={2} eyebrow="TEAM" dot={tokens.blue} value={activeUsers.length} label="Active users" to="/branch-users" />
-      <StatTile index={3} eyebrow="HANDOVER" cols={2} dot={dealStatusDot('HANDOVER')} value={handover.length}
-                label="Waiting for compliance to start" color={handover.length ? tokens.submitted : undefined} to="/firm/deals" />
+      <StatTile index={3} eyebrow="IN REVIEW" cols={2} dot={dealStatusDot('REVIEW')} value={underReview.length}
+                label="With compliance" color={underReview.length ? tokens.review : undefined} to="/firm/deals" />
 
       <ListTile
         index={4}

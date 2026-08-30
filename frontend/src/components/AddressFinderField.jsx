@@ -141,7 +141,7 @@ export function AddressFinderField({ value, onChange, country }) {
       )}
 
       {/* A typed-but-unpicked address would leave nothing saved, so say so rather than let the
-          broker discover it at handover. */}
+          broker discover it at submission. */}
       {!summary && (
         <Alert severity="info" sx={{ py: 0 }}>
           Choose an address from the suggestions — typing alone doesn’t save it.

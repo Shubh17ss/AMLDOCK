@@ -10,7 +10,9 @@ import {
  * Australian one. Every amount input and display goes through this so a firm never sees a
  * jurisdiction that isn't its own.
  *
- * With no entity selected (ROOT viewing "All entities") there is no single currency, so this
+ * A scope always names one entity now, but a selection saved before `country` was carried has
+ * only { id, name } until the provider repairs it, and the first render happens before any of
+ * that resolves. There is no single currency to use in that window, so this
  * falls back to NZD. Amounts shown there can span firms and should be read as indicative.
  *
  *   const money = useCurrency();

@@ -198,11 +198,12 @@ class OwnershipServiceTest {
 
         service.updateNode(DEAL_ID, 1L, patch(null, new PersonPatch(
                 "Anna Eriksson", "anna@example.com", "NZ", "21 555 0123", "Architect",
-                "Sale of a rental property, evidenced by the settlement statement")));
+                "Sale of a rental property, evidenced by the settlement statement", "SE")));
 
         assertThat(owner.getFullName()).isEqualTo("Anna Eriksson");
         assertThat(owner.getEmail()).isEqualTo("anna@example.com");
         assertThat(owner.getPhoneCountry()).isEqualTo("NZ");
+        assertThat(owner.getCountryOfResidence()).isEqualTo("SE");
         assertThat(owner.getOccupation()).isEqualTo("Architect");
         // display_name is NOT NULL and is what the tree renders, so it follows the name.
         assertThat(person.getDisplayName()).isEqualTo("Anna Eriksson");
@@ -219,7 +220,7 @@ class OwnershipServiceTest {
         when(owners.findById(500L)).thenReturn(Optional.of(owner));
 
         service.updateNode(DEAL_ID, 1L,
-                patch(null, new PersonPatch(null, "", null, null, null, null)));
+                patch(null, new PersonPatch(null, "", null, null, null, null, null)));
 
         assertThat(owner.getEmail()).isNull();          // "" is an instruction to clear
         assertThat(owner.getOccupation()).isEqualTo("Architect");  // null is "leave alone"
@@ -235,7 +236,7 @@ class OwnershipServiceTest {
         when(owners.findById(500L)).thenReturn(Optional.of(otherFirmsPerson));
 
         assertThatThrownBy(() -> service.updateNode(DEAL_ID, 1L,
-                patch(null, new PersonPatch(null, "leaked@example.com", null, null, null, null))))
+                patch(null, new PersonPatch(null, "leaked@example.com", null, null, null, null, null))))
                 .isInstanceOf(ForbiddenException.class);
 
         assertThat(otherFirmsPerson.getEmail()).isNull();

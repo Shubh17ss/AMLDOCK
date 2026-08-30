@@ -75,6 +75,12 @@ export function OwnershipTreeBuilder({
   onAddChild,
   onSetRoot,
   onAttachDetached,
+  // Hides every control that changes the chain, leaving the chain itself readable. Selecting a
+  // node still works — looking at an owner is not editing one.
+  readOnly = false,
+  /** Opens the deal itself, from the property at the head of the chain. */
+  onOpenDeal,
+  dealSelected = false,
 }) {
   const { nodesById, childrenByParent, parentIdByChild } = useMemo(() => indexTree(tree), [tree]);
   const root = tree?.rootNodeId ? nodesById.get(tree.rootNodeId) : null;
@@ -100,6 +106,7 @@ export function OwnershipTreeBuilder({
     onAddChild,
     onSetRoot,
     onAttachDetached,
+    readOnly,
     order,
   };
 
@@ -114,9 +121,11 @@ export function OwnershipTreeBuilder({
             Who stands behind this property, down to the people
           </Typography>
         </Box>
-        <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={onAddRoot}>
-          Add owner
-        </Button>
+        {!readOnly && (
+          <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={onAddRoot}>
+            Add owner
+          </Button>
+        )}
       </Stack>
 
       <Box
@@ -127,7 +136,7 @@ export function OwnershipTreeBuilder({
           overflow: 'hidden',
         }}
       >
-        {deal && <PropertyAnchor deal={deal} />}
+        {deal && <PropertyAnchor deal={deal} onOpen={onOpenDeal} selected={dealSelected} />}
 
         <Box sx={{ px: { xs: 1, sm: 2 }, py: 2 }}>
           {tree.nodes.length === 0 ? (
@@ -172,11 +181,17 @@ export function OwnershipTreeBuilder({
 /**
  * The property the deal is about, at the head of the chain.
  *
- * <p>Deliberately not a tree row: no type chip, no menu, not selectable. It is the deal's
- * property rather than an ownership node, and a reviewer reaching for "Make root" must never be
- * able to aim at it. It is here because a chain of owners with nothing at the top reads as a list.
+ * <p>Still not a tree row: no type chip, no menu, and none of the chain's own actions can aim at
+ * it — a reviewer reaching for "Make root" must never land here. It is the deal's property rather
+ * than an ownership node, and it sits at the top because a chain of owners with nothing above
+ * them reads as a list.
+ *
+ * <p>It does open the deal, though. Everything else in this tree opens a drawer when you click
+ * it, and the property is where a reader already looks for "what is this deal" — so it opens the
+ * deal drawer rather than an owner one. Opening is not editing, so `readOnly` does not gate it,
+ * exactly as it does not gate selecting a node.
  */
-function PropertyAnchor({ deal }) {
+function PropertyAnchor({ deal, onOpen, selected = false }) {
   const p = deal.property ?? {};
   const address = formatPropertyAddress(p) || 'Property address not recorded';
   const detail = [
@@ -189,12 +204,29 @@ function PropertyAnchor({ deal }) {
       direction="row"
       spacing={1.5}
       alignItems="center"
-      sx={{
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      aria-pressed={onOpen ? selected : undefined}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (!onOpen) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
+      }}
+      sx={motion.respectful({
         px: { xs: 1.5, sm: 2.5 },
         py: 1.75,
-        backgroundColor: tokens.tileRaised,
+        backgroundColor: selected ? tokens.blueWash : tokens.tileRaised,
         borderBottom: `1px solid ${tokens.hairline}`,
-      }}
+        cursor: onOpen ? 'pointer' : 'default',
+        // An inset bar rather than a border: this band is full-bleed with no border of its own,
+        // so anything outset would either be clipped by the parent's overflow or move the row.
+        boxShadow: selected ? `inset 3px 0 0 ${tokens.blue}` : 'none',
+        transition: `background-color ${motion.swift} ease, box-shadow ${motion.swift} ease`,
+        '&:hover': onOpen
+          ? { backgroundColor: selected ? tokens.blueWash : tokens.hover }
+          : {},
+        '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: -2 },
+      })}
     >
       <Box
         sx={{
@@ -223,7 +255,7 @@ function PropertyAnchor({ deal }) {
 function NodeBranch({
   node, parentEdge, depth, isRoot = false,
   nodesById, childrenByParent, selectedNodeId, onSelectNode, onAddChild, onSetRoot,
-  onAttachDetached, order,
+  onAttachDetached, readOnly, order,
 }) {
   const children = childrenByParent.get(node.id) ?? [];
   const [expanded, setExpanded] = useState(true);
@@ -366,7 +398,7 @@ function NodeBranch({
           />
 
           {/* An individual owns nothing, so there is no child to add. */}
-          {!isLeafOnlyType(node.nodeType) && (
+          {!readOnly && !isLeafOnlyType(node.nodeType) && (
             <Tooltip title="Add owned entity or person">
               <IconButton
                 className="rowAction"
@@ -380,19 +412,23 @@ function NodeBranch({
               </IconButton>
             </Tooltip>
           )}
-          <Tooltip title="More">
-            <IconButton
-              className="rowAction"
-              size="small"
-              aria-label={`More actions for ${node.displayName}`}
-              onClick={(e) => { e.stopPropagation(); setMenuAnchor(e.currentTarget); }}
-              sx={motion.respectful({
-                opacity: 0, transition: `opacity ${motion.swift} ease`, flexShrink: 0,
-              })}
-            >
-              <MoreVertIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {/* Every item in this menu rewrites the chain, so the trigger goes when they do —
+              an empty menu is worse than no menu. */}
+          {!readOnly && (
+            <Tooltip title="More">
+              <IconButton
+                className="rowAction"
+                size="small"
+                aria-label={`More actions for ${node.displayName}`}
+                onClick={(e) => { e.stopPropagation(); setMenuAnchor(e.currentTarget); }}
+                sx={motion.respectful({
+                  opacity: 0, transition: `opacity ${motion.swift} ease`, flexShrink: 0,
+                })}
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
 
           <Menu open={Boolean(menuAnchor)} anchorEl={menuAnchor} onClose={() => setMenuAnchor(null)}>
             {isDetached && onAttachDetached && (
@@ -429,6 +465,7 @@ function NodeBranch({
               onAddChild={onAddChild}
               onSetRoot={onSetRoot}
               onAttachDetached={onAttachDetached}
+              readOnly={readOnly}
               order={order}
             />
           );

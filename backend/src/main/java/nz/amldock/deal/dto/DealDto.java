@@ -40,6 +40,7 @@ public record DealDto(
         Boolean onSoldQuickly,
         String foreignExposureCountry,
         Boolean redFlagPresent,
+        String redFlag,
         BigDecimal valuationMin,
         BigDecimal valuationMax,
         RiskRating riskRating,
@@ -59,7 +60,7 @@ public record DealDto(
                 d.getDecidedByUserId(), d.getDecidedAt(),
                 d.getCreatedAt(), d.getUpdatedAt(),
                 d.getTransactionPurpose(), d.getTrustInvolved(), d.getOnSoldQuickly(),
-                d.getForeignExposureCountry(), d.getRedFlagPresent(),
+                d.getForeignExposureCountry(), d.getRedFlagPresent(), d.getRedFlag(),
                 d.getValuationMin(), d.getValuationMax(),
                 d.getRiskRating(), d.getRiskRatingSource(),
                 d.getClientRemote());

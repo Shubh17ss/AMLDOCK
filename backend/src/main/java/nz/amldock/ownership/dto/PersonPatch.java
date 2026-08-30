@@ -18,5 +18,6 @@ public record PersonPatch(
         @Size(max = 2) String phoneCountry,
         @Size(max = 32) String phoneNumber,
         @Size(max = 255) String occupation,
-        String sourceOfFunds
+        String sourceOfFunds,
+        @Size(max = 2) String countryOfResidence
 ) {}

@@ -3,6 +3,9 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
 import { RiskRatingChip } from './RiskRatingChip.jsx';
+import { isEditable } from '../data/dealStatus.js';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { isDealAuthor } from '../auth/roles.js';
 import { fonts } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -13,6 +16,16 @@ const mono = { fontFamily: fonts.mono, fontSize: '0.8rem' };
 export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No deals yet.' }) {
   const navigate = useNavigate();
   const money = useCurrency();
+  const { user } = useAuth();
+
+  // Only the broker who owns an unfinished deal wants the form: finishing it is the one thing to
+  // do with their own half-written deal, and it opens at the first unanswered section. Everyone
+  // else — reviewers included — wants the deal page, where the ownership structure is.
+  //
+  // One predicate, read by both the link and the tooltip below, so the two cannot drift apart.
+  const opensForm = (d) => isEditable(d.status)
+    && isDealAuthor(user?.role) && user?.userId === d.createdByUserId;
+  const openPathFor = (d) => (opensForm(d) ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
 
   if (deals.length === 0) {
     return (
@@ -43,7 +56,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
         </TableHead>
         <TableBody>
           {deals.map((d) => (
-            <TableRow key={d.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/deals/${d.id}`)}>
+            <TableRow key={d.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(openPathFor(d))}>
               <TableCell sx={mono}>{d.reference ?? `#${d.id}`}</TableCell>
               <TableCell><DealStatusChip status={d.status} /></TableCell>
               <TableCell><RiskRatingChip rating={d.riskRating} /></TableCell>
@@ -57,8 +70,8 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
               <TableCell>{d.createdByEmail ?? '—'}</TableCell>
               <TableCell sx={{ color: tokens.muted }}>{timeAgo(d.updatedAt)}</TableCell>
               <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                <Tooltip title="Open">
-                  <IconButton size="small" onClick={() => navigate(`/deals/${d.id}`)}>
+                <Tooltip title={opensForm(d) ? 'Continue this deal' : 'Open'}>
+                  <IconButton size="small" onClick={() => navigate(openPathFor(d))}>
                     <OpenInNewIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>

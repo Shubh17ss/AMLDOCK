@@ -15,11 +15,10 @@ public enum AuditAction {
     USER_WELCOME_EMAIL_FAILED,
     ROLE_CHANGED,
     DEAL_CREATED,
-    // The lifecycle verbs (V29). One per DealAction, plus the free-comment case. The column has
+    // The lifecycle verbs. One per DealAction, plus the free-comment case. The column has
     // no DB CHECK, but it is mapped @Enumerated(STRING), so a value dropped from this enum
-    // throws when an old row is read — V29 remaps the four names this set replaced.
-    DEAL_HANDED_OVER,
-    DEAL_REVIEW_STARTED,
+    // throws when an old row is read — V29 and V38 remap the names this set replaced.
+    DEAL_SUBMITTED_FOR_REVIEW,
     DEAL_PUT_ON_HOLD,
     DEAL_VERIFIED,
     DEAL_CLOSED,

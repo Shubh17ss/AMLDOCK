@@ -12,8 +12,12 @@ import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
+import nz.amldock.audit.AuditAction;
+import nz.amldock.audit.AuditService;
 import nz.amldock.dealnote.DealNoteService;
 import nz.amldock.dealnote.dto.DealNoteDto;
+import nz.amldock.ownership.OwnershipNode;
+import nz.amldock.ownership.OwnershipService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
@@ -50,6 +54,8 @@ public class DealService {
     private final DealNoteService dealNotes;
     private final BeneficialOwnerService beneficialOwners;
     private final DealRiskService risk;
+    private final OwnershipService ownership;
+    private final AuditService audit;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -60,7 +66,9 @@ public class DealService {
                        DealLifecycleService lifecycle,
                        DealNoteService dealNotes,
                        BeneficialOwnerService beneficialOwners,
-                       DealRiskService risk) {
+                       DealRiskService risk,
+                       OwnershipService ownership,
+                       AuditService audit) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -71,12 +79,30 @@ public class DealService {
         this.dealNotes = dealNotes;
         this.beneficialOwners = beneficialOwners;
         this.risk = risk;
+        this.ownership = ownership;
+        this.audit = audit;
     }
 
     /* ---------- queries ---------- */
 
+    /**
+     * Every deal the caller may read, narrowed by their role.
+     *
+     * <p>The requested firm and branch are <em>overwritten</em> by whatever the actor's own role
+     * pins, not merely intersected with it — an agent asking for a branch still gets only their own
+     * deals. This is the set-level twin of {@link DealLifecycleService#assertCanRead}: use that one
+     * for a single deal, this one for a list, because asserting per row would throw on the first
+     * deal outside the caller's scope instead of leaving it out.
+     *
+     * <p>Shared with the individuals register, which reaches people through their deals and so
+     * inherits exactly this rule. A second transcription of it would be a second thing to keep
+     * right.
+     *
+     * <p>A switch with no default, so a new role fails to compile here rather than defaulting into
+     * whichever branch happens to be last.
+     */
     @Transactional(readOnly = true)
-    public List<DealListItemDto> list(DealStatus status, Long firmIdFilter, Long branchIdFilter) {
+    public List<Deal> readableDeals(DealStatus status, Long firmIdFilter, Long branchIdFilter) {
         UserPrincipal actor = currentPrincipal();
 
         Long effectiveCreator = null;
@@ -93,7 +119,12 @@ public class DealService {
             case FINANCE -> throw new ForbiddenException("Deals are outside the finance role");
         }
 
-        List<Deal> results = deals.search(status, effectiveCreator, effectiveFirm, effectiveBranch);
+        return deals.search(status, effectiveCreator, effectiveFirm, effectiveBranch);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DealListItemDto> list(DealStatus status, Long firmIdFilter, Long branchIdFilter) {
+        List<Deal> results = readableDeals(status, firmIdFilter, branchIdFilter);
         if (results.isEmpty()) return List.of();
 
         // Bulk-resolve lookups
@@ -146,23 +177,30 @@ public class DealService {
     @Transactional
     public Deal create(CreateDealRequest req) {
         UserPrincipal actor = currentPrincipal();
-        if (!DealLifecycleService.isDealAuthor(actor.role())) {
-            throw new BadRequestException("Only agents may create deals");
+        if (!DealLifecycleService.canCreateDeal(actor.role())) {
+            throw new BadRequestException("This role may not create deals");
         }
-        // Agents can only create deals for the branch they're assigned to, so the request
-        // needn't name it — the deal form omits it entirely. A value that disagrees is still
-        // rejected rather than silently ignored.
-        if (actor.firmBranchId() == null) {
-            throw new ForbiddenException("You are not assigned to a branch — ask an administrator");
-        }
+        // Branch-level staff create on the branch they're assigned to, so the request needn't
+        // name it — the deal form omits it for them entirely. Firm-level staff have no branch of
+        // their own, so for them the form asks and the value is required here.
         Long branchId = req.firmBranchId() == null ? actor.firmBranchId() : req.firmBranchId();
+        if (branchId == null) {
+            throw new BadRequestException("Choose the branch this deal belongs to");
+        }
         FirmBranch branch = branches.findById(branchId)
                 .orElseThrow(() -> new BadRequestException("Branch " + branchId + " not found"));
         if (!branch.isActive()) {
             throw new BadRequestException("Branch is inactive");
         }
-        if (!actor.firmBranchId().equals(branch.getId())) {
-            throw new ForbiddenException("You can only create deals on your assigned branch");
+        if (actor.firmBranchId() != null) {
+            // Assigned to a branch: that branch and no other, whatever the request asked for.
+            if (!actor.firmBranchId().equals(branch.getId())) {
+                throw new ForbiddenException("You can only create deals on your assigned branch");
+            }
+        } else if (actor.realEstateFirmId() == null
+                || !actor.realEstateFirmId().equals(branch.getRealEstateFirmId())) {
+            // Firm-level: any branch of their own reporting entity, and nobody else's.
+            throw new ForbiddenException("You can only create deals within your own firm");
         }
         validateValuationRange(req.valuationMin(), req.valuationMax());
 
@@ -203,6 +241,7 @@ public class DealService {
         d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         d.setClientRemote(req.clientRemote());
         d.setRedFlagPresent(req.redFlagPresent());
+        d.setRedFlag(redFlagFor(req.redFlagPresent(), req.redFlag()));
         d.setValuationMin(req.valuationMin());
         d.setValuationMax(req.valuationMax());
         d.setCreatedByUserId(actor.id());
@@ -212,6 +251,11 @@ public class DealService {
         // Generate human reference now that we have an id
         int year = OffsetDateTime.now(ZoneOffset.UTC).getYear();
         saved.setReference(String.format("DEAL-%d-%04d", year, saved.getId()));
+
+        // Rarely reached from the form, which creates the deal at the end of section 2 and only
+        // asks about trusts in section 3 — but POST /deals accepts the field, so an API client
+        // can answer it here. Leaving it out would make the rule depend on which door you came in.
+        if (Boolean.TRUE.equals(req.trustInvolved())) recordImpliedTrust(saved.getId());
         return saved;
     }
 
@@ -234,6 +278,12 @@ public class DealService {
         if (req.pocEmail() != null) d.setPocEmail(blankToNull(req.pocEmail()));
         if (req.notes() != null) d.setNotes(blankToNull(req.notes()));
         if (req.transactionPurpose() != null) d.setTransactionPurpose(blankToNull(req.transactionPurpose()));
+        // Against the stored value, and before the setter: the create form autosaves on every
+        // section move, so this PATCH re-sends trustInvolved: true many times per deal. Only the
+        // edge from "not asked" or "no" implies a node; a repeat of the same answer implies
+        // nothing. Three-state field — null means not asked — hence Boolean.TRUE.equals.
+        boolean trustJustAdded = Boolean.TRUE.equals(req.trustInvolved())
+                && !Boolean.TRUE.equals(d.getTrustInvolved());
         if (req.trustInvolved() != null) d.setTrustInvolved(req.trustInvolved());
         if (req.onSoldQuickly() != null) d.setOnSoldQuickly(req.onSoldQuickly());
         if (req.foreignExposureCountry() != null) {
@@ -241,13 +291,36 @@ public class DealService {
         }
         if (req.clientRemote() != null) d.setClientRemote(req.clientRemote());
         if (req.redFlagPresent() != null) d.setRedFlagPresent(req.redFlagPresent());
+        if (req.redFlag() != null) d.setRedFlag(blankToNull(req.redFlag()));
+        // "No red flag" and "this red flag" cannot both be true. Answering the boolean No clears
+        // whichever flag was named before it, so the pair can never contradict itself on the
+        // record — checked against the merged state, since either half may arrive alone.
+        if (Boolean.FALSE.equals(d.getRedFlagPresent())) d.setRedFlag(null);
         if (req.valuationMin() != null) d.setValuationMin(req.valuationMin());
         if (req.valuationMax() != null) d.setValuationMax(req.valuationMax());
         // Against the merged state, not the request — a PATCH carrying only one bound must
         // still be checked against the bound already stored.
         validateValuationRange(d.getValuationMin(), d.getValuationMax());
         applyRiskRating(d);
+        if (trustJustAdded) recordImpliedTrust(d.getId());
         return d;
+    }
+
+    /**
+     * Puts the trust the deal just declared onto its ownership structure.
+     *
+     * <p>Audited here rather than inside OwnershipService: that whole package records from its
+     * controller, and this node has no controller behind it. The deal package already audits a
+     * derived change from the service that derives it — see DealRiskService recording
+     * DEAL_RISK_CHANGED — and an implied node is the same kind of event. A node appearing in an
+     * AML file with no trail is worse than one a person put there.
+     */
+    private void recordImpliedTrust(Long dealId) {
+        OwnershipNode node = ownership.attachImpliedTrust(dealId);
+        if (node == null) return;   // the deal already had a trust on it
+        audit.record(AuditAction.NODE_CREATED, "OwnershipNode", node.getId(),
+                "Added TRUST node \"" + node.getDisplayName() + "\" to deal " + dealId
+                        + " because the deal answered yes to a trust in the beneficial ownership");
     }
 
     @Transactional
@@ -420,6 +493,16 @@ public class DealService {
         return (v == null || v.isBlank()) ? null : v;
     }
 
+    /**
+     * The named red flag, but only when the deal admits to having one.
+     *
+     * <p>Storing a flag against {@code redFlagPresent = false} would put a contradiction on the
+     * compliance record, and the answer that carries weight is the boolean — so it wins.
+     */
+    private static String redFlagFor(Boolean present, String redFlag) {
+        return Boolean.TRUE.equals(present) ? blankToNull(redFlag) : null;
+    }
+
     private static void validateValuationRange(BigDecimal min, BigDecimal max) {
         if (min == null || max == null) return;
         if (max.compareTo(min) < 0) {
@@ -443,7 +526,10 @@ public class DealService {
         return fallback;
     }
 
-    private static String formatAddress(Property p) {
+    /** Public rather than private: the individuals register, in its own package, shows the same
+     *  one-liner, and a second copy of "address, suburb, district, region" would be a second thing
+     *  to keep in step. */
+    public static String formatAddress(Property p) {
         StringBuilder sb = new StringBuilder();
         appendPart(sb, p.getAddressLine1());
         appendPart(sb, p.getSuburb());

@@ -38,15 +38,9 @@ export async function deleteDeal(id) {
 // One call per verb, mirroring the endpoints. The server owns the rules — see
 // data/dealStatus.js for the predicates that decide which of these to offer.
 
-/** NEW → HANDOVER. The broker has finished. */
-export async function handoverDeal(id) {
-  const { data } = await apiClient.post(`/deals/${id}/handover`);
-  return data;
-}
-
-/** HANDOVER → REVIEW. Assigns the deal to nobody. */
-export async function startDealReview(id) {
-  const { data } = await apiClient.post(`/deals/${id}/start-review`);
+/** NEW → REVIEW. The broker has finished; the deal passes straight to compliance. */
+export async function submitDealForReview(id) {
+  const { data } = await apiClient.post(`/deals/${id}/submit`);
   return data;
 }
 
@@ -68,7 +62,7 @@ export async function closeDeal(id) {
   return data;
 }
 
-/** HANDOVER | REVIEW | ON_HOLD → NEW, handing edit rights back to the broker. */
+/** REVIEW | ON_HOLD → NEW, handing edit rights back to the broker. */
 export async function revertDeal(id, note) {
   const { data } = await apiClient.post(`/deals/${id}/revert`, { note });
   return data;

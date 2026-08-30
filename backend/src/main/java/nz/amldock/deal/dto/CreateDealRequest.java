@@ -32,8 +32,12 @@ public record CreateDealRequest(
         String transactionPurpose,
         Boolean trustInvolved,
         Boolean onSoldQuickly,
-        /** "NONE" or an ISO alpha-2 code. Null passes — it means the question is unanswered. */
-        @Pattern(regexp = "NONE|[A-Z]{2}", message = "Must be 'NONE' or an ISO alpha-2 country code")
+        /**
+         * "NONE" or an ISO alpha-2 code. Null and "" both pass — the question is unanswered
+         * until section 3 asks it, and the form sends "" for every field it owns on every save,
+         * including the create at the end of section 2. DealService reads either as null.
+         */
+        @Pattern(regexp = "(NONE|[A-Z]{2})?", message = "Must be 'NONE' or an ISO alpha-2 country code")
         String foreignExposureCountry,
 
         /* ---------- section 3: client identity ---------- */
@@ -44,6 +48,7 @@ public record CreateDealRequest(
         /* ---------- section 4: risk and valuation ---------- */
 
         Boolean redFlagPresent,
+        String redFlag,
         @PositiveOrZero BigDecimal valuationMin,
         @PositiveOrZero BigDecimal valuationMax,
 

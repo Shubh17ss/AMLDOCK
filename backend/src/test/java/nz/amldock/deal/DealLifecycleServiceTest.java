@@ -56,13 +56,11 @@ class DealLifecycleServiceTest {
     void aDealWalksTheWholeLifecycle() {
         Deal d = dealIn(DealStatus.NEW);
 
-        assertThat(lifecycle.transition(d, broker, DealAction.HANDOVER, FIRM_A, null)).isEqualTo(DealStatus.NEW);
-        assertThat(d.getStatus()).isEqualTo(DealStatus.HANDOVER);
-
-        lifecycle.transition(d, amlco, DealAction.START_REVIEW, FIRM_A, null);
+        // Submitting hands the deal straight to compliance: there is no staging status in between.
+        assertThat(lifecycle.transition(d, broker, DealAction.SUBMIT, FIRM_A, null)).isEqualTo(DealStatus.NEW);
         assertThat(d.getStatus()).isEqualTo(DealStatus.REVIEW);
 
-        // A *second* compliance officer finishes what the first started — nothing is assigned.
+        // Any compliance officer of the firm may act - a deal is assigned to none of them.
         lifecycle.transition(d, amlco2, DealAction.VERIFY, FIRM_A, "Documents all sighted");
         assertThat(d.getStatus()).isEqualTo(DealStatus.VERIFIED);
         assertThat(d.getDecidedByUserId()).isEqualTo(amlco2.id());
@@ -90,7 +88,10 @@ class DealLifecycleServiceTest {
     void anOnHoldDealCannotGoStraightBackIntoReview() {
         Deal d = dealIn(DealStatus.ON_HOLD);
 
-        assertThatThrownBy(() -> lifecycle.transition(d, amlco, DealAction.START_REVIEW, FIRM_A, null))
+        assertThatThrownBy(() -> lifecycle.transition(d, broker, DealAction.SUBMIT, FIRM_A, null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("ON_HOLD");
+        assertThatThrownBy(() -> lifecycle.transition(d, amlco, DealAction.VERIFY, FIRM_A, "looks fine"))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("ON_HOLD");
     }
@@ -115,11 +116,10 @@ class DealLifecycleServiceTest {
     /** Mirrors DealLifecycleService.RULES. Kept here so a table change fails this test loudly. */
     private static Set<DealStatus> allowedFrom(DealAction action) {
         return switch (action) {
-            case HANDOVER     -> EnumSet.of(DealStatus.NEW);
-            case START_REVIEW -> EnumSet.of(DealStatus.HANDOVER);
+            case SUBMIT       -> EnumSet.of(DealStatus.NEW);
             case HOLD, VERIFY -> EnumSet.of(DealStatus.REVIEW);
             case CLOSE        -> EnumSet.of(DealStatus.VERIFIED);
-            case REVERT       -> EnumSet.of(DealStatus.HANDOVER, DealStatus.REVIEW, DealStatus.ON_HOLD);
+            case REVERT       -> EnumSet.of(DealStatus.REVIEW, DealStatus.ON_HOLD);
         };
     }
 
@@ -137,9 +137,7 @@ class DealLifecycleServiceTest {
 
     @Test
     void theRoutineVerbsDoNot() {
-        assertThatCode(() -> lifecycle.transition(dealIn(DealStatus.NEW), broker, DealAction.HANDOVER, FIRM_A, null))
-                .doesNotThrowAnyException();
-        assertThatCode(() -> lifecycle.transition(dealIn(DealStatus.HANDOVER), amlco, DealAction.START_REVIEW, FIRM_A, null))
+        assertThatCode(() -> lifecycle.transition(dealIn(DealStatus.NEW), broker, DealAction.SUBMIT, FIRM_A, null))
                 .doesNotThrowAnyException();
         assertThatCode(() -> lifecycle.transition(dealIn(DealStatus.VERIFIED), amlco, DealAction.CLOSE, FIRM_A, null))
                 .doesNotThrowAnyException();
@@ -147,17 +145,14 @@ class DealLifecycleServiceTest {
 
     /* ---------- who may revert, and from where ---------- */
 
+    /**
+     * Sending a deal back is now purely a compliance decision. With no staging status, a
+     * submitted deal is already being worked on - there is no window in which the broker could
+     * pull it back before anyone had looked, which is the only case that ever justified letting
+     * them.
+     */
     @Test
-    void aBrokerMayRecallTheirOwnDealFromHandover() {
-        Deal d = dealIn(DealStatus.HANDOVER);
-
-        lifecycle.transition(d, broker, DealAction.REVERT, FIRM_A, "Wrong property type, fixing");
-
-        assertThat(d.getStatus()).isEqualTo(DealStatus.NEW);
-    }
-
-    @Test
-    void aBrokerMayNotRevertOnceReviewHasStarted() {
+    void aBrokerMayNotRevertAtAll() {
         assertThatThrownBy(() -> lifecycle.transition(
                 dealIn(DealStatus.REVIEW), broker, DealAction.REVERT, FIRM_A, "changed my mind"))
                 .isInstanceOf(ForbiddenException.class);
@@ -168,9 +163,9 @@ class DealLifecycleServiceTest {
     }
 
     @Test
-    void aBrokerMayNotRecallSomebodyElsesDeal() {
+    void aBrokerMayNotSubmitSomebodyElsesDeal() {
         assertThatThrownBy(() -> lifecycle.transition(
-                dealIn(DealStatus.HANDOVER), otherBroker, DealAction.REVERT, FIRM_A, "not mine"))
+                dealIn(DealStatus.NEW), otherBroker, DealAction.SUBMIT, FIRM_A, null))
                 .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining("Not your deal");
     }
@@ -209,7 +204,10 @@ class DealLifecycleServiceTest {
     @Test
     void aBranchManagerMayNotDriveTheLifecycle() {
         assertThatThrownBy(() -> lifecycle.transition(
-                dealIn(DealStatus.HANDOVER), salesManager, DealAction.START_REVIEW, FIRM_A, null))
+                dealIn(DealStatus.NEW), salesManager, DealAction.SUBMIT, FIRM_A, null))
+                .isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.REVIEW), salesManager, DealAction.VERIFY, FIRM_A, "all good"))
                 .isInstanceOf(ForbiddenException.class);
     }
 
@@ -231,13 +229,13 @@ class DealLifecycleServiceTest {
     }
 
     /**
-     * A reviewer works the deal after handover, so their editing window is the states where
-     * it sits with compliance. The rule this replaces stopped at NEW, which let an officer
-     * upload a document to a handed-over deal and then refused to let them delete it.
+     * A reviewer works the deal after it is submitted, so their editing window is the states
+     * where it sits with compliance. The rule this replaces stopped at NEW, which let an officer
+     * upload a document to a submitted deal and then refused to let them delete it.
      */
     @Test
     void aReviewerMayEditThroughoutTheStatesTheDealSitsWithCompliance() {
-        for (DealStatus s : EnumSet.of(DealStatus.HANDOVER, DealStatus.REVIEW, DealStatus.ON_HOLD)) {
+        for (DealStatus s : EnumSet.of(DealStatus.REVIEW, DealStatus.ON_HOLD)) {
             assertThatCode(() -> lifecycle.assertEditable(dealIn(s), amlco, FIRM_A))
                     .as("compliance officer editing a %s deal", s)
                     .doesNotThrowAnyException();
@@ -265,8 +263,8 @@ class DealLifecycleServiceTest {
     }
 
     /**
-     * The author's window did not widen. Once handed over the deal is somebody else's to work
-     * on, and a broker editing underneath a review is the thing handover exists to stop.
+     * The author's window did not widen. Once submitted the deal is somebody else's to work on,
+     * and a broker editing underneath a live review is exactly what submitting rules out.
      */
     @Test
     void theBrokersEditingWindowIsStillNewOnly() {
@@ -278,10 +276,10 @@ class DealLifecycleServiceTest {
     }
 
     @Test
-    void aForeignReviewerIsStillRefusedOnAHandedOverDeal() {
+    void aForeignReviewerIsStillRefusedOnASubmittedDeal() {
         // The widened window is per status, not per firm. Scope is checked first and
         // separately, so relaxing one must not quietly relax the other.
-        assertThatThrownBy(() -> lifecycle.assertEditable(dealIn(DealStatus.HANDOVER), foreignAmlco, FIRM_A))
+        assertThatThrownBy(() -> lifecycle.assertEditable(dealIn(DealStatus.REVIEW), foreignAmlco, FIRM_A))
                 .isInstanceOf(ForbiddenException.class);
     }
 

@@ -38,6 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -60,10 +63,11 @@ class DealServiceRiskAndPatchTest {
     @Mock nz.amldock.ownership.OwnershipStructureRepository structures;
     @Mock nz.amldock.ownership.OwnershipNodeRepository nodes;
     @Mock nz.amldock.audit.AuditService audit;
+    @Mock nz.amldock.ownership.OwnershipService ownership;
 
     DealService service;
 
-    /** An agent in firm 1, branch 10 — the only shape of user that may create a deal. */
+    /** An agent in firm 1, branch 10. Who else may create a deal is DealCreateAuthorizationTest. */
     final UserPrincipal agent =
             new UserPrincipal(7L, "agent@firm.com", null, Role.AGENT, 1L, 10L, true);
 
@@ -73,7 +77,8 @@ class DealServiceRiskAndPatchTest {
         // mocked one would assert only that DealService calls something.
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(), new DealNoteService(dealNotes, documents, users),
-                beneficialOwners, new DealRiskService(deals, structures, nodes, audit));
+                beneficialOwners, new DealRiskService(deals, structures, nodes, audit),
+                ownership, audit);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 
@@ -232,6 +237,86 @@ class DealServiceRiskAndPatchTest {
                 .isInstanceOf(BadRequestException.class);
     }
 
+    /* ---------- the trust a deal declares ---------- */
+
+    /**
+     * Answering yes puts a trust on the ownership structure, because the answer asserts one exists
+     * and an empty tree behind a deal that says "yes, a trust" is a gap nobody can see.
+     */
+    @Test
+    void declaringATrustPutsOneOnTheOwnershipStructure() {
+        draftInRepo();
+
+        service.update(1L, update(u -> u.trustInvolved(true)));
+
+        verify(ownership).attachImpliedTrust(1L);
+    }
+
+    /**
+     * The regression this pairs with: the create form autosaves on every section move, so the same
+     * `trustInvolved: true` is re-sent many times per deal. Only the edge implies a node — a repeat
+     * of an answer already stored implies nothing, and firing on it would stack up placeholders.
+     */
+    @Test
+    void re_sendingTheSameAnswerAddsNothing() {
+        Deal d = draftInRepo();
+
+        service.update(1L, update(u -> u.trustInvolved(true)));   // null -> true, the real edge
+        service.update(1L, update(u -> u.trustInvolved(true)));   // autosave, and again
+        service.update(1L, update(u -> u.trustInvolved(true)));
+
+        assertThat(d.getTrustInvolved()).isTrue();
+        verify(ownership, times(1)).attachImpliedTrust(1L);
+    }
+
+    /** A patch that never mentions trusts is not an answer about them. */
+    @Test
+    void aPatchThatOmitsTheQuestionAddsNothing() {
+        draftInRepo();
+
+        service.update(1L, update(u -> u.notes("unrelated")));
+
+        verify(ownership, never()).attachImpliedTrust(any());
+    }
+
+    @Test
+    void answeringNoAddsNothing() {
+        draftInRepo();
+
+        service.update(1L, update(u -> u.trustInvolved(false)));
+
+        verify(ownership, never()).attachImpliedTrust(any());
+    }
+
+    /**
+     * Changing your mind is a fresh answer, so it implies a node again. The one path that brings a
+     * placeholder back after a reviewer has deleted it.
+     */
+    @Test
+    void answeringNoThenYesAddsOne() {
+        draftInRepo();
+
+        service.update(1L, update(u -> u.trustInvolved(false)));
+        service.update(1L, update(u -> u.trustInvolved(true)));
+
+        verify(ownership, times(1)).attachImpliedTrust(1L);
+    }
+
+    /** POST /deals carries the field too, so the rule cannot depend on which door you came in. */
+    @Test
+    void creatingWithATrustDeclaredPutsOneOnTheStructure() {
+        service.create(request(null, true));
+
+        verify(ownership).attachImpliedTrust(any());
+    }
+
+    @Test
+    void creatingWithoutOneAddsNothing() {
+        service.create(request(null));
+
+        verify(ownership, never()).attachImpliedTrust(any());
+    }
+
     /* ---------- creation ---------- */
 
     @Test
@@ -249,7 +334,7 @@ class DealServiceRiskAndPatchTest {
     void aClientWithNoTypeIsAccepted() {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null, null, null, null),
                 new ClientInput("Jane Marsh", null, null, null));
 
@@ -263,7 +348,7 @@ class DealServiceRiskAndPatchTest {
     void aClientTypeIsStillStoredWhenOneIsGiven() {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 new ClientInput("Marsh Family Trust", ClientType.ENTITY, null, null));
 
         service.create(req);
@@ -274,9 +359,13 @@ class DealServiceRiskAndPatchTest {
     /* ---------- helpers ---------- */
 
     private CreateDealRequest request(Boolean onSoldQuickly) {
+        return request(onSoldQuickly, false);
+    }
+
+    private CreateDealRequest request(Boolean onSoldQuickly, Boolean trustInvolved) {
         return new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                "Retiring overseas", false, onSoldQuickly, "NONE", false, false, null, null,
+                "Retiring overseas", trustInvolved, onSoldQuickly, "NONE", false, false, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
                         null, PropertyType.RESIDENTIAL, "RETIREMENT"),
                 new ClientInput("Jane Marsh", null, null, null));
@@ -303,7 +392,7 @@ class DealServiceRiskAndPatchTest {
     }
 
     /**
-     * UpdateDealRequest is a 15-field positional record, so tests build one through a small
+     * UpdateDealRequest is a 17-field positional record, so tests build one through a small
      * builder rather than counting nulls at every call site.
      */
     private UpdateDealRequest update(java.util.function.UnaryOperator<Patch> fn) {
@@ -311,7 +400,7 @@ class DealServiceRiskAndPatchTest {
     }
 
     static final class Patch {
-        String notes, transactionPurpose, foreignExposureCountry;
+        String notes, transactionPurpose, foreignExposureCountry, redFlag;
         Boolean trustInvolved, onSoldQuickly, redFlagPresent;
         BigDecimal valuationMin, valuationMax;
 
@@ -321,13 +410,14 @@ class DealServiceRiskAndPatchTest {
         Patch trustInvolved(Boolean v) { this.trustInvolved = v; return this; }
         Patch onSoldQuickly(Boolean v) { this.onSoldQuickly = v; return this; }
         Patch redFlagPresent(Boolean v) { this.redFlagPresent = v; return this; }
+        Patch redFlag(String v) { this.redFlag = v; return this; }
         Patch valuationMin(BigDecimal v) { this.valuationMin = v; return this; }
         Patch valuationMax(BigDecimal v) { this.valuationMax = v; return this; }
 
         UpdateDealRequest build() {
             return new UpdateDealRequest(null, null, null, null, null, null, null, notes,
                     transactionPurpose, trustInvolved, onSoldQuickly, foreignExposureCountry,
-                    null, redFlagPresent, valuationMin, valuationMax);
+                    null, redFlagPresent, redFlag, valuationMin, valuationMax);
         }
     }
 

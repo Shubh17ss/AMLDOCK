@@ -17,8 +17,11 @@ import { tokens, fonts } from '../../theme/theme.js';
  *
  * <p>This is the human record, and it sits alongside — not instead of — the audit log. The audit
  * log says what the system did; this says what people meant by it.
+ *
+ * @param embedded true when this owns a whole tab, which makes the card and the "Notes" heading
+ *                 around it redundant — the tab already said so.
  */
-export function DealNotesTimeline({ dealId, status, canComment = true }) {
+export function DealNotesTimeline({ dealId, status, canComment = true, embedded = false }) {
   const qc = useQueryClient();
   const [body, setBody] = useState('');
   const [error, setError] = useState(null);
@@ -42,11 +45,15 @@ export function DealNotesTimeline({ dealId, status, canComment = true }) {
 
   const entries = q.data ?? [];
 
-  return (
-    <Card>
-      <CardContent>
+  // One body, two frames. Built as an element rather than a wrapper component: a component
+  // declared here would be a new type on every render, and React would remount the whole subtree
+  // — taking the half-typed comment in the box below with it.
+  const content = (
+    <>
         <Stack direction="row" alignItems="baseline" justifyContent="space-between" sx={{ mb: 0.5 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Notes</Typography>
+          {!embedded && (
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Notes</Typography>
+          )}
           {status && <DealStatusChip status={status} />}
         </Stack>
         <Typography variant="caption" sx={{ color: tokens.muted }}>
@@ -98,9 +105,12 @@ export function DealNotesTimeline({ dealId, status, canComment = true }) {
             </Stack>
           </Box>
         )}
-      </CardContent>
-    </Card>
+    </>
   );
+
+  // Embedded drops the card and the heading; the tab strip above it has already said "Notes".
+  if (embedded) return <Box>{content}</Box>;
+  return <Card><CardContent>{content}</CardContent></Card>;
 }
 
 function TimelineEntry({ entry, last }) {

@@ -40,27 +40,26 @@ public class DealLifecycleService {
      * The transition table.
      *
      * <pre>
-     * NEW ──handover──▶ HANDOVER ──start review──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
-     *  ▲                    │                        │
-     *  │                    │                        └──hold──▶ ON_HOLD
-     *  └────────revert──────┴────────────────────────────────────────┘
+     * NEW ──submit──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
+     *  ▲                │
+     *  │                └──hold──▶ ON_HOLD
+     *  └──────revert────┴──────────────┘
      * </pre>
      *
+     * <p>There is no staging status between the broker and compliance: submitting hands the deal
+     * straight to review, because a queue nobody works from is not a state.
+     *
      * <p>ON_HOLD is the only negative outcome and its only exit is back to NEW — a parked deal
-     * always returns through the broker, so there is a fresh handover on the record before
+     * always returns through the broker, so there is a fresh submission on the record before
      * verification.
      */
     private static final Map<DealAction, Rule> RULES = Map.of(
-        DealAction.HANDOVER,     new Rule(EnumSet.of(DealStatus.NEW),      DealStatus.HANDOVER, Who.EDITOR,   false),
-        DealAction.START_REVIEW, new Rule(EnumSet.of(DealStatus.HANDOVER), DealStatus.REVIEW,   Who.REVIEWER, false),
-        DealAction.HOLD,         new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.ON_HOLD,  Who.REVIEWER, true),
-        DealAction.VERIFY,       new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.VERIFIED, Who.REVIEWER, true),
-        DealAction.CLOSE,        new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.CLOSED,   Who.REVIEWER, false),
-        // Revert's `who` is the strictest case; assertRevert relaxes it for a broker recalling
-        // their own deal from HANDOVER. See that method for why it can't be a plain Rule.
-        DealAction.REVERT,       new Rule(EnumSet.of(DealStatus.HANDOVER,
-                                                    DealStatus.REVIEW,
-                                                    DealStatus.ON_HOLD),  DealStatus.NEW,      Who.REVIEWER, true));
+        DealAction.SUBMIT, new Rule(EnumSet.of(DealStatus.NEW),      DealStatus.REVIEW,   Who.EDITOR,   false),
+        DealAction.HOLD,   new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.ON_HOLD,  Who.REVIEWER, true),
+        DealAction.VERIFY, new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.VERIFIED, Who.REVIEWER, true),
+        DealAction.CLOSE,  new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.CLOSED,   Who.REVIEWER, false),
+        DealAction.REVERT, new Rule(EnumSet.of(DealStatus.REVIEW,
+                                               DealStatus.ON_HOLD),  DealStatus.NEW,      Who.REVIEWER, true));
 
     /** The only status in which the broker who authored a deal may still change it. */
     public static final DealStatus EDITABLE_STATUS = DealStatus.NEW;
@@ -69,7 +68,7 @@ public class DealLifecycleService {
      * The statuses a firm-level reviewer may change a deal's content in.
      *
      * <p>Wider than the author's single status, because these are the states in which the
-     * deal is <em>sitting with compliance</em>: handed over, under review, or parked. A
+     * deal is <em>sitting with compliance</em>: under review, or parked. A
      * reviewer working through an ownership structure has to be able to correct and remove
      * what they find, and bouncing the deal back to the broker to fix a typo is not a
      * workflow, it is an obstacle.
@@ -79,7 +78,7 @@ public class DealLifecycleService {
      * or overriding first puts that decision on the record, which is the point.
      */
     public static final Set<DealStatus> REVIEWER_EDITABLE_STATUSES = EnumSet.of(
-            DealStatus.NEW, DealStatus.HANDOVER, DealStatus.REVIEW, DealStatus.ON_HOLD);
+            DealStatus.NEW, DealStatus.REVIEW, DealStatus.ON_HOLD);
 
     /** Whether this actor may change the content of a deal in this status. */
     public static boolean canEditContent(DealStatus status, Role role) {
@@ -103,11 +102,7 @@ public class DealLifecycleService {
             throw new BadRequestException("Unknown action " + action);
         }
 
-        if (action == DealAction.REVERT) {
-            assertRevert(deal, actor, dealFirmId);
-        } else {
-            assertActor(deal, actor, dealFirmId, rule.who());
-        }
+        assertActor(deal, actor, dealFirmId, rule.who());
 
         DealStatus previous = deal.getStatus();
         if (!rule.from().contains(previous)) {
@@ -124,25 +119,10 @@ public class DealLifecycleService {
     }
 
     /**
-     * Reverting is the one verb whose permission depends on where it starts.
-     *
-     * <p>A broker may pull their own deal back from HANDOVER — before anyone has looked at it,
-     * an early handover is their mistake to undo. Once review has started, sending a deal back
-     * is a compliance decision and needs a compliance name against it.
-     */
-    private void assertRevert(Deal deal, UserPrincipal actor, Long dealFirmId) {
-        if (deal.getStatus() == DealStatus.HANDOVER) {
-            assertActor(deal, actor, dealFirmId, Who.EDITOR);
-            return;
-        }
-        assertActor(deal, actor, dealFirmId, Who.REVIEWER);
-    }
-
-    /**
      * May this actor change the deal's <em>content</em>?
      *
      * <p>Two groups, and they differ twice over. The broker who created it owns the answers
-     * and may correct them, but only while the deal is still theirs — once handed over it is
+     * and may correct them, but only while the deal is still theirs — once submitted it is
      * someone else's to work on. An AMLCO or senior manager of the firm may correct them
      * throughout the states where the deal sits with compliance, because that is when they
      * are doing the work. Nobody else — including ROOT, which reads and deletes but does not
@@ -193,6 +173,26 @@ public class DealLifecycleService {
     /** Deals are authored by the branch-level deal creators: AGENT, AGENT_PA, ADMIN. */
     static boolean isDealAuthor(Role role) {
         return role == Role.AGENT || role == Role.AGENT_PA || role == Role.ADMIN;
+    }
+
+    /**
+     * Who may open a new deal.
+     *
+     * <p>Deliberately wider than {@link #isDealAuthor} and deliberately separate from it. Authorship
+     * carries rights that outlive creation — editing a NEW deal, submitting it, deleting one's own —
+     * and a sales manager or compliance officer starting a file on a broker's behalf is not meant to
+     * acquire those. Widening {@code isDealAuthor} instead would have granted all of them silently.
+     *
+     * <p>The branch-level roles create on their own branch, which {@code DealService.create} derives
+     * from them. The firm-level roles have no branch of their own, so they must name one and it must
+     * belong to their firm. ROOT is absent because it has no firm either, and AUDIT because it writes
+     * nothing anywhere.
+     */
+    static boolean canCreateDeal(Role role) {
+        return isDealAuthor(role)
+                || role == Role.SALES_MANAGER
+                || role == Role.AML_COMPLIANCE_OFFICER
+                || role == Role.SENIOR_MANAGER;
     }
 
     /** Firm-level reviewers. A deal is no longer tied to one of them — any will do. */
@@ -281,12 +281,11 @@ public class DealLifecycleService {
 
     private static String past(DealAction a) {
         return switch (a) {
-            case HANDOVER     -> "handed over";
-            case START_REVIEW -> "moved into review";
-            case HOLD         -> "put on hold";
-            case VERIFY       -> "verified";
-            case CLOSE        -> "closed";
-            case REVERT       -> "reverted";
+            case SUBMIT -> "submitted for review";
+            case HOLD   -> "put on hold";
+            case VERIFY -> "verified";
+            case CLOSE  -> "closed";
+            case REVERT -> "reverted";
         };
     }
 }

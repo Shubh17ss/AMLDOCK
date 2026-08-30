@@ -17,7 +17,7 @@ export const CURRENCY_BY_COUNTRY = {
 /**
  * Currency for a firm's country, defaulting to NZD.
  *
- * The default covers two real cases: ROOT viewing "All entities", where there is no single
+ * The default covers two real cases: a scope not yet resolved to a country, where there is no single
  * currency to use, and a scope selection persisted before V25 that has no country on it.
  */
 export function currencyFor(country) {

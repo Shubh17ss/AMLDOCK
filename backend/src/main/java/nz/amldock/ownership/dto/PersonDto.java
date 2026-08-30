@@ -24,6 +24,8 @@ public record PersonDto(
         String phoneNumber,
         String occupation,
         String sourceOfFunds,
+        /** ISO 3166-1 alpha-2. Null means not asked, which is not the same as living here. */
+        String countryOfResidence,
 
         LocalDate dateOfBirth,
         LocalDate idExpiryDate,
@@ -32,7 +34,7 @@ public record PersonDto(
     public static PersonDto from(BeneficialOwner o) {
         return new PersonDto(
                 o.getId(), o.getFullName(), o.getEmail(), o.getPhoneCountry(), o.getPhoneNumber(),
-                o.getOccupation(), o.getSourceOfFunds(),
+                o.getOccupation(), o.getSourceOfFunds(), o.getCountryOfResidence(),
                 o.getDateOfBirth(), o.getIdExpiryDate(), o.getReviewStatus());
     }
 }
