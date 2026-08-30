@@ -8,7 +8,7 @@ import { UserMenu } from './UserMenu.jsx';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { BottomNav } from './BottomNav.jsx';
 import { moduleTitleFor } from '../navigation/moduleRegistry.jsx';
-import { DashboardScopeProvider, useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import { DashboardScopeProvider, useDashboardScope, isScopeExemptPath } from '../dashboard/DashboardScope.jsx';
 import { ScopeRequiredDialog } from '../dashboard/ScopeRequiredDialog.jsx';
 import { ColorModeProvider } from '../theme/ColorMode.jsx';
 import { tokens, fonts } from '../theme/theme.js';
@@ -199,12 +199,18 @@ export function AppShell() {
  * Letting them mount behind the backdrop would send exactly the unscoped requests this change
  * exists to stop, and the user cannot see the result anyway.
  *
+ * <p>The exception is the routes where a scope that cannot be satisfied gets repaired — see
+ * isScopeExemptPath. Those pages read no scope, so there is nothing to hold back, and holding them
+ * back is what turned "choose an entity" into a trap for the one account with no entity to choose.
+ *
  * <p>Lives here rather than in AppShell itself because AppShell renders the provider and so sits
- * outside it.
+ * outside it. It calls useLocation() of its own rather than taking a prop: AppShell's own call is
+ * for the page title, and threading the pathname down would couple two unrelated readers.
  */
 function ScopedOutlet() {
   const { scopeComplete } = useDashboardScope();
-  if (!scopeComplete) {
+  const { pathname } = useLocation();
+  if (!scopeComplete && !isScopeExemptPath(pathname)) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
         <CircularProgress />

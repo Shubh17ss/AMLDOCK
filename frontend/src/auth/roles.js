@@ -101,6 +101,12 @@ export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MAN
 // see the same screens scoped by the API to their own reporting entity. AUDIT opens them too but
 // every control inside is gated by canWrite / canManageUsers, so it only reads.
 export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
+// Who can repair a dead-ended dashboard scope themselves, as opposed to merely reading the screen
+// where it is repaired. SETTINGS_ROLES opens Settings › Reporting Entities; only these three may
+// write there — FirmController gates POST /firms on ROOT and POST /firms/{id}/branches on all
+// three, and AuditReadOnlyFilter refuses AUDIT's writes everywhere regardless. Derived rather than
+// listed so it cannot drift from SETTINGS_ROLES or from the read-only set.
+export const SCOPE_SETUP_ROLES = SETTINGS_ROLES.filter((r) => canWrite(r));
 // Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior manager
 // sees their own entity's, scoped server-side by actor in AuditService.search.
 export const AUDIT_LOG_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
