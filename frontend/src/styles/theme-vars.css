@@ -27,7 +27,7 @@
   /* The broker's floating mobile nav. Its own tokens rather than --cl-ink/--cl-canvas, because the
      pill is always a DARK ground with a LIGHT marker on it — a relationship that must survive the
      theme flipping, which reusing ink/canvas would invert. */
-  --cl-navpill-bg:     #242C3C;
+  --cl-navpill-bg:     #000000;
   --cl-navpill-marker: #FFFFFF;
   --cl-navpill-idle:   rgba(255, 255, 255, 0.66);
   --cl-chip-neutral:  #EEF1F6;

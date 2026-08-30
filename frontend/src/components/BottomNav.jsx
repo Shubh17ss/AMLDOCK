@@ -16,12 +16,23 @@ const NEU_MUTED  = tokens.muted;
  */
 export const BOTTOM_NAV_CLEARANCE = 'calc(80px + env(safe-area-inset-bottom, 0px))';
 
-// Broker pill geometry, exported as parts so the clearance below is derived rather than asserted.
-export const NAV_PILL_HEIGHT = 62;  // the pill itself
-export const NAV_PILL_INSET  = 14;  // its float above the bottom edge, and its side margins
-export const NAV_CAPSULE_PAD = 5;   // pill padding; the marker insets by exactly this
+// ── Broker pill geometry ────────────────────────────────────────────────────
+// Exported as parts so the clearance below is derived rather than asserted, and because the tab
+// layout below has to add up to the track height exactly — see NAV_LABEL_HEIGHT.
+export const NAV_PILL_HEIGHT = 60;   // the pill itself
+export const NAV_PILL_INSET  = 14;   // its float above the bottom edge, and its side margins
+export const NAV_PILL_MAXW   = 300;  // narrow, so the round marker reads as a mark and not a slab
+export const NAV_CAPSULE_PAD = 5;    // pill padding; the track insets by exactly this
 export const BROKER_NAV_CLEARANCE =
   `calc(${NAV_PILL_HEIGHT + NAV_PILL_INSET + 16}px + env(safe-area-inset-bottom, 0px))`;
+
+// The marker is a circle behind the icon alone, so the icon well and the label have fixed heights
+// that fill the 50px track exactly (38 + 2 + 10). That is what lets the marker be positioned at
+// `top: 0` instead of being centred against a content block whose height it would have to guess.
+const NAV_TRACK_HEIGHT = NAV_PILL_HEIGHT - NAV_CAPSULE_PAD * 2;  // 50
+const NAV_ICON_WELL    = 38;
+const NAV_LABEL_GAP    = 2;
+const NAV_LABEL_HEIGHT = NAV_TRACK_HEIGHT - NAV_ICON_WELL - NAV_LABEL_GAP;  // 10
 
 // ── Broker nav ──────────────────────────────────────────────────────────────
 // Three tabs, because a broker on a phone does three things.
@@ -225,7 +236,7 @@ function BrokerNav({ pathname }) {
         bottom: `calc(${NAV_PILL_INSET}px + env(safe-area-inset-bottom, 0px))`,
         left: NAV_PILL_INSET,
         right: NAV_PILL_INSET,
-        maxWidth: 400,
+        maxWidth: NAV_PILL_MAXW,
         mx: 'auto',
         height: NAV_PILL_HEIGHT,
         boxSizing: 'border-box',
@@ -246,14 +257,21 @@ function BrokerNav({ pathname }) {
         the same box, so `width: 100%/3` and `translateX(n * 100%)` are exactly one tab.
       */}
       <Box sx={{ position: 'relative', height: '100%', display: 'flex' }}>
+        {/*
+          Two elements, on purpose. The outer one is a full third of the track and is the thing that
+          travels, so the slide stays `translateX(n * 100%)` with no measuring. The circle is its
+          centred child, free to be any diameter without that arithmetic changing — which is what
+          lets the marker be a mark behind the icon rather than a slab behind the whole tab.
+        */}
         <Box
           aria-hidden
           sx={motion.respectful({
             position: 'absolute',
-            top: 0, bottom: 0, left: 0,
+            top: 0, left: 0,
             width: 'calc(100% / 3)',
-            borderRadius: '999px',
-            backgroundColor: tokens.navPillMarker,
+            height: NAV_ICON_WELL,
+            display: 'grid',
+            placeItems: 'center',
             // Some routes belong to no tab — /profile is reached from the avatar, not from here.
             // The marker hides rather than sliding to a tab that would be lying about where you
             // are, and `max(index, 0)` keeps it from flying off the left edge on -1.
@@ -261,7 +279,14 @@ function BrokerNav({ pathname }) {
             opacity: index < 0 ? 0 : 1,
             transition: `transform ${motion.enter} ${motion.ease}, opacity ${motion.swift} linear`,
           })}
-        />
+        >
+          <Box sx={{
+            width: NAV_ICON_WELL,
+            height: NAV_ICON_WELL,
+            borderRadius: '50%',
+            backgroundColor: tokens.navPillMarker,
+          }} />
+        </Box>
 
         {BROKER_ITEMS.map((item, i) => {
           const active = i === index;
@@ -279,27 +304,37 @@ function BrokerNav({ pathname }) {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: '3px',
+                gap: `${NAV_LABEL_GAP}px`,
                 textDecoration: 'none',
-                borderRadius: '999px',
                 WebkitTapHighlightColor: 'transparent',
                 touchAction: 'manipulation',
-                color: active ? tokens.navPillBg : tokens.navPillIdle,
-                transition: `color ${motion.swift} ease`,
-                '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
+                '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2, borderRadius: '999px' },
               }}
             >
-              <item.Icon color="currentColor" size={21} filled={active} />
+              {/* Fixed-height well: it is what the circle is drawn against, and together with the
+                  label height it fills the track exactly, so the marker needs no vertical maths. */}
+              <Box sx={{
+                height: NAV_ICON_WELL,
+                display: 'grid',
+                placeItems: 'center',
+                // Black on the white circle when active; the label below keeps its own colour,
+                // since the marker sits behind the icon and not behind the whole tab.
+                color: active ? tokens.navPillBg : tokens.navPillIdle,
+                transition: `color ${motion.swift} ease`,
+              }}>
+                <item.Icon color="currentColor" size={21} filled={active} />
+              </Box>
               <Typography
                 component="span"
                 sx={{
                   fontFamily: fonts.body,
-                  fontSize: '0.6rem',
+                  fontSize: '0.58rem',
                   fontWeight: active ? 700 : 500,
                   letterSpacing: '0.02em',
-                  lineHeight: 1,
-                  color: 'inherit',
+                  height: NAV_LABEL_HEIGHT,
+                  lineHeight: `${NAV_LABEL_HEIGHT}px`,
+                  color: active ? tokens.navPillMarker : tokens.navPillIdle,
+                  transition: `color ${motion.swift} ease`,
                 }}
               >
                 {item.label}
