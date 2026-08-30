@@ -8,7 +8,7 @@ import {
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { canCreateDeal, isDealAuthor } from '../auth/roles.js';
+import { canCreateDeal } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
@@ -16,7 +16,7 @@ import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { SearchField, matchesSearch } from '../components/SearchField.jsx';
-import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, isEditable } from '../data/dealStatus.js';
+import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, opensDealForm } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
 
@@ -71,8 +71,7 @@ export function DealsPage() {
    * The author test carries the owner check the page guards have always made. Without it a broker
    * opening a colleague's NEW deal was linked to the form only to be bounced straight back.
    */
-  const opensForm = (d) => isEditable(d.status)
-    && isDealAuthor(user?.role) && user?.userId === d.createdByUserId;
+  const opensForm = (d) => opensDealForm(d, user);
   const openPathFor = (d) => (opensForm(d) ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
 
   return (

@@ -3,7 +3,8 @@ import { Box, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { roleLabel, canAccessAllModules, canManageReview } from '../auth/roles.js';
+import { roleLabel, canAccessAllModules, canManageReview, isBroker } from '../auth/roles.js';
+import { BrokerMobileHome } from './dashboard/BrokerMobileHome.jsx';
 import { visibleGroupsFor, isReviewableModule } from '../navigation/moduleRegistry.jsx';
 import { ModuleCard } from '../components/dashboard/ModuleCard.jsx';
 import { ScopeSelector } from '../components/dashboard/ScopeSelector.jsx';
@@ -52,8 +53,20 @@ export function DashboardPage() {
   const groups = visibleGroupsFor(user?.role);
   let cardIndex = 0;
 
+  // On a phone a broker gets their own home instead of the module carousel — see BrokerMobileHome.
+  // Swapped with `display` rather than by branching the render, which is how every other mobile
+  // alternative in this app is expressed. It costs nothing to leave the desktop tree mounted here:
+  // the only query on this page is already disabled for these roles.
+  const broker = isBroker(user?.role);
+
   return (
-    <Stack spacing={{ xs: 3, md: 4 }}>
+    <>
+    {broker && (
+      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+        <BrokerMobileHome />
+      </Box>
+    )}
+    <Stack spacing={{ xs: 3, md: 4 }} sx={broker ? { display: { xs: 'none', md: 'flex' } } : undefined}>
       <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
         {/* Greeting leads the load choreography; cards follow with their own stagger. */}
         <Box sx={{
@@ -252,5 +265,6 @@ export function DashboardPage() {
         review={reviewing ? reviewByModule[reviewing.id] ?? null : null}
       />
     </Stack>
+    </>
   );
 }

@@ -26,6 +26,12 @@ export const tokens = {
   glassBg:      'var(--cl-glass-bg)',
   panelBg:      'var(--cl-panel-bg)',
   glassBorder:  'var(--cl-glass-border)',
+
+  // The broker's floating mobile nav — a dark ground with a light marker, a relationship that has
+  // to hold in either theme, which ink/canvas would invert.
+  navPillBg:     'var(--cl-navpill-bg)',
+  navPillMarker: 'var(--cl-navpill-marker)',
+  navPillIdle:   'var(--cl-navpill-idle)',
   iconHover:    'var(--cl-icon-hover)',
   // Deal-status semantics (used only where a status is actually shown).
   draft:     'var(--cl-draft)',

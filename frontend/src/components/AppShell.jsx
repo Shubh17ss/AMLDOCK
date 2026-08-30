@@ -3,11 +3,13 @@ import {
 } from '@mui/material';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { isBroker } from '../auth/roles.js';
 import { SidebarNav } from './SidebarNav.jsx';
 import { UserMenu } from './UserMenu.jsx';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
-import { BottomNav } from './BottomNav.jsx';
-import { moduleTitleFor } from '../navigation/moduleRegistry.jsx';
+import { BottomNav, BOTTOM_NAV_CLEARANCE, BROKER_NAV_CLEARANCE } from './BottomNav.jsx';
+import { greeting, stamp } from '../pages/dashboard/greeting.js';
+import { moduleTitleFor, DASHBOARD_PATH } from '../navigation/moduleRegistry.jsx';
 import { DashboardScopeProvider, useDashboardScope, isScopeExemptPath } from '../dashboard/DashboardScope.jsx';
 import { ScopeRequiredDialog } from '../dashboard/ScopeRequiredDialog.jsx';
 import { ColorModeProvider } from '../theme/ColorMode.jsx';
@@ -40,6 +42,12 @@ export function AppShell() {
   const { user } = useAuth();
   const { pathname } = useLocation();
   const pageTitle = titleFor(pathname);
+
+  // A broker's phone home swaps the page-title bar for a greeting — but only there. Everywhere else
+  // a title is what the screen owes you, and on a deep page like /deals/123 a greeting would be
+  // noise where the heading used to be.
+  const broker = isBroker(user?.role);
+  const brokerHome = broker && pathname === DASHBOARD_PATH;
 
   return (
     <ColorModeProvider>
@@ -118,7 +126,14 @@ export function AppShell() {
 
       {/* Main column */}
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <AppBar position="sticky">
+        {brokerHome && <BrokerGreeting user={user} />}
+
+        <AppBar
+          position="sticky"
+          // On the broker's home the greeting above replaces this bar — but only on a phone; the
+          // desktop shell is unchanged, so the bar has to come back at md.
+          sx={brokerHome ? { display: { xs: 'none', md: 'flex' } } : undefined}
+        >
           <Toolbar sx={{gap: 2, minHeight: { xs: '56px !important', md: '64px !important'} }}>
             {/* Mobile: shield logo */}
             <Box
@@ -155,7 +170,9 @@ export function AppShell() {
             flexGrow: 1,
             position: 'relative',
             p: { xs: 2, md: 4 },
-            pb: { xs: 'calc(80px + env(safe-area-inset-bottom, 0px))', md: 4 },
+            // Room for whichever nav is mounted — the constants live with it so the two cannot
+            // drift. The broker's pill floats clear of the bottom edge and so needs more.
+            pb: { xs: broker ? BROKER_NAV_CLEARANCE : BOTTOM_NAV_CLEARANCE, md: 4 },
           }}
         >
           {/* Ambient canvas wash — gives the frosted tiles something to blur. Oversized
@@ -188,6 +205,55 @@ export function AppShell() {
     </Box>
     </DashboardScopeProvider>
     </ColorModeProvider>
+  );
+}
+
+/**
+ * The broker's home header: a mono ledger stamp over a display-face greeting, with the avatar menu
+ * on the right.
+ *
+ * <p>Deliberately not sticky. A greeting is worth the top of the screen once, on arrival; keeping it
+ * pinned would spend a fifth of a phone's height on it forever. It also sidesteps the theme's
+ * `MuiToolbar` `minHeight: 64px !important`, which any custom sticky bar here would have to fight.
+ *
+ * <p>The avatar is why the nav could drop its Profile tab — UserMenu already carries
+ * "Profile & password" and "Sign out".
+ */
+function BrokerGreeting({ user }) {
+  const firstName = (user?.fullName || '').trim().split(/\s+/)[0] || null;
+
+  return (
+    <Box
+      component="header"
+      sx={{
+        display: { xs: 'flex', md: 'none' },
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 2,
+        px: 2,
+        pt: 2.5,
+        pb: 0.5,
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{
+          fontFamily: fonts.mono, fontSize: '0.62rem', fontWeight: 500,
+          letterSpacing: '0.16em', textTransform: 'uppercase',
+          color: tokens.muted, mb: 0.6,
+        }}>
+          {stamp()}
+        </Typography>
+        <Typography sx={{
+          fontFamily: fonts.display, fontSize: '1.6rem', fontWeight: 700,
+          letterSpacing: '-0.03em', lineHeight: 1.1, color: tokens.ink,
+        }}>
+          {greeting()}{firstName ? `, ${firstName}` : ''}
+        </Typography>
+      </Box>
+      <Box sx={{ flexShrink: 0, pt: 0.5 }}>
+        <UserMenu compact />
+      </Box>
+    </Box>
   );
 }
 

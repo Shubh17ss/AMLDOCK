@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import HandshakeIcon from '@mui/icons-material/Handshake';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { listDeals } from '../api/deals.js';
 import { DealsTable } from '../components/DealsTable.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { StatusPills } from '../components/StatusPills.jsx';
-import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel } from '../data/dealStatus.js';
+import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, opensDealForm } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { tokens, shadows } from '../theme/theme.js';
@@ -18,7 +19,7 @@ import { tokens, shadows } from '../theme/theme.js';
 
 export function MyDealsPage() {
   const [status, setStatus] = useState('ALL');
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const params = status === 'ALL' ? {} : { status };
   const q = useQuery({ queryKey: ['deals', 'mine', status], queryFn: () => listDeals(params) });
   const deals = q.data ?? [];
@@ -60,7 +61,10 @@ export function MyDealsPage() {
           <MobileEmpty icon="🔍" title="No results" description={`No deals with status "${dealStatusLabel(status).toLowerCase()}".`} />
         )}
         {deals.map((d) => (
-          <DealCard key={d.id} deal={d} />
+          // Without canEdit this defaulted to the read-only page, so a broker tapping their
+          // own unfinished deal on a phone could not get back into the form the desktop
+          // table beside it opens. Same predicate as DealsTable.
+          <DealCard key={d.id} deal={d} canEdit={opensDealForm(d, user)} />
         ))}
       </Box>
 

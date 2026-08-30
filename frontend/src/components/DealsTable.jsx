@@ -3,9 +3,8 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useNavigate } from 'react-router-dom';
 import { DealStatusChip } from './DealStatusChip.jsx';
 import { RiskRatingChip } from './RiskRatingChip.jsx';
-import { isEditable } from '../data/dealStatus.js';
+import { opensDealForm } from '../data/dealStatus.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { isDealAuthor } from '../auth/roles.js';
 import { fonts } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -23,8 +22,7 @@ export function DealsTable({ deals = [], showFirm = false, emptyMessage = 'No de
   // else — reviewers included — wants the deal page, where the ownership structure is.
   //
   // One predicate, read by both the link and the tooltip below, so the two cannot drift apart.
-  const opensForm = (d) => isEditable(d.status)
-    && isDealAuthor(user?.role) && user?.userId === d.createdByUserId;
+  const opensForm = (d) => opensDealForm(d, user);
   const openPathFor = (d) => (opensForm(d) ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
 
   if (deals.length === 0) {

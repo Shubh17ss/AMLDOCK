@@ -174,6 +174,15 @@ export const canManageReview = (role) => REVIEW_MANAGER_ROLES.includes(role);
 export const canManageUsers = (role) => USER_MANAGER_ROLES.includes(role);
 export const canOverride = (role) => role === 'SENIOR_MANAGER';
 
+// The phone-first roles. An agent's whole mobile job is: start a deal, check my deals, do my
+// training — so on a phone they get a home screen built around those three and nothing else.
+// ADMIN shares their permissions and their nav profile but works at a desk, so it keeps the full
+// mobile nav. Deliberately narrower than DEAL_AUTHOR_ROLES: this is about the shape of someone's
+// day, not about what they may write. Kept separate from navProfileFor for the same reason — that
+// function also picks the CDD bento in CddRegisterPage, which this must not disturb.
+export const BROKER_ROLES = ['AGENT', 'AGENT_PA'];
+export const isBroker = (role) => BROKER_ROLES.includes(role);
+
 /**
  * Coarse navigation/home profile a role maps to:
  *   'agent'        → AGENT / AGENT_PA / ADMIN (author & view their own deals)
