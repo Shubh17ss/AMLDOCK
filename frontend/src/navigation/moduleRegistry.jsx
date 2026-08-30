@@ -19,7 +19,8 @@ import WorkspacePremiumRoundedIcon from '@mui/icons-material/WorkspacePremiumRou
 import MonitorHeartRoundedIcon from '@mui/icons-material/MonitorHeartRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import HistoryIcon from '@mui/icons-material/History';
-import { canAccessAllModules, FINANCE_MODULE_IDS, AUDIT_LOG_ROLES } from '../auth/roles.js';
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
+import { canAccessAllModules, FINANCE_MODULE_IDS, AUDIT_LOG_ROLES, NOTIFICATION_ADMIN_ROLES } from '../auth/roles.js';
 
 // ── Compliance module registry ──────────────────────────────────────────────
 // Single source of truth for the workspace surface: the sidebar, the dashboard
@@ -106,6 +107,9 @@ export const MODULE_GROUPS = [
       // `roles` narrows an item within an otherwise-visible section. The trail is the record of
       // who changed what, so it stays with the people accountable for it — not the auditor,
       // whose own reads would otherwise be the thing being audited.
+      { id: 'notifications', label: 'Notifications', to: '/settings/notifications',
+        icon: <NotificationsActiveRoundedIcon />, roles: NOTIFICATION_ADMIN_ROLES,
+        blurb: 'Choose who is emailed about deal activity, branch by branch.' },
       { id: 'audit-log', label: 'Audit Log', to: AUDIT_LOG_PATH, icon: <HistoryIcon />,
         roles: AUDIT_LOG_ROLES,
         blurb: 'Every recorded action across the workspace, with who did it and when.' },

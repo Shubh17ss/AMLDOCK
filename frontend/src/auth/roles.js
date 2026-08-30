@@ -104,6 +104,30 @@ export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER
 // Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior manager
 // sees their own entity's, scoped server-side by actor in AuditService.search.
 export const AUDIT_LOG_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+// Settings › Notifications. Who may open the firm-wide matrix and change someone else's toggles.
+// AUDIT reads it like every other section; the switches inside are gated by canWrite, and the
+// server refuses its writes at AuditReadOnlyFilter regardless.
+export const NOTIFICATION_ADMIN_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
+
+// ── Deal email notifications ────────────────────────────────────────────────
+// Mirrors nz.amldock.notification.NotificationEligibility — keep the two in step. Everyone else
+// manages their own toggles on the Profile page, so this is about who has any to manage.
+//
+// ROOT, AUDIT and FINANCE are excluded by judgement rather than by read scope: assertCanRead
+// forbids only FINANCE and hands ROOT and AUDIT everything. ROOT belongs to no firm, and AUDIT
+// reads the record rather than being alerted by it.
+export const NOTIFIABLE_ROLES = [
+  'AGENT', 'AGENT_PA', 'ADMIN', 'SALES_MANAGER', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER',
+];
+export const canReceiveDealNotifications = (role) => NOTIFIABLE_ROLES.includes(role);
+/** Firm-level staff have no branch of their own, so they choose branch by branch. */
+export const choosesNotificationsPerBranch = (role) => isFirmLevel(role);
+
+// Labels for nz.amldock.notification.DealNotificationEvent, in the order the columns render.
+export const DEAL_NOTIFICATION_EVENTS = [
+  { id: 'DEAL_CREATED', label: 'Deal created' },
+  { id: 'DEAL_STATUS_CHANGED', label: 'Status changed' },
+];
 
 // Roles with the full compliance workspace. Everyone else is confined to the CDD section:
 // only CDD modules are visible in the sidebar / dashboard hub and only those routes resolve.

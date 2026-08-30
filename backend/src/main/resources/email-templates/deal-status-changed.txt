@@ -1,0 +1,18 @@
+Hi {{recipientName_plain}},
+
+{{actorName_plain}} moved deal {{reference_plain}} from {{fromStatus_plain}} to {{toStatus_plain}}.
+
+Reference:  {{reference_plain}}
+Now:        {{toStatus_plain}}
+Previously: {{fromStatus_plain}}
+Client:     {{clientName_plain}}
+Property:   {{propertyAddress_plain}}
+Branch:     {{branchName_plain}}
+Entity:     {{firmName_plain}}
+
+Open the deal: {{dealUrl}}
+
+You are receiving this because deal notifications are switched on for this branch.
+Change that under Profile > Deal email notifications.
+
+-- AML_DOCK

@@ -11,6 +11,7 @@ import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
   DEAL_AUTHOR_ROLES, DEAL_CREATOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
+  NOTIFICATION_ADMIN_ROLES,
   FINANCE_SECTION_ROLES, AUDIT_LOG_ROLES,
   TRAINING_ASSIGNABLE_ROLES,
 } from '../auth/roles.js';
@@ -31,6 +32,7 @@ import { SuspiciousActivityRegisterPage } from '../pages/monitoring/SuspiciousAc
 import { StaffTrainingPage } from '../pages/training/StaffTrainingPage.jsx';
 import { MyTrainingPage } from '../pages/training/MyTrainingPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
+import { NotificationsAdminPage } from '../pages/admin/NotificationsAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
 import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
 import { MyDealsPage } from '../pages/MyDealsPage.jsx';
@@ -139,6 +141,14 @@ export function AppRoutes() {
         <Route path="/settings/users" element={
           <ProtectedRoute roles={SETTINGS_ROLES}>
             <UsersAdminPage />
+          </ProtectedRoute>
+        } />
+
+        {/* Settings › Notifications — who is emailed about deal activity, branch by branch. Every
+            user manages their own on /profile; this is the firm-wide override. */}
+        <Route path="/settings/notifications" element={
+          <ProtectedRoute roles={NOTIFICATION_ADMIN_ROLES}>
+            <NotificationsAdminPage />
           </ProtectedRoute>
         } />
 
