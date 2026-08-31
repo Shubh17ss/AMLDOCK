@@ -15,6 +15,7 @@ import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
 import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
 import { AttachToParentDialog } from '../features/ownership/AttachToParentDialog.jsx';
+import { DeleteNodeDialog } from '../features/ownership/DeleteNodeDialog.jsx';
 import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
 import { NodeDrawer } from '../features/deal/review/NodeDrawer.jsx';
 import { DealDrawer } from '../features/deal/review/DealDrawer.jsx';
@@ -72,6 +73,7 @@ export function DealReviewScreen() {
   const [dealDrawerOpen, setDealDrawerOpen] = useState(false);
   const [addDialog, setAddDialog]           = useState(null);
   const [attachNodeId, setAttachNodeId]     = useState(null);
+  const [deleteNodeId, setDeleteNodeId]     = useState(null);
   const [statusOpen, setStatusOpen]         = useState(false);
   const [actionError, setActionError]       = useState(null);
 
@@ -257,6 +259,7 @@ export function DealReviewScreen() {
             onAddChild={(parentNodeId) => setAddDialog({ parentNodeId })}
             onSetRoot={(nodeId) => tree.setRoot.mutate(nodeId)}
             onAttachDetached={setAttachNodeId}
+            onDeleteNode={mayEdit ? setDeleteNodeId : undefined}
             readOnly={!mayEdit}
             // Two right-hand drawers open at once would stack two backdrops on each other, so
             // opening either closes the other.
@@ -301,6 +304,7 @@ export function DealReviewScreen() {
         useTree={tree}
         dealId={dealId}
         onClose={() => setSelectedNodeId(null)}
+        onRequestDelete={mayEdit ? setDeleteNodeId : undefined}
         readOnly={!mayEdit}
       />
 
@@ -333,6 +337,21 @@ export function DealReviewScreen() {
         tree={tree.tree}
         useTree={tree}
         onClose={() => setAttachNodeId(null)}
+      />
+
+      {/* One dialog for both entry points — the row's kebab and the drawer's Remove button — so
+          "delete this node" cannot come to mean two different things. */}
+      <DeleteNodeDialog
+        open={deleteNodeId != null}
+        tree={tree.tree}
+        nodeId={deleteNodeId}
+        useTree={tree}
+        onClose={() => setDeleteNodeId(null)}
+        onDeleted={() => {
+          // The drawer may be showing a node that no longer exists.
+          if (selectedNodeId != null) setSelectedNodeId(null);
+          setDeleteNodeId(null);
+        }}
       />
     </Stack>
   );

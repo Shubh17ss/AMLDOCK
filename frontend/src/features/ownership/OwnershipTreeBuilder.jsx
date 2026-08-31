@@ -5,6 +5,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import HomeWorkOutlinedIcon from '@mui/icons-material/HomeWorkOutlined';
@@ -75,6 +76,7 @@ export function OwnershipTreeBuilder({
   onAddChild,
   onSetRoot,
   onAttachDetached,
+  onDeleteNode,
   // Hides every control that changes the chain, leaving the chain itself readable. Selecting a
   // node still works — looking at an owner is not editing one.
   readOnly = false,
@@ -106,6 +108,7 @@ export function OwnershipTreeBuilder({
     onAddChild,
     onSetRoot,
     onAttachDetached,
+    onDeleteNode,
     readOnly,
     order,
   };
@@ -255,7 +258,7 @@ function PropertyAnchor({ deal, onOpen, selected = false }) {
 function NodeBranch({
   node, parentEdge, depth, isRoot = false,
   nodesById, childrenByParent, selectedNodeId, onSelectNode, onAddChild, onSetRoot,
-  onAttachDetached, readOnly, order,
+  onAttachDetached, onDeleteNode, readOnly, order,
 }) {
   const children = childrenByParent.get(node.id) ?? [];
   const [expanded, setExpanded] = useState(true);
@@ -446,6 +449,17 @@ function NodeBranch({
                 <StarBorderIcon fontSize="small" sx={{ mr: 1 }} /> Clear top of the chain
               </MenuItem>
             )}
+            {/* Last, and set apart by colour: the only item here that destroys anything. Offered on
+                the root too — clearing the structure to start again is a real thing to want, and
+                the dialog names the count before anyone commits. */}
+            {onDeleteNode && (
+              <MenuItem
+                sx={{ color: 'error.main' }}
+                onClick={() => { onDeleteNode(node.id); setMenuAnchor(null); }}
+              >
+                <DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} /> Delete
+              </MenuItem>
+            )}
           </Menu>
         </Stack>
 
@@ -465,6 +479,7 @@ function NodeBranch({
               onAddChild={onAddChild}
               onSetRoot={onSetRoot}
               onAttachDetached={onAttachDetached}
+              onDeleteNode={onDeleteNode}
               readOnly={readOnly}
               order={order}
             />

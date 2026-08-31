@@ -30,6 +30,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,6 +70,9 @@ class OwnershipServiceTest {
     @Mock BeneficialOwnerRepository owners;
     @Mock DealBeneficialOwnerRepository ownerLinks;
     @Mock nz.amldock.deal.DealRiskService risk;
+    @Mock nz.amldock.document.DocumentRepository documents;
+    @Mock nz.amldock.document.storage.FileStorageService storage;
+    @Mock nz.amldock.audit.AuditService audit;
 
     OwnershipService service;
     Deal deal;
@@ -77,7 +82,7 @@ class OwnershipServiceTest {
     @BeforeEach
     void setUp() {
         service = new OwnershipService(structures, nodes, edges, deals, branches, lifecycle,
-                owners, ownerLinks, risk);
+                owners, ownerLinks, risk, documents, storage, audit);
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
@@ -99,6 +104,7 @@ class OwnershipServiceTest {
             if (n.getId() == null) ReflectionTestUtils.setField(n, "id", nextNodeId.incrementAndGet());
             return n;
         });
+        lenient().when(documents.findAllByOwnershipNodeIdIn(any())).thenReturn(List.of());
         lenient().when(owners.save(any())).thenAnswer(i -> {
             BeneficialOwner o = i.getArgument(0);
             if (o.getId() == null) ReflectionTestUtils.setField(o, "id", 500L);
@@ -398,9 +404,28 @@ class OwnershipServiceTest {
     }
 
     private void stubNodes(OwnershipNode... all) {
+        Map<Long, OwnershipNode> byId = new HashMap<>();
         for (OwnershipNode n : all) {
+            byId.put(n.getId(), n);
             lenient().when(nodes.findById(n.getId())).thenReturn(Optional.of(n));
         }
+        // deleteNode loads the whole doomed set in one go, so the fake has to answer by id list
+        // as well as one at a time.
+        lenient().when(nodes.findAllById(any())).thenAnswer(i -> {
+            List<OwnershipNode> found = new ArrayList<>();
+            for (Long id : (Iterable<Long>) i.getArgument(0)) {
+                if (byId.containsKey(id)) found.add(byId.get(id));
+            }
+            return found;
+        });
+    }
+
+    /** parent --owns--> child, as the edge rows the traversal walks. */
+    private OwnershipEdge edge(Long parentId, Long childId) {
+        OwnershipEdge e = new OwnershipEdge();
+        e.setParentNodeId(parentId);
+        e.setChildNodeId(childId);
+        return e;
     }
 
     private static BeneficialOwner owner(Long id, Long firmId) {
@@ -435,5 +460,168 @@ class OwnershipServiceTest {
     /** A patch that sets arbitrary named fields — used by the private-company cases. */
     private static UpdateNodeRequest patchOf(Map<String, Object> fields) {
         return JSON.convertValue(fields, UpdateNodeRequest.class);
+    }
+
+    /* ---------- deleting a node takes what it holds up, and no more ---------- */
+
+    /**
+     * The diamond, and the whole reason this is not a subtree delete. Jane is a shareholder in both
+     * Acme and Beta. Removing Acme must leave her in place, because Beta still owns her.
+     */
+    @Test
+    void keepsADescendantThatAnotherBranchStillOwns() {
+        OwnershipNode acme = node(2L, NodeType.PRIVATE_COMPANY, "Acme Holdings");
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(acme, jane);
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of(edge(2L, 4L)));
+        lenient().when(edges.findAllByParentNodeId(4L)).thenReturn(List.of());
+        // Beta (3L) is not being deleted, so its edge to Jane is what saves her.
+        when(edges.findAllByChildNodeId(4L)).thenReturn(List.of(edge(2L, 4L), edge(3L, 4L)));
+        lenient().when(edges.findAllByChildNodeId(2L)).thenReturn(List.of());
+
+        List<Long> removed = service.deleteNode(DEAL_ID, 2L, true);
+
+        assertThat(removed).containsExactly(2L);
+    }
+
+    /** With nothing else holding it, the descendant goes with its owner. */
+    @Test
+    void removesADescendantNothingElseOwns() {
+        OwnershipNode acme = node(2L, NodeType.PRIVATE_COMPANY, "Acme Holdings");
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(acme, jane);
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of(edge(2L, 4L)));
+        when(edges.findAllByParentNodeId(4L)).thenReturn(List.of());
+        when(edges.findAllByChildNodeId(4L)).thenReturn(List.of(edge(2L, 4L)));
+        lenient().when(edges.findAllByChildNodeId(2L)).thenReturn(List.of());
+
+        List<Long> removed = service.deleteNode(DEAL_ID, 2L, true);
+
+        assertThat(removed).containsExactlyInAnyOrder(2L, 4L);
+    }
+
+    /**
+     * Why the release loop has to run to a fixpoint rather than once.
+     *
+     * <p>Acme(2) owns both Sub(5) and Mid(3), and Mid owns Sub as well. Mid is also owned by
+     * Outside(9), which is not being deleted, so Mid is released — and that release is what saves
+     * Sub, whose only other parent is Acme.
+     *
+     * <p>The traversal reaches Sub before Mid, so on a single pass Sub is judged while Mid is still
+     * condemned: both its parents look doomed and it is deleted. Only a second pass sees that Mid
+     * survived. This test fails if the {@code while (released)} loop is flattened to one sweep.
+     */
+    @Test
+    void rescuingANodeAlsoRescuesWhatItHoldsUp() {
+        OwnershipNode acme = node(2L, NodeType.PRIVATE_COMPANY, "Acme Holdings");
+        OwnershipNode sub  = node(5L, NodeType.PRIVATE_COMPANY, "Sub Ltd");
+        OwnershipNode mid  = node(3L, NodeType.PRIVATE_COMPANY, "Mid Ltd");
+        stubNodes(acme, sub, mid);
+        // Order matters: Sub enters the set first, so it is also judged first.
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of(edge(2L, 5L), edge(2L, 3L)));
+        when(edges.findAllByParentNodeId(5L)).thenReturn(List.of());
+        when(edges.findAllByParentNodeId(3L)).thenReturn(List.of(edge(3L, 5L)));
+        when(edges.findAllByChildNodeId(5L)).thenReturn(List.of(edge(2L, 5L), edge(3L, 5L)));
+        when(edges.findAllByChildNodeId(3L)).thenReturn(List.of(edge(2L, 3L), edge(9L, 3L)));
+        lenient().when(edges.findAllByChildNodeId(2L)).thenReturn(List.of());
+
+        List<Long> removed = service.deleteNode(DEAL_ID, 2L, true);
+
+        assertThat(removed).containsExactly(2L);
+    }
+
+    /** A cycle among the doomed nodes terminates rather than spinning, and they all go. */
+    @Test
+    void handlesACycleAmongTheNodesBeingRemoved() {
+        OwnershipNode a = node(2L, NodeType.PRIVATE_COMPANY, "A Ltd");
+        OwnershipNode b = node(3L, NodeType.PRIVATE_COMPANY, "B Ltd");
+        stubNodes(a, b);
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of(edge(2L, 3L)));
+        when(edges.findAllByParentNodeId(3L)).thenReturn(List.of(edge(3L, 2L)));
+        when(edges.findAllByChildNodeId(3L)).thenReturn(List.of(edge(2L, 3L)));
+        lenient().when(edges.findAllByChildNodeId(2L)).thenReturn(List.of(edge(3L, 2L)));
+
+        List<Long> removed = service.deleteNode(DEAL_ID, 2L, true);
+
+        assertThat(removed).containsExactlyInAnyOrder(2L, 3L);
+    }
+
+    /** The person behind a cascaded individual is cleaned up, not only the one named in the call. */
+    @Test
+    void removesThePersonBehindACascadedIndividual() {
+        OwnershipNode acme = node(2L, NodeType.PRIVATE_COMPANY, "Acme Holdings");
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        jane.setBeneficialOwnerId(500L);
+        stubNodes(acme, jane);
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of(edge(2L, 4L)));
+        when(edges.findAllByParentNodeId(4L)).thenReturn(List.of());
+        when(edges.findAllByChildNodeId(4L)).thenReturn(List.of(edge(2L, 4L)));
+        lenient().when(edges.findAllByChildNodeId(2L)).thenReturn(List.of());
+        when(ownerLinks.findAllByDealIdOrderByCreatedAtAsc(DEAL_ID))
+                .thenReturn(List.of(new DealBeneficialOwner(DEAL_ID, 500L, null)));
+        when(ownerLinks.countByBeneficialOwnerId(500L)).thenReturn(0L);
+
+        service.deleteNode(DEAL_ID, 2L, true);
+
+        verify(owners).deleteById(500L);
+    }
+
+    /** The root pointer is cleared when a cascaded descendant was the root, not only the target. */
+    @Test
+    void clearsTheRootPointerWhenACascadedNodeWasTheRoot() {
+        OwnershipStructure structure = new OwnershipStructure();
+        ReflectionTestUtils.setField(structure, "id", STRUCTURE_ID);
+        structure.setDealId(DEAL_ID);
+        structure.setRootNodeId(4L);
+        when(structures.findById(STRUCTURE_ID)).thenReturn(Optional.of(structure));
+
+        OwnershipNode acme = node(2L, NodeType.PRIVATE_COMPANY, "Acme Holdings");
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(acme, jane);
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of(edge(2L, 4L)));
+        when(edges.findAllByParentNodeId(4L)).thenReturn(List.of());
+        when(edges.findAllByChildNodeId(4L)).thenReturn(List.of(edge(2L, 4L)));
+        lenient().when(edges.findAllByChildNodeId(2L)).thenReturn(List.of());
+
+        service.deleteNode(DEAL_ID, 2L, true);
+
+        assertThat(structure.getRootNodeId()).isNull();
+    }
+
+    /**
+     * The stored file goes when its node does. Postgres hard-deletes the document row through the
+     * ON DELETE CASCADE, so nothing else would ever empty the bucket.
+     */
+    @Test
+    void removesTheStoredFilesBehindDocumentsOnADeletedNode() {
+        OwnershipNode acme = node(2L, NodeType.PRIVATE_COMPANY, "Acme Holdings");
+        stubNodes(acme);
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of());
+        lenient().when(edges.findAllByChildNodeId(2L)).thenReturn(List.of());
+
+        nz.amldock.document.Document doc = new nz.amldock.document.Document();
+        doc.setS3Key("deals/1/nodes/2/certificate.pdf");
+        doc.setOwnershipNodeId(2L);
+        when(documents.findAllByOwnershipNodeIdIn(any())).thenReturn(List.of(doc));
+
+        service.deleteNode(DEAL_ID, 2L, true);
+
+        verify(storage).delete("deals/1/nodes/2/certificate.pdf");
+    }
+
+    /** Once for the whole cascade, not once per node. */
+    @Test
+    void recomputesTheDealsRiskOnceForTheWholeCascade() {
+        OwnershipNode acme = node(2L, NodeType.PRIVATE_COMPANY, "Acme Holdings");
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(acme, jane);
+        when(edges.findAllByParentNodeId(2L)).thenReturn(List.of(edge(2L, 4L)));
+        when(edges.findAllByParentNodeId(4L)).thenReturn(List.of());
+        when(edges.findAllByChildNodeId(4L)).thenReturn(List.of(edge(2L, 4L)));
+        lenient().when(edges.findAllByChildNodeId(2L)).thenReturn(List.of());
+
+        service.deleteNode(DEAL_ID, 2L, true);
+
+        verify(risk, times(1)).recomputeFor(DEAL_ID);
     }
 }

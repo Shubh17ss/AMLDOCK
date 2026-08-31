@@ -33,7 +33,7 @@ const VERIFICATION_OPTIONS = [
  * Documents and Verifications tabs are placeholders for M8 / M9.
  */
 export function NodeEditorPane({
-  tree, selectedNodeId, useTree, onCleared, dealId,
+  tree, selectedNodeId, useTree, onRequestDelete, dealId,
   /** Which panel to show. Owned by NodeDrawer, which draws the tab strip. */
   tab = 'details',
   /**
@@ -47,7 +47,6 @@ export function NodeEditorPane({
   const [verification, setVerification] = useState({ status: 'IN_PROGRESS', notes: '' });
   const [verificationVoice, setVerificationVoice] = useState(null); // Blob | null
   const [error, setError] = useState(null);
-  const [deleting, setDeleting] = useState(false);
   const { showToast } = useToast();
   // The document open in the viewer, or null. Held whole rather than by id: both lists
   // already have the row in hand, and re-finding it would mean each knowing about the other.
@@ -207,31 +206,13 @@ export function NodeEditorPane({
     }
   };
 
-  const handleDelete = async () => {
-    setError(null);
-    setDeleting(true);
-    try {
-      // Try without force first.
-      await useTree.deleteNode.mutateAsync({ nodeId: selected.id, force: false });
-      onCleared?.();
-    } catch (err) {
-      const message = err.response?.data?.message || '';
-      if (/edges/i.test(message)) {
-        if (window.confirm('This node has edges. Delete it anyway? Edges will also be removed.')) {
-          try {
-            await useTree.deleteNode.mutateAsync({ nodeId: selected.id, force: true });
-            onCleared?.();
-          } catch (err2) {
-            setError(err2.response?.data?.message || 'Failed to force-delete');
-          }
-        }
-      } else {
-        setError(message || 'Failed to delete');
-      }
-    } finally {
-      setDeleting(false);
-    }
-  };
+  // Hands off to the same dialog the row's kebab opens, rather than deleting from here.
+  //
+  // This used to attempt the delete, read the server's "node has N edges" refusal, and escalate to
+  // a window.confirm offering to force it. That warned about the wrong thing: the edges were never
+  // the cost, the nodes underneath were — and forcing it left them behind as orphans anyway. The
+  // dialog counts what is actually going before anything is attempted.
+  const handleDelete = () => onRequestDelete?.(selected.id);
 
   return (
     <Box>
@@ -282,8 +263,8 @@ export function NodeEditorPane({
                 </Button>
                 <Box sx={{ flexGrow: 1 }} />
                 <Button size="small" color="error" startIcon={<DeleteOutlineIcon />}
-                        onClick={handleDelete} disabled={deleting}>
-                  {deleting ? 'Removing…' : 'Remove from structure'}
+                        onClick={handleDelete}>
+                  Remove from structure
                 </Button>
               </Stack>
             </>
