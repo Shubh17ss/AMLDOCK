@@ -232,13 +232,22 @@ export const theme = createTheme({
           color: T.canvas,
           '&:hover': { backgroundColor: '#1A2130' },
         },
-        outlined: {
+        // outlinedPrimary for the same reason as textPrimary above: keyed on `outlined` it painted
+        // every outlined button ink-on-hairline with a blue hover, whatever colour the button asked
+        // for, because a theme styleOverride lands after MUI's own outlinedError/outlinedInherit.
+        // Default colour is primary, so every existing outlined button is unaffected.
+        outlinedPrimary: {
           backgroundColor: T.tile,
           borderColor: T.hairline2,
           color: T.ink,
           '&:hover': { borderColor: T.blue, backgroundColor: T.blueWash },
         },
-        text: {
+        // textPrimary, not text: a text button defaults to color="primary", so this paints every
+        // one that does not ask for something else — exactly as before — while leaving the ones
+        // that do ask alone. Keyed on `text` it also beat the color prop, because MUI applies a
+        // theme styleOverride after its own textError/textInherit styling, so `color="error"`
+        // buttons rendered blue and the hover wash came out blue on them too.
+        textPrimary: {
           color: T.blue,
           '&:hover': { backgroundColor: T.blueWash },
         },

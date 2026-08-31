@@ -17,12 +17,13 @@ import { useToast } from '../../components/ToastProvider.jsx';
 import { DealDocumentList } from '../deal/review/DealDocumentList.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
 import { tokens } from '../../theme/theme.js';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 
 // Three user-facing manual states mapped onto the existing backend enum.
 const VERIFICATION_OPTIONS = [
-  { value: 'VERIFIED',    label: 'Verified',          tone: 'success' },
+  { value: 'VERIFIED', label: 'Verified', tone: 'success' },
   { value: 'IN_PROGRESS', label: 'Under verification', tone: 'info' },
-  { value: 'FAILED',      label: 'Not verified',       tone: 'error' },
+  { value: 'FAILED', label: 'Not verified', tone: 'error' },
 ];
 
 /**
@@ -241,14 +242,22 @@ export function NodeEditorPane({
               {/* Percentage only. The edge used to carry a Link role as well, which was a second
                   answer to the question Type already asks on the node itself. */}
               <TextField label="Percentage" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }}
-                         value={edgeForm.percentage}
-                         onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
-                         sx={{ width: 180 }} />
-              <Stack direction="row" spacing={1}>
-                <Button size="small" variant="outlined" onClick={saveEdge}
-                        disabled={useTree.updateEdge.isPending}>Save link</Button>
-                <Button size="small" color="error" onClick={detachFromParent}
-                        disabled={useTree.deleteEdge.isPending}>Detach from parent</Button>
+                value={edgeForm.percentage}
+                onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
+                sx={{ width: 180 }} />
+              {/* Same shape as the Update / Remove pair at the foot of this tab: two equal
+                  buttons filling the row, the destructive one bordered rather than solid. Both
+                  default size, so the heights and the 12px radius match. */}
+              <Stack direction="row" justifyContent="space-between">
+                <Button variant="outlined" color="error" onClick={detachFromParent}
+                  disabled={useTree.deleteEdge.isPending} sx={{ width: '45%' }}>
+                  <LinkOffIcon fontSize="small" sx={{ mr: 1 }} />
+                  Detach from parent
+                </Button>
+                <Button variant="contained" onClick={saveEdge}
+                  disabled={useTree.updateEdge.isPending} sx={{ width: '45%' }}>
+                  Save link
+                </Button>
               </Stack>
             </>
           )}
@@ -256,15 +265,14 @@ export function NodeEditorPane({
           {!readOnly && (
             <>
               <Divider />
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Button variant="contained" startIcon={<SaveIcon />} onClick={saveDetails}
-                        disabled={useTree.updateNode.isPending}>
-                  {useTree.updateNode.isPending ? 'Saving…' : 'Save details'}
-                </Button>
-                <Box sx={{ flexGrow: 1 }} />
-                <Button size="small" color="error" startIcon={<DeleteOutlineIcon />}
-                        onClick={handleDelete}>
+              <Stack direction="row" justifyContent="space-between">
+                <Button variant="outlined" color="error" startIcon={<DeleteOutlineIcon />}
+                  onClick={handleDelete} sx={{ width: '45%' }}>
                   Remove from structure
+                </Button>
+                <Button variant="contained" onClick={saveDetails}
+                  disabled={useTree.updateNode.isPending} sx={{ width: '45%' }}>
+                  {useTree.updateNode.isPending ? 'Saving…' : 'Update'}
                 </Button>
               </Stack>
             </>

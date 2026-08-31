@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createEdge, createNode, deleteEdge, deleteNode,
-  getTree, setRoot, updateEdge, updateNode,
+  getTree, updateEdge, updateNode,
 } from '../../api/ownership.js';
 
 export function useOwnershipTree(dealId) {
@@ -43,7 +43,6 @@ export function useOwnershipTree(dealId) {
     onSuccess: invalidate,
   });
 
-  const setRootMut = useMutation({ mutationFn: (nodeId) => setRoot(dealId, nodeId), onSuccess: invalidate });
 
   return {
     tree: treeQ.data,
@@ -56,6 +55,5 @@ export function useOwnershipTree(dealId) {
     createEdge: createEdgeMut,
     updateEdge: updateEdgeMut,
     deleteEdge: deleteEdgeMut,
-    setRoot: setRootMut,
   };
 }

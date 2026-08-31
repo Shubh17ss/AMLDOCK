@@ -7,13 +7,18 @@ import { isLeafOnlyType, nodeTypeLabel } from '../../api/ownership.js';
 import { tokens } from '../../theme/theme.js';
 
 /**
- * Lets the user attach an existing detached node to a chosen parent.
+ * Gives a node an owner: attaching a detached one, or moving one that already has an owner.
  *
  * Validates *in the UI* that the chosen parent isn't the node itself or one of its
  * descendants (cycle prevention). The backend also enforces cycle detection on save —
  * this is a defence-in-depth that also makes the dropdown clean.
+ *
+ * Pass `replaceEdge` — the node's current incoming edge — to move it rather than attach it. That
+ * swaps the wording, hides the owner it already has (picking it comes back as "Edge already exists
+ * between these nodes"), carries the percentage over so a move does not quietly drop it, and cuts
+ * the old link once the new one is in.
  */
-export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
+export function AttachToParentDialog({ open, onClose, node, tree, useTree, replaceEdge = null }) {
   const [parentId, setParentId] = useState('');
   const [percentage, setPercentage] = useState('');
   const [error, setError] = useState(null);
@@ -22,15 +27,18 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
   useEffect(() => {
     if (open) {
       setParentId('');
-      setPercentage('');
+      // A move keeps what the old link was worth; an attach starts blank.
+      setPercentage(replaceEdge?.percentage != null ? String(replaceEdge.percentage) : '');
       setError(null);
     }
-  }, [open, node?.id]);
+  }, [open, node?.id, replaceEdge?.id]);
 
-  // Valid parents = every node except `node` and the subtree rooted at `node`.
+  // Valid parents = every node except `node`, the subtree rooted at `node`, and — when moving —
+  // the owner it already has.
   const validParents = useMemo(() => {
     if (!node || !tree) return [];
     const forbidden = new Set([node.id]);
+    if (replaceEdge) forbidden.add(replaceEdge.parentNodeId);
     const queue = [node.id];
     while (queue.length > 0) {
       const id = queue.shift();
@@ -47,7 +55,7 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
       // Individuals are excluded outright: they own nothing, so they can never be a parent.
       .filter((n) => !forbidden.has(n.id) && !isLeafOnlyType(n.nodeType))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
-  }, [node?.id, tree]);
+  }, [node?.id, tree, replaceEdge?.parentNodeId]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -63,9 +71,13 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
         childNodeId: node.id,
         percentage: percentage === '' ? null : Number(percentage),
       });
+      // New link first, old link second. The server refuses an edge that would close a cycle, so a
+      // rejected move leaves the node where it was; cutting first would strand it on any failure.
+      if (replaceEdge) await useTree.deleteEdge.mutateAsync(replaceEdge.id);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to attach');
+      setError(err.response?.data?.message || err.message
+        || (replaceEdge ? 'Failed to change owner' : 'Failed to attach'));
     } finally {
       setSubmitting(false);
     }
@@ -75,13 +87,18 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <Box component="form" onSubmit={submit}>
         <DialogTitle>
-          Attach <strong>{node?.displayName ?? 'node'}</strong> to a parent
+          {replaceEdge
+            ? <>Change the owner of <strong>{node?.displayName ?? 'this node'}</strong></>
+            : <>Attach <strong>{node?.displayName ?? 'node'}</strong> to a parent</>}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" sx={{ color: tokens.muted }}>
               Pick the node that should sit <em>above</em> {node?.displayName ?? 'this node'} in
-              the ownership tree. Ancestors-of-self are hidden from the list to prevent cycles.
+              the ownership tree. Its own descendants are hidden from the list, because owning them
+              would close a loop.
+              {replaceEdge && ' The owner it has now is hidden too, and that link is removed once '
+                + 'the new one is in place.'}
             </Typography>
 
             <FormControl required disabled={validParents.length === 0}>
@@ -107,7 +124,7 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
               </Select>
               {validParents.length === 0 && (
                 <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
-                  No valid parents — the tree only has this node (or its descendants).
+                  No other node can own this one — the rest of the tree sits below it.
                 </Typography>
               )}
             </FormControl>
@@ -134,7 +151,9 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree }) {
             variant="contained"
             disabled={submitting || !parentId}
           >
-            {submitting ? 'Attaching…' : 'Attach'}
+            {replaceEdge
+              ? (submitting ? 'Changing…' : 'Change owner')
+              : (submitting ? 'Attaching…' : 'Attach')}
           </Button>
         </DialogActions>
       </Box>
