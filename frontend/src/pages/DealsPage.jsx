@@ -116,24 +116,40 @@ export function DealsPage() {
         {STATUSES.map((s) => <Tab key={s} value={s} label={dealStatusLabel(s)} />)}
       </Tabs>
 
-      {/* Search and the create action share a row: the field is capped at 320px and does not
-          grow, so the button sits at the far right without either being pushed off a phone —
-          hence the wrap rather than a fixed row. */}
+      {/* Two layouts, one row of controls. On a desktop the field is capped at 320px and the
+          button sits at the far right of the same line. On a phone they stack and each takes the
+          full column width, so they line up with the deal cards they act on rather than floating
+          at desktop measures inside a wider list — and at 52px they are proper touch targets. */}
       <Stack
-        direction="row"
-        alignItems="center"
+        direction={{ xs: 'column', md: 'row' }}
+        alignItems={{ xs: 'stretch', md: 'center' }}
         justifyContent="space-between"
-        sx={{ flexWrap: 'wrap', gap: 1.5 }}
+        sx={{ flexWrap: { xs: 'nowrap', md: 'wrap' }, gap: 1.5 }}
       >
         <SearchField
           value={query}
           onChange={setQuery}
           placeholder="Search by property…"
+          sx={{
+            width: { xs: '100%', md: 'auto' },
+            maxWidth: { xs: 'none', md: 320 },
+            '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
+          }}
         />
         {/* Guarded, not decorative: this list is open to every role, including ones the server
             refuses to let create a deal at all — an ungated button would bounce them to /app. */}
         {mayCreate && (
-          <Button variant="contained" component={RouterLink} to="/deals/new" startIcon={<AddIcon />}>
+          <Button
+            variant="contained"
+            component={RouterLink}
+            to="/deals/new"
+            startIcon={<AddIcon />}
+            sx={{
+              width: { xs: '100%', md: 'auto' },
+              minHeight: { xs: 52, md: 0 },
+              fontSize: { xs: '0.95rem', md: '0.875rem' },
+            }}
+          >
             Create Deal
           </Button>
         )}
