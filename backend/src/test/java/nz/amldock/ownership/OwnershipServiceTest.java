@@ -10,6 +10,10 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.document.Document;
+import nz.amldock.document.DocumentStatus;
+import nz.amldock.document.DocumentType;
+import nz.amldock.document.OcrStatus;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.ownership.dto.CreateEdgeRequest;
@@ -41,6 +45,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -393,6 +399,166 @@ class OwnershipServiceTest {
     }
 
     /* ---------- helpers ---------- */
+
+    /* ---------- documents follow a person onto a new deal ---------- */
+
+    @Test
+    void copyingAnIndividualGivesEachDocumentItsOwnObject() {
+        // The point of the whole feature. A second row pointing at the source key would mean
+        // whichever deal is tidied first deletes the other one's evidence, because neither
+        // stripDocuments nor DocumentService.delete counts references before calling delete.
+        OwnershipNode source = node(1L, NodeType.INDIVIDUAL, "Anna Eriksson");
+        stubNodes(source);
+        stubDocumentsOn(source,
+                doc(90L, "deals/9/nodes/1/aaa-passport.jpg", "passport.jpg", OcrStatus.DONE),
+                doc(91L, "deals/9/nodes/1/bbb-licence.jpg", "licence.jpg", OcrStatus.DONE));
+
+        NodeDto created = service.createNode(DEAL_ID, copyRequest("Anna Eriksson", 1L));
+
+        ArgumentCaptor<String> from = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);
+        verify(storage, times(2)).copy(from.capture(), to.capture());
+        assertThat(from.getAllValues()).containsExactly(
+                "deals/9/nodes/1/aaa-passport.jpg", "deals/9/nodes/1/bbb-licence.jpg");
+        // Every destination is new, and filed where an upload on this node would have landed.
+        assertThat(to.getAllValues()).doesNotContainAnyElementsOf(from.getAllValues());
+        assertThat(to.getAllValues())
+                .allSatisfy(k -> assertThat(k).startsWith("deals/" + DEAL_ID + "/nodes/" + created.id() + "/"));
+        assertThat(to.getAllValues()).doesNotHaveDuplicates();
+
+        ArgumentCaptor<Document> saved = ArgumentCaptor.forClass(Document.class);
+        verify(documents, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).allSatisfy(d -> {
+            assertThat(d.getS3Key()).isIn(to.getAllValues());
+            assertThat(d.getDealId()).isEqualTo(DEAL_ID);
+            assertThat(d.getStatus()).isEqualTo(DocumentStatus.ACTIVE);
+            // Set, or stripDocuments never finds this row again and its object is stranded.
+            assertThat(d.getOwnershipNodeId()).isEqualTo(created.id());
+            // Null, or removeIfOrphaned hard-deletes this node when the last copy is deleted.
+            assertThat(d.getBeneficialOwnerId()).isNull();
+        });
+    }
+
+    @Test
+    void aCopiedDocumentIsNeverQueuedForExtraction() {
+        // Textract is billed by the page and these are the same bytes. The queue claims PENDING
+        // rows, so DONE and NOT_APPLICABLE are both invisible to it — but PENDING would not be.
+        OwnershipNode source = node(1L, NodeType.INDIVIDUAL, "Anna Eriksson");
+        stubNodes(source);
+        Document read = doc(90L, "deals/9/nodes/1/aaa.jpg", "read.jpg", OcrStatus.DONE);
+        read.setOcrRawText("ERIKSSON<<ANNA");
+        Document waiting = doc(91L, "deals/9/nodes/1/bbb.jpg", "waiting.jpg", OcrStatus.PENDING);
+        stubDocumentsOn(source, read, waiting);
+
+        service.createNode(DEAL_ID, copyRequest("Anna Eriksson", 1L));
+
+        ArgumentCaptor<Document> saved = ArgumentCaptor.forClass(Document.class);
+        verify(documents, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).allSatisfy(d -> {
+            assertThat(d.getOcrStatus()).isNotEqualTo(OcrStatus.PENDING);
+            assertThat(d.getOcrNextAttemptAt()).isNull();
+            assertThat(d.getOcrClaimedAt()).isNull();
+            assertThat(d.getOcrAttemptCount()).isZero();
+        });
+        // What was read off those exact bytes travels with them; what was never read does not
+        // become a claim that it was.
+        assertThat(saved.getAllValues().get(0).getOcrStatus()).isEqualTo(OcrStatus.DONE);
+        assertThat(saved.getAllValues().get(0).getOcrRawText()).isEqualTo("ERIKSSON<<ANNA");
+        assertThat(saved.getAllValues().get(1).getOcrStatus()).isEqualTo(OcrStatus.NOT_APPLICABLE);
+    }
+
+    @Test
+    void theCopyTakesTheScansHangingOffThePersonToo() {
+        // A scanned ID has a beneficial_owner_id and a null ownership_node_id, so a node-only
+        // lookup would miss exactly the passport that justifies the verification status.
+        OwnershipNode source = node(1L, NodeType.INDIVIDUAL, "Anna Eriksson");
+        source.setBeneficialOwnerId(42L);
+        stubNodes(source);
+        lenient().when(documents.findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(
+                1L, DocumentStatus.ACTIVE)).thenReturn(List.of());
+        lenient().when(documents.findAllByBeneficialOwnerIdAndStatus(42L, DocumentStatus.ACTIVE))
+                .thenReturn(List.of(doc(90L, "deals/9/scan.jpg", "scan.jpg", OcrStatus.DONE)));
+
+        service.createNode(DEAL_ID, copyRequest("Anna Eriksson", 1L));
+
+        verify(storage).copy(eq("deals/9/scan.jpg"), any());
+        verify(documents).save(any(Document.class));
+    }
+
+    @Test
+    void documentsAreNotTakenFromADealTheCallerCannotRead() {
+        Deal other = new Deal();
+        ReflectionTestUtils.setField(other, "id", 99L);
+        other.setFirmBranchId(BRANCH_ID);
+        OwnershipStructure otherStructure = new OwnershipStructure();
+        ReflectionTestUtils.setField(otherStructure, "id", 77L);
+        otherStructure.setDealId(99L);
+
+        OwnershipNode source = node(1L, NodeType.INDIVIDUAL, "Anna Eriksson");
+        source.setOwnershipStructureId(77L);
+        stubNodes(source);
+        lenient().when(structures.findById(77L)).thenReturn(Optional.of(otherStructure));
+        lenient().when(deals.findById(99L)).thenReturn(Optional.of(other));
+        // Lenient: assertCanRead is also called for the deal being added to, and that one must
+        // pass. A strict stub would fail on the very call the feature depends on.
+        lenient().doThrow(new ForbiddenException("Not your firm's deal"))
+                .when(lifecycle).assertCanRead(eq(other), any(), any());
+
+        // The URL names the deal being added to. Nothing on it speaks for the deal being read.
+        assertThatThrownBy(() -> service.createNode(DEAL_ID, copyRequest("Anna Eriksson", 1L)))
+                .isInstanceOf(ForbiddenException.class);
+
+        verify(storage, never()).copy(any(), any());
+        verify(documents, never()).save(any(Document.class));
+    }
+
+    @Test
+    void aFailedCopySweepsTheObjectsItAlreadyWrote() {
+        // The transaction rolls the rows back. The bucket has no transaction, so without the
+        // sweep the first object would sit there referenced by nothing, forever.
+        OwnershipNode source = node(1L, NodeType.INDIVIDUAL, "Anna Eriksson");
+        stubNodes(source);
+        stubDocumentsOn(source,
+                doc(90L, "deals/9/first.jpg", "first.jpg", OcrStatus.DONE),
+                doc(91L, "deals/9/second.jpg", "second.jpg", OcrStatus.DONE));
+        // Lenient: the first copy has to succeed, which is the whole point — the sweep only
+        // matters once something has already been written.
+        lenient().doThrow(new IllegalStateException("S3 is having a day"))
+                .when(storage).copy(eq("deals/9/second.jpg"), any());
+
+        assertThatThrownBy(() -> service.createNode(DEAL_ID, copyRequest("Anna Eriksson", 1L)))
+                .isInstanceOf(IllegalStateException.class);
+
+        ArgumentCaptor<String> written = ArgumentCaptor.forClass(String.class);
+        verify(storage).copy(eq("deals/9/first.jpg"), written.capture());
+        verify(storage).delete(written.getValue());
+    }
+
+    private void stubDocumentsOn(OwnershipNode source, Document... docs) {
+        lenient().when(documents.findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(
+                source.getId(), DocumentStatus.ACTIVE)).thenReturn(List.of(docs));
+    }
+
+    private static Document doc(Long id, String key, String filename, OcrStatus ocr) {
+        Document d = new Document();
+        ReflectionTestUtils.setField(d, "id", id);
+        d.setS3Key(key);
+        d.setOriginalFilename(filename);
+        d.setContentType("image/jpeg");
+        d.setSizeBytes(1234L);
+        d.setDocumentType(DocumentType.PASSPORT);
+        d.setStatus(DocumentStatus.ACTIVE);
+        d.setDealId(9L);
+        d.setOcrStatus(ocr);
+        return d;
+    }
+
+    private static CreateNodeRequest copyRequest(String name, Long sourceNodeId) {
+        return JSON.convertValue(Map.of(
+                "nodeType", NodeType.INDIVIDUAL,
+                "displayName", name,
+                "copyDocumentsFromNodeId", sourceNodeId), CreateNodeRequest.class);
+    }
 
     private OwnershipNode node(Long id, NodeType type, String name) {
         OwnershipNode n = new OwnershipNode();

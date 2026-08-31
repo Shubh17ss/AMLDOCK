@@ -12,3 +12,14 @@ export async function listIndividuals({ firmId, branchId } = {}) {
   const { data } = await apiClient.get('/individuals', { params: { firmId, branchId } });
   return data;
 }
+
+/**
+ * One individual in full, by the node id a register row carries.
+ *
+ * The list stays deliberately thin — it feeds two registers and a CSV export — so the contact and
+ * background fields are fetched only for the one person somebody actually opened.
+ */
+export async function getIndividual(nodeId) {
+  const { data } = await apiClient.get(`/individuals/${nodeId}`);
+  return data;
+}

@@ -15,6 +15,8 @@ import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.document.Document;
 import nz.amldock.document.DocumentRepository;
+import nz.amldock.document.DocumentStatus;
+import nz.amldock.document.OcrStatus;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
@@ -35,14 +37,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class OwnershipService {
@@ -128,6 +133,9 @@ public class OwnershipService {
         n.setPersonRole(req.personRole());
         n.setReference(req.reference());
         n.setNotes(req.notes());
+        // Null leaves the entity default in place; only the owner picker, copying a person this
+        // firm has already cleared elsewhere, ever sends one.
+        if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
         applyNodeFields(n, req.dateOfBirth(), req.idDocumentType(), req.idDocumentNumber(), req.idDocumentCountry(),
                 req.businessNumber(), req.companyNumber(), req.incorporationDate(), req.registeredOffice(),
                 req.trustName(), req.trustDeedDocumentId(), req.settlorName(), req.extraJson());
@@ -147,7 +155,12 @@ public class OwnershipService {
             applyPersonPatch(person, req.person());
         }
 
-        NodeDto created = NodeDto.from(nodes.save(n), person == null ? null : PersonDto.from(person));
+        OwnershipNode savedNode = nodes.save(n);
+        if (req.copyDocumentsFromNodeId() != null) {
+            copyDocumentsOnto(deal, savedNode, req.copyDocumentsFromNodeId());
+        }
+
+        NodeDto created = NodeDto.from(savedNode, person == null ? null : PersonDto.from(person));
         risk.recomputeFor(dealId);
         return created;
     }
@@ -630,6 +643,138 @@ public class OwnershipService {
                     "\"" + n.getDisplayName() + "\" owns other nodes, so it cannot become an individual."
                             + " Detach them first.");
         }
+    }
+
+    /* ---------- documents that follow a person onto a new deal ---------- */
+
+    /**
+     * Copies every document filed against {@code sourceNodeId} onto {@code target}, each as its own
+     * new object in the bucket.
+     *
+     * <p><strong>Why not simply point a second row at the same key.</strong> Nothing here counts
+     * references: {@link #stripDocuments} and {@code DocumentService.delete} both call
+     * {@code storage.delete} the moment their row goes, so a shared key means whichever deal is
+     * tidied first destroys the other one's evidence and leaves behind an ACTIVE row whose download
+     * 404s. Two objects cost bytes; one object costs a file nobody can explain the loss of.
+     *
+     * <p>Done here rather than through {@code DocumentService} because that service reaches
+     * {@code BeneficialOwnerService}, which reaches this one — the same constructor cycle that put
+     * {@link #stripDocuments} in this class.
+     */
+    private void copyDocumentsOnto(Deal deal, OwnershipNode target, Long sourceNodeId) {
+        OwnershipNode source = nodes.findById(sourceNodeId)
+                .orElseThrow(() -> new NotFoundException("Node " + sourceNodeId + " not found"));
+        OwnershipStructure sourceStructure = structures.findById(source.getOwnershipStructureId())
+                .orElseThrow(() -> new NotFoundException("Structure for node " + sourceNodeId + " not found"));
+        // The URL this request arrived on speaks for the deal being added to, not the one being
+        // read from. Without this a caller could lift documents off any deal by guessing node ids.
+        Deal sourceDeal = assertReadable(sourceStructure.getDealId());
+
+        List<Document> sources = documentsOn(source);
+        if (sources.isEmpty()) return;
+
+        // Keys already written, for the sweep below. The transaction can undo the rows; only this
+        // can undo the objects.
+        List<String> written = new ArrayList<>();
+        try {
+            for (Document src : sources) {
+                String key = buildDocumentKey(deal.getId(), target.getId(), src.getOriginalFilename());
+                // Object first, row second — the same order confirmUpload guarantees, so an ACTIVE
+                // row never promises bytes that are not there.
+                storage.copy(src.getS3Key(), key);
+                written.add(key);
+                documents.save(copyOf(src, deal, target, key));
+                audit.record(AuditAction.DOCUMENT_UPLOADED, "Document", src.getId(),
+                        "Copied " + src.getOriginalFilename() + " from deal " + sourceDeal.getId()
+                                + " onto node " + target.getId());
+            }
+        } catch (RuntimeException e) {
+            // The transaction rolls the rows back; the bucket has no transaction, so anything
+            // already copied would sit there unreferenced forever.
+            for (String key : written) storage.delete(key);
+            throw e;
+        }
+    }
+
+    /**
+     * What the node's Documents tab shows: files filed against the node, plus the identity scans
+     * hanging off the person behind it.
+     *
+     * <p>Both halves are needed. A scanned ID has a {@code beneficialOwnerId} and a null
+     * {@code ownershipNodeId}, so looking only at the node would miss exactly the passport that
+     * justifies the verification status travelling with it. Mirrors
+     * {@code DocumentService.listForNode}.
+     */
+    private List<Document> documentsOn(OwnershipNode node) {
+        Map<Long, Document> byId = new LinkedHashMap<>();
+        for (Document d : documents.findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(
+                node.getId(), DocumentStatus.ACTIVE)) {
+            byId.put(d.getId(), d);
+        }
+        if (node.getBeneficialOwnerId() != null) {
+            for (Document d : documents.findAllByBeneficialOwnerIdAndStatus(
+                    node.getBeneficialOwnerId(), DocumentStatus.ACTIVE)) {
+                byId.putIfAbsent(d.getId(), d);
+            }
+        }
+        return List.copyOf(byId.values());
+    }
+
+    /**
+     * The copy, shaped exactly like a document uploaded on the target node's own Documents tab.
+     *
+     * <p>Two fields carry the whole safety story, and they pull in opposite directions:
+     * <ul>
+     *   <li>{@code ownershipNodeId} is <em>set</em>, or {@link #stripDocuments} — which finds
+     *       documents only by node — would never see this row again, stranding its object in the
+     *       bucket when the node is deleted.</li>
+     *   <li>{@code beneficialOwnerId} is <em>left null</em>, which is what a node-filed upload does
+     *       anyway. {@code BeneficialOwnerService.removeIfOrphaned} runs after every document
+     *       delete and, unlike {@code removePersonIfHandAdded}, never consults
+     *       {@code sourceDocumentId}: it asks only whether any ACTIVE document still names that
+     *       person, and hard-deletes their node if none does. Naming the person here would mean a
+     *       reviewer deleting the last copied file silently deleted the owner they were looking
+     *       at.</li>
+     * </ul>
+     *
+     * <p>The extraction is copied but never re-run. It was read off these exact bytes, and Textract
+     * is billed by the page; the OCR queue only claims PENDING rows, so a DONE copy is invisible to
+     * it, as is anything filed against a node.
+     */
+    private Document copyOf(Document src, Deal deal, OwnershipNode target, String key) {
+        Document d = new Document();
+        d.setS3Key(key);
+        d.setOriginalFilename(src.getOriginalFilename());
+        d.setContentType(src.getContentType());
+        d.setSizeBytes(src.getSizeBytes());
+        d.setDocumentType(src.getDocumentType());
+        d.setStatus(DocumentStatus.ACTIVE);
+        d.setDealId(deal.getId());
+        d.setOwnershipNodeId(target.getId());
+        d.setBeneficialOwnerId(null);
+        d.setIdSide(src.getIdSide());
+        d.setUploadedByUserId(currentPrincipal().id());
+
+        boolean extracted = src.getOcrStatus() == OcrStatus.DONE;
+        d.setOcrStatus(extracted ? OcrStatus.DONE : OcrStatus.NOT_APPLICABLE);
+        if (extracted) {
+            d.setOcrProvider(src.getOcrProvider());
+            d.setOcrRawText(src.getOcrRawText());
+            d.setOcrFields(src.getOcrFields());
+            d.setOcrConfidence(src.getOcrConfidence());
+            d.setOcrCompletedAt(src.getOcrCompletedAt());
+        }
+        // Queue bookkeeping belongs to the row that was actually queued. Left at its defaults, this
+        // copy can never be claimed, retried, or counted as a failed attempt.
+        d.setOcrAttemptCount(0);
+        return d;
+    }
+
+    /** Mirrors {@code DocumentService.buildKey}: same layout, so copies file where uploads do. */
+    private static String buildDocumentKey(Long dealId, Long nodeId, String filename) {
+        String sanitised = filename == null ? "file"
+                : filename.replaceAll("[^A-Za-z0-9._-]", "_");
+        return "deals/" + dealId + "/nodes/" + nodeId + "/" + UUID.randomUUID() + "-" + sanitised;
     }
 
     private Deal assertReadable(Long dealId) {

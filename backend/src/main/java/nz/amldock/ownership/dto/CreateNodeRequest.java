@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import nz.amldock.ownership.NodeType;
+import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.NomineeStatus;
 import nz.amldock.ownership.TrustHoldingComplexity;
 import nz.amldock.ownership.TrustType;
@@ -56,6 +57,30 @@ public record CreateNodeRequest(
         /** Free-text notes on the node. The create dialog has always shown this field; until
          *  V34 the request had nowhere to put it and it was silently discarded. */
         String notes,
+
+        /**
+         * Where verification stands the moment the node is created. Null leaves the column at its
+         * default, which is what every caller but one wants.
+         *
+         * <p>The exception is the owner picker copying an individual the firm has already cleared
+         * on another deal: the status is part of what it copies, and setting it here keeps that one
+         * owner one request instead of a create followed by a patch that could half-fail. No new
+         * privilege — {@code UpdateNodeRequest} has always carried this field, and the roles allowed
+         * to create a node are exactly the roles allowed to patch it.
+         */
+        NodeVerificationStatus verificationStatus,
+
+        /**
+         * Copy the documents of this existing individual onto the new node.
+         *
+         * <p>Set by the owner picker when a reviewer chooses somebody the firm has met on another
+         * deal. The caller must be able to read that deal; the service checks, because the URL this
+         * arrives on only speaks for the deal being added to.
+         *
+         * <p>Each document is copied to a new object under a new key. Sharing the source key would
+         * mean either deal deleting the other one's evidence.
+         */
+        Long copyDocumentsFromNodeId,
 
         /**
          * Details for the person behind an INDIVIDUAL. The person record itself is created by

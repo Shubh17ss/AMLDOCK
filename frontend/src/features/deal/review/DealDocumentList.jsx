@@ -8,13 +8,7 @@ import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutl
 import { AUDIO_DOCUMENT_TYPES, documentTypeLabel, listDealDocuments } from '../../../api/documents.js';
 import { isViewable } from '../../../components/DocumentViewerDialog.jsx';
 import { tokens, fonts, motion } from '../../../theme/theme.js';
-
-const formatBytes = (n) => {
-  if (n == null) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-};
+import { formatBytes } from '../../../utils/formatters.js';
 
 /**
  * Everything filed against the deal, wherever it was filed from.
