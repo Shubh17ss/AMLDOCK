@@ -2,6 +2,7 @@ import { Box, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isBroker, navProfileFor } from '../auth/roles.js';
+import { DEALS_PATH } from '../navigation/moduleRegistry.jsx';
 import { tokens, shadows, fonts, motion } from '../theme/theme.js';
 
 const NEU_ACCENT = tokens.blue;
@@ -37,17 +38,17 @@ const NAV_LABEL_HEIGHT = NAV_TRACK_HEIGHT - NAV_ICON_WELL - NAV_LABEL_GAP;  // 1
 // ── Broker nav ──────────────────────────────────────────────────────────────
 // Three tabs, because a broker on a phone does three things.
 //
-// A tab owns a territory, not a path. `/deals/*` — where a deal is created, read and edited — is
-// all downstream of Deals but shares no prefix with `/my-deals`, so without the explicit claim the
-// nav would go blank the moment someone opened a deal. `/profile` is claimed by nobody on purpose:
-// it is reached from the avatar, so lighting a tab would misreport where you are.
-//
-// No collision with the compliance register: that is DEALS_PATH = '/cdd/deals', not '/deals'.
+// A tab owns a territory, not a path. The Deals tab is the Listing Register itself — for an agent
+// the server pins the list to `createdBy = me` (DealService.readableDeals), so the register already
+// *is* their deals — plus `/deals/*`, where one is created, read and edited. Those share no prefix
+// with DEALS_PATH, so without the explicit claim the nav would go blank the moment someone opened a
+// deal. `/profile` is claimed by nobody on purpose: it is reached from the avatar, so lighting a tab
+// would misreport where you are.
 const owns = (...prefixes) => (p) => prefixes.some((x) => p === x || p.startsWith(`${x}/`));
 
 const BROKER_ITEMS = [
   { label: 'Home',     to: '/dashboard',   Icon: HomeIcon,     match: owns('/dashboard', '/app') },
-  { label: 'Deals',    to: '/my-deals',    Icon: DealsIcon,    match: owns('/my-deals', '/deals') },
+  { label: 'Deals',    to: DEALS_PATH,     Icon: DealsIcon,    match: owns(DEALS_PATH, '/deals') },
   { label: 'Learning', to: '/my-training', Icon: LearningIcon, match: owns('/my-training') },
 ];
 
@@ -55,7 +56,7 @@ function navItemsFor(role) {
   switch (navProfileFor(role)) {
     case 'agent': return [
       { label: 'Home',     to: '/dashboard', Icon: HomeIcon },
-      { label: 'My Deals', to: '/my-deals',  Icon: DealsIcon },
+      { label: 'Deals',    to: DEALS_PATH,   Icon: DealsIcon },
       { label: 'New',      to: '/deals/new', Icon: PlusIcon,  accent: true },
       { label: 'Profile',  to: '/profile',   Icon: ProfileIcon },
     ];

@@ -3,13 +3,13 @@ import {
 } from '@mui/material';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { isBroker } from '../auth/roles.js';
+import { isBroker, isDealAuthor } from '../auth/roles.js';
 import { SidebarNav } from './SidebarNav.jsx';
 import { UserMenu } from './UserMenu.jsx';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { BottomNav, BOTTOM_NAV_CLEARANCE, BROKER_NAV_CLEARANCE } from './BottomNav.jsx';
 import { greeting, stamp } from '../pages/dashboard/greeting.js';
-import { moduleTitleFor, DASHBOARD_PATH } from '../navigation/moduleRegistry.jsx';
+import { moduleTitleFor, DASHBOARD_PATH, DEALS_PATH } from '../navigation/moduleRegistry.jsx';
 import { DashboardScopeProvider, useDashboardScope, isScopeExemptPath } from '../dashboard/DashboardScope.jsx';
 import { ScopeRequiredDialog } from '../dashboard/ScopeRequiredDialog.jsx';
 import { ColorModeProvider } from '../theme/ColorMode.jsx';
@@ -18,7 +18,6 @@ import { tokens, fonts } from '../theme/theme.js';
 const SIDEBAR_WIDTH = 260;
 
 const TITLE_BY_PATH_PREFIX = [
-  ['/my-deals',    'My deals'],
   ['/deals/new',   'New deal'],
   ['/deals/',      'Deal'],
   ['/firm/deals',  'Firm deals'],
@@ -29,10 +28,15 @@ const TITLE_BY_PATH_PREFIX = [
   ['/app',         'Dashboard'],
 ];
 
-function titleFor(pathname) {
+function titleFor(pathname, role) {
   // The deal id sits in the middle of /deals/:id/edit, so this one can't be expressed as a
   // prefix like the rest of the table.
   if (/^\/deals\/\d+\/edit\/?$/.test(pathname)) return 'Edit deal';
+  // One page, two honest names. DealService.readableDeals pins the list to `createdBy = me` for an
+  // agent and to their branch for an ADMIN, so the register genuinely *is* a deal author's own
+  // deals — and calling it "Listing Register" to the person who arrived via a tab labelled Deals
+  // and a button labelled "My deals" would be the odd one out.
+  if (pathname === DEALS_PATH && isDealAuthor(role)) return 'My deals';
   const match = TITLE_BY_PATH_PREFIX.find(([prefix]) => pathname.startsWith(prefix));
   if (match) return match[1];
   return moduleTitleFor(pathname) ?? 'AML·DOCK';
@@ -41,7 +45,7 @@ function titleFor(pathname) {
 export function AppShell() {
   const { user } = useAuth();
   const { pathname } = useLocation();
-  const pageTitle = titleFor(pathname);
+  const pageTitle = titleFor(pathname, user?.role);
 
   // A broker's phone home swaps the page-title bar for a greeting — but only there. Everywhere else
   // a title is what the screen owes you, and on a deep page like /deals/123 a greeting would be

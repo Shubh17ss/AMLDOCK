@@ -78,12 +78,11 @@ export function DealReviewScreen() {
   const dealQ = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
   const tree  = useOwnershipTree(dealId);
 
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['deals', dealId] });
-    qc.invalidateQueries({ queryKey: ['deals', 'queue'] });
-    qc.invalidateQueries({ queryKey: ['deals', 'mine'] });
-    qc.invalidateQueries({ queryKey: ['deals', 'firm'] });
-  };
+  // One prefix, every deals query. This used to name four keys and still missed ['deals','list'] —
+  // the register's — so acting on a deal here left the list you came from showing the old status.
+  // That list is now the only one an agent has, and TanStack matches key prefixes, so naming the
+  // root covers the detail, the queues and the register at once. Same call NewDealPage makes.
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['deals'] });
 
   /** What each move is called once it has happened, and how loudly to say it. */
   const SAID = {

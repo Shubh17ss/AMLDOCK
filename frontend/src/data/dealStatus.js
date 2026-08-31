@@ -134,10 +134,10 @@ export const isOpenForReview = (s) => s === 'REVIEW' || s === 'ON_HOLD';
  * the ownership structure is. The author test carries the owner check the page guards already make:
  * without it, opening a colleague's NEW deal links to a form that bounces you straight back.
  *
- * Lives here because three lists ask the question and only two had an answer. DealsTable and
- * DealsPage each held their own copy; MyDealsPage had none, which is why a broker tapping their own
- * NEW deal on a phone landed on the read-only page while the desktop table beside it opened the
- * form. One predicate, so the three cannot drift again.
+ * Lives here because both remaining deal lists ask it — DealsTable (Firm deals) and DealsPage (the
+ * register) — and each used to hold its own copy. A third list had none, which is how a broker
+ * tapping their own NEW deal on a phone reached the read-only page while the desktop table beside
+ * it opened the form. One predicate, so they cannot drift again.
  */
 export const opensDealForm = (deal, user) =>
   isEditable(deal.status) && isDealAuthor(user?.role) && user?.userId === deal.createdByUserId;

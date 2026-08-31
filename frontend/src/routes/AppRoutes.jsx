@@ -35,7 +35,6 @@ import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
 import { NotificationsAdminPage } from '../pages/admin/NotificationsAdminPage.jsx';
 import { FirmsAdminPage } from '../pages/admin/FirmsAdminPage.jsx';
 import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
-import { MyDealsPage } from '../pages/MyDealsPage.jsx';
 import { DealsPage } from '../pages/DealsPage.jsx';
 import { BeneficialOwnersPage } from '../pages/cdd/BeneficialOwnersPage.jsx';
 import { OverseasResidentsPage } from '../pages/cdd/OverseasResidentsPage.jsx';
@@ -179,11 +178,6 @@ export function AppRoutes() {
           );
         })}
 
-        <Route path="/my-deals" element={
-          <ProtectedRoute roles={DEAL_AUTHOR_ROLES}>
-            <MyDealsPage />
-          </ProtectedRoute>
-        } />
         {/* Wider than DEAL_AUTHOR_ROLES: a sales manager or compliance officer may open a deal
             without thereby becoming its author. See roles.js DEAL_CREATOR_ROLES. */}
         <Route path="/deals/new" element={

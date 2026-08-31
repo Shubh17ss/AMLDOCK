@@ -1,6 +1,7 @@
 import { Box, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { ScopeSelector } from '../../components/dashboard/ScopeSelector.jsx';
+import { DEALS_PATH } from '../../navigation/moduleRegistry.jsx';
 import { tokens, fonts, shadows, motion } from '../../theme/theme.js';
 
 /**
@@ -41,7 +42,7 @@ export function BrokerMobileHome() {
 
       <Stack spacing={1.25}>
         <ActionRow to="/deals/new" label="Create deal" primary icon={<PlusGlyph />} />
-        <ActionRow to="/my-deals" label="My deals" icon={<DealsGlyph />} />
+        <ActionRow to={DEALS_PATH} label="My deals" icon={<DealsGlyph />} />
         <ActionRow to="/my-training" label="My learnings" icon={<LearningGlyph />} />
       </Stack>
     </Stack>

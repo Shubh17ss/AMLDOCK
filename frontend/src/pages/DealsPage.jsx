@@ -8,7 +8,7 @@ import {
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { canCreateDeal } from '../auth/roles.js';
+import { canCreateDeal, isDealAuthor } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
@@ -61,6 +61,13 @@ export function DealsPage() {
     [scoped, query],
   );
 
+  // "You have no deals" and "nothing matches this filter" are different messages and want different
+  // answers — the first is a first-run screen and should invite the one action that fixes it, the
+  // second should not, because creating a deal is not how you find an existing one.
+  const filtered = status !== 'ALL' || query.trim() !== '';
+  const isEmpty = !dealsQ.isLoading && deals.length === 0 && !filtered;
+  const mayCreate = canCreateDeal(user?.role);
+
   /**
    * Where a row goes when you open it.
    *
@@ -84,7 +91,7 @@ export function DealsPage() {
           firm?.name,
           branch?.name,
         ].filter(Boolean).join(' · ')}
-        title="Deals"
+        title={isDealAuthor(user?.role) ? 'My deals' : 'Listing Register'}
       />
 
       {/* One status at a time, as tabs. Scrollable rather than responsive-by-breakpoint: the
@@ -125,7 +132,7 @@ export function DealsPage() {
         />
         {/* Guarded, not decorative: this list is open to every role, including ones the server
             refuses to let create a deal at all — an ungated button would bounce them to /app. */}
-        {canCreateDeal(user?.role) && (
+        {mayCreate && (
           <Button variant="contained" component={RouterLink} to="/deals/new" startIcon={<AddIcon />}>
             Create Deal
           </Button>
@@ -142,9 +149,21 @@ export function DealsPage() {
             borderRadius: 4, p: 4, textAlign: 'center',
             backgroundColor: tokens.tile, border: `1px solid ${tokens.hairline}`,
           }}>
-            <Typography sx={{ fontSize: '1.5rem', mb: 1 }}>📁</Typography>
-            <Typography sx={{ fontWeight: 700, color: tokens.ink }}>No deals</Typography>
-            <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>No deals match these filters.</Typography>
+            <Typography sx={{ fontSize: '1.5rem', mb: 1 }}>{isEmpty ? '📋' : '🔍'}</Typography>
+            <Typography sx={{ fontWeight: 700, color: tokens.ink }}>
+              {isEmpty ? 'No deals yet' : 'No results'}
+            </Typography>
+            <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>
+              {isEmpty
+                ? 'Start your first deal — capture the property, client, and IDs.'
+                : 'No deals match these filters.'}
+            </Typography>
+            {isEmpty && mayCreate && (
+              <Button variant="contained" component={RouterLink} to="/deals/new"
+                      startIcon={<AddIcon />} sx={{ mt: 2 }}>
+                Create first deal
+              </Button>
+            )}
           </Box>
         )}
         {deals.map((d) => (
@@ -154,7 +173,7 @@ export function DealsPage() {
 
       {/* Desktop: table */}
       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-        {dealsQ.isLoading && <SkeletonTable rows={6} columns={10} />}
+        {dealsQ.isLoading && <SkeletonTable rows={6} columns={9} />}
         {!dealsQ.isLoading && (
           <TableContainer component={Paper}>
             <Table size="small">
@@ -200,8 +219,22 @@ export function DealsPage() {
                 ))}
                 {deals.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} align="center" sx={{ py: 4, color: tokens.muted }}>
-                      No deals match these filters.
+                    <TableCell colSpan={9} align="center" sx={{ py: 5, color: tokens.muted }}>
+                      {isEmpty ? (
+                        <Stack spacing={1.5} alignItems="center">
+                          <Typography sx={{ fontWeight: 700, color: tokens.ink }}>No deals yet</Typography>
+                          <Typography sx={{ fontSize: '0.875rem', color: tokens.muted, maxWidth: 420 }}>
+                            Start your first deal — capture the property and client, attach IDs, and
+                            submit it for review.
+                          </Typography>
+                          {mayCreate && (
+                            <Button variant="contained" component={RouterLink} to="/deals/new"
+                                    startIcon={<AddIcon />}>
+                              Create your first deal
+                            </Button>
+                          )}
+                        </Stack>
+                      ) : 'No deals match these filters.'}
                     </TableCell>
                   </TableRow>
                 )}

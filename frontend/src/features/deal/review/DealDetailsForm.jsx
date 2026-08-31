@@ -99,7 +99,9 @@ export function DealDetailsForm({ deal, dealId, form, setForm, dirty, onSaved, r
       // rewrites the top of the Notes tab next door. And a save is auditable.
       qc.invalidateQueries({ queryKey: ['dealNotes', dealId] });
       qc.invalidateQueries({ queryKey: ['audit', 'deal', dealId] });
-      qc.invalidateQueries({ queryKey: ['deals', 'list'] });
+      // The prefix, not ['deals','list']: the dashboards keep their own deals queries and were
+      // left stale by naming only the register's key.
+      qc.invalidateQueries({ queryKey: ['deals'] });
       // The mirror of useOwnershipTree's invalidate, which busts the deal on every node write.
       // The traffic runs the other way too now: answering yes to a trust in the beneficial
       // ownership puts a TRUST node on the structure, and this form sits on top of the tree that
