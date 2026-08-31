@@ -30,12 +30,11 @@ const PICKABLE = NODE_TYPES.filter((t) => t.value !== 'OTHER');
  *   open, onClose
  *   parentNodeId: number | null — if set, the new owner is linked under that parent
  *   parentLabel: string — the parent's name, named in the subtitle
- *   isFirstNode: boolean — an empty structure roots whatever is added first
  *   useTree: result of useOwnershipTree(dealId)
  *   onCreated: (nodeId) => void — the review screen opens the drawer on it
  */
 export function AddNodeDialog({
-  open, onClose, parentNodeId, parentLabel, isFirstNode, useTree, onCreated,
+  open, onClose, parentNodeId, parentLabel, useTree, onCreated,
 }) {
   const [nodeType, setNodeType] = useState(null);
   const [displayName, setDisplayName] = useState('');
@@ -66,9 +65,6 @@ export function AddNodeDialog({
           childNodeId: created.id,
           percentage: null,
         });
-      }
-      if (isFirstNode && parentNodeId == null) {
-        await useTree.setRoot.mutateAsync(created.id);
       }
       onClose();
       onCreated?.(created.id);

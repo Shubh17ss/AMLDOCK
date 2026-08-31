@@ -15,6 +15,7 @@ import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
 import { AddNodeDialog } from '../features/ownership/AddNodeDialog.jsx';
 import { AttachToParentDialog } from '../features/ownership/AttachToParentDialog.jsx';
+import { DeleteNodeDialog } from '../features/ownership/DeleteNodeDialog.jsx';
 import { useOwnershipTree } from '../features/ownership/useOwnershipTree.js';
 import { NodeDrawer } from '../features/deal/review/NodeDrawer.jsx';
 import { DealDrawer } from '../features/deal/review/DealDrawer.jsx';
@@ -72,18 +73,19 @@ export function DealReviewScreen() {
   const [dealDrawerOpen, setDealDrawerOpen] = useState(false);
   const [addDialog, setAddDialog]           = useState(null);
   const [attachNodeId, setAttachNodeId]     = useState(null);
+  const [changeOwner, setChangeOwner]       = useState(null);   // { nodeId, edge }
+  const [deleteNodeId, setDeleteNodeId]     = useState(null);
   const [statusOpen, setStatusOpen]         = useState(false);
   const [actionError, setActionError]       = useState(null);
 
   const dealQ = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
   const tree  = useOwnershipTree(dealId);
 
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['deals', dealId] });
-    qc.invalidateQueries({ queryKey: ['deals', 'queue'] });
-    qc.invalidateQueries({ queryKey: ['deals', 'mine'] });
-    qc.invalidateQueries({ queryKey: ['deals', 'firm'] });
-  };
+  // One prefix, every deals query. This used to name four keys and still missed ['deals','list'] —
+  // the register's — so acting on a deal here left the list you came from showing the old status.
+  // That list is now the only one an agent has, and TanStack matches key prefixes, so naming the
+  // root covers the detail, the queues and the register at once. Same call NewDealPage makes.
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['deals'] });
 
   /** What each move is called once it has happened, and how loudly to say it. */
   const SAID = {
@@ -137,7 +139,6 @@ export function DealReviewScreen() {
   }
 
   const deal        = dealQ.data;
-  const isFirstNode = !tree.tree || tree.tree.nodes.length === 0;
   const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === deal.createdByUserId;
 
   // A NEW deal in the broker's hands is unfinished, and finishing it is what the form is for — so
@@ -256,8 +257,10 @@ export function DealReviewScreen() {
             onSelectNode={(nodeId) => { setDealDrawerOpen(false); setSelectedNodeId(nodeId); }}
             onAddRoot={() => setAddDialog({ parentNodeId: null })}
             onAddChild={(parentNodeId) => setAddDialog({ parentNodeId })}
-            onSetRoot={(nodeId) => tree.setRoot.mutate(nodeId)}
             onAttachDetached={setAttachNodeId}
+            onChangeOwner={mayEdit ? (nodeId, edge) => setChangeOwner({ nodeId, edge }) : undefined}
+            onDetachFromParent={mayEdit ? (edgeId) => tree.deleteEdge.mutate(edgeId) : undefined}
+            onDeleteNode={mayEdit ? setDeleteNodeId : undefined}
             readOnly={!mayEdit}
             // Two right-hand drawers open at once would stack two backdrops on each other, so
             // opening either closes the other.
@@ -302,6 +305,7 @@ export function DealReviewScreen() {
         useTree={tree}
         dealId={dealId}
         onClose={() => setSelectedNodeId(null)}
+        onRequestDelete={mayEdit ? setDeleteNodeId : undefined}
         readOnly={!mayEdit}
       />
 
@@ -313,7 +317,6 @@ export function DealReviewScreen() {
         parentLabel={addDialog?.parentNodeId != null
           ? tree.tree?.nodes.find((n) => n.id === addDialog.parentNodeId)?.displayName
           : null}
-        isFirstNode={isFirstNode}
         useTree={tree}
         // Straight into the panel that asks for everything the picker no longer does.
         onCreated={setSelectedNodeId}
@@ -328,12 +331,31 @@ export function DealReviewScreen() {
         onSubmit={(transition, reason) => statusMut.mutateAsync({ transition, reason })}
       />
 
+      {/* One dialog, two jobs: attaching a node that has no owner, and moving one that has.
+          `replaceEdge` is what tells them apart — see AttachToParentDialog. */}
       <AttachToParentDialog
-        open={attachNodeId != null}
-        node={tree.tree?.nodes.find((n) => n.id === attachNodeId) ?? null}
+        open={attachNodeId != null || changeOwner != null}
+        node={tree.tree?.nodes.find(
+          (n) => n.id === (changeOwner ? changeOwner.nodeId : attachNodeId)) ?? null}
+        replaceEdge={changeOwner?.edge ?? null}
         tree={tree.tree}
         useTree={tree}
-        onClose={() => setAttachNodeId(null)}
+        onClose={() => { setAttachNodeId(null); setChangeOwner(null); }}
+      />
+
+      {/* One dialog for both entry points — the row's kebab and the drawer's Remove button — so
+          "delete this node" cannot come to mean two different things. */}
+      <DeleteNodeDialog
+        open={deleteNodeId != null}
+        tree={tree.tree}
+        nodeId={deleteNodeId}
+        useTree={tree}
+        onClose={() => setDeleteNodeId(null)}
+        onDeleted={() => {
+          // The drawer may be showing a node that no longer exists.
+          if (selectedNodeId != null) setSelectedNodeId(null);
+          setDeleteNodeId(null);
+        }}
       />
     </Stack>
   );

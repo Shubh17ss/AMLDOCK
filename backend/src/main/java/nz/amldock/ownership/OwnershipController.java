@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/deals/{dealId}/ownership")
 public class OwnershipController {
@@ -68,9 +70,15 @@ public class OwnershipController {
     @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
     public ResponseEntity<Void> deleteNode(@PathVariable Long dealId, @PathVariable Long nodeId,
                                            @RequestParam(defaultValue = "false") boolean force) {
-        ownership.deleteNode(dealId, nodeId, force);
+        List<Long> removed = ownership.deleteNode(dealId, nodeId, force);
+        // The ids rather than a count: a cascade can take nodes the caller never named, and the
+        // trail is the only place that record exists once the rows are gone.
         audit.record(AuditAction.NODE_DELETED, "OwnershipNode", nodeId,
-                "Deleted node " + nodeId + (force ? " (cascade)" : ""));
+                removed.size() == 1
+                        ? "Deleted node " + nodeId
+                        : "Deleted node " + nodeId + " and " + (removed.size() - 1)
+                                + " held up by it",
+                "{\"removedNodeIds\":" + removed + "}");
         return ResponseEntity.noContent().build();
     }
 

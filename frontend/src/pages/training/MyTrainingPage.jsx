@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Badge, Box, Stack, Tab, Tabs } from '@mui/material';
+import { Box, Stack, Tab, Tabs } from '@mui/material';
 import { listTrainingSessions, listTrainingCourses } from '../../api/training.js';
 import { MySessionsTab } from './MySessionsTab.jsx';
 import { MyCoursesTab } from './MyCoursesTab.jsx';
@@ -18,6 +18,9 @@ import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
  * card names its own branch instead. The tab badges carry the outstanding count so it's obvious
  * where the work is.
  */
+/** "Sessions · 3" — the count only when there is something outstanding to count. */
+const countLabel = (label, count) => (count > 0 ? `${label} · ${count}` : label);
+
 export function MyTrainingPage() {
   const { firm } = useDashboardScope();
 
@@ -47,13 +50,6 @@ export function MyTrainingPage() {
   const outstanding = sessionsOutstanding + coursesOutstanding;
   const assigned = sessions.length + courses.length;
 
-  const countBadge = (label, count) => (
-    <Badge color="primary" badgeContent={count}
-           sx={{ '& .MuiBadge-badge': { right: -12, top: 2 } }}>
-      {label}
-    </Badge>
-  );
-
   return (
     <Stack spacing={2.5}>
       <PageHeader
@@ -66,9 +62,30 @@ export function MyTrainingPage() {
 
       <ScopeGate what="Training" requireBranch={false}>
         <Stack spacing={2.5}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ alignSelf: 'flex-start' }}>
-            <Tab value="sessions" label={countBadge('Sessions', sessionsOutstanding)} />
-            <Tab value="courses" label={countBadge('Courses', coursesOutstanding)} />
+          {/* Two controls, one track. The theme already renders MuiTabs as a segmented pill with a
+              sliding indicator (theme.js › MuiTabs), which is the control this screen wants and
+              which StaffTrainingPage already uses — so this stays Tabs rather than a hand-rolled
+              button pair, and keeps arrow-key navigation and the tab/tabpanel semantics with it.
+
+              The track stretches on a phone, where the two halves need to be real touch targets,
+              and sizes to its labels on a desktop, where a control stretched across a 1400px page
+              would read as a banner rather than as a choice between two things. Done with `sx`
+              rather than `variant="fullWidth"` because the variant applies at every breakpoint —
+              which is exactly how it ended up spanning the desktop page.
+
+              The outstanding count is folded into the label rather than hung off a Badge: the
+              badge's `right: -12` overlaps the track edge once the tabs stretch, and a count
+              reading "0" is an alarm about nothing. */}
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            sx={{
+              alignSelf: { xs: 'stretch', md: 'flex-start' },
+              '& .MuiTab-root': { flex: { xs: 1, md: '0 0 auto' } },
+            }}
+          >
+            <Tab value="sessions" label={countLabel('Sessions', sessionsOutstanding)} />
+            <Tab value="courses" label={countLabel('Courses', coursesOutstanding)} />
           </Tabs>
 
           <Box>

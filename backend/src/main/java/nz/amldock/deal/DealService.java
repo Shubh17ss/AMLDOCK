@@ -22,6 +22,7 @@ import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
 import nz.amldock.firm.RealEstateFirmRepository;
+import nz.amldock.notification.DealNotificationEnqueuer;
 import nz.amldock.property.Property;
 import nz.amldock.property.PropertyRepository;
 import nz.amldock.property.dto.PropertyDto;
@@ -56,6 +57,7 @@ public class DealService {
     private final DealRiskService risk;
     private final OwnershipService ownership;
     private final AuditService audit;
+    private final DealNotificationEnqueuer notifier;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -68,7 +70,8 @@ public class DealService {
                        BeneficialOwnerService beneficialOwners,
                        DealRiskService risk,
                        OwnershipService ownership,
-                       AuditService audit) {
+                       AuditService audit,
+                       DealNotificationEnqueuer notifier) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -81,6 +84,7 @@ public class DealService {
         this.risk = risk;
         this.ownership = ownership;
         this.audit = audit;
+        this.notifier = notifier;
     }
 
     /* ---------- queries ---------- */
@@ -256,6 +260,11 @@ public class DealService {
         // asks about trusts in section 3 — but POST /deals accepts the field, so an API client
         // can answer it here. Leaving it out would make the rule depend on which door you came in.
         if (Boolean.TRUE.equals(req.trustInvolved())) recordImpliedTrust(saved.getId());
+
+        // Inside this transaction on purpose, and after setReference above: the reference needs the
+        // generated id, and the payload snapshot would otherwise capture a null. See
+        // DealNotificationEnqueuer for why the outbox row must commit with the deal.
+        notifier.enqueueDealCreated(saved, actor);
         return saved;
     }
 
@@ -408,6 +417,7 @@ public class DealService {
         UserPrincipal actor = currentPrincipal();
         DealStatus previous = lifecycle.transition(d, actor, action, firmIdOf(d), note);
         dealNotes.appendTransition(d, actor, note, previous, d.getStatus());
+        notifier.enqueueStatusChanged(d, actor, previous);
         return new TransitionResult(d, previous);
     }
 
@@ -435,6 +445,7 @@ public class DealService {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         DealStatus previous = lifecycle.override(d, currentPrincipal(), target, firmIdOf(d), reason);
         dealNotes.appendTransition(d, currentPrincipal(), reason, previous, d.getStatus());
+        notifier.enqueueStatusChanged(d, currentPrincipal(), previous);
         return new OverrideResult(d, previous);
     }
 

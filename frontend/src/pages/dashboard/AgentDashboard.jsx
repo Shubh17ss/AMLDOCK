@@ -8,6 +8,7 @@ import { Bento, HeroTile, StatTile, ListTile, ActionTile, SkeletonTiles } from '
 import { dealStatusDot } from '../../data/dealStatus.js';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
 import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
+import { DEALS_PATH } from '../../navigation/moduleRegistry.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { tokens } from '../../theme/theme.js';
 
@@ -48,9 +49,9 @@ export function AgentDashboard() {
       />
 
       <StatTile index={1} eyebrow="WITH YOU" dot={dealStatusDot('NEW')} value={mine.length}
-                label="New or sent back" to="/my-deals" />
+                label="New or sent back" to={DEALS_PATH} />
       <StatTile index={2} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={inReview.length}
-                label="With compliance" color={inReview.length ? tokens.review : undefined} to="/my-deals" />
+                label="With compliance" color={inReview.length ? tokens.review : undefined} to={DEALS_PATH} />
       <StatTile index={3} eyebrow={`${money.code} · IN FLIGHT`} cols={2} mono value={money.formatCompact(sum(inReview))}
                 label="Value awaiting clearance" />
 
@@ -58,7 +59,7 @@ export function AgentDashboard() {
         index={4}
         eyebrow="RECENT · UPDATED"
         title="Your recent deals"
-        to="/my-deals"
+        to={DEALS_PATH}
         items={recent}
         renderItem={(d) => <DealRow deal={d} />}
         empty="No deals yet — start your first to see it here."
@@ -68,13 +69,13 @@ export function AgentDashboard() {
         index={5}
         actions={[
           { to: '/deals/new', label: 'New deal', icon: <AddIcon fontSize="small" />, primary: true },
-          { to: '/my-deals', label: 'My deals', icon: <DescriptionIcon fontSize="small" /> },
+          { to: DEALS_PATH, label: 'My deals', icon: <DescriptionIcon fontSize="small" /> },
         ]}
       />
 
       <StatTile index={6} eyebrow="VERIFIED" dot={dealStatusDot('VERIFIED')} value={verified.length}
-                label="Cleared" color={verified.length ? tokens.approved : undefined} to="/my-deals" />
-      <StatTile index={7} eyebrow="ALL DEALS" value={deals.length} label="Total on your desk" to="/my-deals" />
+                label="Cleared" color={verified.length ? tokens.approved : undefined} to={DEALS_PATH} />
+      <StatTile index={7} eyebrow="ALL DEALS" value={deals.length} label="Total on your desk" to={DEALS_PATH} />
     </Bento>
   );
 }

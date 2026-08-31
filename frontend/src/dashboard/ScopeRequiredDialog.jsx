@@ -3,9 +3,14 @@ import {
   FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { useDashboardScope } from './DashboardScope.jsx';
+import { SCOPE_SETUP_ROLES } from '../auth/roles.js';
+import { useDashboardScope, isScopeExemptPath } from './DashboardScope.jsx';
 import { tokens, fonts } from '../theme/theme.js';
+
+const FIRMS_ADMIN_PATH = '/settings/reporting-entities';
 
 /**
  * Blocks the app until a single reporting entity and a single branch are chosen.
@@ -16,9 +21,11 @@ import { tokens, fonts } from '../theme/theme.js';
  * consumers rendered unscoped data, while a dozen write paths posted `realEstateFirmId: undefined`
  * with nothing stopping them. This is the rule made real.
  *
- * <p>Not dismissible. "All entities" no longer exists, so there is nothing to dismiss *to*. The one
- * way out is signing out, which matters for the single state this dialog cannot resolve on its
- * own: an entity whose branches are all inactive.
+ * <p>Not dismissible by clicking away — "All entities" no longer exists, so there is nothing to
+ * dismiss *to*. There are two ways out. Signing out, always. And, for the two states the dialog
+ * cannot resolve with a dropdown — no reporting entity on the platform at all, or an entity whose
+ * branches are all inactive — a button through to Settings › Reporting Entities, which is
+ * scope-exempt precisely so that the rule cannot trap the account that exists to satisfy it.
  *
  * <p>Branch-level staff never see it — DashboardScopeProvider pins both values from their own
  * record before the first paint. The exception is one whose record names no branch: they are
@@ -28,6 +35,9 @@ import { tokens, fonts } from '../theme/theme.js';
  */
 export function ScopeRequiredDialog() {
   const { user, logout } = useAuth();
+  // Both above the early return below, or the hook count changes the moment the scope completes.
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const {
     firm, branch, firmOptions, activeBranches, selectFirm, selectBranch,
     isRoot, branchSelectable, currentFirmId, optionsLoading, scopeComplete, scopeSettled,
@@ -35,12 +45,34 @@ export function ScopeRequiredDialog() {
 
   // `scopeSettled` keeps a branch-level user — whose scope pins itself the moment the branches
   // query resolves — from seeing this flash open and shut on every cold load.
-  if (!user || scopeComplete || !scopeSettled) return null;
+  //
+  // The path clause is the way out. Settings › Reporting Entities is where both dead ends below are
+  // repaired, so the dialog stands down there rather than covering the only screen that can answer
+  // it. There is no dismissal state: navigating away re-arms it, and a refresh on the exempt path
+  // lands with it still down.
+  if (!user || scopeComplete || !scopeSettled || isScopeExemptPath(pathname)) return null;
 
-  // A firm whose branches are all inactive: nothing to select, and not something the dialog can
-  // resolve. Only rendered once the list has actually arrived, so a slow network never shows a
-  // dead end that then fixes itself.
-  const noBranches = Boolean(currentFirmId) && activeBranches.length === 0;
+  // The two states this dialog cannot resolve on its own, because the thing to choose does not
+  // exist. Both wait on `optionsLoading` so a slow network never paints a dead end that then fixes
+  // itself — `noBranches` used to get that implicitly from rendering inside the ternary below, but
+  // the escape button sits in DialogActions, outside it, and would otherwise flash on every load.
+  //
+  //   noEntities — nothing onboarded yet. Only reachable by ROOT and AUDIT, the two roles asked to
+  //                choose an entity at all; everyone else has theirs pinned from their account.
+  //   noBranches — an entity whose branches are all inactive.
+  const noEntities = !optionsLoading && firmOptions.length === 0;
+  const noBranches = Boolean(currentFirmId) && !optionsLoading && activeBranches.length === 0;
+  const deadEnd = noEntities || noBranches;
+
+  // AUDIT reaches both screens — it is in SETTINGS_ROLES — but may create neither an entity nor a
+  // branch, so the button would only move its dead end one screen along. It gets the explanation
+  // and Sign out instead.
+  const canFixScope = SCOPE_SETUP_ROLES.includes(user.role);
+
+  // Where each dead end is repaired. A has no entity to deep-link to, so it goes to the register and
+  // its create button; B goes straight to the entity's own page, whose branches card is the exact
+  // control needed.
+  const setupPath = noEntities ? FIRMS_ADMIN_PATH : `${FIRMS_ADMIN_PATH}/${currentFirmId}`;
 
   return (
     <Dialog
@@ -87,7 +119,9 @@ export function ScopeRequiredDialog() {
           <Stack spacing={2}>
             {/* ROOT and AUDIT belong to no entity and pick one; everybody else has theirs. */}
             {isRoot ? (
-              <FormControl fullWidth required>
+              // Disabled when empty, mirroring the branch control below. A required-looking select
+              // that opens an empty popper is the visual signature of a broken screen.
+              <FormControl fullWidth required disabled={noEntities}>
                 <InputLabel id="scope-entity-label">Reporting entity</InputLabel>
                 <SelectField
                   labelId="scope-entity-label"
@@ -127,10 +161,21 @@ export function ScopeRequiredDialog() {
               />
             )}
 
+            {noEntities && (
+              <Alert severity="warning">
+                No reporting entities have been set up yet.
+                {canFixScope
+                  ? ' Create the first one to start using the workspace.'
+                  : ' Ask a platform administrator to create one.'}
+              </Alert>
+            )}
+
             {noBranches && (
               <Alert severity="warning">
-                {firm?.name ?? 'This entity'} has no active branches. Ask an administrator to add
-                one under Settings.
+                {firm?.name ?? 'This entity'} has no active branches.
+                {canFixScope
+                  ? ' Add one to continue.'
+                  : ' Ask an administrator to add one under Settings › Reporting entities.'}
               </Alert>
             )}
           </Stack>
@@ -138,13 +183,29 @@ export function ScopeRequiredDialog() {
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        {/* Always present. Without it, the two dead ends above would strand the user in a modal
-            with no exit. */}
+        {/* Always present. Not everyone's dead end is theirs to fix — AUDIT creates nothing, and a
+            firm-level user on a suspended entity has nowhere to go. */}
         <Button onClick={logout} color="inherit">Sign out</Button>
         <Box sx={{ flexGrow: 1 }} />
-        {/* No confirm button: choosing both values closes the dialog on its own, so a Continue
-            that is only ever clickable at the moment it becomes redundant would be furniture. */}
-        {!noBranches && !optionsLoading && (
+
+        {/* No confirm button in the ordinary case: choosing both values closes the dialog on its
+            own, so a Continue that is only ever clickable at the moment it becomes redundant would
+            be furniture. A dead end is the exception — there is nothing to choose, so the only
+            useful action is to go and create what is missing. Navigating there is enough to close
+            this: the route is scope-exempt, so the next render returns null. */}
+        {deadEnd && canFixScope && (
+          <Button
+            variant="contained"
+            endIcon={<ArrowForwardRoundedIcon />}
+            onClick={() => navigate(setupPath)}
+          >
+            {noEntities ? 'Set up reporting entities' : 'Add a branch'}
+          </Button>
+        )}
+
+        {/* `!deadEnd`, not `!noBranches`: with no entities at all the old guard was true and this
+            told ROOT to choose from an empty list. The alert and the button take that space now. */}
+        {!deadEnd && !optionsLoading && (
           <Typography variant="caption" sx={{ color: tokens.muted }}>
             {firm?.id ? 'Choose a branch to continue' : 'Choose an entity to continue'}
           </Typography>

@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { roleLabel } from '../auth/roles.js';
 import { changePassword } from '../api/auth.js';
 import { PageHeader } from '../components/PageHeader.jsx';
+import { DealNotificationsCard } from '../features/notifications/DealNotificationsCard.jsx';
 import { tokens } from '../theme/theme.js';
 
 export function ProfilePage() {
@@ -44,6 +45,8 @@ export function ProfilePage() {
           </Stack>
         </CardContent>
       </Card>
+
+      <DealNotificationsCard />
 
       {user?.role === 'ROOT' ? (
         <Card>

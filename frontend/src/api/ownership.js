@@ -190,7 +190,3 @@ export async function deleteEdge(dealId, edgeId) {
   await apiClient.delete(`/deals/${dealId}/ownership/edges/${edgeId}`);
 }
 
-export async function setRoot(dealId, nodeId) {
-  const { data } = await apiClient.post(`/deals/${dealId}/ownership/root`, { nodeId });
-  return data;
-}

@@ -17,12 +17,13 @@ import { useToast } from '../../components/ToastProvider.jsx';
 import { DealDocumentList } from '../deal/review/DealDocumentList.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
 import { tokens } from '../../theme/theme.js';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 
 // Three user-facing manual states mapped onto the existing backend enum.
 const VERIFICATION_OPTIONS = [
-  { value: 'VERIFIED',    label: 'Verified',          tone: 'success' },
+  { value: 'VERIFIED', label: 'Verified', tone: 'success' },
   { value: 'IN_PROGRESS', label: 'Under verification', tone: 'info' },
-  { value: 'FAILED',      label: 'Not verified',       tone: 'error' },
+  { value: 'FAILED', label: 'Not verified', tone: 'error' },
 ];
 
 /**
@@ -33,7 +34,7 @@ const VERIFICATION_OPTIONS = [
  * Documents and Verifications tabs are placeholders for M8 / M9.
  */
 export function NodeEditorPane({
-  tree, selectedNodeId, useTree, onCleared, dealId,
+  tree, selectedNodeId, useTree, onRequestDelete, dealId,
   /** Which panel to show. Owned by NodeDrawer, which draws the tab strip. */
   tab = 'details',
   /**
@@ -47,7 +48,6 @@ export function NodeEditorPane({
   const [verification, setVerification] = useState({ status: 'IN_PROGRESS', notes: '' });
   const [verificationVoice, setVerificationVoice] = useState(null); // Blob | null
   const [error, setError] = useState(null);
-  const [deleting, setDeleting] = useState(false);
   const { showToast } = useToast();
   // The document open in the viewer, or null. Held whole rather than by id: both lists
   // already have the row in hand, and re-finding it would mean each knowing about the other.
@@ -207,31 +207,13 @@ export function NodeEditorPane({
     }
   };
 
-  const handleDelete = async () => {
-    setError(null);
-    setDeleting(true);
-    try {
-      // Try without force first.
-      await useTree.deleteNode.mutateAsync({ nodeId: selected.id, force: false });
-      onCleared?.();
-    } catch (err) {
-      const message = err.response?.data?.message || '';
-      if (/edges/i.test(message)) {
-        if (window.confirm('This node has edges. Delete it anyway? Edges will also be removed.')) {
-          try {
-            await useTree.deleteNode.mutateAsync({ nodeId: selected.id, force: true });
-            onCleared?.();
-          } catch (err2) {
-            setError(err2.response?.data?.message || 'Failed to force-delete');
-          }
-        }
-      } else {
-        setError(message || 'Failed to delete');
-      }
-    } finally {
-      setDeleting(false);
-    }
-  };
+  // Hands off to the same dialog the row's kebab opens, rather than deleting from here.
+  //
+  // This used to attempt the delete, read the server's "node has N edges" refusal, and escalate to
+  // a window.confirm offering to force it. That warned about the wrong thing: the edges were never
+  // the cost, the nodes underneath were — and forcing it left them behind as orphans anyway. The
+  // dialog counts what is actually going before anything is attempted.
+  const handleDelete = () => onRequestDelete?.(selected.id);
 
   return (
     <Box>
@@ -260,14 +242,22 @@ export function NodeEditorPane({
               {/* Percentage only. The edge used to carry a Link role as well, which was a second
                   answer to the question Type already asks on the node itself. */}
               <TextField label="Percentage" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }}
-                         value={edgeForm.percentage}
-                         onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
-                         sx={{ width: 180 }} />
-              <Stack direction="row" spacing={1}>
-                <Button size="small" variant="outlined" onClick={saveEdge}
-                        disabled={useTree.updateEdge.isPending}>Save link</Button>
-                <Button size="small" color="error" onClick={detachFromParent}
-                        disabled={useTree.deleteEdge.isPending}>Detach from parent</Button>
+                value={edgeForm.percentage}
+                onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
+                sx={{ width: 180 }} />
+              {/* Same shape as the Update / Remove pair at the foot of this tab: two equal
+                  buttons filling the row, the destructive one bordered rather than solid. Both
+                  default size, so the heights and the 12px radius match. */}
+              <Stack direction="row" justifyContent="space-between">
+                <Button variant="outlined" color="error" onClick={detachFromParent}
+                  disabled={useTree.deleteEdge.isPending} sx={{ width: '45%' }}>
+                  <LinkOffIcon fontSize="small" sx={{ mr: 1 }} />
+                  Detach from parent
+                </Button>
+                <Button variant="contained" onClick={saveEdge}
+                  disabled={useTree.updateEdge.isPending} sx={{ width: '45%' }}>
+                  Save link
+                </Button>
               </Stack>
             </>
           )}
@@ -275,15 +265,14 @@ export function NodeEditorPane({
           {!readOnly && (
             <>
               <Divider />
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Button variant="contained" startIcon={<SaveIcon />} onClick={saveDetails}
-                        disabled={useTree.updateNode.isPending}>
-                  {useTree.updateNode.isPending ? 'Saving…' : 'Save details'}
+              <Stack direction="row" justifyContent="space-between">
+                <Button variant="outlined" color="error" startIcon={<DeleteOutlineIcon />}
+                  onClick={handleDelete} sx={{ width: '45%' }}>
+                  Remove from structure
                 </Button>
-                <Box sx={{ flexGrow: 1 }} />
-                <Button size="small" color="error" startIcon={<DeleteOutlineIcon />}
-                        onClick={handleDelete} disabled={deleting}>
-                  {deleting ? 'Removing…' : 'Remove from structure'}
+                <Button variant="contained" onClick={saveDetails}
+                  disabled={useTree.updateNode.isPending} sx={{ width: '45%' }}>
+                  {useTree.updateNode.isPending ? 'Saving…' : 'Update'}
                 </Button>
               </Stack>
             </>

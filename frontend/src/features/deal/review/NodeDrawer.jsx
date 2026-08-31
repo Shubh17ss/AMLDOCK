@@ -30,7 +30,7 @@ const TABS = [
  * button, the footer, or clicking the tree behind it. Nothing here is a commit, so leaving costs
  * nothing — each tab saves its own work with its own button.
  */
-export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, readOnly = false }) {
+export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onRequestDelete, readOnly = false }) {
   const [tab, setTab] = useState('details');
 
   // A different owner opens on Details. Landing on whichever tab the last one was left on would
@@ -155,7 +155,7 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, readOnl
             useTree={useTree}
             dealId={dealId}
             tab={tab}
-            onCleared={onClose}
+            onRequestDelete={onRequestDelete}
           />
         )}
       </Box>

@@ -5,12 +5,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface DocumentRepository extends JpaRepository<Document, Long> {
     List<Document> findAllByDealIdAndStatusOrderByCreatedAtDesc(Long dealId, DocumentStatus status);
     List<Document> findAllByOwnershipNodeIdAndStatusOrderByCreatedAtDesc(Long nodeId, DocumentStatus status);
+
+    /**
+     * Every document on any of these nodes, whatever its status.
+     *
+     * <p>Status-blind on purpose, unlike the finder above: the caller is about to delete the nodes,
+     * and {@code document.ownership_node_id} is ON DELETE CASCADE, so every row here is going
+     * regardless of what state it was in. Anything filtered out would leave its file in the bucket.
+     */
+    List<Document> findAllByOwnershipNodeIdIn(Collection<Long> nodeIds);
     Optional<Document> findByS3Key(String s3Key);
 
     /** The images making up one person's identity document — at most a front and a back. */

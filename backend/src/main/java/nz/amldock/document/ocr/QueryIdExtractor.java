@@ -38,21 +38,47 @@ import java.util.stream.Collectors;
 @Component
 public class QueryIdExtractor implements IdExtractor {
 
-    static final String ALIAS_FULL_NAME = "FULL_NAME";
-    static final String ALIAS_DOB       = "DATE_OF_BIRTH";
-    static final String ALIAS_EXPIRY    = "EXPIRY_DATE";
-    static final String ALIAS_VALIDITY  = "VALIDITY";
+    static final String ALIAS_FULL_NAME   = "FULL_NAME";
+    static final String ALIAS_GIVEN_NAMES = "GIVEN_NAMES";
+    static final String ALIAS_SURNAME     = "SURNAME";
+    static final String ALIAS_DOB         = "DATE_OF_BIRTH";
+    static final String ALIAS_EXPIRY      = "EXPIRY_DATE";
+    static final String ALIAS_VALIDITY    = "VALIDITY";
+    static final String ALIAS_EXPIRES     = "EXPIRES";
 
-    private static final List<Query> QUERIES = List.of(
+    /** Textract rejects a request carrying more than this many queries. */
+    static final int MAX_QUERIES = 15;
+
+    static final List<Query> QUERIES = List.of(
             Query.builder().alias(ALIAS_FULL_NAME).text("What is the full name of the document holder?").build(),
+            // Asked as well as the full name, not instead of it. A great many cards never print a
+            // combined name at all — an NZ licence prints "1. Surname" and "2. First names" on
+            // separate lines and nothing that reads as a whole name — so the full-name question has
+            // no line to match and the holder comes back unnamed. See chooseName for how the two
+            // halves are put back together, and why the combined reading still wins when there is one.
+            Query.builder().alias(ALIAS_GIVEN_NAMES).text("What are the given names or first names of the document holder?").build(),
+            Query.builder().alias(ALIAS_SURNAME).text("What is the surname or family name of the document holder?").build(),
             Query.builder().alias(ALIAS_DOB).text("What is the date of birth?").build(),
             Query.builder().alias(ALIAS_EXPIRY).text("What is the expiry date?").build(),
             // Asked as well as the expiry question, not instead of it. Plenty of cards never print
             // the word "expiry" — NZ licences say "Valid to", many national identity cards print
             // "Validity" or "Valid until" — and a semantic match against the wrong label is the
             // most common way this path returns no expiry at all. Queries is billed per page
-            // rather than per question, so the second reading costs nothing; the limit is 15.
-            Query.builder().alias(ALIAS_VALIDITY).text("Until what date is this document valid?").build());
+            // rather than per question, so the extra readings cost nothing.
+            Query.builder().alias(ALIAS_VALIDITY).text("Until what date is this document valid?").build(),
+            // And a third phrasing for the bare label: an NZ licence prints "6. Expires" with no
+            // "date" and no "valid" anywhere near it.
+            Query.builder().alias(ALIAS_EXPIRES).text("When does this document expire?").build());
+
+    static {
+        // The cap used to be a remark in a comment. Exceeding it is an InvalidParameterException,
+        // which IdExtractionService.isRetryable classifies as non-retryable — so it would not fail
+        // loudly at the 16th query, it would quietly burn a document's attempt and mark it FAILED.
+        if (QUERIES.size() > MAX_QUERIES) {
+            throw new IllegalStateException(
+                    "Textract accepts at most " + MAX_QUERIES + " queries, got " + QUERIES.size());
+        }
+    }
 
     private final TextractClient textract;
 
@@ -78,14 +104,84 @@ public class QueryIdExtractor implements IdExtractor {
         AnalyzeDocumentResponse res = textract.analyzeDocument(req);
         Map<String, Block> answers = answersByAlias(res.blocks());
 
-        Block nameBlock = answers.get(ALIAS_FULL_NAME);
-        Block dobBlock  = answers.get(ALIAS_DOB);
+        Block dobBlock = answers.get(ALIAS_DOB);
+        ExtractedField<LocalDate> dob =
+                ExtractedField.fromPercent(date(dobBlock), confidence(dobBlock));
 
         return new ExtractedIdFields(
-                ExtractedField.fromPercent(text(nameBlock), confidence(nameBlock)),
-                ExtractedField.fromPercent(date(dobBlock), confidence(dobBlock)),
-                chooseExpiry(answers.get(ALIAS_EXPIRY), answers.get(ALIAS_VALIDITY)),
+                chooseName(answers.get(ALIAS_FULL_NAME),
+                           answers.get(ALIAS_GIVEN_NAMES),
+                           answers.get(ALIAS_SURNAME)),
+                dob,
+                rejectDobEcho(
+                        chooseExpiry(answers.get(ALIAS_EXPIRY),
+                                     answers.get(ALIAS_VALIDITY),
+                                     answers.get(ALIAS_EXPIRES)),
+                        dob),
                 rawText(res.blocks()));
+    }
+
+    /**
+     * Settles the combined-name reading and the two half-name readings into one name.
+     *
+     * <p>The full-name question stays authoritative on the same grounds as the expiry one below: it
+     * names the field being asked for. The halves are used when it read nothing — the NZ licence
+     * case, where there is no combined line on the card to find — or when both of them are read
+     * strictly better than it was.
+     *
+     * <p>Both halves are required to compose. Half a name is worse than no name: it would be
+     * written to the record as if it were whole, and a surname on its own is indistinguishable from
+     * a full name that happens to be short.
+     *
+     * <p>The composed reading takes the <em>lower</em> of the two confidences — a name assembled
+     * from two readings is only as trustworthy as its weaker half. That is the rule
+     * {@code IdExtractionService.weakestConfidence} already applies across fields.
+     *
+     * <p>Given names first, matching {@code MrzParser.parseName}: this becomes a display name, and
+     * it should read the way its holder writes it.
+     */
+    static ExtractedField<String> chooseName(Block fullBlock, Block givenBlock, Block surnameBlock) {
+        ExtractedField<String> full =
+                ExtractedField.fromPercent(text(fullBlock), confidence(fullBlock));
+
+        String given = text(givenBlock);
+        String surname = text(surnameBlock);
+        if (given == null || surname == null) return full;
+
+        ExtractedField<String> composed = ExtractedField.fromPercent(
+                given + " " + surname, weaker(confidence(givenBlock), confidence(surnameBlock)));
+
+        if (!full.isPresent()) return composed;
+        return moreConfident(composed, full) ? composed : full;
+    }
+
+    /** Null means unmeasured, and an unmeasured half makes the whole composite unmeasured. */
+    private static Float weaker(Float a, Float b) {
+        return a == null || b == null ? null : Math.min(a, b);
+    }
+
+    /**
+     * Drops an expiry reading that is really the date of birth.
+     *
+     * <p>A card face carrying no expiry at all invites this: asked when the document expires, with
+     * no expiry printed anywhere on the image, Textract answers with the most date-shaped thing it
+     * can find, and on the front of a licence that is the date of birth. {@link #chooseExpiry}
+     * cannot catch it, because its <em>not earlier</em> guard needs two readings to compare and
+     * this arrives as the only one.
+     *
+     * <p>Rejected outright rather than merely de-prioritised. {@code
+     * BeneficialOwnerService.shouldWrite} replaces a stored value only on strictly higher
+     * confidence, so a confidently misread expiry from the front of a card squats in the record and
+     * locks out the correct reading when the back is scanned next. Leaving the field empty is what
+     * lets the second image fill it.
+     *
+     * <p>{@code isAfter} settles the equal and the earlier case together: nobody's document expires
+     * on or before the day they were born.
+     */
+    static ExtractedField<LocalDate> rejectDobEcho(ExtractedField<LocalDate> expiry,
+                                                   ExtractedField<LocalDate> dob) {
+        if (!expiry.isPresent() || !dob.isPresent()) return expiry;
+        return expiry.value().isAfter(dob.value()) ? expiry : ExtractedField.empty();
     }
 
     /**
@@ -105,15 +201,34 @@ public class QueryIdExtractor implements IdExtractor {
      * nothing and the other reading stands alone.
      */
     static ExtractedField<LocalDate> chooseExpiry(Block expiryBlock, Block validityBlock) {
-        ExtractedField<LocalDate> expiry =
-                ExtractedField.fromPercent(date(expiryBlock), confidence(expiryBlock));
-        ExtractedField<LocalDate> validity =
-                ExtractedField.fromPercent(date(validityBlock), confidence(validityBlock));
+        return chooseExpiry(expiryBlock, validityBlock, null);
+    }
 
-        if (!validity.isPresent()) return expiry;
-        if (!expiry.isPresent()) return validity;
-        if (validity.value().isBefore(expiry.value())) return expiry;
-        return moreConfident(validity, expiry) ? validity : expiry;
+    /**
+     * The same reconciliation across all three expiry readings, folded left so the expiry question
+     * stays the incumbent and each alternative has to unseat whatever survived before it.
+     *
+     * <p>Deliberately not varargs. Every existing caller passes a literal {@code null} for a
+     * question that went unanswered, and against {@code Block...} that null binds to the array
+     * rather than to an element — an immediate NullPointerException at the fold, for code that
+     * reads as though it should work.
+     */
+    static ExtractedField<LocalDate> chooseExpiry(Block expiryBlock, Block validityBlock, Block expiresBlock) {
+        ExtractedField<LocalDate> best =
+                ExtractedField.fromPercent(date(expiryBlock), confidence(expiryBlock));
+        best = preferBetterExpiry(best, validityBlock);
+        return preferBetterExpiry(best, expiresBlock);
+    }
+
+    /** One step of the fold: the incumbent holds unless the candidate is later-or-equal and better read. */
+    private static ExtractedField<LocalDate> preferBetterExpiry(ExtractedField<LocalDate> incumbent, Block block) {
+        ExtractedField<LocalDate> candidate =
+                ExtractedField.fromPercent(date(block), confidence(block));
+
+        if (!candidate.isPresent()) return incumbent;
+        if (!incumbent.isPresent()) return candidate;
+        if (candidate.value().isBefore(incumbent.value())) return incumbent;
+        return moreConfident(candidate, incumbent) ? candidate : incumbent;
     }
 
     /** Strictly higher confidence wins; an unmeasured reading never displaces a measured one. */

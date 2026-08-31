@@ -14,6 +14,7 @@
 // ON_HOLD, or goes back to NEW for the broker to fix. ON_HOLD's only exit is back to NEW.
 
 import { tokens } from '../theme/theme.js';
+import { isDealAuthor } from '../auth/roles.js';
 
 export const DEAL_STATUSES = ['NEW', 'REVIEW', 'ON_HOLD', 'VERIFIED', 'CLOSED'];
 
@@ -124,3 +125,19 @@ export const isReviewable = (s) => Boolean(s) && s !== 'NEW';
 
 /** Deals still needing compliance attention — what a reviewer's queue tiles count. */
 export const isOpenForReview = (s) => s === 'REVIEW' || s === 'ON_HOLD';
+
+/**
+ * Whether *this* viewer opens *this* deal in the form rather than on the read-only deal page.
+ *
+ * Finishing their own half-written deal is the one thing a broker wants with it, and the form opens
+ * at the first unanswered section. Everyone else — reviewers included — wants the deal page, where
+ * the ownership structure is. The author test carries the owner check the page guards already make:
+ * without it, opening a colleague's NEW deal links to a form that bounces you straight back.
+ *
+ * Lives here because both remaining deal lists ask it — DealsTable (Firm deals) and DealsPage (the
+ * register) — and each used to hold its own copy. A third list had none, which is how a broker
+ * tapping their own NEW deal on a phone reached the read-only page while the desktop table beside
+ * it opened the form. One predicate, so they cannot drift again.
+ */
+export const opensDealForm = (deal, user) =>
+  isEditable(deal.status) && isDealAuthor(user?.role) && user?.userId === deal.createdByUserId;

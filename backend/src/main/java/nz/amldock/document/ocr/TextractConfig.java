@@ -3,7 +3,6 @@ package nz.amldock.document.ocr;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -21,11 +20,13 @@ import java.util.concurrent.ThreadPoolExecutor;
  * bucket to live in the endpoint's region, and a drift between the two would surface as a runtime
  * InvalidS3ObjectException on real documents rather than as a startup failure.
  *
- * <p>{@code @EnableScheduling} lives here because the OCR poller is the only scheduled work in
- * the application. The other background path, email, is {@code @Async} and enabled on EmailConfig.
+ * <p>{@code @EnableScheduling} used to live here, back when the OCR poller was the only scheduled
+ * work in the application. It now sits on {@link nz.amldock.common.config.SchedulingConfig}, so
+ * that deal notifications — the second polled queue — do not depend on this class and its Textract
+ * client being constructed. The poller's own on/off switch is still local: see the
+ * {@code @ConditionalOnProperty} on {@link ScheduledIdExtractionDispatcher}.
  */
 @Configuration
-@EnableScheduling
 public class TextractConfig {
 
     @Bean

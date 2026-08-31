@@ -101,9 +101,39 @@ export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MAN
 // see the same screens scoped by the API to their own reporting entity. AUDIT opens them too but
 // every control inside is gated by canWrite / canManageUsers, so it only reads.
 export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
+// Who can repair a dead-ended dashboard scope themselves, as opposed to merely reading the screen
+// where it is repaired. SETTINGS_ROLES opens Settings › Reporting Entities; only these three may
+// write there — FirmController gates POST /firms on ROOT and POST /firms/{id}/branches on all
+// three, and AuditReadOnlyFilter refuses AUDIT's writes everywhere regardless. Derived rather than
+// listed so it cannot drift from SETTINGS_ROLES or from the read-only set.
+export const SCOPE_SETUP_ROLES = SETTINGS_ROLES.filter((r) => canWrite(r));
 // Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior manager
 // sees their own entity's, scoped server-side by actor in AuditService.search.
 export const AUDIT_LOG_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+// Settings › Notifications. Who may open the firm-wide matrix and change someone else's toggles.
+// AUDIT reads it like every other section; the switches inside are gated by canWrite, and the
+// server refuses its writes at AuditReadOnlyFilter regardless.
+export const NOTIFICATION_ADMIN_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
+
+// ── Deal email notifications ────────────────────────────────────────────────
+// Mirrors nz.amldock.notification.NotificationEligibility — keep the two in step. Everyone else
+// manages their own toggles on the Profile page, so this is about who has any to manage.
+//
+// ROOT, AUDIT and FINANCE are excluded by judgement rather than by read scope: assertCanRead
+// forbids only FINANCE and hands ROOT and AUDIT everything. ROOT belongs to no firm, and AUDIT
+// reads the record rather than being alerted by it.
+export const NOTIFIABLE_ROLES = [
+  'AGENT', 'AGENT_PA', 'ADMIN', 'SALES_MANAGER', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER',
+];
+export const canReceiveDealNotifications = (role) => NOTIFIABLE_ROLES.includes(role);
+/** Firm-level staff have no branch of their own, so they choose branch by branch. */
+export const choosesNotificationsPerBranch = (role) => isFirmLevel(role);
+
+// Labels for nz.amldock.notification.DealNotificationEvent, in the order the columns render.
+export const DEAL_NOTIFICATION_EVENTS = [
+  { id: 'DEAL_CREATED', label: 'Deal created' },
+  { id: 'DEAL_STATUS_CHANGED', label: 'Status changed' },
+];
 
 // Roles with the full compliance workspace. Everyone else is confined to the CDD section:
 // only CDD modules are visible in the sidebar / dashboard hub and only those routes resolve.
@@ -143,6 +173,15 @@ export const canDelete = (role) => DELETE_ROLES.includes(role);
 export const canManageReview = (role) => REVIEW_MANAGER_ROLES.includes(role);
 export const canManageUsers = (role) => USER_MANAGER_ROLES.includes(role);
 export const canOverride = (role) => role === 'SENIOR_MANAGER';
+
+// The phone-first roles. An agent's whole mobile job is: start a deal, check my deals, do my
+// training — so on a phone they get a home screen built around those three and nothing else.
+// ADMIN shares their permissions and their nav profile but works at a desk, so it keeps the full
+// mobile nav. Deliberately narrower than DEAL_AUTHOR_ROLES: this is about the shape of someone's
+// day, not about what they may write. Kept separate from navProfileFor for the same reason — that
+// function also picks the CDD bento in CddRegisterPage, which this must not disturb.
+export const BROKER_ROLES = ['AGENT', 'AGENT_PA'];
+export const isBroker = (role) => BROKER_ROLES.includes(role);
 
 /**
  * Coarse navigation/home profile a role maps to:

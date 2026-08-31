@@ -17,6 +17,9 @@ spring:
 
 # Actually send mail in dev (the SmtpEmailService switch reads MAIL_ENABLED).
 MAIL_ENABLED: true
+# Mailpit speaks SMTP, not the SES API, so dev sends one message per recipient to the local sink
+# instead of one bulk call to AWS. Same templates, same per-recipient outcomes.
+NOTIFICATIONS_TRANSPORT: smtp
 MAIL_SMTP_AUTH: false
 MAIL_SMTP_STARTTLS: false
 

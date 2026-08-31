@@ -24,6 +24,29 @@ import { readSavedScope, writeSavedScope } from './scopeStorage.js';
 // a branch-level user's both — is converged on every render, so a partial or stale saved scope
 // cannot leave someone facing a chooser it can't fill in for them.
 
+// ── Scope-exempt routes ─────────────────────────────────────────────────────
+// The one hole in "no page renders without a scope", and it exists because the rule can otherwise
+// trap the very person meant to satisfy it. A ROOT account on a fresh platform has no reporting
+// entity to choose; an entity whose branches are all inactive offers no branch. Neither dead end is
+// resolvable from a modal that only offers dropdowns, and both are repaired on exactly these
+// screens — which read no scope of their own (FirmAdminDetailPage takes its firm id from the URL,
+// FirmsAdminPage lists whatever the API returns).
+//
+// Path-based rather than a dismiss button on the dialog: it survives a refresh, it is declarative,
+// and it cannot be arrived at by accident. Authorisation is not this list's job — both routes sit
+// behind `ProtectedRoute roles={SETTINGS_ROLES}` in AppRoutes, so anyone else who types the URL is
+// redirected to /app and simply meets the dialog again.
+//
+// A pure function of the pathname rather than a member of the context value: putting it in the
+// value would force this provider to call useLocation(), re-creating the value memo on every
+// navigation and re-rendering every scope consumer in the app for a fact only two of them need.
+const SCOPE_EXEMPT_PREFIXES = ['/settings/reporting-entities'];
+
+/** Whether `pathname` is a route allowed to render with an incomplete scope. */
+export function isScopeExemptPath(pathname) {
+  return SCOPE_EXEMPT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 const DashboardScopeContext = createContext(null);
 
 export function DashboardScopeProvider({ children }) {

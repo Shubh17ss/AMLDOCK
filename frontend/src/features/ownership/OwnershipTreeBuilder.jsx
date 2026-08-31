@@ -3,13 +3,14 @@ import {
   Alert, Box, Button, Chip, IconButton, Menu, MenuItem, Stack, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import StarIcon from '@mui/icons-material/Star';
-import StarBorderIcon from '@mui/icons-material/StarBorder';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import HomeWorkOutlinedIcon from '@mui/icons-material/HomeWorkOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddLinkIcon from '@mui/icons-material/AddLink';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import { isLeafOnlyType, nodeTypeLabel, personRoleLabel, trustTypeLabel } from '../../api/ownership.js';
 import { countryName } from '../../data/countries.js';
@@ -73,8 +74,10 @@ export function OwnershipTreeBuilder({
   onSelectNode,
   onAddRoot,
   onAddChild,
-  onSetRoot,
   onAttachDetached,
+  onChangeOwner,
+  onDetachFromParent,
+  onDeleteNode,
   // Hides every control that changes the chain, leaving the chain itself readable. Selecting a
   // node still works — looking at an owner is not editing one.
   readOnly = false,
@@ -83,14 +86,15 @@ export function OwnershipTreeBuilder({
   dealSelected = false,
 }) {
   const { nodesById, childrenByParent, parentIdByChild } = useMemo(() => indexTree(tree), [tree]);
-  const root = tree?.rootNodeId ? nodesById.get(tree.rootNodeId) : null;
 
-  const detached = useMemo(() => {
-    if (!tree) return [];
-    return tree.nodes
-      .filter((n) => !parentIdByChild.has(n.id) && n.id !== tree.rootNodeId)
-      .sort((a, b) => a.id - b.id);
-  }, [tree, parentIdByChild]);
+  // Every node with no owner above it, on equal terms. There is no privileged head of the chain:
+  // a node sitting at the top level is a finished answer — "this person owns the property" — and
+  // not a loose end. The structure used to single one out as the root, which bought nothing (the
+  // risk rules never read it) and cost two bugs: a starred node with no actions but Delete, and a
+  // "make top of the chain" that moved the pointer without moving the edge, so the node drew twice.
+  const topLevel = useMemo(() => (tree?.nodes ?? [])
+    .filter((n) => !parentIdByChild.has(n.id))
+    .sort((a, b) => a.id - b.id), [tree, parentIdByChild]);
 
   if (!tree) return null;
 
@@ -104,8 +108,10 @@ export function OwnershipTreeBuilder({
     selectedNodeId,
     onSelectNode,
     onAddChild,
-    onSetRoot,
     onAttachDetached,
+    onChangeOwner,
+    onDetachFromParent,
+    onDeleteNode,
     readOnly,
     order,
   };
@@ -146,30 +152,9 @@ export function OwnershipTreeBuilder({
             </Alert>
           ) : (
             <>
-              {root && <NodeBranch node={root} parentEdge={null} depth={0} isRoot {...branchProps} />}
-
-              {detached.length > 0 && (
-                <Box sx={{ mt: root ? 2.5 : 0 }}>
-                  {root && (
-                    <Typography
-                      sx={{
-                        fontFamily: fonts.mono,
-                        fontSize: '0.62rem',
-                        letterSpacing: '0.12em',
-                        textTransform: 'uppercase',
-                        color: tokens.muted,
-                        pl: 0.5,
-                        mb: 0.75,
-                      }}
-                    >
-                      Not yet attached
-                    </Typography>
-                  )}
-                  {detached.map((n) => (
-                    <NodeBranch key={n.id} node={n} parentEdge={null} depth={0} {...branchProps} />
-                  ))}
-                </Box>
-              )}
+              {topLevel.map((n) => (
+                <NodeBranch key={n.id} node={n} parentEdge={null} depth={0} {...branchProps} />
+              ))}
             </>
           )}
         </Box>
@@ -253,18 +238,17 @@ function PropertyAnchor({ deal, onOpen, selected = false }) {
 }
 
 function NodeBranch({
-  node, parentEdge, depth, isRoot = false,
-  nodesById, childrenByParent, selectedNodeId, onSelectNode, onAddChild, onSetRoot,
-  onAttachDetached, readOnly, order,
+  node, parentEdge, depth,
+  nodesById, childrenByParent, selectedNodeId, onSelectNode, onAddChild,
+  onAttachDetached, onChangeOwner, onDetachFromParent, onDeleteNode, readOnly, order,
 }) {
   const children = childrenByParent.get(node.id) ?? [];
   const [expanded, setExpanded] = useState(true);
   const [menuAnchor, setMenuAnchor] = useState(null);
 
   const isSelected = selectedNodeId === node.id;
-  // "Detached" = renders at the top level but isn't the root. Its descendants render normally
-  // (with parentEdge set) and should NOT show the attach action.
-  const isDetached = !isRoot && !parentEdge;
+  // No parent edge means this row is at the top level, and the only thing that can be done to its
+  // position is to give it an owner. Everything below has a parentEdge and gets the other two.
   const riskReason = riskReasonFor(node);
   const visual = visualFor(node.nodeType);
 
@@ -348,7 +332,7 @@ function NodeBranch({
               color: visual.hue,
             }}
           >
-            {isRoot ? <StarIcon fontSize="small" /> : <visual.Icon fontSize="small" />}
+            <visual.Icon fontSize="small" />
           </Box>
 
           <Box sx={{ minWidth: 0, flexGrow: 1 }}>
@@ -431,19 +415,33 @@ function NodeBranch({
           )}
 
           <Menu open={Boolean(menuAnchor)} anchorEl={menuAnchor} onClose={() => setMenuAnchor(null)}>
-            {isDetached && onAttachDetached && (
+            {!parentEdge && onAttachDetached && (
               <MenuItem onClick={() => { onAttachDetached(node.id); setMenuAnchor(null); }}>
                 <AddLinkIcon fontSize="small" sx={{ mr: 1 }} /> Attach to an owner…
               </MenuItem>
             )}
-            {!isRoot && (
-              <MenuItem onClick={() => { onSetRoot(node.id); setMenuAnchor(null); }}>
-                <StarBorderIcon fontSize="small" sx={{ mr: 1 }} /> Make top of the chain
+            {/* Both keyed on parentEdge, which is the edge this row is drawn under and so exactly
+                the one to move or cut. Together with Attach above they are one symmetrical set:
+                a row either has an owner or it does not. */}
+            {parentEdge && onChangeOwner && (
+              <MenuItem onClick={() => { onChangeOwner(node.id, parentEdge); setMenuAnchor(null); }}>
+                <SwapHorizIcon fontSize="small" sx={{ mr: 1 }} /> Change owner…
               </MenuItem>
             )}
-            {isRoot && (
-              <MenuItem onClick={() => { onSetRoot(null); setMenuAnchor(null); }}>
-                <StarBorderIcon fontSize="small" sx={{ mr: 1 }} /> Clear top of the chain
+            {parentEdge && onDetachFromParent && (
+              <MenuItem onClick={() => { onDetachFromParent(parentEdge.id); setMenuAnchor(null); }}>
+                <LinkOffIcon fontSize="small" sx={{ mr: 1 }} /> Detach from parent
+              </MenuItem>
+            )}
+            {/* Last, and set apart by colour: the only item here that destroys anything. Offered on
+                every row, top-level ones included — clearing a structure to start again is a real
+                thing to want, and the dialog names the count before anyone commits. */}
+            {onDeleteNode && (
+              <MenuItem
+                sx={{ color: 'error.main' }}
+                onClick={() => { onDeleteNode(node.id); setMenuAnchor(null); }}
+              >
+                <DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} /> Delete
               </MenuItem>
             )}
           </Menu>
@@ -463,8 +461,10 @@ function NodeBranch({
               selectedNodeId={selectedNodeId}
               onSelectNode={onSelectNode}
               onAddChild={onAddChild}
-              onSetRoot={onSetRoot}
               onAttachDetached={onAttachDetached}
+              onChangeOwner={onChangeOwner}
+              onDetachFromParent={onDetachFromParent}
+              onDeleteNode={onDeleteNode}
               readOnly={readOnly}
               order={order}
             />

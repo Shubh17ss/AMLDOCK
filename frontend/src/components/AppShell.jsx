@@ -3,12 +3,14 @@ import {
 } from '@mui/material';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { isBroker, isDealAuthor } from '../auth/roles.js';
 import { SidebarNav } from './SidebarNav.jsx';
 import { UserMenu } from './UserMenu.jsx';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
-import { BottomNav } from './BottomNav.jsx';
-import { moduleTitleFor } from '../navigation/moduleRegistry.jsx';
-import { DashboardScopeProvider, useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import { BottomNav, BOTTOM_NAV_CLEARANCE, BROKER_NAV_CLEARANCE } from './BottomNav.jsx';
+import { greeting, stamp } from '../pages/dashboard/greeting.js';
+import { moduleTitleFor, DASHBOARD_PATH, DEALS_PATH } from '../navigation/moduleRegistry.jsx';
+import { DashboardScopeProvider, useDashboardScope, isScopeExemptPath } from '../dashboard/DashboardScope.jsx';
 import { ScopeRequiredDialog } from '../dashboard/ScopeRequiredDialog.jsx';
 import { ColorModeProvider } from '../theme/ColorMode.jsx';
 import { tokens, fonts } from '../theme/theme.js';
@@ -16,7 +18,6 @@ import { tokens, fonts } from '../theme/theme.js';
 const SIDEBAR_WIDTH = 260;
 
 const TITLE_BY_PATH_PREFIX = [
-  ['/my-deals',    'My deals'],
   ['/deals/new',   'New deal'],
   ['/deals/',      'Deal'],
   ['/firm/deals',  'Firm deals'],
@@ -27,10 +28,15 @@ const TITLE_BY_PATH_PREFIX = [
   ['/app',         'Dashboard'],
 ];
 
-function titleFor(pathname) {
+function titleFor(pathname, role) {
   // The deal id sits in the middle of /deals/:id/edit, so this one can't be expressed as a
   // prefix like the rest of the table.
   if (/^\/deals\/\d+\/edit\/?$/.test(pathname)) return 'Edit deal';
+  // One page, two honest names. DealService.readableDeals pins the list to `createdBy = me` for an
+  // agent and to their branch for an ADMIN, so the register genuinely *is* a deal author's own
+  // deals — and calling it "Listing Register" to the person who arrived via a tab labelled Deals
+  // and a button labelled "My deals" would be the odd one out.
+  if (pathname === DEALS_PATH && isDealAuthor(role)) return 'My deals';
   const match = TITLE_BY_PATH_PREFIX.find(([prefix]) => pathname.startsWith(prefix));
   if (match) return match[1];
   return moduleTitleFor(pathname) ?? 'AML·DOCK';
@@ -39,7 +45,13 @@ function titleFor(pathname) {
 export function AppShell() {
   const { user } = useAuth();
   const { pathname } = useLocation();
-  const pageTitle = titleFor(pathname);
+  const pageTitle = titleFor(pathname, user?.role);
+
+  // A broker's phone home swaps the page-title bar for a greeting — but only there. Everywhere else
+  // a title is what the screen owes you, and on a deep page like /deals/123 a greeting would be
+  // noise where the heading used to be.
+  const broker = isBroker(user?.role);
+  const brokerHome = broker && pathname === DASHBOARD_PATH;
 
   return (
     <ColorModeProvider>
@@ -118,7 +130,14 @@ export function AppShell() {
 
       {/* Main column */}
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <AppBar position="sticky">
+        {brokerHome && <BrokerGreeting user={user} />}
+
+        <AppBar
+          position="sticky"
+          // On the broker's home the greeting above replaces this bar — but only on a phone; the
+          // desktop shell is unchanged, so the bar has to come back at md.
+          sx={brokerHome ? { display: { xs: 'none', md: 'flex' } } : undefined}
+        >
           <Toolbar sx={{gap: 2, minHeight: { xs: '56px !important', md: '64px !important'} }}>
             {/* Mobile: shield logo */}
             <Box
@@ -155,7 +174,9 @@ export function AppShell() {
             flexGrow: 1,
             position: 'relative',
             p: { xs: 2, md: 4 },
-            pb: { xs: 'calc(80px + env(safe-area-inset-bottom, 0px))', md: 4 },
+            // Room for whichever nav is mounted — the constants live with it so the two cannot
+            // drift. The broker's pill floats clear of the bottom edge and so needs more.
+            pb: { xs: broker ? BROKER_NAV_CLEARANCE : BOTTOM_NAV_CLEARANCE, md: 4 },
           }}
         >
           {/* Ambient canvas wash — gives the frosted tiles something to blur. Oversized
@@ -192,6 +213,55 @@ export function AppShell() {
 }
 
 /**
+ * The broker's home header: a mono ledger stamp over a display-face greeting, with the avatar menu
+ * on the right.
+ *
+ * <p>Deliberately not sticky. A greeting is worth the top of the screen once, on arrival; keeping it
+ * pinned would spend a fifth of a phone's height on it forever. It also sidesteps the theme's
+ * `MuiToolbar` `minHeight: 64px !important`, which any custom sticky bar here would have to fight.
+ *
+ * <p>The avatar is why the nav could drop its Profile tab — UserMenu already carries
+ * "Profile & password" and "Sign out".
+ */
+function BrokerGreeting({ user }) {
+  const firstName = (user?.fullName || '').trim().split(/\s+/)[0] || null;
+
+  return (
+    <Box
+      component="header"
+      sx={{
+        display: { xs: 'flex', md: 'none' },
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 2,
+        px: 2,
+        pt: 2.5,
+        pb: 0.5,
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{
+          fontFamily: fonts.mono, fontSize: '0.62rem', fontWeight: 500,
+          letterSpacing: '0.16em', textTransform: 'uppercase',
+          color: tokens.muted, mb: 0.6,
+        }}>
+          {stamp()}
+        </Typography>
+        <Typography sx={{
+          fontFamily: fonts.display, fontSize: '1.6rem', fontWeight: 700,
+          letterSpacing: '-0.03em', lineHeight: 1.1, color: tokens.ink,
+        }}>
+          {greeting()}{firstName ? `, ${firstName}` : ''}
+        </Typography>
+      </Box>
+      <Box sx={{ flexShrink: 0, pt: 0.5 }}>
+        <UserMenu compact />
+      </Box>
+    </Box>
+  );
+}
+
+/**
  * The page, once there is a scope to render it in.
  *
  * <p>Holding the route back matters as much as showing the dialog: nearly every page fires its
@@ -199,12 +269,18 @@ export function AppShell() {
  * Letting them mount behind the backdrop would send exactly the unscoped requests this change
  * exists to stop, and the user cannot see the result anyway.
  *
+ * <p>The exception is the routes where a scope that cannot be satisfied gets repaired — see
+ * isScopeExemptPath. Those pages read no scope, so there is nothing to hold back, and holding them
+ * back is what turned "choose an entity" into a trap for the one account with no entity to choose.
+ *
  * <p>Lives here rather than in AppShell itself because AppShell renders the provider and so sits
- * outside it.
+ * outside it. It calls useLocation() of its own rather than taking a prop: AppShell's own call is
+ * for the page title, and threading the pathname down would couple two unrelated readers.
  */
 function ScopedOutlet() {
   const { scopeComplete } = useDashboardScope();
-  if (!scopeComplete) {
+  const { pathname } = useLocation();
+  if (!scopeComplete && !isScopeExemptPath(pathname)) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
         <CircularProgress />

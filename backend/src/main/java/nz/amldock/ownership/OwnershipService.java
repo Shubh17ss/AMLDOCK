@@ -11,6 +11,11 @@ import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
 import nz.amldock.deal.DealRiskService;
+import nz.amldock.audit.AuditAction;
+import nz.amldock.audit.AuditService;
+import nz.amldock.document.Document;
+import nz.amldock.document.DocumentRepository;
+import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.ownership.dto.CreateEdgeRequest;
@@ -33,8 +38,10 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -52,6 +59,13 @@ public class OwnershipService {
     private final DealBeneficialOwnerRepository ownerLinks;
     // Repositories only inside DealRiskService, so this direction adds no constructor cycle.
     private final DealRiskService risk;
+    // The three leaves DocumentService is built from, rather than DocumentService itself: it
+    // depends on BeneficialOwnerService, which depends on this class, and that cycle fails at
+    // startup. Only used by the cascade delete — see stripDocuments for why the soft-delete path
+    // in DocumentService would be the wrong call here anyway.
+    private final DocumentRepository documents;
+    private final FileStorageService storage;
+    private final AuditService audit;
 
     public OwnershipService(OwnershipStructureRepository structures,
                             OwnershipNodeRepository nodes,
@@ -61,7 +75,10 @@ public class OwnershipService {
                             DealLifecycleService lifecycle,
                             BeneficialOwnerRepository owners,
                             DealBeneficialOwnerRepository ownerLinks,
-                            DealRiskService risk) {
+                            DealRiskService risk,
+                            DocumentRepository documents,
+                            FileStorageService storage,
+                            AuditService audit) {
         this.structures = structures;
         this.nodes = nodes;
         this.edges = edges;
@@ -71,6 +88,9 @@ public class OwnershipService {
         this.owners = owners;
         this.ownerLinks = ownerLinks;
         this.risk = risk;
+        this.documents = documents;
+        this.storage = storage;
+        this.audit = audit;
     }
 
     /* ---------- queries ---------- */
@@ -182,8 +202,22 @@ public class OwnershipService {
         return NodeDto.from(n, person == null ? null : PersonDto.from(person));
     }
 
+    /**
+     * Removes a node and everything that was only held up by it.
+     *
+     * <p>"Everything under it" is not the same as "every descendant", because this is a graph and
+     * not a tree: a person can be a shareholder in two subsidiaries. Deleting one of those
+     * subsidiaries must leave the person in place, still owned by the other. So a descendant goes
+     * only when nothing outside the deleted set still holds it — see {@link #doomedBy}.
+     *
+     * <p>This used to delete the target's own edges and stop, which left its children behind as
+     * nodes with no parent. They did not disappear: they reappeared at the top of the tree under
+     * "Not yet attached", so deleting a company scattered its owners rather than removing them.
+     *
+     * @return the ids actually removed, so the caller can record what went.
+     */
     @Transactional
-    public void deleteNode(Long dealId, Long nodeId, boolean force) {
+    public List<Long> deleteNode(Long dealId, Long nodeId, boolean force) {
         Deal deal = assertReadable(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
 
@@ -194,23 +228,104 @@ public class OwnershipService {
                     "Node has " + outgoing.size() + " outgoing and " + incoming.size() +
                             " incoming edges. Pass ?force=true to cascade.");
         }
-        edges.deleteAll(outgoing);
-        edges.deleteAll(incoming);
 
-        // Clear root reference if needed
+        Set<Long> doomed = doomedBy(n.getId());
+        List<OwnershipNode> going = nodes.findAllById(doomed);
+
+        // Before the rows go: the document table cascades off ownership_node in the database, so
+        // once the nodes are gone there is nothing left to say which files belonged to them.
+        stripDocuments(doomed);
+
+        // The root may be any of them, not only the target.
         OwnershipStructure structure = structures.findById(n.getOwnershipStructureId()).orElse(null);
-        if (structure != null && n.getId().equals(structure.getRootNodeId())) {
+        if (structure != null && doomed.contains(structure.getRootNodeId())) {
             structure.setRootNodeId(null);
         }
 
-        Long personId = n.getBeneficialOwnerId();
-        nodes.delete(n);
-        if (personId != null) removePersonIfHandAdded(deal, personId);
+        List<Long> personIds = going.stream()
+                .map(OwnershipNode::getBeneficialOwnerId)
+                .filter(Objects::nonNull)
+                .toList();
 
-        // The deleted node may have been the only thing holding the deal at HIGH. Flushed first
-        // so the recompute's own query cannot still see the row.
+        // ownership_edge cascades off both of its foreign keys (V6__ownership.sql), so every edge
+        // between and into these nodes goes with them without any bookkeeping here.
+        nodes.deleteAll(going);
+
+        // Per removed node, not only the target: a cascaded individual left behind would still sit
+        // on the deal's people list, pointing at a node that no longer exists.
+        for (Long personId : personIds) removePersonIfHandAdded(deal, personId);
+
+        // The deleted nodes may have been the only thing holding the deal at HIGH. Flushed first
+        // so the recompute's own query cannot still see the rows, and run once for the whole
+        // cascade rather than once per node.
         nodes.flush();
         risk.recomputeFor(dealId);
+        return List.copyOf(doomed);
+    }
+
+    /**
+     * The node, plus every descendant that nothing outside the set still holds.
+     *
+     * <p>Collected as a subtree first, then shrunk: any candidate with a parent outside the set is
+     * released, and releasing one can release its own descendants in turn, so it runs to a
+     * fixpoint. A single pass would delete the children of a node it had just decided to keep.
+     *
+     * <p>Membership is decided on "still has a parent" rather than "still reachable from the root".
+     * The root is nullable — {@code setRoot(null)} exists, and this method's own caller clears it —
+     * and a detached subtree is a state the builder renders quite deliberately, so a reachability
+     * rule would condemn nodes that are merely unattached.
+     *
+     * <p>One query per node per pass. Ownership structures run to a few dozen nodes at the outside,
+     * so this stays clearer than the batched {@code findAllByParentNodeIdIn} equivalent.
+     */
+    private Set<Long> doomedBy(Long nodeId) {
+        Set<Long> doomed = new LinkedHashSet<>();
+        Deque<Long> frontier = new ArrayDeque<>();
+        doomed.add(nodeId);
+        frontier.add(nodeId);
+        while (!frontier.isEmpty()) {
+            for (OwnershipEdge edge : edges.findAllByParentNodeId(frontier.pollFirst())) {
+                // The set doubles as the seen-set, which is what stops a diamond being walked twice
+                // and a cycle spinning forever.
+                if (doomed.add(edge.getChildNodeId())) frontier.add(edge.getChildNodeId());
+            }
+        }
+
+        boolean released = true;
+        while (released) {
+            released = false;
+            for (Long id : List.copyOf(doomed)) {
+                if (id.equals(nodeId)) continue;          // the target goes whatever holds it
+                boolean heldElsewhere = edges.findAllByChildNodeId(id).stream()
+                        .anyMatch(e -> !doomed.contains(e.getParentNodeId()));
+                if (heldElsewhere) {
+                    doomed.remove(id);
+                    released = true;
+                }
+            }
+        }
+        return doomed;
+    }
+
+    /**
+     * Removes the stored files behind documents attached to nodes that are about to be deleted.
+     *
+     * <p>{@code document.ownership_node_id} is ON DELETE CASCADE, so Postgres hard-deletes those
+     * rows by itself. What it cannot do is empty the bucket or write an audit entry, and without
+     * this the files were stranded and their removal went unrecorded.
+     *
+     * <p>Not routed through {@code DocumentService.delete}, for two reasons. It would close a
+     * constructor cycle through BeneficialOwnerService; and it is a <em>soft</em> delete, which is
+     * the wrong operation for a row the database is about to remove outright — the only parts that
+     * apply here are the object removal and the audit row.
+     */
+    private void stripDocuments(Set<Long> nodeIds) {
+        for (Document doc : documents.findAllByOwnershipNodeIdIn(nodeIds)) {
+            if (doc.getS3Key() != null) storage.delete(doc.getS3Key());
+            audit.record(AuditAction.DOCUMENT_DELETED, "Document", doc.getId(),
+                    "Removed with ownership node " + doc.getOwnershipNodeId()
+                            + ": " + doc.getOriginalFilename());
+        }
     }
 
     /**
