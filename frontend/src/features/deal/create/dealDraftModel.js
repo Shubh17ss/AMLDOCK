@@ -91,6 +91,13 @@ export function buildDealPatch(form) {
  *
  * transactionType and firmBranchId are absent for the same reason buildDealPatch omits
  * firmBranchId: a deal's type and its branch are decided once, at creation.
+ *
+ * `notes` is absent for that reason too, and its absence is the load-bearing kind. That column is
+ * the broker's opening note: the timeline renders it as one CREATION entry credited to whoever
+ * created the deal, so a reviewer saving through here did not add a note — they rewrote the
+ * broker's, under the broker's name, destroying what it said. A reviewer's note goes to
+ * POST /deals/{id}/notes, which appends and records its own author. buildDealPatch still carries
+ * it, because the create form is where that note is actually written.
  */
 export function buildDealDetailsPatch(form) {
   return {
@@ -103,7 +110,6 @@ export function buildDealDetailsPatch(form) {
     redFlag: form.redFlagPresent === true ? form.redFlag : '',
     valuationMin: num(form.valuationMin),
     valuationMax: num(form.valuationMax),
-    notes: form.notes,
   };
 }
 

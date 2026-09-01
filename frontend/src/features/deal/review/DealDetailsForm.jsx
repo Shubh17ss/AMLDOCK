@@ -8,7 +8,6 @@ import SaveIcon from '@mui/icons-material/Save';
 import { updateDeal, updateDealProperty } from '../../../api/deals.js';
 import { AddressFinderField } from '../../../components/AddressFinderField.jsx';
 import { CountrySelect } from '../../../components/CountrySelect.jsx';
-import { DictationField } from '../../../components/DictationField.jsx';
 import { RiskRatingChip } from '../../../components/RiskRatingChip.jsx';
 import { useToast } from '../../../components/ToastProvider.jsx';
 import { useCurrency } from '../../../dashboard/useCurrency.js';
@@ -95,9 +94,8 @@ export function DealDetailsForm({ deal, dealId, form, setForm, dirty, onSaved, r
       // Seeded rather than refetched: the response is the same DealDto shape getDeal returns, so
       // the header chips and the property band update without a flash.
       qc.setQueryData(['deals', dealId], dto);
-      // The deal's own `notes` is the opening entry of the notes thread, so editing it here
-      // rewrites the top of the Notes tab next door. And a save is auditable.
-      qc.invalidateQueries({ queryKey: ['dealNotes', dealId] });
+      // A save is auditable. The notes thread is not touched from here: this form no longer
+      // carries the deal's opening note, precisely so that saving these fields cannot rewrite it.
       qc.invalidateQueries({ queryKey: ['audit', 'deal', dealId] });
       // The prefix, not ['deals','list']: the dashboards keep their own deals queries and were
       // left stale by naming only the register's key.
@@ -256,15 +254,6 @@ export function DealDetailsForm({ deal, dealId, form, setForm, dirty, onSaved, r
               helperText={rangeInverted ? 'Must be at or above the minimum' : undefined}
             />
           </Stack>
-        </FieldGroup>
-
-        <FieldGroup title="Deal notes">
-          <DictationField
-            label="Add relevant notes"
-            value={form.notes}
-            onChange={setField('notes')}
-            minRows={4}
-          />
         </FieldGroup>
       </Stack>
 
