@@ -106,6 +106,14 @@ function buildRange(min, max, fallback, fmt) {
   return '—';
 }
 
+/** File size at one decimal place. Empty string for null — an absent size is not "0 B". */
+export function formatBytes(n) {
+  if (n == null) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
 /** Short date, e.g. "21 Jun 2026". */
 export function formatDate(iso) {
   if (!iso) return '—';

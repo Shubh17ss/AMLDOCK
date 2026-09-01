@@ -20,6 +20,17 @@ public interface FileStorageService {
     /** Object size in bytes; throws if the object doesn't exist. */
     long size(String key);
 
+    /**
+     * Copies an object to a second key, leaving the source untouched.
+     *
+     * <p>The one operation here that moves bytes, and it still does not move them through this
+     * process — the store copies server-side. Used when a document follows a person from one deal
+     * onto another: each deal gets its own object, so deleting either one cannot reach the other.
+     * Sharing a key instead would be silently destructive, because {@code delete} takes no account
+     * of whether anything else still points at it.
+     */
+    void copy(String sourceKey, String destinationKey);
+
     /** Delete the object. No-op if it doesn't exist. */
     void delete(String key);
 }

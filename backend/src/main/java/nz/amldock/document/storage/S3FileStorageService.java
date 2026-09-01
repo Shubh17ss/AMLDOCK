@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -82,6 +83,18 @@ public class S3FileStorageService implements FileStorageService {
         HeadObjectResponse head = client.headObject(HeadObjectRequest.builder()
                 .bucket(bucket).key(key).build());
         return head.contentLength();
+    }
+
+    @Override
+    public void copy(String sourceKey, String destinationKey) {
+        // Server-side: S3 does the work and the bytes never enter this JVM, so the cost is the
+        // same whether the file is 50 KB or 50 MB. Failures are thrown, not logged and swallowed
+        // as in delete() — a copy that silently did nothing would leave a document row promising
+        // an object that was never written.
+        client.copyObject(CopyObjectRequest.builder()
+                .sourceBucket(bucket).sourceKey(sourceKey)
+                .destinationBucket(bucket).destinationKey(destinationKey)
+                .build());
     }
 
     @Override

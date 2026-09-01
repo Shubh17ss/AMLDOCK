@@ -2,6 +2,7 @@ package nz.amldock.email;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import nz.amldock.email.ses.SesBulkEmailSender;
+import nz.amldock.email.ses.SesEmailService;
 import nz.amldock.email.ses.SesTemplateProvisioner;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,15 +29,49 @@ public class EmailConfig {
     // AWS credentials; same shape, same fix. Reading the property rather than the variable keeps
     // both routes working, because the property is defined in terms of the variable.
 
+    /**
+     * How a single rendered message leaves the box: the login OTP, the welcome email, a training
+     * assignment.
+     *
+     * <p>Follows {@code amldock.notifications.transport}, the same property that chooses the bulk
+     * transport, so one setting governs all outbound mail rather than transactional and bulk
+     * drifting onto different providers. The dev profile pins it to smtp, which is what keeps a
+     * local run in Mailpit.
+     *
+     * <p>{@code amldock.mail.enabled} stays the master switch and is checked first: turning mail
+     * off turns all of it off, whatever transport is named.
+     *
+     * <p>Falls back to logging rather than failing startup, matching {@link #bulkEmailSender}: a
+     * misconfigured transport should cost email, not the whole application. That fallback is also
+     * why the SES branch tests the client rather than the property — {@link #sesV2Client} is
+     * conditional on the same value, so under any other transport the bean does not exist.
+     */
     @Bean
     public EmailService emailService(
             @Value("${amldock.mail.enabled:false}") boolean enabled,
+            @Value("${amldock.notifications.transport:ses}") String transport,
             @Value("${amldock.mail.from:noreply@amldock.local}") String fromAddress,
             @Value("${amldock.mail.from-name:AML_DOCK}") String fromName,
             @Value("${amldock.mail.reply-to:}") String replyTo,
+            @Value("${amldock.notifications.configuration-set:}") String configurationSet,
+            ObjectProvider<SesV2Client> ses,
             ObjectProvider<JavaMailSender> sender) {
+
+        if (!enabled) {
+            return new LoggingEmailService();
+        }
+
+        if ("ses".equalsIgnoreCase(transport)) {
+            SesV2Client client = ses.getIfAvailable();
+            if (client != null) {
+                return new SesEmailService(
+                        client, fromAddress, fromName, replyTo, configurationSet);
+            }
+            return new LoggingEmailService();
+        }
+
         JavaMailSender mailSender = sender.getIfAvailable();
-        if (!enabled || mailSender == null) {
+        if (mailSender == null) {
             return new LoggingEmailService();
         }
         return new SmtpEmailService(mailSender, fromAddress, fromName, replyTo);

@@ -1,6 +1,7 @@
 package nz.amldock.individual;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,5 +32,17 @@ public class IndividualController {
     public List<IndividualRowDto> list(@RequestParam(required = false) Long firmId,
                                        @RequestParam(required = false) Long branchId) {
         return individuals.list(firmId, branchId);
+    }
+
+    /**
+     * One individual in full, addressed by node id because that is what a row of the register is.
+     *
+     * <p>Feeds the owner picker, which copies an existing person onto a new deal. No
+     * {@code @PreAuthorize} here for the same reason as {@link #list}: the rule is whether the
+     * caller can read the deal this person stands on, and it lives in the service.
+     */
+    @GetMapping("/{nodeId}")
+    public IndividualDetailDto detail(@PathVariable Long nodeId) {
+        return individuals.detail(nodeId);
     }
 }

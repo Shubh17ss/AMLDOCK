@@ -21,6 +21,11 @@ export function useOwnershipTree(dealId) {
     // rather than at each call site: create, update and delete can all change it, and one of
     // them being forgotten is exactly the bug this replaces.
     if (dealId) qc.invalidateQueries({ queryKey: ['deals', dealId] });
+    // And the individuals register, which every INDIVIDUAL node is a row of. The owner picker
+    // reads that same list to offer people from the firm's other deals, so without this a person
+    // added here would be missing from the picker for the rest of the session — including when
+    // the very next owner is their co-owner. Prefix key: every firm/branch scope goes stale.
+    qc.invalidateQueries({ queryKey: ['individuals'] });
   };
 
   const createNodeMut = useMutation({ mutationFn: (payload) => createNode(dealId, payload), onSuccess: invalidate });

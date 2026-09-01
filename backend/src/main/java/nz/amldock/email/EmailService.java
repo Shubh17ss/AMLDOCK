@@ -3,12 +3,18 @@ package nz.amldock.email;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Outbound email gateway. Implementations:
- *   - {@link SmtpEmailService}     real SMTP via JavaMailSender, used when amldock.mail.enabled=true
- *   - {@link LoggingEmailService}  no-op fallback that logs the rendered email, used in dev
+ * Outbound email gateway for a single rendered message. Implementations:
+ *   - {@link nz.amldock.email.ses.SesEmailService}  the SES API, used when the transport is ses
+ *   - {@link SmtpEmailService}     real SMTP via JavaMailSender, and what Mailpit receives in dev
+ *   - {@link LoggingEmailService}  no-op fallback that logs the rendered email
  *
- * Sends are fire-and-forget from the caller's perspective. Failures are swallowed and logged
- * so a missing SMTP doesn't break user-facing flows like onboarding.
+ * Which one is wired is decided by {@code EmailConfig.emailService}: {@code amldock.mail.enabled}
+ * is the master switch, and {@code amldock.notifications.transport} (ses | smtp | log) then chooses
+ * the route — the same property the bulk sender follows, so all outbound mail leaves one way.
+ *
+ * Sends are fire-and-forget from the caller's perspective. Failures are swallowed and logged so a
+ * mail outage doesn't break user-facing flows like onboarding — or, in the case of the login code,
+ * lock everybody out.
  */
 public interface EmailService {
 

@@ -2,13 +2,18 @@ package nz.amldock.individual;
 
 import nz.amldock.beneficialowner.BeneficialOwner;
 import nz.amldock.beneficialowner.BeneficialOwnerRepository;
+import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealService;
+import nz.amldock.deal.dto.DealDto;
+import nz.amldock.document.DocumentService;
+import nz.amldock.document.dto.DocumentDto;
 import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipNodeRepository;
 import nz.amldock.ownership.OwnershipStructure;
 import nz.amldock.ownership.OwnershipStructureRepository;
+import nz.amldock.ownership.dto.PersonDto;
 import nz.amldock.property.Property;
 import nz.amldock.property.PropertyRepository;
 import org.springframework.stereotype.Service;
@@ -43,17 +48,20 @@ public class IndividualService {
     private final OwnershipNodeRepository nodes;
     private final BeneficialOwnerRepository owners;
     private final PropertyRepository properties;
+    private final DocumentService documentService;
 
     public IndividualService(DealService dealService,
                              OwnershipStructureRepository structures,
                              OwnershipNodeRepository nodes,
                              BeneficialOwnerRepository owners,
-                             PropertyRepository properties) {
+                             PropertyRepository properties,
+                             DocumentService documentService) {
         this.dealService = dealService;
         this.structures = structures;
         this.nodes = nodes;
         this.owners = owners;
         this.properties = properties;
+        this.documentService = documentService;
     }
 
     @Transactional(readOnly = true)
@@ -105,6 +113,66 @@ public class IndividualService {
                     n.getPersonRole(),
                     n.getVerificationStatus());
         }).filter(java.util.Objects::nonNull).toList();
+    }
+
+    /**
+     * One individual in full: everything a reviewer needs to recognise a person, and everything
+     * worth copying onto a new owner on another deal.
+     *
+     * <p>Authorisation is {@link DealService#get(Long)}, which runs the same per-deal read check as
+     * opening the deal itself. Deliberately that rather than a rule of its own — a person is
+     * readable exactly because their file is, and a second copy of that rule could only ever drift
+     * from the first.
+     *
+     * <p>Fetched one at a time, for the row somebody expanded. {@link IndividualRowDto} stays thin
+     * because it is fetched by the hundred.
+     */
+    @Transactional(readOnly = true)
+    public IndividualDetailDto detail(Long nodeId) {
+        OwnershipNode node = nodes.findById(nodeId)
+                .orElseThrow(() -> new NotFoundException("Individual " + nodeId + " not found"));
+        // Not a 403: which nodes are individuals is not a secret, and a caller who asks about a
+        // company here has asked the wrong question, not one they were forbidden to ask.
+        if (node.getNodeType() != NodeType.INDIVIDUAL) {
+            throw new NotFoundException("Node " + nodeId + " is not an individual");
+        }
+        OwnershipStructure structure = structures.findById(node.getOwnershipStructureId())
+                .orElseThrow(() -> new NotFoundException("Structure for node " + nodeId + " not found"));
+
+        // Throws when this caller may not read the deal. That is the whole authorisation story.
+        DealDto deal = dealService.get(structure.getDealId());
+
+        String address = deal.property() == null ? null
+                : properties.findById(deal.property().id())
+                        .map(DealService::formatAddress).orElse(null);
+        // Null when the person record was deleted out from under the node — beneficial_owner_id is
+        // ON DELETE SET NULL, and the node is still a real answer to "who is on this deal".
+        BeneficialOwner person = node.getBeneficialOwnerId() == null ? null
+                : owners.findById(node.getBeneficialOwnerId()).orElse(null);
+
+        return new IndividualDetailDto(
+                node.getId(),
+                deal.id(),
+                // Matches how the register renders a reference that was never generated.
+                deal.reference() != null ? deal.reference() : "#" + deal.id(),
+                address,
+                node.getDisplayName(),
+                node.getDateOfBirth(),
+                node.getIdDocumentType(),
+                node.getIdDocumentNumber(),
+                node.getIdDocumentCountry(),
+                node.getPersonRole(),
+                node.getVerificationStatus(),
+                person == null ? null : PersonDto.from(person),
+                // Through DocumentService rather than the repositories, so this list and the node
+                // Documents tab can never disagree about what is on the file. It unions the node
+                // documents with the person scans, which is the set the copy takes.
+                documentService.listForNode(nodeId).stream().map(IndividualService::summarise).toList());
+    }
+
+    private static IndividualDetailDto.DocumentSummary summarise(DocumentDto d) {
+        return new IndividualDetailDto.DocumentSummary(
+                d.id(), d.originalFilename(), d.documentType(), d.idSide(), d.sizeBytes());
     }
 
     private static <T> List<Long> distinct(List<T> rows, Function<T, Long> id) {
