@@ -1,6 +1,6 @@
 package nz.amldock.document.dto;
 
-import nz.amldock.document.Document;
+import nz.amldock.document.DocumentFields;
 import nz.amldock.document.DocumentStatus;
 import nz.amldock.document.DocumentType;
 import nz.amldock.document.IdSide;
@@ -30,8 +30,8 @@ public record DocumentDto(
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static DocumentDto from(Document d, String uploaderEmail) {
-        return new DocumentDto(d.getId(), d.getOriginalFilename(), d.getContentType(), d.getSizeBytes(),
+    public static DocumentDto from(DocumentFields d, String uploaderEmail) {
+        return new DocumentDto(d.getDocumentId(), d.getOriginalFilename(), d.getContentType(), d.getSizeBytes(),
                 d.getDocumentType(), d.getStatus(), d.getDealId(), d.getOwnershipNodeId(),
                 d.getBeneficialOwnerId(), d.getIdSide(),
                 d.getUploadedByUserId(), uploaderEmail,

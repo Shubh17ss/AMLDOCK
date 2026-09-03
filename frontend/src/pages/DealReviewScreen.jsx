@@ -6,8 +6,9 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
-  closeDeal, getDeal, holdDeal, overrideDeal, revertDeal, submitDealForReview, verifyDeal,
+  closeDeal, getDeal, holdDeal, overrideDeal, reopenDeal, revertDeal, submitDealForReview, verifyDeal,
 } from '../api/deals.js';
+import { getDealVersion, listDealVersions } from '../api/dealVersions.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canOverride, canWrite, isDealAuthor, isDealReviewer } from '../auth/roles.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
@@ -22,6 +23,8 @@ import { DealDrawer } from '../features/deal/review/DealDrawer.jsx';
 import { ReviewTabPanel } from '../features/deal/review/ReviewTabPanel.jsx';
 import { ParkedPanel } from '../features/deal/review/ParkedPanel.jsx';
 import { DealStatusDialog } from '../features/deal/DealStatusDialog.jsx';
+import { DealVersionsMenu, VersionsIcon } from '../features/deal/DealVersionsMenu.jsx';
+import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -77,9 +80,38 @@ export function DealReviewScreen() {
   const [deleteNodeId, setDeleteNodeId]     = useState(null);
   const [statusOpen, setStatusOpen]         = useState(false);
   const [actionError, setActionError]       = useState(null);
+  const [versionsAnchor, setVersionsAnchor] = useState(null);
+
+  /*
+   * Which version is on screen, or null for the live deal.
+   *
+   * In the URL beside ?tab= and for the same reasons: a reload keeps your place, and a link can
+   * point at one. It matters more here than for the tab — "the ownership structure we signed off
+   * in August" is a thing reviewers send each other.
+   */
+  const versionParam = params.get('version');
+  const viewingVersion = versionParam ? Number(versionParam) : null;
+  const setViewingVersion = (next) => {
+    const merged = new URLSearchParams(params);
+    if (next == null) merged.delete('version');
+    else merged.set('version', String(next));
+    setParams(merged, { replace: true });
+  };
 
   const dealQ = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
-  const tree  = useOwnershipTree(dealId);
+  const liveTree = useOwnershipTree(dealId);
+
+  const versionsQ = useQuery({
+    queryKey: ['dealVersions', dealId],
+    queryFn: () => listDealVersions(dealId),
+    enabled: Boolean(dealId),
+  });
+
+  const versionQ = useQuery({
+    queryKey: ['dealVersions', dealId, viewingVersion],
+    queryFn: () => getDealVersion(dealId, viewingVersion),
+    enabled: Boolean(dealId) && viewingVersion != null,
+  });
 
   // One prefix, every deals query. This used to name four keys and still missed ['deals','list'] —
   // the register's — so acting on a deal here left the list you came from showing the old status.
@@ -94,6 +126,7 @@ export function DealReviewScreen() {
     hold:     { message: 'Deal put on hold', severity: 'warning' },
     revert:   { message: 'Sent back to the broker', severity: 'warning' },
     close:    { message: 'Deal closed', severity: 'success' },
+    reopen:   { message: 'Reopened for changes — the signed-off version is saved', severity: 'warning' },
   };
 
   /**
@@ -111,19 +144,26 @@ export function DealReviewScreen() {
         case 'verify': return verifyDeal(dealId, reason);
         case 'revert': return revertDeal(dealId, reason);
         case 'close':  return closeDeal(dealId);
+        case 'reopen': return reopenDeal(dealId, reason);
         default:       return overrideDeal(dealId, transition.to, reason);
       }
     },
     onSuccess: (_, vars) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ['dealNotes', dealId] });
+      // Verifying writes a version and reopening stamps one, so the menu is stale after either.
+      // Named unconditionally rather than per action: an override can do both too, and working
+      // out which is exactly the sort of thing that goes wrong later.
+      qc.invalidateQueries({ queryKey: ['dealVersions', dealId] });
       setStatusOpen(false);
       setActionError(null);
       const said = SAID[vars.transition.action]
         ?? { message: `Status overridden to ${dealStatusLabel(vars.transition.to)}`, severity: 'warning' };
       showToast(said);
       // Verifying and sending back both end this reviewer's involvement for now; a hold does not,
-      // so it stays on the deal.
+      // so it stays on the deal. Neither does a reopen, and emphatically so — it was asked for in
+      // order to change something, and dropping the reviewer back on the queue would put the deal
+      // they just unlocked one navigation away from where they meant to be.
       if (vars.transition.action === 'verify' || vars.transition.action === 'revert') {
         navigate(listPath);
       }
@@ -138,17 +178,42 @@ export function DealReviewScreen() {
     return <Alert severity="error">Failed to load deal.</Alert>;
   }
 
-  const deal        = dealQ.data;
-  const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === deal.createdByUserId;
+  const liveDeal    = dealQ.data;
+  const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === liveDeal.createdByUserId;
 
   // A NEW deal in the broker's hands is unfinished, and finishing it is what the form is for — so
   // its author still gets the form rather than this screen. A reviewer does not: the work they do
   // on a NEW deal is the ownership structure, which exists only here, and the deal's own record is
   // editable in the drawer beside it. NewDealPage's guard is deliberately wider than this one, so
   // a reviewer who asks for the form by name still gets it and the two routes cannot bounce.
-  if (isEditable(deal.status) && isOwnerAgent) {
-    return <Navigate to={`/deals/${deal.id}/edit`} replace />;
+  if (isEditable(liveDeal.status) && isOwnerAgent) {
+    return <Navigate to={`/deals/${liveDeal.id}/edit`} replace />;
   }
+
+  /*
+   * The whole screen, from one source or the other.
+   *
+   * A version answers in exactly the payloads the live deal does — that is the point of the
+   * server returning DealDto / TreeDto / documents / people rather than a shape of its own — so
+   * everything below this line is written once and draws either. `tree` is shaped like
+   * useOwnershipTree's return but carries no mutations: there is nothing to mutate on a snapshot,
+   * and the components already treat a missing callback as "not offered".
+   */
+  const snapshot = viewingVersion != null ? versionQ.data : null;
+  const versionFailed = viewingVersion != null && versionQ.isError;
+  const versionLoading = viewingVersion != null && versionQ.isLoading;
+
+  const deal = snapshot?.deal ?? liveDeal;
+  const tree = snapshot
+    ? { tree: snapshot.ownership, loading: false, error: null }
+    : liveTree;
+
+  // What the document surfaces need to read from the snapshot instead of the deal — the list, and
+  // the route a file is fetched by, since a document deleted since the sign-off is served only
+  // through the version that still names it.
+  const documentScope = snapshot
+    ? { dealId, versionNo: viewingVersion, documents: snapshot.documents }
+    : null;
 
   /**
    * Whether this viewer may change anything on this deal.
@@ -160,17 +225,25 @@ export function DealReviewScreen() {
    * product and writes to none.
    */
   const mayEdit = (isOwnerAgent || isDealReviewer(user?.role))
-    && canEditContent(deal.status, user?.role)
-    && canWrite(user?.role);
+    && canEditContent(liveDeal.status, user?.role)
+    && canWrite(user?.role)
+    // A version is a record of a past moment, so nothing on it is editable by anyone — regardless
+    // of what the live deal's status would otherwise allow. Folded into the one predicate the
+    // whole screen already reads, rather than added as a second test each consumer must remember.
+    && !snapshot;
 
   const showOverride = canOverride(user?.role);
 
   const selectedNode = tree.tree?.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
   // Whether the deal has anywhere to go, and whether this viewer is the one to take it there.
-  // The role test used to be the router's job.
+  // The role test used to be the router's job. Asked of the *live* status: the moves offered are
+  // moves of the deal, and looking at v1 does not make them moves of v1.
   const canUpdateStatus = isDealReviewer(user?.role)
-    && (transitionsFrom(deal.status).length > 0 || showOverride);
+    && !snapshot
+    && (transitionsFrom(liveDeal.status).length > 0 || showOverride);
+
+  const versions = versionsQ.data ?? [];
 
   return (
     <Stack spacing={2}>
@@ -193,21 +266,65 @@ export function DealReviewScreen() {
         </Stack>
 
         {/* One button. It used to be up to six verbs, and "Verify" beside an ownership tree read
-            as an action on the tree rather than on the deal. */}
-        {canUpdateStatus && (
-          <Stack direction="row" justifyContent="flex-end">
-            <Button variant="contained" size="small" onClick={() => setStatusOpen(true)}>
-              Update status
-            </Button>
+            as an action on the tree rather than on the deal.
+
+            Versions sits beside it because the two are halves of the same idea: this is where the
+            deal goes next, and that is where it has been. Absent until the deal has been verified
+            once — an empty history is not worth a control. */}
+        {(canUpdateStatus || versions.length > 0) && (
+          <Stack direction="row" justifyContent="flex-end" spacing={1}>
+            {versions.length > 0 && (
+              <Button
+                size="small"
+                startIcon={<VersionsIcon />}
+                onClick={(e) => setVersionsAnchor(e.currentTarget)}
+                aria-haspopup="menu"
+              >
+                {viewingVersion != null ? `Viewing v${viewingVersion}` : 'Versions'}
+              </Button>
+            )}
+            {canUpdateStatus && (
+              <Button variant="contained" size="small" onClick={() => setStatusOpen(true)}>
+                Update status
+              </Button>
+            )}
           </Stack>
         )}
       </Stack>
+
+      <DealVersionsMenu
+        anchorEl={versionsAnchor}
+        open={Boolean(versionsAnchor)}
+        onClose={() => setVersionsAnchor(null)}
+        versions={versions}
+        selected={viewingVersion}
+        onSelect={(v) => {
+          // Any drawer open over the live deal is showing a row that may not exist in the version
+          // being opened, so both close on the way across.
+          setSelectedNodeId(null);
+          setDealDrawerOpen(false);
+          setViewingVersion(v);
+        }}
+      />
 
       {actionError && (
         <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>
       )}
 
-      {!mayEdit && (
+      {versionFailed && (
+        <Alert severity="error" onClose={() => setViewingVersion(null)}>
+          Couldn’t load version {viewingVersion} of this deal.
+        </Alert>
+      )}
+
+      <DealVersionBanner
+        summary={snapshot?.summary}
+        onBackToCurrent={() => setViewingVersion(null)}
+      />
+
+      {/* The version banner already says the page is read-only and why, so this one would be a
+          second answer to a question the reader has stopped asking. */}
+      {!mayEdit && !snapshot && (
         <Alert severity="info" sx={{ py: 0.5 }}>
           This deal is <strong>{dealStatusLabel(deal.status)}</strong> and is read-only for you.
           You can see everything on it; changing it is not yours to do from here.
@@ -245,7 +362,9 @@ export function DealReviewScreen() {
 
       {/* ── Panels ──────────────────────────────────────────────────────── */}
       <ReviewTabPanel value="structure" current={tab}>
-        {tree.loading ? (
+        {versionLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
+        ) : tree.loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
         ) : tree.error ? (
           <Alert severity="error">Failed to load the ownership structure.</Alert>
@@ -295,6 +414,9 @@ export function DealReviewScreen() {
         // Commenting is not editing — a reviewer may still add a note to a deal they can no
         // longer change. Only the auditor, who writes nothing anywhere, is kept out.
         canComment={canWrite(user?.role)}
+        // The thread as it stood at the sign-off, which also turns off the composer and the live
+        // audit tab. Null on the live deal, where the drawer fetches its own.
+        frozenNotes={snapshot?.notes ?? null}
       />
 
       {/* ── The selected owner ──────────────────────────────────────────── */}
@@ -302,11 +424,12 @@ export function DealReviewScreen() {
         open={Boolean(selectedNode)}
         node={selectedNode}
         tree={tree.tree}
-        useTree={tree}
+        useTree={liveTree}
         dealId={dealId}
         onClose={() => setSelectedNodeId(null)}
         onRequestDelete={mayEdit ? setDeleteNodeId : undefined}
         readOnly={!mayEdit}
+        version={documentScope}
       />
 
       {/* ── Dialogs ─────────────────────────────────────────────────────── */}
@@ -317,7 +440,7 @@ export function DealReviewScreen() {
         parentLabel={addDialog?.parentNodeId != null
           ? tree.tree?.nodes.find((n) => n.id === addDialog.parentNodeId)?.displayName
           : null}
-        useTree={tree}
+        useTree={liveTree}
         // Straight into the panel that asks for everything the picker no longer does.
         onCreated={setSelectedNodeId}
       />
@@ -339,7 +462,7 @@ export function DealReviewScreen() {
           (n) => n.id === (changeOwner ? changeOwner.nodeId : attachNodeId)) ?? null}
         replaceEdge={changeOwner?.edge ?? null}
         tree={tree.tree}
-        useTree={tree}
+        useTree={liveTree}
         onClose={() => { setAttachNodeId(null); setChangeOwner(null); }}
       />
 
@@ -349,7 +472,7 @@ export function DealReviewScreen() {
         open={deleteNodeId != null}
         tree={tree.tree}
         nodeId={deleteNodeId}
-        useTree={tree}
+        useTree={liveTree}
         onClose={() => setDeleteNodeId(null)}
         onDeleted={() => {
           // The drawer may be showing a node that no longer exists.

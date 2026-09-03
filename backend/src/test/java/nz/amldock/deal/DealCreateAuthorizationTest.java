@@ -61,6 +61,7 @@ class DealCreateAuthorizationTest {
     @Mock nz.amldock.audit.AuditService audit;
     @Mock nz.amldock.ownership.OwnershipService ownership;
     @Mock nz.amldock.notification.DealNotificationEnqueuer notifier;
+    @Mock nz.amldock.deal.version.DealVersionService versions;
 
     DealService service;
 
@@ -73,7 +74,7 @@ class DealCreateAuthorizationTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, audit),
-                ownership, audit, notifier);
+                ownership, audit, notifier, versions);
 
         lenient().when(branches.findById(OWN_BRANCH)).thenReturn(Optional.of(branch(OWN_BRANCH, 1L)));
         lenient().when(branches.findById(OTHER_FIRM_BRANCH))

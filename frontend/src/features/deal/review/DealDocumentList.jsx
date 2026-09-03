@@ -20,8 +20,13 @@ import { formatBytes } from '../../../utils/formatters.js';
  *
  * <p>Voice notes are left out. This list exists to open things in a viewer, and audio is not one
  * of them; the deal's recordings are played where they were recorded.
+ *
+ * @param frozenDocuments the documents a past version was signed off with, fetched with that
+ *                 version. Supplying it turns off the live query — a version showing the deal's
+ *                 current files would be describing a set the reviewer never saw, and would miss
+ *                 the ones deleted since, which are exactly the ones worth still having.
  */
-export function DealDocumentList({ dealId, onOpen }) {
+export function DealDocumentList({ dealId, onOpen, frozenDocuments = null }) {
   const [query, setQuery] = useState('');
 
   const q = useQuery({
@@ -29,12 +34,16 @@ export function DealDocumentList({ dealId, onOpen }) {
     // second request or a stale list.
     queryKey: ['documents', dealId],
     queryFn: () => listDealDocuments(dealId),
-    enabled: Boolean(dealId),
+    enabled: Boolean(dealId) && !frozenDocuments,
   });
 
+  const source = frozenDocuments ?? q.data;
+  const loading = !frozenDocuments && q.isLoading;
+  const failed = !frozenDocuments && q.isError;
+
   const all = useMemo(
-    () => (q.data ?? []).filter((d) => !AUDIO_DOCUMENT_TYPES.includes(d.documentType)),
-    [q.data],
+    () => (source ?? []).filter((d) => !AUDIO_DOCUMENT_TYPES.includes(d.documentType)),
+    [source],
   );
 
   const trimmed = query.trim();
@@ -49,7 +58,9 @@ export function DealDocumentList({ dealId, onOpen }) {
       <Box>
         <Typography variant="subtitle1">Documents in this deal</Typography>
         <Typography variant="caption" sx={{ color: tokens.muted }}>
-          Everything filed against the deal, including files on other parties
+          {frozenDocuments
+            ? 'Everything filed against the deal when this version was signed off'
+            : 'Everything filed against the deal, including files on other parties'}
         </Typography>
       </Box>
 
@@ -67,18 +78,20 @@ export function DealDocumentList({ dealId, onOpen }) {
         }}
       />
 
-      {q.isLoading && (
+      {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
           <CircularProgress size={22} />
         </Box>
       )}
-      {q.isError && <Alert severity="error">Could not load this deal's documents.</Alert>}
+      {failed && <Alert severity="error">Could not load this deal's documents.</Alert>}
 
-      {q.data && rows.length === 0 && (
+      {source && rows.length === 0 && (
         <Typography variant="body2" sx={{ color: tokens.muted, py: 2, textAlign: 'center' }}>
           {trimmed
             ? `No file name matches "${trimmed}".`
-            : 'Nothing has been filed against this deal yet.'}
+            : frozenDocuments
+              ? 'Nothing was filed against this deal when it was signed off.'
+              : 'Nothing has been filed against this deal yet.'}
         </Typography>
       )}
 

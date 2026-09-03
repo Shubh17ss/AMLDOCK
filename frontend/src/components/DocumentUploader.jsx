@@ -40,6 +40,12 @@ export function DocumentUploader({
   onViewDocument = null,
   hideVoiceNotes = false,
   scrollTable = false,
+  /**
+   * The documents a past version was signed off with, already filtered to this scope. Supplying
+   * it turns off the live query and every way of adding to the list: a version is a record of a
+   * moment, and a file uploaded into it now was not part of that moment.
+   */
+  frozenDocuments = null,
 }) {
   const qc = useQueryClient();
   const inputRef = useRef(null);
@@ -56,8 +62,10 @@ export function DocumentUploader({
   const listQ = useQuery({
     queryKey: listKey,
     queryFn: () => (isNodeScoped ? listNodeDocuments(ownershipNodeId) : listDealDocuments(dealId)),
-    enabled: Boolean(isNodeScoped ? ownershipNodeId : dealId),
+    enabled: Boolean(isNodeScoped ? ownershipNodeId : dealId) && !frozenDocuments,
   });
+  const source = frozenDocuments ?? listQ.data;
+  const mayUpload = canUpload && !frozenDocuments;
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: listKey });
@@ -112,7 +120,7 @@ export function DocumentUploader({
 
   // Optionally drop voice notes — some screens surface them separately (e.g. a Broker
   // notes card) and don't want them repeated in the document table.
-  const rows = (listQ.data ?? []).filter(
+  const rows = (source ?? []).filter(
     (d) => !(hideVoiceNotes && AUDIO_DOCUMENT_TYPES.includes(d.documentType)),
   );
 
@@ -143,7 +151,7 @@ export function DocumentUploader({
         spacing={compact ? 1.5 : { xs: 1.5, sm: 0 }}
       >
         <Typography variant="subtitle1">{title}</Typography>
-        {canUpload && (
+        {mayUpload && (
           <Stack
             direction={compact ? 'column' : { xs: 'column', sm: 'row' }}
             spacing={1.5}
@@ -261,7 +269,7 @@ export function DocumentUploader({
                       <DownloadIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  {canUpload && (isDeletableHere(d) ? (
+                  {mayUpload && (isDeletableHere(d) ? (
                     <Tooltip title="Delete">
                       <IconButton size="small"
                                   onClick={() => deleteMut.mutate(d.id)}

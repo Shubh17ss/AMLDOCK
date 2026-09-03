@@ -23,6 +23,7 @@ public enum AuditAction {
     DEAL_VERIFIED,
     DEAL_CLOSED,
     DEAL_REVERTED,
+    DEAL_REOPENED,
     DEAL_NOTE_ADDED,
     DEAL_OVERRIDDEN,
     /**

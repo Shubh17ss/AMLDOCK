@@ -14,6 +14,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { fetchDownloadUrl, documentTypeLabel } from '../api/documents.js';
+import { presignVersionDocumentDownload } from '../api/dealVersions.js';
 import { tokens, fonts } from '../theme/theme.js';
 
 // Configure the pdf.js worker once. Using a CDN keeps us out of Vite bundler config.
@@ -34,7 +35,13 @@ export const isViewable = (doc) =>
  * structure. It opens above the node drawer, so it has to be larger than the drawer to be worth
  * opening at all.
  */
-export function DocumentViewerDialog({ open, doc, onClose }) {
+/**
+ * @param version when the surrounding page is showing a past version of a deal:
+ *                `{ dealId, versionNo }`. The file is then fetched through that version, which is
+ *                the only route that still serves a document deleted from the live deal since —
+ *                and a version listing a file it cannot open would be a poor kind of record.
+ */
+export function DocumentViewerDialog({ open, doc, onClose, version = null }) {
   return (
     <Dialog
       open={open && Boolean(doc)}
@@ -43,12 +50,12 @@ export function DocumentViewerDialog({ open, doc, onClose }) {
       fullWidth
       PaperProps={{ sx: { height: '90vh', maxHeight: '90vh' } }}
     >
-      {doc && <ViewerBody doc={doc} onClose={onClose} />}
+      {doc && <ViewerBody doc={doc} onClose={onClose} version={version} />}
     </Dialog>
   );
 }
 
-function ViewerBody({ doc, onClose }) {
+function ViewerBody({ doc, onClose, version = null }) {
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [urlError, setUrlError] = useState(null);
   const [numPages, setNumPages] = useState(null);
@@ -70,11 +77,14 @@ function ViewerBody({ doc, onClose }) {
     setRotation(0);
     setScale(1);
     setFitToWidth(true);
-    fetchDownloadUrl(doc.id)
+    const ask = version
+      ? presignVersionDocumentDownload(version.dealId, version.versionNo, doc.id)
+      : fetchDownloadUrl(doc.id);
+    ask
       .then((res) => { if (!cancelled) setDownloadUrl(res.downloadUrl); })
       .catch((e) => { if (!cancelled) setUrlError(e.response?.data?.message || 'Could not open this file'); });
     return () => { cancelled = true; };
-  }, [doc.id]);
+  }, [doc.id, version?.versionNo]);
 
   useEffect(() => {
     if (!containerRef.current) return undefined;

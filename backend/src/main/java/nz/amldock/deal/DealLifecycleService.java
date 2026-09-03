@@ -40,6 +40,8 @@ public class DealLifecycleService {
      * The transition table.
      *
      * <pre>
+     *                  ┌──────────reopen──────────┐
+     *                  ▼                          │
      * NEW ──submit──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
      *  ▲                │
      *  │                └──hold──▶ ON_HOLD
@@ -52,12 +54,20 @@ public class DealLifecycleService {
      * <p>ON_HOLD is the only negative outcome and its only exit is back to NEW — a parked deal
      * always returns through the broker, so there is a fresh submission on the record before
      * verification.
+     *
+     * <p>REOPEN is the one edge that was long absent, and it is here now only because verifying
+     * writes a {@link nz.amldock.deal.version.DealVersion} first. The objection to it was never
+     * that compliance should not be able to correct a verified deal — it was that correcting one
+     * silently rewrites the evidence behind a sign-off. Snapshotting answers that: the sign-off
+     * points at a copy, so the live deal is free to move. It lands in REVIEW rather than NEW
+     * because the work is compliance's to finish, not the broker's to redo.
      */
     private static final Map<DealAction, Rule> RULES = Map.of(
         DealAction.SUBMIT, new Rule(EnumSet.of(DealStatus.NEW),      DealStatus.REVIEW,   Who.EDITOR,   false),
         DealAction.HOLD,   new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.ON_HOLD,  Who.REVIEWER, true),
         DealAction.VERIFY, new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.VERIFIED, Who.REVIEWER, true),
         DealAction.CLOSE,  new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.CLOSED,   Who.REVIEWER, false),
+        DealAction.REOPEN, new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.REVIEW,   Who.REVIEWER, true),
         DealAction.REVERT, new Rule(EnumSet.of(DealStatus.REVIEW,
                                                DealStatus.ON_HOLD),  DealStatus.NEW,      Who.REVIEWER, true));
 
@@ -286,6 +296,7 @@ public class DealLifecycleService {
             case VERIFY -> "verified";
             case CLOSE  -> "closed";
             case REVERT -> "reverted";
+            case REOPEN -> "reopened";
         };
     }
 }

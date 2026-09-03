@@ -9,6 +9,7 @@ import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.deal.version.DealVersionDocumentRepository;
 import nz.amldock.document.dto.DocumentDto;
 import nz.amldock.document.dto.DownloadUrlResponse;
 import nz.amldock.document.dto.UploadUrlRequest;
@@ -46,6 +47,8 @@ public class DocumentService {
     private final DealLifecycleService lifecycle;
     private final BeneficialOwnerService beneficialOwners;
     private final AuditService audit;
+    /** Asked before an S3 object is removed: is a verified version still pointing at it? */
+    private final DealVersionDocumentRepository versionDocuments;
     private final long maxBytes;
     private final Duration uploadTtl;
     private final Duration downloadTtl;
@@ -60,6 +63,7 @@ public class DocumentService {
                            DealLifecycleService lifecycle,
                            BeneficialOwnerService beneficialOwners,
                            AuditService audit,
+                           DealVersionDocumentRepository versionDocuments,
                            @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
                            @Value("${S3_UPLOAD_TTL_MINUTES:5}") long uploadTtlMinutes,
                            @Value("${S3_DOWNLOAD_TTL_MINUTES:5}") long downloadTtlMinutes) {
@@ -73,6 +77,7 @@ public class DocumentService {
         this.lifecycle = lifecycle;
         this.beneficialOwners = beneficialOwners;
         this.audit = audit;
+        this.versionDocuments = versionDocuments;
         this.maxBytes = maxBytes;
         this.uploadTtl = Duration.ofMinutes(uploadTtlMinutes);
         this.downloadTtl = Duration.ofMinutes(downloadTtlMinutes);
@@ -282,7 +287,19 @@ public class DocumentService {
         }
         if (d.getStatus() == DocumentStatus.DELETED) return;
 
-        storage.delete(d.getS3Key());
+        // The row goes DELETED either way, so the document leaves the live deal either way — that
+        // is what listForDeal filters on and it is unaffected by any of this.
+        //
+        // The bytes are a different question. A verified deal keeps a copy of the documents it was
+        // signed off with (deal_version_document), and those rows name this same S3 object: keys
+        // carry a UUID, so an object is written once and never overwritten, and nothing is gained
+        // by duplicating it per version. Deleting it here would leave every past version listing
+        // evidence it could no longer produce — the sign-off would still claim the passport was
+        // checked and no longer be able to show it. So the object stays for as long as a version
+        // refers to it, and only an unreferenced one is really removed.
+        if (!versionDocuments.existsBySourceDocumentId(d.getId())) {
+            storage.delete(d.getS3Key());
+        }
         d.setStatus(DocumentStatus.DELETED);
         audit.record(AuditAction.DOCUMENT_DELETED, "Document", d.getId(),
                 "Deleted " + d.getOriginalFilename());

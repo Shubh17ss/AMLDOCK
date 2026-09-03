@@ -20,8 +20,12 @@ import { tokens, fonts } from '../../theme/theme.js';
  *
  * @param embedded true when this owns a whole tab, which makes the card and the "Notes" heading
  *                 around it redundant — the tab already said so.
+ * @param frozenEntries the thread as a past version recorded it, already fetched with that
+ *                 version. Supplying it turns off the live query and the composer: a version is
+ *                 a record of a moment, and a comment added to it now would not be part of that
+ *                 moment.
  */
-export function DealNotesTimeline({ dealId, status, canComment = true, embedded = false }) {
+export function DealNotesTimeline({ dealId, status, canComment = true, embedded = false, frozenEntries = null }) {
   const qc = useQueryClient();
   const [body, setBody] = useState('');
   const [error, setError] = useState(null);
@@ -29,7 +33,9 @@ export function DealNotesTimeline({ dealId, status, canComment = true, embedded 
   const q = useQuery({
     queryKey: ['dealNotes', dealId],
     queryFn: () => listDealNotes(dealId),
-    enabled: Boolean(dealId),
+    // A version supplies its own thread, cut at the moment it was signed off. Fetching the live
+    // one beside it would be a request whose answer is the thing we are deliberately not showing.
+    enabled: Boolean(dealId) && !frozenEntries,
   });
 
   const addMut = useMutation({
@@ -43,7 +49,11 @@ export function DealNotesTimeline({ dealId, status, canComment = true, embedded 
     onError: (e) => setError(e.response?.data?.message || 'Your note didn’t save. Try again.'),
   });
 
-  const entries = q.data ?? [];
+  const entries = frozenEntries ?? q.data ?? [];
+  // A frozen thread is already in hand: nothing to load, nothing to fail, and nothing to add to.
+  const loading = !frozenEntries && q.isLoading;
+  const failed = !frozenEntries && q.isError;
+  const mayComment = canComment && !frozenEntries;
 
   // One body, two frames. Built as an element rather than a wrapper component: a component
   // declared here would be a new type on every render, and React would remount the whole subtree
@@ -62,12 +72,12 @@ export function DealNotesTimeline({ dealId, status, canComment = true, embedded 
 
         <Divider sx={{ my: 2 }} />
 
-        {q.isLoading && (
+        {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={22} /></Box>
         )}
-        {q.isError && <Alert severity="error">Couldn’t load the notes for this deal.</Alert>}
+        {failed && <Alert severity="error">Couldn’t load the notes for this deal.</Alert>}
 
-        {!q.isLoading && !q.isError && entries.length === 0 && (
+        {!loading && !failed && entries.length === 0 && (
           <Typography variant="body2" sx={{ color: tokens.muted, py: 1 }}>
             Nothing here yet.
           </Typography>
@@ -79,7 +89,7 @@ export function DealNotesTimeline({ dealId, status, canComment = true, embedded 
           ))}
         </Stack>
 
-        {canComment && (
+        {mayComment && (
           <Box sx={{ mt: 2.5 }}>
             <TextField
               label="Add a note"

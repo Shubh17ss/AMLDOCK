@@ -1,6 +1,6 @@
 package nz.amldock.property.dto;
 
-import nz.amldock.property.Property;
+import nz.amldock.property.PropertyFields;
 import nz.amldock.property.PropertyType;
 
 import java.math.BigDecimal;
@@ -20,8 +20,8 @@ public record PropertyDto(
         PropertyType propertyType,
         String reasonForSelling
 ) {
-    public static PropertyDto from(Property p) {
-        return new PropertyDto(p.getId(), p.getAddressLine1(), p.getAddressLine2(),
+    public static PropertyDto from(PropertyFields p) {
+        return new PropertyDto(p.getPropertyId(), p.getAddressLine1(), p.getAddressLine2(),
                 p.getSuburb(), p.getDistrict(), p.getRegion(), p.getCountry(), p.getPostcode(),
                 p.getTitleReference(), p.getLegalDescription(), p.getLandAreaSqm(),
                 p.getPropertyType(), p.getReasonForSelling());

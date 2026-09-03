@@ -4,6 +4,8 @@
 // (backend/src/main/java/nz/amldock/deal/). The server is authoritative and rejects anything
 // these predicates let through — they exist only to decide which buttons render.
 //
+//                 ┌──────────reopen──────────┐
+//                 ▼                          │
 //   NEW ──submit──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
 //    ▲                │
 //    │                └──hold──▶ ON_HOLD
@@ -12,6 +14,10 @@
 // There is no staging status between the broker and compliance: submitting hands the deal
 // straight to review. There is no rejected state either — a deal that cannot pass sits in
 // ON_HOLD, or goes back to NEW for the broker to fix. ON_HOLD's only exit is back to NEW.
+//
+// Reopening is the newest edge and the only one that runs backwards from a sign-off. It is safe
+// because verifying writes a *version* first: what was signed off is a copy, so the live deal can
+// move without rewriting it. See DealVersion on the backend.
 
 import { tokens } from '../theme/theme.js';
 import { isDealAuthor } from '../auth/roles.js';
@@ -100,6 +106,11 @@ export const STATUS_TRANSITIONS = [
     blurb: 'Back to the broker for changes. Say what needs doing — they see it on the timeline.',
   },
   {
+    to: 'REVIEW', from: ['VERIFIED'], action: 'reopen', noteRequired: true,
+    blurb: 'Back to compliance for changes. The current version is saved first and stays exactly '
+      + 'as it was signed off — this reopens only the live deal.',
+  },
+  {
     to: 'CLOSED', from: ['VERIFIED'], action: 'close', noteRequired: false,
     blurb: 'The file is finished. Nothing further happens to this deal.',
   },
@@ -119,6 +130,9 @@ export const canHold = (s) => allows('hold', s);
 export const canVerify = (s) => allows('verify', s);
 export const canClose = (s) => allows('close', s);
 export const canRevert = (s) => allows('revert', s);
+
+/** Whether a signed-off deal can be taken back for changes. Its version is written first. */
+export const canReopen = (s) => allows('reopen', s);
 
 /** The reviewer workspace is useful from submission onward, decided or not. */
 export const isReviewable = (s) => Boolean(s) && s !== 'NEW';

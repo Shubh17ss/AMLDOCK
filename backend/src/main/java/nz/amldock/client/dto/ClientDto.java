@@ -1,6 +1,6 @@
 package nz.amldock.client.dto;
 
-import nz.amldock.client.Client;
+import nz.amldock.client.ClientFields;
 import nz.amldock.client.ClientType;
 
 public record ClientDto(
@@ -10,7 +10,7 @@ public record ClientDto(
         String email,
         String phone
 ) {
-    public static ClientDto from(Client c) {
-        return new ClientDto(c.getId(), c.getDisplayName(), c.getClientType(), c.getEmail(), c.getPhone());
+    public static ClientDto from(ClientFields c) {
+        return new ClientDto(c.getClientId(), c.getDisplayName(), c.getClientType(), c.getEmail(), c.getPhone());
     }
 }

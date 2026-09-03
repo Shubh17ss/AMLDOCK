@@ -1,6 +1,6 @@
 package nz.amldock.ownership.dto;
 
-import nz.amldock.beneficialowner.BeneficialOwner;
+import nz.amldock.beneficialowner.BeneficialOwnerFields;
 import nz.amldock.beneficialowner.ReviewStatus;
 
 import java.time.LocalDate;
@@ -31,9 +31,9 @@ public record PersonDto(
         LocalDate idExpiryDate,
         ReviewStatus reviewStatus) {
 
-    public static PersonDto from(BeneficialOwner o) {
+    public static PersonDto from(BeneficialOwnerFields o) {
         return new PersonDto(
-                o.getId(), o.getFullName(), o.getEmail(), o.getPhoneCountry(), o.getPhoneNumber(),
+                o.getBeneficialOwnerId(), o.getFullName(), o.getEmail(), o.getPhoneCountry(), o.getPhoneNumber(),
                 o.getOccupation(), o.getSourceOfFunds(), o.getCountryOfResidence(),
                 o.getDateOfBirth(), o.getIdExpiryDate(), o.getReviewStatus());
     }
