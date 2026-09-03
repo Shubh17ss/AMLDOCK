@@ -145,7 +145,10 @@ function EditUserDialog({ target, onClose }) {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField label="Full name" value={form.fullName} onChange={ch('fullName')} required />
-            <TextField label="Email" type="email" value={form.email} onChange={ch('email')} required />
+            <TextField label="Email" type="email" value={form.email} onChange={ch('email')} required
+                       helperText={'Applied immediately, without a code sent to the new address — '
+                         + 'this is the way to repair a mistyped email, since that person cannot '
+                         + 'receive one. Their current address is notified of the change.'} />
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         </DialogContent>

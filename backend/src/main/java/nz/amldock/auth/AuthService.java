@@ -95,7 +95,10 @@ public class AuthService {
         try {
             otp.verify(u, code, OtpPurpose.LOGIN);
         } catch (RuntimeException ex) {
-            audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_FAILED, "User", u.getId(),
+            // recordFailure, not recordForUser: this method is @Transactional and is about to throw,
+            // which would roll an ordinary audit write back along with it. A failed sign-in attempt
+            // leaving no trace is precisely the wrong way round.
+            audit.recordFailure(u.getId(), u.getEmail(), AuditAction.USER_OTP_FAILED, "User", u.getId(),
                     "Login OTP verification failed for " + u.getEmail());
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code");
         }
@@ -143,7 +146,7 @@ public class AuthService {
         try {
             otp.verify(u, code, OtpPurpose.ADMIN_LOGIN);
         } catch (RuntimeException ex) {
-            audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_FAILED, "User", u.getId(),
+            audit.recordFailure(u.getId(), u.getEmail(), AuditAction.USER_OTP_FAILED, "User", u.getId(),
                     "Admin OTP verification failed for " + u.getEmail());
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code");
         }
@@ -188,6 +191,25 @@ public class AuthService {
     public AuthResponse me(Long userId) {
         User u = users.findById(userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "User not found"));
+        return toAuthResponse(u);
+    }
+
+    /**
+     * Issues a fresh cookie pair for a user whose identity claims have moved under them.
+     *
+     * <p>Exists for the email change. The access token carries an {@code email} claim that
+     * {@code AuditService} reads for {@code actorEmail}, and
+     * {@code JwtAuthenticationFilter} rebuilds the principal from it without consulting the
+     * database — so after a change the old address would keep signing every audit row this user
+     * produced for up to the token's fifteen-minute life. Re-issuing costs one row in
+     * {@code refresh_token} and keeps the trail honest.
+     *
+     * <p>It also spares the user a forced sign-out: they changed an address, not a password, and
+     * being logged out for it would read as something having gone wrong.
+     */
+    @Transactional
+    public AuthResponse reissueSession(User u, HttpServletResponse response) {
+        issueCookies(u, response);
         return toAuthResponse(u);
     }
 

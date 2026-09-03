@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, IconButton, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer,
+  Divider, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { InstantSwitch } from '../../components/InstantSwitch.jsx';
 import EditIcon from '@mui/icons-material/Edit';
 import { createBranch, deactivateBranch, listBranches, updateBranch } from '../../api/firms.js';
 import { tokens } from '../../theme/theme.js';
@@ -35,8 +36,13 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
 
   const toggleActive = useMutation({
     mutationFn: ({ id, active }) => updateBranch(id, { active }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['firms', firmId, 'branches'] }),
   });
+
+  // Resolves only once the branch list has refetched — see InstantSwitch.
+  const setActive = async (id, active) => {
+    await toggleActive.mutateAsync({ id, active });
+    await qc.invalidateQueries({ queryKey: ['firms', firmId, 'branches'] });
+  };
   const deleteMut = useMutation({
     mutationFn: (id) => deactivateBranch(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['firms', firmId, 'branches'] }),
@@ -85,9 +91,9 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
                   <TableCell>{b.managerName ?? '—'}</TableCell>
                   <TableCell>{b.phone ?? '—'}</TableCell>
                   <TableCell>
-                    <Switch size="small" checked={b.active}
-                            disabled={!canDeactivate}
-                            onChange={(e) => toggleActive.mutate({ id: b.id, active: e.target.checked })} />
+                    <InstantSwitch size="small" checked={b.active}
+                                   disabled={!canDeactivate}
+                                   onToggle={(active) => setActive(b.id, active)} />
                   </TableCell>
                   <TableCell align="right">
                     <Tooltip title="Edit">

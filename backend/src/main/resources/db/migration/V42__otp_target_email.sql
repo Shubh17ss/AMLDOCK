@@ -1,0 +1,24 @@
+-- V42: bind a one-time code to the address it was sent to, so an email can be changed safely.
+--
+-- Email is the credential here — sign-in is address + OTP, and nothing else. So an address that has
+-- never been proved to reach its owner is an unverified credential, and a mistyped one locks that
+-- person out permanently: the code they need in order to fix it goes to the address they cannot
+-- read. Changing an email now requires a code sent to the NEW address, which is the only evidence
+-- that the person asking can actually receive mail there.
+--
+-- That is what this column is for. LOGIN and ADMIN_LOGIN mail user.getEmail(), so their destination
+-- is implied by the row's user_id and they stay NULL. EMAIL_CHANGE cannot work that way — the whole
+-- point is an address the user does not own yet — and the destination has to be recorded against
+-- the code rather than inferred.
+--
+-- Without it the flow would verify nothing useful. A code proves only "somebody reading some inbox
+-- typed these six digits"; it is the pairing with the address that turns it into "the person who
+-- can read new@example.com asked for this". Storing the pending address anywhere other than on the
+-- code itself — a field on app_user, say — would leave the two able to drift apart, and the window
+-- in which they disagree is exactly the window an attacker wants: request a code to an address you
+-- control, then swap the pending address to the victim's before spending it.
+--
+-- Nullable, so the two existing purposes need no backfill and behave exactly as before. There is
+-- deliberately no CHECK tying it to purpose: otp_code.purpose has never had one (V11 records the
+-- values in a comment), and OtpPurpose is the single place that set is defined.
+ALTER TABLE otp_code ADD COLUMN target_email VARCHAR(255);

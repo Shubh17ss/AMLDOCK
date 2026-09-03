@@ -255,8 +255,8 @@ public class UserService {
             }
             u.setEmail(req.email().toLowerCase());
         }
-        // Role / firm / branch / active are platform-admin concerns — firm-level managers may
-        // only edit name + email of the users in their firm.
+        // Role / firm / branch stay platform-admin concerns — they decide what a user *is* and
+        // which reporting entity they answer to, which is not a firm manager's call to make.
         if (isRoot) {
             if (req.role() != null) {
                 u.setRole(req.role());
@@ -266,9 +266,22 @@ public class UserService {
                 if (req.realEstateFirmId() != null) u.setRealEstateFirmId(req.realEstateFirmId());
                 if (req.firmBranchId() != null) u.setFirmBranchId(req.firmBranchId());
             }
-            if (req.active() != null) {
-                u.setActive(req.active());
+        }
+        // Suspending is not. It used to sit in the block above, which left the compliance officers
+        // who create a firm's accounts unable to switch one off — the account stayed live until a
+        // platform administrator got round to it. Suspending is the same authority as creating, so
+        // it is governed by the same check: assertCanManage ran at the top of this method and has
+        // already settled the scope (firm-level staff over their own firm but not their peers, a
+        // sales manager over their own branch, ROOT over anyone but another ROOT).
+        if (req.active() != null && req.active() != u.isActive()) {
+            // assertCanManage deliberately lets an actor act on themselves, so that a manager can
+            // fix their own name. Suspension is the one thing that must not follow from that: a
+            // firm whose only compliance officer switched their own account off has nobody left
+            // who can switch it back on.
+            if (actor.id().equals(u.getId())) {
+                throw new BadRequestException("You can't change your own account's status");
             }
+            u.setActive(req.active());
         }
         validateFirmLinkage(u.getRole(), u.getRealEstateFirmId(), u.getFirmBranchId());
         return u;

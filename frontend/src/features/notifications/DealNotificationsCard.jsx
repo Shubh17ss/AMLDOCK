@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert, Card, CardContent, Divider, FormControlLabel, Paper, Stack, Switch, Table, TableBody,
+  Alert, Card, CardContent, Divider, FormControlLabel, Paper, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material';
+import { InstantSwitch } from '../../components/InstantSwitch.jsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import {
@@ -71,12 +72,14 @@ export function DealNotificationsCard() {
     [branches, search],
   );
 
+  // mutateAsync rather than mutate: InstantSwitch holds the thumb where the user put it until this
+  // resolves, and onSuccess above seeds the cache from the response, so by then `checked` is right.
   const toggle = (branchId, eventType, enabled) =>
-    save.mutate([{ firmBranchId: branchId, eventType, enabled }]);
+    save.mutateAsync([{ firmBranchId: branchId, eventType, enabled }]);
 
   /** Sets one event across every branch currently in view, in a single request. */
   const toggleAll = (eventType, enabled) =>
-    save.mutate(visible.map((b) => ({ firmBranchId: b.id, eventType, enabled })));
+    save.mutateAsync(visible.map((b) => ({ firmBranchId: b.id, eventType, enabled })));
 
   if (!eligible) {
     return (
@@ -117,10 +120,9 @@ export function DealNotificationsCard() {
             <FormControlLabel
               key={e.id}
               control={(
-                <Switch
+                <InstantSwitch
                   checked={Boolean(only.events[e.id]?.enabled)}
-                  disabled={save.isPending}
-                  onChange={(ev) => toggle(only.id, e.id, ev.target.checked)}
+                  onToggle={(enabled) => toggle(only.id, e.id, enabled)}
                 />
               )}
               label={e.label}
@@ -159,12 +161,12 @@ export function DealNotificationsCard() {
                   const on = visible.filter((b) => b.events[e.id]?.enabled).length;
                   return (
                     <TableCell key={e.id} align="center">
-                      <Switch
+                      <InstantSwitch
                         size="small"
                         checked={visible.length > 0 && on === visible.length}
                         indeterminate={on > 0 && on < visible.length}
-                        disabled={save.isPending || visible.length === 0}
-                        onChange={(ev) => toggleAll(e.id, ev.target.checked)}
+                        disabled={visible.length === 0}
+                        onToggle={(enabled) => toggleAll(e.id, enabled)}
                       />
                     </TableCell>
                   );
@@ -175,11 +177,10 @@ export function DealNotificationsCard() {
                   <TableCell>{b.name}</TableCell>
                   {DEAL_NOTIFICATION_EVENTS.map((e) => (
                     <TableCell key={e.id} align="center">
-                      <Switch
+                      <InstantSwitch
                         size="small"
                         checked={Boolean(b.events[e.id]?.enabled)}
-                        disabled={save.isPending}
-                        onChange={(ev) => toggle(b.id, e.id, ev.target.checked)}
+                        onToggle={(enabled) => toggle(b.id, e.id, enabled)}
                       />
                     </TableCell>
                   ))}

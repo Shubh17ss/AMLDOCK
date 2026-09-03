@@ -9,6 +9,16 @@ public enum AuditAction {
     USER_CREATED,
     USER_UPDATED,
     USER_DELETED,
+    // Suspension used to be an indistinguishable USER_UPDATED. It is the one user change that
+    // takes someone's access away, so it earns its own name in the trail.
+    USER_ACTIVATED,
+    USER_DEACTIVATED,
+    // An email is the sign-in credential here, so a change of one is a change of credential.
+    // Split three ways because they answer different questions: who asked, who confirmed it from
+    // the new address, and who set one administratively without that confirmation.
+    USER_EMAIL_CHANGE_REQUESTED,
+    USER_EMAIL_CHANGED,
+    USER_EMAIL_SET_BY_ADMIN,
     USER_PASSWORD_RESET,
     USER_PASSWORD_CHANGED,
     USER_WELCOME_EMAIL_SENT,

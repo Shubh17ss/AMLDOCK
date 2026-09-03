@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Alert, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../auth/AuthContext.jsx';
+import { InstantSwitch } from '../../components/InstantSwitch.jsx';
 import { DEAL_NOTIFICATION_EVENTS, canWrite, roleLabel } from '../../auth/roles.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import {
@@ -45,8 +46,10 @@ export function NotificationsAdminPage() {
   const save = useMutation({
     mutationFn: ({ userId, preferences }) =>
       updateUserNotificationPreferences(userId, preferences),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['notification-preferences'] });
+    onSuccess: async () => {
+      // Awaited, so the promise mutateAsync returns does not settle before the grid this switch
+      // reads from has been refreshed.
+      await qc.invalidateQueries({ queryKey: ['notification-preferences'] });
       showToast({ severity: 'success', message: 'Notification preferences saved' });
     },
     onError: (err) => showToast({
@@ -60,8 +63,9 @@ export function NotificationsAdminPage() {
     return all.filter((r) => matchesSearch(search, r.fullName, r.email, roleLabel(r.role)));
   }, [gridQ.data, search]);
 
+  // mutateAsync so InstantSwitch can hold the thumb until the matrix has refetched.
   const toggle = (row, eventType, enabled) =>
-    save.mutate({
+    save.mutateAsync({
       userId: row.userId,
       preferences: [{ firmBranchId: branchId, eventType, enabled }],
     });
@@ -110,11 +114,14 @@ export function NotificationsAdminPage() {
                       const pref = valueFor(row, e.id);
                       return (
                         <TableCell key={e.id} align="center">
-                          <Switch
+                          <InstantSwitch
                             size="small"
                             checked={Boolean(pref?.enabled)}
-                            disabled={!mayWrite || save.isPending || !pref}
-                            onChange={(ev) => toggle(row, e.id, ev.target.checked)}
+                            // No longer disabled while saving: the switch holds the requested
+                            // position itself, and locking it mid-gesture is what made this feel
+                            // stuck. The two real reasons to refuse a click remain.
+                            disabled={!mayWrite || !pref}
+                            onToggle={(enabled) => toggle(row, e.id, enabled)}
                           />
                         </TableCell>
                       );
