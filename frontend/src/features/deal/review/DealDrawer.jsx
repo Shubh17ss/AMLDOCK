@@ -30,8 +30,17 @@ const TABS = [
  * <p>Nothing here is committed by closing. Details has its own Save, and will say so if it is
  * dismissed with unsaved work.
  */
-export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canComment = true }) {
+export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canComment = true,
+                            frozenNotes = null }) {
   const [tab, setTab] = useState('details');
+
+  // The audit trail is a live event log about the deal, not part of any snapshot, so a version
+  // does not offer it. Showing it under a banner reading "as it was signed off" would be the one
+  // thing on the screen quietly contradicting that.
+  const tabs = frozenNotes ? TABS.filter((t) => t.value !== 'audit') : TABS;
+  // Switching to a version while the audit tab is open would leave Tabs pointing at a tab that is
+  // no longer there, which MUI renders as no selection at all.
+  const current = tabs.some((t) => t.value === tab) ? tab : 'details';
 
   /*
    * The Details form's state lives here rather than in the form.
@@ -144,7 +153,7 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
       <Tabs
-        value={tab}
+        value={current}
         onChange={(_, v) => setTab(v)}
         variant="scrollable"
         scrollButtons={false}
@@ -162,7 +171,7 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
           },
         }}
       >
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <Tab key={t.value} value={t.value} label={t.label} id={`deal-drawer-tab-${t.value}`} />
         ))}
       </Tabs>
@@ -181,9 +190,9 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
             to: { opacity: 1, transform: 'none' },
           },
         })}
-        key={tab}
+        key={current}
       >
-        {deal && form && tab === 'details' && (
+        {deal && form && current === 'details' && (
           <DealDetailsForm
             deal={deal}
             dealId={dealId}
@@ -197,11 +206,16 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
             readOnly={readOnly}
           />
         )}
-        {deal && tab === 'notes' && (
+        {deal && current === 'notes' && (
           // No status chip: the page header already carries one a couple of inches away.
-          <DealNotesTimeline dealId={dealId} canComment={canComment} embedded />
+          <DealNotesTimeline
+            dealId={dealId}
+            canComment={canComment}
+            frozenEntries={frozenNotes}
+            embedded
+          />
         )}
-        {tab === 'audit' && <DealAuditPanel dealId={dealId} embedded />}
+        {current === 'audit' && !frozenNotes && <DealAuditPanel dealId={dealId} embedded />}
       </Box>
 
       {/* ── Footer ─────────────────────────────────────────────────────── */}

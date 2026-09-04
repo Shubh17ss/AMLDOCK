@@ -116,10 +116,10 @@ class DealLifecycleServiceTest {
     /** Mirrors DealLifecycleService.RULES. Kept here so a table change fails this test loudly. */
     private static Set<DealStatus> allowedFrom(DealAction action) {
         return switch (action) {
-            case SUBMIT       -> EnumSet.of(DealStatus.NEW);
-            case HOLD, VERIFY -> EnumSet.of(DealStatus.REVIEW);
-            case CLOSE        -> EnumSet.of(DealStatus.VERIFIED);
-            case REVERT       -> EnumSet.of(DealStatus.REVIEW, DealStatus.ON_HOLD);
+            case SUBMIT        -> EnumSet.of(DealStatus.NEW);
+            case HOLD, VERIFY  -> EnumSet.of(DealStatus.REVIEW);
+            case CLOSE, REOPEN -> EnumSet.of(DealStatus.VERIFIED);
+            case REVERT        -> EnumSet.of(DealStatus.REVIEW, DealStatus.ON_HOLD);
         };
     }
 
@@ -297,13 +297,104 @@ class DealLifecycleServiceTest {
         lifecycle.transition(d, amlco, DealAction.VERIFY, FIRM_A, "verified");
         assertThat(d.getDecidedByUserId()).isNotNull();
 
-        // Only an override can leave VERIFIED, and doing so must not leave a sign-off standing
-        // for a deal that is no longer verified.
+        // Leaving VERIFIED must not leave a sign-off standing for a deal that is no longer
+        // verified. The override is one way out; REOPEN below is the other, and both clear it.
         lifecycle.override(d, seniorManager, DealStatus.REVIEW, FIRM_A, "Reopening, new information");
 
         assertThat(d.getStatus()).isEqualTo(DealStatus.REVIEW);
         assertThat(d.getDecidedByUserId()).isNull();
         assertThat(d.getDecidedAt()).isNull();
+    }
+
+    /* ---------- reopen ---------- */
+
+    /**
+     * The verb that made VERIFIED a door rather than a wall.
+     *
+     * <p>It lands in REVIEW, not NEW: the deal is compliance's to finish correcting, and sending it
+     * back through the broker would ask them to redo work that was already accepted.
+     */
+    @Test
+    void reopeningAVerifiedDealReturnsItToReview() {
+        Deal d = dealIn(DealStatus.REVIEW);
+        lifecycle.transition(d, amlco, DealAction.VERIFY, FIRM_A, "checked the title");
+
+        assertThat(lifecycle.transition(d, amlco2, DealAction.REOPEN, FIRM_A, "new ID supplied"))
+                .isEqualTo(DealStatus.VERIFIED);
+        assertThat(d.getStatus()).isEqualTo(DealStatus.REVIEW);
+    }
+
+    /**
+     * The sign-off does not survive on the deal. It survives on the version, which is the whole
+     * reason reopening is allowed at all — see DealVersion.
+     */
+    @Test
+    void reopeningClearsTheSignOffFromTheDeal() {
+        Deal d = dealIn(DealStatus.REVIEW);
+        lifecycle.transition(d, amlco, DealAction.VERIFY, FIRM_A, "checked the title");
+        assertThat(d.getDecidedByUserId()).isNotNull();
+
+        lifecycle.transition(d, amlco, DealAction.REOPEN, FIRM_A, "new ID supplied");
+
+        assertThat(d.getDecidedByUserId()).isNull();
+        assertThat(d.getDecidedAt()).isNull();
+    }
+
+    /** Taking a sign-off back is the same decision as giving one, so it is the same people. */
+    @Test
+    void onlyAReviewerOfTheFirmMayReopen() {
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.VERIFIED), broker, DealAction.REOPEN, FIRM_A, "let me back in"))
+                .isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.VERIFIED), salesManager, DealAction.REOPEN, FIRM_A, "let me back in"))
+                .isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.VERIFIED), foreignAmlco, DealAction.REOPEN, FIRM_A, "let me back in"))
+                .isInstanceOf(ForbiddenException.class);
+
+        assertThatCode(() -> lifecycle.transition(
+                dealIn(DealStatus.VERIFIED), amlco, DealAction.REOPEN, FIRM_A, "new ID supplied"))
+                .doesNotThrowAnyException();
+    }
+
+    /** Undoing a sign-off has to say why, exactly as making one does. */
+    @Test
+    void reopeningDemandsANote() {
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.VERIFIED), amlco, DealAction.REOPEN, FIRM_A, null))
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("note is required");
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.VERIFIED), amlco, DealAction.REOPEN, FIRM_A, "no"))
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("min 3");
+    }
+
+    /**
+     * A closed deal stays closed. CLOSED is terminal and reopening is not a way around that — a
+     * senior manager's override still is, which keeps that decision on the record where it belongs.
+     */
+    @Test
+    void aClosedDealCannotBeReopened() {
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.CLOSED), seniorManager, DealAction.REOPEN, FIRM_A, "reopening"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("cannot be reopened");
+    }
+
+    /**
+     * The deal becomes editable again by being in REVIEW, not by any new rule. Reopening buys a
+     * reviewer nothing except the status they can already edit in.
+     */
+    @Test
+    void aReopenedDealIsEditableAgainByAReviewer() {
+        Deal d = dealIn(DealStatus.REVIEW);
+        lifecycle.transition(d, amlco, DealAction.VERIFY, FIRM_A, "checked the title");
+        lifecycle.transition(d, amlco, DealAction.REOPEN, FIRM_A, "new ID supplied");
+
+        assertThatCode(() -> lifecycle.assertEditable(d, amlco, FIRM_A)).doesNotThrowAnyException();
+        // Still not the broker's: their window is NEW and reopening does not widen it.
+        assertThatThrownBy(() -> lifecycle.assertEditable(d, broker, FIRM_A))
+                .isInstanceOf(BadRequestException.class);
     }
 
     /* ---------- override ---------- */

@@ -56,6 +56,17 @@ export async function verifyDeal(id, note) {
   return data;
 }
 
+/**
+ * VERIFIED → REVIEW. Takes a signed-off deal back for changes.
+ *
+ * The server writes the version *before* the deal moves, so what was signed off is untouched by
+ * anything done after this returns. Invalidate ['dealVersions', id] alongside the deal.
+ */
+export async function reopenDeal(id, note) {
+  const { data } = await apiClient.post(`/deals/${id}/reopen`, { note });
+  return data;
+}
+
 /** VERIFIED → CLOSED. */
 export async function closeDeal(id) {
   const { data } = await apiClient.post(`/deals/${id}/close`);

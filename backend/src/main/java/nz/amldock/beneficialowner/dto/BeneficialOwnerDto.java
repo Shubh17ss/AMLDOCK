@@ -1,6 +1,6 @@
 package nz.amldock.beneficialowner.dto;
 
-import nz.amldock.beneficialowner.BeneficialOwner;
+import nz.amldock.beneficialowner.BeneficialOwnerFields;
 import nz.amldock.beneficialowner.ReviewStatus;
 
 import java.time.Instant;
@@ -28,9 +28,9 @@ public record BeneficialOwnerDto(
         int imageCount,
         Instant createdAt) {
 
-    public static BeneficialOwnerDto from(BeneficialOwner o, String idDocumentType, int imageCount) {
+    public static BeneficialOwnerDto from(BeneficialOwnerFields o, String idDocumentType, int imageCount) {
         return new BeneficialOwnerDto(
-                o.getId(), o.getFullName(), o.getDateOfBirth(), o.getIdExpiryDate(),
+                o.getBeneficialOwnerId(), o.getFullName(), o.getDateOfBirth(), o.getIdExpiryDate(),
                 o.getExtractionConfidence(), o.getReviewStatus(),
                 idDocumentType, imageCount, o.getCreatedAt());
     }

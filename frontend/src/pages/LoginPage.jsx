@@ -3,6 +3,7 @@ import { Link as RouterLink, Navigate, useLocation, useNavigate } from 'react-ro
 import {
   Alert, Box, Button, Link, Stack, TextField, Typography,
 } from '@mui/material';
+import { OtpCodeField, isCompleteOtp } from '../components/OtpCodeField.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
 import logoSrc from '../../assets/logos/image.png';
@@ -118,17 +119,11 @@ export function LoginPage() {
           ) : (
             <Box component="form" onSubmit={handleVerify}>
               <Stack spacing={2.5}>
-                <TextField
-                  label="One-time code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required autoFocus fullWidth
-                  inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', autoComplete: 'one-time-code' }}
-                />
+                <OtpCodeField value={code} onChange={setCode} autoFocus />
                 {error && <Alert severity="error">{error}</Alert>}
                 <Button
                   type="submit" variant="contained" size="large"
-                  disabled={submitting || code.length < 6}
+                  disabled={submitting || !isCompleteOtp(code)}
                   sx={{ py: 1.5, mt: 1 }}
                 >
                   {submitting ? 'Verifying…' : 'Verify & sign in'}

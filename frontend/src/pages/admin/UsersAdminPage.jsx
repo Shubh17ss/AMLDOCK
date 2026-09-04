@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  IconButton, Paper, Stack, Switch,
+  IconButton, Paper, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
   Tooltip, Typography,
 } from '@mui/material';
@@ -15,6 +15,7 @@ import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { creatableRoles, isFirmLevel, roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
 import { SearchField, matchesSearch } from '../../components/SearchField.jsx';
+import { InstantSwitch } from '../../components/InstantSwitch.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import AddIcon from '@mui/icons-material/PersonAddAlt1';
 import { tokens } from '../../theme/theme.js';
@@ -57,8 +58,26 @@ export function UsersAdminPage() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, payload }) => updateUser(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });
+
+  /**
+   * Suspend or restore an account.
+   *
+   * Awaits the invalidation as well as the PATCH, because InstantSwitch drops its optimistic
+   * position the moment this settles — returning before the list has refetched would hand the
+   * switch back a value it is about to replace, and the thumb would flick twice.
+   */
+  const toggleActive = async (id, active) => {
+    try {
+      await updateMut.mutateAsync({ id, payload: { active } });
+      await qc.invalidateQueries({ queryKey: ['users'] });
+    } catch (err) {
+      // Matching the delete handler on this page. The switch returns to the server's value on its
+      // own; this says why, which "it sprang back" alone does not.
+      window.alert(err.response?.data?.message || 'Could not change this account’s status');
+      throw err;
+    }
+  };
   const deleteMut = useMutation({
     mutationFn: (id) => deleteUser(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
@@ -108,11 +127,14 @@ export function UsersAdminPage() {
                 user={u}
                 canResetPassword={isRoot && u.role === 'ROOT'}
                 canDelete={canManage(u)}
-                canToggleActive={isRoot}
+                // Mirrors the server: whoever may manage a user may suspend them, and nobody may
+                // suspend themselves (UserService.update refuses it — a firm whose only compliance
+                // officer switched their own account off would have nobody left to switch it on).
+                canToggleActive={canManage(u) && u.id !== currentUser?.userId}
                 firmName={u.realEstateFirmId
                   ? (firmsById.get(u.realEstateFirmId)?.name ?? `#${u.realEstateFirmId}`)
                   : null}
-                onToggleActive={(v) => updateMut.mutate({ id: u.id, payload: { active: v } })}
+                onToggleActive={(v) => toggleActive(u.id, v)}
                 onResetPassword={() => setResetTarget(u)}
                 onDelete={() => {
                   if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
@@ -159,10 +181,9 @@ function UserRow({ user, firmName, canResetPassword, canDelete, canToggleActive,
       <TableCell>{firmName ?? '—'}</TableCell>
       <TableCell>{branchName ?? '—'}</TableCell>
       <TableCell>
-        {/* Activating/suspending an account is platform-only — the API ignores `active` from
-            firm-level staff, so the switch is read-only for them rather than silently inert. */}
-        <Switch checked={user.active} disabled={!canToggleActive}
-                onChange={(e) => onToggleActive(e.target.checked)} />
+        {/* Read-only rather than silently inert for anyone the API would refuse — and it does
+            still refuse: this only decides whether to offer the control. */}
+        <InstantSwitch checked={user.active} disabled={!canToggleActive} onToggle={onToggleActive} />
       </TableCell>
       <TableCell align="right">
         {canResetPassword && (

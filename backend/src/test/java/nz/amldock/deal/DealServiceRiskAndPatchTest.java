@@ -65,6 +65,7 @@ class DealServiceRiskAndPatchTest {
     @Mock nz.amldock.audit.AuditService audit;
     @Mock nz.amldock.ownership.OwnershipService ownership;
     @Mock nz.amldock.notification.DealNotificationEnqueuer notifier;
+    @Mock nz.amldock.deal.version.DealVersionService versions;
 
     DealService service;
 
@@ -79,7 +80,7 @@ class DealServiceRiskAndPatchTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, audit),
-                ownership, audit, notifier);
+                ownership, audit, notifier, versions);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 

@@ -21,6 +21,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -77,6 +78,32 @@ public class AuditService {
         }
 
         repo.save(log);
+    }
+
+    /**
+     * Records something that happened on a path which is about to fail.
+     *
+     * <p>Ordinary {@link #recordForUser} joins the caller's transaction, which is right for a
+     * success: the row and the change it describes commit together or not at all. On a failure path
+     * it is exactly wrong. The caller signals failure by throwing, that marks the transaction
+     * rollback-only, and the audit row explaining the failure is rolled back with it — so the events
+     * most worth having a trail of are the ones that leave none. Every {@code USER_OTP_FAILED} the
+     * product has ever tried to write was lost this way.
+     *
+     * <p>{@code REQUIRES_NEW} commits this row on its own, before the exception unwinds.
+     *
+     * <p>Deliberately narrow: it is for bookkeeping that must outlive a rollback, not a general
+     * escape hatch. A success recorded this way would survive a transaction that failed afterwards
+     * and claim something happened that did not.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordFailure(Long userId, String userEmail, AuditAction action, String entityType,
+                              Long entityId, String summary) {
+        // Self-invocation, which usually means an ignored @Transactional — harmless here, and for
+        // the opposite reason to OtpAttemptRecorder's. The annotation that matters is on *this*
+        // method, and it is reached through the proxy from outside; the inner call then simply runs
+        // in the new transaction that is already open.
+        recordForUser(userId, userEmail, action, entityType, entityId, summary);
     }
 
     @Transactional

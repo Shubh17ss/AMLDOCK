@@ -3,11 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead,
+  Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TextField, Typography,
 } from '@mui/material';
 import { createFirm, listFirms, updateFirm } from '../../api/firms.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
+import { InstantSwitch } from '../../components/InstantSwitch.jsx';
 import { canWrite } from '../../auth/roles.js';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
@@ -30,8 +31,14 @@ export function FirmsAdminPage() {
 
   const toggleActive = useMutation({
     mutationFn: ({ id, active }) => updateFirm(id, { active }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['firms'] }),
   });
+
+  // Awaited through the invalidation, not just the PATCH — see InstantSwitch on why the optimistic
+  // position must outlive the refetch.
+  const setActive = async (id, active) => {
+    await toggleActive.mutateAsync({ id, active });
+    await qc.invalidateQueries({ queryKey: ['firms'] });
+  };
 
   return (
     <Stack spacing={3}>
@@ -79,10 +86,10 @@ export function FirmsAdminPage() {
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {/* Suspending an entity is platform-only — the API ignores `active` from
                       firm-level staff, so don't offer a switch that would silently do nothing. */}
-                  <Switch
+                  <InstantSwitch
                     checked={firm.active}
                     disabled={!isRoot || !mayWrite}
-                    onChange={(e) => toggleActive.mutate({ id: firm.id, active: e.target.checked })}
+                    onToggle={(active) => setActive(firm.id, active)}
                   />
                 </TableCell>
                 <TableCell align="right">

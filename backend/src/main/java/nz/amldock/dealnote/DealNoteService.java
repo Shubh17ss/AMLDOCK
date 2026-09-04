@@ -1,6 +1,7 @@
 package nz.amldock.dealnote;
 
 import nz.amldock.deal.Deal;
+import nz.amldock.deal.DealFields;
 import nz.amldock.deal.DealStatus;
 import nz.amldock.dealnote.dto.DealNoteDto;
 import nz.amldock.document.Document;
@@ -13,6 +14,7 @@ import nz.amldock.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -74,8 +76,25 @@ public class DealNoteService {
      * double-posting on a re-handover or needing clearing logic that can drift from the field.
      */
     @Transactional(readOnly = true)
-    public List<DealNoteDto> timeline(Deal deal) {
-        List<DealNote> rows = notes.findAllByDealIdOrderByCreatedAtAsc(deal.getId());
+    public List<DealNoteDto> timeline(DealFields deal) {
+        return timeline(deal, null);
+    }
+
+    /**
+     * The timeline as it stood at an instant, for reading a deal version back.
+     *
+     * <p>Takes {@link DealFields} rather than {@link Deal} so a {@code DealVersion} can ask the
+     * same question of itself: the opening entry then renders from the broker note the version
+     * froze, not from whatever the live deal says now.
+     *
+     * <p>{@code deal_note} is append-only and never edited or deleted, so cutting it at a point in
+     * time is exact — which is why versions do not copy it.
+     *
+     * @param upTo latest entry to include, or null for the whole thread
+     */
+    @Transactional(readOnly = true)
+    public List<DealNoteDto> timeline(DealFields deal, Instant upTo) {
+        List<DealNote> rows = notes.findAllByDealIdOrderByCreatedAtAsc(deal.getDealId());
 
         List<Long> authorIds = new ArrayList<>(rows.stream().map(DealNote::getAuthorUserId).distinct().toList());
         if (!authorIds.contains(deal.getCreatedByUserId())) authorIds.add(deal.getCreatedByUserId());
@@ -87,7 +106,7 @@ public class DealNoteService {
         // The broker's note opens the thread, attributed to whoever created the deal and
         // timestamped when they did. Shown even when empty-bodied but carrying a recording, so a
         // voice-only note is not silently dropped.
-        Long voiceId = latestVoiceNoteId(deal.getId());
+        Long voiceId = latestVoiceNoteId(deal.getDealId());
         boolean hasOpening = (deal.getNotes() != null && !deal.getNotes().isBlank()) || voiceId != null;
         if (hasOpening) {
             User author = byId.get(deal.getCreatedByUserId());
@@ -120,7 +139,11 @@ public class DealNoteService {
         // later can round to the same instant, so sort explicitly rather than trusting insertion
         // order to hold.
         out.sort(Comparator.comparing(DealNoteDto::createdAt));
-        return out;
+        // Filtered after the sort rather than in the queries above, so the one rule covers the
+        // synthesised opening entry as well as the rows — and that entry carries the deal's
+        // creation time, which is not something the deal_note query could have excluded.
+        if (upTo == null) return out;
+        return out.stream().filter(n -> !n.createdAt().isAfter(upTo)).toList();
     }
 
     /**

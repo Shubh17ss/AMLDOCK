@@ -17,5 +17,15 @@ public enum DealAction {
     /** VERIFIED → CLOSED. */
     CLOSE,
     /** REVIEW | ON_HOLD → NEW, handing edit rights back to the broker. Note required. */
-    REVERT
+    REVERT,
+    /**
+     * VERIFIED → REVIEW, putting a signed-off deal back in compliance's hands for changes.
+     * Note required.
+     *
+     * <p>Safe to offer because verifying writes a {@link nz.amldock.deal.version.DealVersion}
+     * first: what was signed off is a copy, and nothing done to the deal afterwards can reach it.
+     * Without that copy this verb would be the edit-the-evidence problem the lock exists to
+     * prevent.
+     */
+    REOPEN
 }

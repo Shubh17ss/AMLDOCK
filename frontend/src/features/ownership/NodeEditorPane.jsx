@@ -42,6 +42,13 @@ export function NodeEditorPane({
    * evidence is filed — they just cannot change any of it.
    */
   readOnly = false,
+  /**
+   * Set when the screen is showing a past version of the deal: `{ dealId, versionNo, documents }`.
+   * Everything document-shaped below then reads from the snapshot rather than from the live deal,
+   * so a version does not quietly show files added — or hide files deleted — since it was signed
+   * off. Null on the live deal.
+   */
+  version = null,
 }) {
   const [form, setForm] = useState(null);
   const [edgeForm, setEdgeForm] = useState({ percentage: '' });
@@ -118,9 +125,19 @@ export function NodeEditorPane({
   const nodeDocsQ = useQuery({
     queryKey: ['documents', 'node', selectedNodeId],
     queryFn: () => listNodeDocuments(selectedNodeId),
-    enabled: Boolean(selectedNodeId) && tab === 'verification',
+    enabled: Boolean(selectedNodeId) && tab === 'verification' && !version,
   });
-  const nodeVoiceNotes = (nodeDocsQ.data ?? []).filter((d) => d.documentType === 'VOICE_NOTE');
+
+  // A version carries the deal's whole document set; this node's share of it is that set filtered
+  // the way the server filters the live one — the node's own files, plus the ID scans of the
+  // person behind it, which hang off the person rather than the node.
+  const versionNodeDocs = version && selected
+    ? (version.documents ?? []).filter((d) => d.ownershipNodeId === selected.id
+        || (selected.beneficialOwnerId != null && d.beneficialOwnerId === selected.beneficialOwnerId))
+    : null;
+
+  const nodeDocs = versionNodeDocs ?? nodeDocsQ.data ?? [];
+  const nodeVoiceNotes = nodeDocs.filter((d) => d.documentType === 'VOICE_NOTE');
 
   useEffect(() => {
     setEdgeForm({ percentage: incomingEdge?.percentage ?? '' });
@@ -297,11 +314,12 @@ export function NodeEditorPane({
             allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
             compact
             canUpload={!readOnly}
+            frozenDocuments={versionNodeDocs}
             title={`Documents on ${selected.displayName}`}
             onViewDocument={(id) => {
               // The node's own rows open the same viewer as the deal list below. One viewer,
               // two ways in — the alternative is two that drift.
-              const found = (nodeDocsQ.data ?? []).find((d) => d.id === id);
+              const found = nodeDocs.find((d) => d.id === id);
               if (found) setViewingDoc(found);
             }}
           />
@@ -310,7 +328,11 @@ export function NodeEditorPane({
               itself and opened on whichever file happened to be first; now it is a list, and
               reading one is a deliberate act. */}
           <Divider />
-          <DealDocumentList dealId={dealId} onOpen={setViewingDoc} />
+          <DealDocumentList
+            dealId={dealId}
+            onOpen={setViewingDoc}
+            frozenDocuments={version?.documents ?? null}
+          />
         </Stack>
       )}
 
@@ -326,6 +348,7 @@ export function NodeEditorPane({
         open={Boolean(viewingDoc)}
         doc={viewingDoc}
         onClose={() => setViewingDoc(null)}
+        version={version}
       />
 
       {tab === 'verification' && (

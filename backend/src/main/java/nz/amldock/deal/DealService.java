@@ -10,6 +10,7 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
+import nz.amldock.deal.version.DealVersionService;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
 import nz.amldock.audit.AuditAction;
@@ -58,6 +59,7 @@ public class DealService {
     private final OwnershipService ownership;
     private final AuditService audit;
     private final DealNotificationEnqueuer notifier;
+    private final DealVersionService versions;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -71,7 +73,8 @@ public class DealService {
                        DealRiskService risk,
                        OwnershipService ownership,
                        AuditService audit,
-                       DealNotificationEnqueuer notifier) {
+                       DealNotificationEnqueuer notifier,
+                       DealVersionService versions) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -85,6 +88,7 @@ public class DealService {
         this.ownership = ownership;
         this.audit = audit;
         this.notifier = notifier;
+        this.versions = versions;
     }
 
     /* ---------- queries ---------- */
@@ -408,14 +412,21 @@ public class DealService {
     /**
      * Runs a lifecycle verb and records its note on the deal's timeline.
      *
-     * <p>One method behind all six endpoints — the rules live in {@link DealLifecycleService},
+     * <p>One method behind all seven endpoints — the rules live in {@link DealLifecycleService},
      * so this only has to resolve the deal's firm (for the scope check) and append the note.
+     *
+     * <p>The two version calls are the price of REOPEN existing at all. Verifying has to freeze the
+     * deal before anything can move it again, and reopening has to say on the version it is leaving
+     * who took it back and why. Both run inside this transaction: a deal that reached VERIFIED
+     * without its snapshot would be a sign-off pointing at nothing.
      */
     @Transactional
     public TransitionResult act(Long id, DealAction action, String note) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
         DealStatus previous = lifecycle.transition(d, actor, action, firmIdOf(d), note);
+        if (action == DealAction.REOPEN) versions.recordReopen(d, actor, note);
+        versions.snapshotIfVerified(d, actor, note, previous);
         dealNotes.appendTransition(d, actor, note, previous, d.getStatus());
         notifier.enqueueStatusChanged(d, actor, previous);
         return new TransitionResult(d, previous);
@@ -444,6 +455,10 @@ public class DealService {
     public OverrideResult override(Long id, DealStatus target, String reason) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         DealStatus previous = lifecycle.override(d, currentPrincipal(), target, firmIdOf(d), reason);
+        // An override is still a way into VERIFIED, so it still owes a version. Leaving it out
+        // would make the sign-off's completeness depend on which door compliance came through.
+        if (previous == DealStatus.VERIFIED) versions.recordReopen(d, currentPrincipal(), reason);
+        versions.snapshotIfVerified(d, currentPrincipal(), reason, previous);
         dealNotes.appendTransition(d, currentPrincipal(), reason, previous, d.getStatus());
         notifier.enqueueStatusChanged(d, currentPrincipal(), previous);
         return new OverrideResult(d, previous);

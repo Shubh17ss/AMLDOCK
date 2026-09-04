@@ -39,6 +39,19 @@ public class OtpCode extends BaseEntity {
     @Column(name = "consumed_at")
     private Instant consumedAt;
 
+    /**
+     * The address this code was sent to, when that is not the user's current one.
+     *
+     * <p>Null for LOGIN and ADMIN_LOGIN, which always mail {@code user.getEmail()} — the destination
+     * is implied and storing it would only be a second copy to keep honest.
+     *
+     * <p>Not null for {@link OtpPurpose#EMAIL_CHANGE}, and load-bearing there: it binds the code to
+     * the address it was issued for. Without it a code mailed to one address would authorise a move
+     * to any other, which is the whole attack the verification is meant to stop.
+     */
+    @Column(name = "target_email", length = 255)
+    private String targetEmail;
+
     public boolean isConsumed() { return consumedAt != null; }
     public boolean isExpired() { return Instant.now().isAfter(expiresAt); }
 
@@ -51,6 +64,8 @@ public class OtpCode extends BaseEntity {
     public void setPurpose(OtpPurpose purpose) { this.purpose = purpose; }
     public int getAttempts() { return attempts; }
     public void setAttempts(int attempts) { this.attempts = attempts; }
+    public String getTargetEmail() { return targetEmail; }
+    public void setTargetEmail(String targetEmail) { this.targetEmail = targetEmail; }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
     public Instant getConsumedAt() { return consumedAt; }

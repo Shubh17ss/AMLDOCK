@@ -5,7 +5,7 @@ import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.NomineeStatus;
 import nz.amldock.ownership.TrustHoldingComplexity;
 import nz.amldock.ownership.TrustType;
-import nz.amldock.ownership.OwnershipNode;
+import nz.amldock.ownership.OwnershipNodeFields;
 import nz.amldock.ownership.PersonRole;
 
 import java.time.Instant;
@@ -62,13 +62,13 @@ public record NodeDto(
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static NodeDto from(OwnershipNode n) {
+    public static NodeDto from(OwnershipNodeFields n) {
         return from(n, null);
     }
 
-    public static NodeDto from(OwnershipNode n, PersonDto person) {
+    public static NodeDto from(OwnershipNodeFields n, PersonDto person) {
         return new NodeDto(
-                n.getId(), n.getOwnershipStructureId(), n.getNodeType(), n.getDisplayName(),
+                n.getNodeId(), n.getOwnershipStructureId(), n.getNodeType(), n.getDisplayName(),
                 n.getDateOfBirth(), n.getIdDocumentType(), n.getIdDocumentNumber(), n.getIdDocumentCountry(),
                 n.getBusinessNumber(), n.getCompanyNumber(), n.getIncorporationDate(), n.getRegisteredOffice(),
                 n.getTrustName(), n.getTrustDeedDocumentId(), n.getSettlorName(),

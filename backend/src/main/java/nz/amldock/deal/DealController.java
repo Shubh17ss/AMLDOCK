@@ -173,6 +173,25 @@ public class DealController {
         return deals.toDtoAfterMutation(r.deal());
     }
 
+    /**
+     * Puts a verified deal back in front of compliance for changes.
+     *
+     * <p>The counterpart to verify, and it only exists because verify now writes a
+     * {@code DealVersion} first. What was signed off is a copy, so reopening changes nothing about
+     * it — which is the difference between this and simply unlocking VERIFIED for editing.
+     *
+     * <p>REVIEWER_ROLES rather than the wider editor set: taking back a sign-off is the same
+     * decision as giving one, and belongs to the same people.
+     */
+    @PostMapping("/{id}/reopen")
+    @PreAuthorize(REVIEWER_ROLES)
+    public DealDto reopen(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+        var r = deals.act(id, DealAction.REOPEN, req.note());
+        audit.record(AuditAction.DEAL_REOPENED, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " reopened for changes from " + r.previousStatus());
+        return deals.toDtoAfterMutation(r.deal());
+    }
+
     @PostMapping("/{id}/override")
     @PreAuthorize("hasRole('SENIOR_MANAGER')")
     public DealDto override(@PathVariable Long id, @Valid @RequestBody OverrideRequest req) {

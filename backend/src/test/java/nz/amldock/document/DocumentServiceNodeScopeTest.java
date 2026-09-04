@@ -73,13 +73,14 @@ class DocumentServiceNodeScopeTest {
     final DealLifecycleService lifecycle = new DealLifecycleService();
     @Mock BeneficialOwnerService beneficialOwners;
     @Mock AuditService audit;
+    @Mock nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;
 
     DocumentService service;
 
     @BeforeEach
     void setUp() {
         service = new DocumentService(documents, deals, branches, ownershipNodes, ownershipStructures,
-                users, storage, lifecycle, beneficialOwners, audit, 26214400L, 5L, 5L);
+                users, storage, lifecycle, beneficialOwners, audit, versionDocuments, 26214400L, 5L, 5L);
 
         Deal deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);

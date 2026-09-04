@@ -32,6 +32,13 @@ export function AuthProvider({ children }) {
     });
   }, [refreshMe]);
 
+  /**
+   * Takes an AuthResponse the caller already has and makes it the current session.
+   *
+   * Exported alongside `refreshMe` because several endpoints hand back the same shape `/auth/me`
+   * would — signing in, and now editing your own profile. Re-fetching after those would be asking
+   * the server to repeat what it just said.
+   */
   const adoptSession = useCallback((me) => {
     setUser(me);
     setStatus('authed');
@@ -57,7 +64,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, status, logout, refreshMe,
+      user, status, logout, refreshMe, adoptSession,
       requestOtp, verifyOtp, adminLogin, adminVerify,
     }}>
       {children}

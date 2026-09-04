@@ -1,7 +1,7 @@
 package nz.amldock.deal.dto;
 
 import nz.amldock.client.dto.ClientDto;
-import nz.amldock.deal.Deal;
+import nz.amldock.deal.DealFields;
 import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.RiskRating;
 import nz.amldock.deal.RiskRatingSource;
@@ -48,11 +48,11 @@ public record DealDto(
         // V29
         Boolean clientRemote
 ) {
-    public static DealDto from(Deal d, String firmName, String branchName,
+    public static DealDto from(DealFields d, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
                                String createdByEmail) {
         return new DealDto(
-                d.getId(), d.getReference(), d.getStatus(), d.getTransactionType(),
+                d.getDealId(), d.getReference(), d.getStatus(), d.getTransactionType(),
                 d.getTransactionValue(), d.getFirmBranchId(), firmName, branchName,
                 d.getPocName(), d.getPocRole(), d.getPocPhone(), d.getPocEmail(),
                 property, client, d.getNotes(),
