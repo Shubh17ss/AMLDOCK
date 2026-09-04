@@ -483,7 +483,22 @@ export const theme = createTheme({
     },
     MuiSwitch: {
       styleOverrides: {
+        // The pill look: MUI's track fills the root minus this padding, so the padding is what
+        // decides the track's size relative to the thumb. 8 turns the 58x38 medium root into a
+        // 42x22 track, which holds the 20px thumb with a 1px inset all round.
+        //
+        // It has to be set per size. The same 8 applied to the 40x24 small root leaves a 24x8
+        // track — 8px shorter than that size's 16px thumb — so the thumb sat outside its own
+        // track and read as a knob hanging off a bar rather than a switch. 3 gives the small size
+        // a 34x18 track and the identical 1px inset, so both sizes are the same design at two
+        // scales instead of two different controls.
         root: { padding: 8 },
+        sizeSmall: {
+          padding: 3,
+          // Half the track height, as above. Left at the medium's radius the browser would clamp
+          // it to something close, but stating it keeps the two definitions honest.
+          '& .MuiSwitch-track': { borderRadius: 18 / 2 },
+        },
         track: { borderRadius: 22 / 2, backgroundColor: 'var(--cl-switch-track)', opacity: 1 },
         thumb: { color: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,0.3)' },
         switchBase: {

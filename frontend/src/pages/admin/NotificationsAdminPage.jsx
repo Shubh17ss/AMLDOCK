@@ -115,7 +115,6 @@ export function NotificationsAdminPage() {
                       return (
                         <TableCell key={e.id} align="center">
                           <InstantSwitch
-                            size="small"
                             checked={Boolean(pref?.enabled)}
                             // No longer disabled while saving: the switch holds the requested
                             // position itself, and locking it mid-gesture is what made this feel

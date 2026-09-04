@@ -162,7 +162,6 @@ export function DealNotificationsCard() {
                   return (
                     <TableCell key={e.id} align="center">
                       <InstantSwitch
-                        size="small"
                         checked={visible.length > 0 && on === visible.length}
                         indeterminate={on > 0 && on < visible.length}
                         disabled={visible.length === 0}
@@ -178,7 +177,6 @@ export function DealNotificationsCard() {
                   {DEAL_NOTIFICATION_EVENTS.map((e) => (
                     <TableCell key={e.id} align="center">
                       <InstantSwitch
-                        size="small"
                         checked={Boolean(b.events[e.id]?.enabled)}
                         onToggle={(enabled) => toggle(b.id, e.id, enabled)}
                       />
