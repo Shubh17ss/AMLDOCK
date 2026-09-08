@@ -99,6 +99,22 @@ export const TYPES_WITH_BACK = new Set([
 /** Both audio types, for read surfaces that route to the player rather than a preview. */
 export const AUDIO_DOCUMENT_TYPES = ['VOICE_NOTE', 'VOICE_NOTE_PURPOSE'];
 
+/**
+ * What belongs to the deal itself rather than to any one party on it — the title, the agreement,
+ * what the property was valued at.
+ *
+ * <p>The sibling of ACCEPTED_DOCUMENT_TYPES in api/ownership.js, with one difference worth knowing:
+ * that one is mirrored by NodeType.accepts and enforced on the server, and this one is not. The
+ * deal form's ID scans are uploaded deal-scoped with no node behind them, so a server-side
+ * allowlist here would reject the passport a broker photographs. This narrows the picker; nothing
+ * narrows the endpoint.
+ */
+export const DEAL_DOCUMENT_TYPES = [
+  'TITLE_DOC', 'SALE_AGREEMENT', 'OWNERSHIP_STRUCTURE',
+  'VALUATION_MIN_EVIDENCE', 'VALUATION_MAX_EVIDENCE',
+  'PROOF_OF_ADDRESS', 'REGISTRY_SEARCH_RESULT', 'WEB_SEARCH_RESULT', 'OTHER',
+];
+
 /** Display label for a stored document-type code; falls back to the raw value. */
 export const documentTypeLabel = (value) =>
   DOCUMENT_TYPES.find((t) => t.value === value)?.label ?? LEGACY_LABELS[value] ?? value ?? '—';

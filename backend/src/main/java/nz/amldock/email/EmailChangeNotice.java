@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
 public class EmailChangeNotice {
 
     private static final Logger log = LoggerFactory.getLogger(EmailChangeNotice.class);
-    private static final String SUBJECT = "Your AML_DOCK sign-in email has been changed";
+    private static final String SUBJECT = "Your AMLDOCK sign-in email has been changed";
 
     private final EmailService email;
 
@@ -51,7 +51,7 @@ public class EmailChangeNotice {
         String text = """
                 Hi %s,
 
-                The email address used to sign in to your AML_DOCK account has been changed to %s.
+                The email address used to sign in to your AMLDOCK account has been changed to %s.
 
                 You are receiving this at your previous address because it is no longer the one
                 attached to the account.
@@ -59,7 +59,7 @@ public class EmailChangeNotice {
                 If you made this change, nothing further is needed. If you did not, contact your
                 administrator immediately — whoever holds the new address can now sign in as you.
 
-                — AML_DOCK
+                — AMLDOCK
                 """.formatted(fullName == null ? "there" : fullName, masked);
 
         String html = """
@@ -67,13 +67,13 @@ public class EmailChangeNotice {
                 <html><body style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937; max-width: 480px; margin:0 auto; padding: 24px;">
                   <h2 style="color:#1f4b7a; margin-top:0;">Your sign-in email has changed</h2>
                   <p>Hi %s,</p>
-                  <p>The email address used to sign in to your AML_DOCK account has been changed to
+                  <p>The email address used to sign in to your AMLDOCK account has been changed to
                      <strong>%s</strong>.</p>
                   <p style="color:#6b7280; font-size: 13px;">You are receiving this at your previous address because it is no longer the one attached to the account.</p>
                   <p>If you made this change, nothing further is needed. If you did not,
                      <strong>contact your administrator immediately</strong> — whoever holds the new
                      address can now sign in as you.</p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AML_DOCK</p>
+                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
                 </body></html>
                 """.formatted(escape(fullName == null ? "there" : fullName), escape(masked));
 

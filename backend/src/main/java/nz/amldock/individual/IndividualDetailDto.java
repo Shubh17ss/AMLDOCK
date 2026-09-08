@@ -7,6 +7,7 @@ import nz.amldock.ownership.PersonRole;
 import nz.amldock.ownership.dto.PersonDto;
 
 import java.time.LocalDate;
+import java.util.Set;
 import java.util.List;
 
 /**
@@ -32,7 +33,7 @@ public record IndividualDetailDto(
         String idDocumentType,
         String idDocumentNumber,
         String idDocumentCountry,
-        PersonRole personRole,
+        Set<PersonRole> personRoles,
         NodeVerificationStatus verificationStatus,
 
         /** The firm-wide record behind this node. Null if it was deleted out from under it. */

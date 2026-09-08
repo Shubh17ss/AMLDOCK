@@ -1,12 +1,14 @@
 package nz.amldock.individual;
 
+import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.PersonRole;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 /**
- * One natural person on one deal, as the CDD registers list them.
+ * One owner on one deal, as the CDD registers list them.
  *
  * <p>A person on two deals is two rows, deliberately. The registers answer "who has this branch
  * done diligence on, and against which file", and the file is half the answer — collapsing the
@@ -18,6 +20,11 @@ import java.time.LocalDate;
  */
 public record IndividualRowDto(
         Long nodeId,
+        /**
+         * What kind of owner this row is. The registers list every type, and without this a trust
+         * and the person behind it are two rows that look alike and read very differently.
+         */
+        NodeType nodeType,
         Long dealId,
         String dealReference,
         String propertyAddress,
@@ -25,6 +32,6 @@ public record IndividualRowDto(
         LocalDate dateOfBirth,
         /** ISO 3166-1 alpha-2, or null when nobody has been asked. */
         String countryOfResidence,
-        PersonRole personRole,
+        Set<PersonRole> personRoles,
         NodeVerificationStatus verificationStatus
 ) {}

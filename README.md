@@ -1,4 +1,4 @@
-# AML_DOCK
+# AMLDOCK
 
 Real-estate AML/compliance web application for a single NZ-based compliance firm. Tracks deals from broker draft through compliance review to approval or rejection, with nested ownership-structure modelling and stubbed NZ verification integrations. See `C:\Users\Shubh Sharma\.claude\plans\let-s-plan-the-work-jaunty-whistle.md` for the full plan.
 
@@ -48,7 +48,7 @@ MAIL_PORT=587
 MAIL_USERNAME=apikey
 MAIL_PASSWORD=...
 MAIL_FROM=noreply@yourdomain.example
-MAIL_FROM_NAME=AML_DOCK
+MAIL_FROM_NAME=AMLDOCK
 MAIL_REPLY_TO=support@yourdomain.example   # optional
 APP_BASE_URL=http://localhost:5173         # used in email links
 ```

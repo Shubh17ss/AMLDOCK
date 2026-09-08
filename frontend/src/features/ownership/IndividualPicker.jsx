@@ -8,7 +8,7 @@ import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
 import { getIndividual, listIndividuals } from '../../api/individuals.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { matchesSearch } from '../../components/SearchField.jsx';
-import { personRoleLabel } from '../../api/ownership.js';
+import { personRolesLabel } from '../../api/ownership.js';
 import { countryName } from '../../data/countries.js';
 import { formatBytes, formatDate } from '../../utils/formatters.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
@@ -272,7 +272,9 @@ function PersonFacts({ person }) {
       <Fact label="Phone" value={phone} />
       <Fact label="Occupation" value={p.occupation} />
       <Fact label="Source of funds" value={p.sourceOfFunds} />
-      <Fact label="Role" value={person.personRole ? personRoleLabel(person.personRole) : null} />
+      <Fact label="Address" value={p.physicalAddress} />
+      {/* "Type" rather than "Role", matching what the form that captured it calls the field. */}
+      <Fact label="Type" value={personRolesLabel(person.personRoles)} />
       <Fact
         label="From"
         value={person.dealReference

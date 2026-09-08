@@ -19,5 +19,7 @@ public record PersonPatch(
         @Size(max = 32) String phoneNumber,
         @Size(max = 255) String occupation,
         String sourceOfFunds,
-        @Size(max = 2) String countryOfResidence
+        @Size(max = 2) String countryOfResidence,
+        /** No @Size: the column is TEXT, and an address is as long as it is. */
+        String physicalAddress
 ) {}

@@ -417,6 +417,9 @@ export function DealReviewScreen() {
         // The thread as it stood at the sign-off, which also turns off the composer and the live
         // audit tab. Null on the live deal, where the drawer fetches its own.
         frozenNotes={snapshot?.notes ?? null}
+        // The same snapshot scope NodeDrawer gets, for the same reason: the Documents tab must
+        // show the files this version was signed off with, not the deal's current ones.
+        version={documentScope}
       />
 
       {/* ── The selected owner ──────────────────────────────────────────── */}

@@ -24,8 +24,13 @@ import { isDealAuthor } from '../auth/roles.js';
 
 export const DEAL_STATUSES = ['NEW', 'REVIEW', 'ON_HOLD', 'VERIFIED', 'CLOSED'];
 
-/** Status filter options, with the all-statuses sentinel first. */
-export const DEAL_STATUS_FILTERS = ['ALL', ...DEAL_STATUSES];
+/**
+ * Status filter options, in lifecycle order with the all-statuses sentinel last.
+ *
+ * New comes first because it is where work starts and where a reviewer opening the list is most
+ * often headed; All sits at the end as the widening escape hatch rather than the default view.
+ */
+export const DEAL_STATUS_FILTERS = [...DEAL_STATUSES, 'ALL'];
 
 /**
  * Status → presentation. One map; there were three.

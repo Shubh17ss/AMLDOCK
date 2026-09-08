@@ -41,6 +41,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import nz.amldock.deal.access.DealUserRepository;
 
 /**
  * What a node's document list contains, and what confirming an upload against a node does.
@@ -70,7 +72,7 @@ class DocumentServiceNodeScopeTest {
     @Mock FileStorageService storage;
     // The real thing, not a mock: it has no dependencies, and the status rule these tests are
     // about lives inside it. A mocked lifecycle made the delete cases pass vacuously.
-    final DealLifecycleService lifecycle = new DealLifecycleService();
+    final DealLifecycleService lifecycle = new DealLifecycleService(mock(DealUserRepository.class));
     @Mock BeneficialOwnerService beneficialOwners;
     @Mock AuditService audit;
     @Mock nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;

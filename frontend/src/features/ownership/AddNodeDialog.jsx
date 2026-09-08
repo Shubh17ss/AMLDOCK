@@ -99,7 +99,7 @@ export function AddNodeDialog({
       idDocumentType: person.idDocumentType ?? null,
       idDocumentNumber: person.idDocumentNumber ?? null,
       idDocumentCountry: person.idDocumentCountry ?? null,
-      personRole: person.personRole ?? null,
+      personRoles: person.personRoles ?? [],
       // Carried across, and now so is the evidence behind it — see below.
       verificationStatus: person.verificationStatus ?? null,
       // The node to copy documents from. Each becomes a new object under a new key on this deal,
@@ -114,6 +114,7 @@ export function AddNodeDialog({
         occupation: p.occupation ?? null,
         sourceOfFunds: p.sourceOfFunds ?? null,
         countryOfResidence: p.countryOfResidence ?? null,
+        physicalAddress: p.physicalAddress ?? null,
       },
     };
   };

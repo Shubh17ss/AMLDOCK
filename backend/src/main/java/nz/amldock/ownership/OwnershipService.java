@@ -130,9 +130,12 @@ public class OwnershipService {
         n.setOwnershipStructureId(structure.getId());
         n.setNodeType(req.nodeType());
         n.setDisplayName(req.displayName());
-        n.setPersonRole(req.personRole());
+        // Null and empty are the same thing on create: nobody has said. The set is never null on
+        // the node, so there is no third state for the form to land in.
+        n.setPersonRoles(req.personRoles() == null ? java.util.Set.of() : req.personRoles());
         n.setReference(req.reference());
         n.setNotes(req.notes());
+        n.setPropertyPercentage(normalisePercentage(req.propertyPercentage()));
         // Null leaves the entity default in place; only the owner picker, copying a person this
         // firm has already cleared elsewhere, ever sends one.
         if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
@@ -186,11 +189,23 @@ public class OwnershipService {
         if (req.trustDeedDocumentId() != null) n.setTrustDeedDocumentId(req.trustDeedDocumentId());
         if (req.settlorName() != null) n.setSettlorName(req.settlorName());
         if (req.extraJson() != null) n.setExtraJson(req.extraJson());
-        if (req.personRole() != null) n.setPersonRole(req.personRole());
+        // Null leaves them alone, like every other field here. An *empty* set is a value and
+        // clears them — the same distinction applyPersonPatch draws between null and "".
+        if (req.personRoles() != null) n.setPersonRoles(req.personRoles());
         if (req.reference() != null) n.setReference(req.reference());
         if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
         if (req.notes() != null) n.setNotes(req.notes());
         if (req.verificationNotes() != null) n.setVerificationNotes(req.verificationNotes());
+        // Written unconditionally, and the one field here that breaks the leave-alone rule. A
+        // percentage has to be clearable back to "not stated", and null is the only way a number
+        // can say that — so an absent value has to mean erase, or emptying the field would report
+        // success and change nothing, which is the silent no-op just fixed on the edge.
+        //
+        // The cost is that every caller must send it, including partial patches that care about
+        // something else entirely. Both in-tree callers do: the details form through
+        // buildNodePayload, and the verification save by carrying the node's stored value back
+        // unchanged. A new partial caller that forgets will clear it.
+        n.setPropertyPercentage(normalisePercentage(req.propertyPercentage()));
         applyEntityFields(n, req.jurisdictionCountry(), req.companyHasConstitution(),
                 req.nomineeStatus(), req.companyComplexOwnership(),
                 req.companyPersonalAssets(), req.companyNewDeveloper(),
@@ -393,6 +408,16 @@ public class OwnershipService {
             throw new BadRequestException("Adding this edge would create a cycle");
         }
 
+        // The child now has an owner above it, so it no longer holds the property directly and its
+        // share of it goes. Enforced here rather than in the UI because that is the only place
+        // every route in passes through: "Change owner" is composed client-side as create-then-
+        // delete, so a check in the dialog would have to be repeated in the attach path and could
+        // still be walked around by a caller hitting the API.
+        //
+        // Not restored on detach. A figure nobody re-entered after the move is not an answer
+        // anybody gave, and the node comes back to the top of the chain blank.
+        child.setPropertyPercentage(null);
+
         OwnershipEdge e = new OwnershipEdge();
         e.setParentNodeId(parent.getId());
         e.setChildNodeId(child.getId());
@@ -407,9 +432,13 @@ public class OwnershipService {
         OwnershipEdge edge = edges.findById(edgeId)
                 .orElseThrow(() -> new NotFoundException("Edge " + edgeId + " not found"));
         // Sanity: the edge's nodes must belong to this deal's structure.
-        OwnershipNode parent = mustLoadNodeForDeal(deal, edge.getParentNodeId());
-        // parent load implicitly asserts structure linkage to this deal.
-        if (req.percentage() != null) edge.setPercentage(normalisePercentage(req.percentage()));
+        mustLoadNodeForDeal(deal, edge.getParentNodeId());
+        // Written unconditionally, unlike the node patches: a percentage has to be clearable, and
+        // the drawer already sends null for an emptied field. Reading null as "leave alone" here
+        // made clearing one a silent no-op that still reported success. `role` keeps the
+        // leave-alone rule — the form has no way to send it, so a null there means "not mentioned"
+        // rather than "erase it".
+        edge.setPercentage(normalisePercentage(req.percentage()));
         if (req.role() != null) edge.setRole(req.role());
         return EdgeDto.from(edge);
     }
@@ -620,6 +649,9 @@ public class OwnershipService {
         if (patch.sourceOfFunds() != null) person.setSourceOfFunds(emptyToNull(patch.sourceOfFunds()));
         if (patch.countryOfResidence() != null) {
             person.setCountryOfResidence(emptyToNull(patch.countryOfResidence()));
+        }
+        if (patch.physicalAddress() != null) {
+            person.setPhysicalAddress(emptyToNull(patch.physicalAddress()));
         }
     }
 

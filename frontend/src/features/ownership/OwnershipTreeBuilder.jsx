@@ -12,7 +12,7 @@ import AddLinkIcon from '@mui/icons-material/AddLink';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
-import { isLeafOnlyType, nodeTypeLabel, personRoleLabel, trustTypeLabel } from '../../api/ownership.js';
+import { isLeafOnlyType, nodeTypeLabel, personRolesLabel, trustTypeLabel } from '../../api/ownership.js';
 import { countryName } from '../../data/countries.js';
 import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
 import { propertyTypeLabel } from '../../data/propertyTypes.js';
@@ -39,7 +39,9 @@ const STAGGER_CAP = 10;   // ~300ms for the whole tree, however deep it goes
  */
 function subtitleFor(node) {
   const parts = [nodeTypeLabel(node.nodeType)];
-  if (node.personRole) parts.push(personRoleLabel(node.personRole));
+  // Every capacity, not the first: a settlor who is also the trustee is a different read.
+  const roles = personRolesLabel(node.personRoles);
+  if (roles) parts.push(roles);
   if (node.jurisdictionCountry) parts.push(countryName(node.jurisdictionCountry));
   if (node.trustType) parts.push(trustTypeLabel(node.trustType));
   return parts.join(' · ');
@@ -252,6 +254,10 @@ function NodeBranch({
   const riskReason = riskReasonFor(node);
   const visual = visualFor(node.nodeType);
 
+  // The edge's figure where there is an edge, the node's own where there is not.
+  const share = parentEdge ? parentEdge.percentage : node.propertyPercentage;
+  const ownerName = parentEdge ? (nodesById.get(parentEdge.parentNodeId)?.displayName ?? 'its owner') : null;
+
   // Captured at first render and never recomputed: a tree that re-animated on every save would
   // be exhausting to work in.
   const [delay] = useState(() => Math.min(order.i++, STAGGER_CAP) * STAGGER_MS);
@@ -366,12 +372,18 @@ function NodeBranch({
             </Typography>
           </Box>
 
-          {parentEdge?.percentage != null && (
-            <Chip
-              size="small"
-              label={`${Number(parentEdge.percentage).toFixed(0)}%`}
-              sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', flexShrink: 0 }}
-            />
+          {/* One chip, two questions. A row under an owner shows its share of that owner; a row at
+              the top of the chain shows its share of the property, which lives on the node because
+              there is no link to hang it on. They look alike deliberately — it is the same kind of
+              answer — so the tooltip is what tells them apart. */}
+          {share != null && (
+            <Tooltip title={parentEdge ? `${share}% of ${ownerName}` : `${share}% of the property`}>
+              <Chip
+                size="small"
+                label={`${Number(share).toFixed(0)}%`}
+                sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', flexShrink: 0 }}
+              />
+            </Tooltip>
           )}
           <Chip
             size="small"

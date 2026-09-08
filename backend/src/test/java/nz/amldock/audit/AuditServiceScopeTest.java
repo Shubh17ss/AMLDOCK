@@ -27,6 +27,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import nz.amldock.deal.access.DealUserRepository;
 
 /**
  * The deal audit trail is role-gated at the controller but must also be firm-scoped: without it a
@@ -51,7 +53,7 @@ class AuditServiceScopeTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuditService(repo, deals, branches, new DealLifecycleService(), users);
+        service = new AuditService(repo, deals, branches, new DealLifecycleService(mock(DealUserRepository.class)), users);
     }
 
     @AfterEach

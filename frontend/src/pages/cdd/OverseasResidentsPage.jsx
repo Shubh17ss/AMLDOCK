@@ -15,9 +15,10 @@ import { exportIndividualsCsv } from './BeneficialOwnersPage.jsx';
 /**
  * The people on this branch's deals who live somewhere other than the reporting entity does.
  *
- * <p>Same read as the Beneficial Owners register, narrowed here rather than server-side: it is one
- * comparison against a country the client already holds, and two endpoints returning the same rows
- * would be two things to keep in step.
+ * <p>The overseas test itself is client-side — one comparison against a country the client already
+ * holds, and a second endpoint returning the same rows would be a second thing to keep in step.
+ * The <em>set</em> of rows is narrowed on the server, though: this register asks for natural
+ * persons, where the Beneficial Owners one asks for every kind of owner.
  *
  * <p><strong>Someone with no residence recorded is not listed.</strong> Not being asked is not
  * evidence of living abroad, and a register that treated it as such would accuse people of an
@@ -31,7 +32,11 @@ export function OverseasResidentsPage() {
   const [query, setQuery] = useState('');
 
   const q = useQuery({
-    // The same key as the Beneficial Owners register, so the two share one fetch and one cache.
+    // Natural persons only — deliberately NOT the Beneficial Owners register's wider fetch, which
+    // now carries companies and trusts too. This register is about where a person lives, and an
+    // entity has no country of residence at all: every one of them would land in the "nobody has
+    // been asked" count below and read as unfinished diligence that does not exist. The narrower
+    // request keeps that impossible rather than merely filtered, so the two cannot drift.
     queryKey: ['individuals', firm?.id ?? null, branch?.id ?? null],
     queryFn: () => listIndividuals({ firmId: firm?.id, branchId: branch?.id }),
   });
@@ -69,7 +74,7 @@ export function OverseasResidentsPage() {
             startIcon={<TableViewIcon />}
             disabled={rows.length === 0}
             onClick={() => exportIndividualsCsv({
-              rows, prefix: 'overseas-residents', firm, branch, showToast,
+              rows, prefix: 'overseas-residents', firm, branch, showToast, noun: ['person', 'people'],
             })}
           >
             Download CSV

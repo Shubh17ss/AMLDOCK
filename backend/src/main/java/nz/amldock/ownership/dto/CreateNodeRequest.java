@@ -3,6 +3,8 @@ package nz.amldock.ownership.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.NomineeStatus;
@@ -10,7 +12,9 @@ import nz.amldock.ownership.TrustHoldingComplexity;
 import nz.amldock.ownership.TrustType;
 import nz.amldock.ownership.PersonRole;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Set;
 
 public record CreateNodeRequest(
         @NotNull NodeType nodeType,
@@ -49,10 +53,16 @@ public record CreateNodeRequest(
 
         /** Where an entity says its money comes from. Not the person-level field. */
         String sourceOfFunds,
+        /**
+         * Share of the property, 0.00 – 100.00. Only meaningful for a node at the top of the
+         * chain; cleared by the server the moment the node gains an owner above it.
+         */
+        @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal propertyPercentage,
 
         String extraJson,
 
-        PersonRole personRole,
+        /** Every capacity this individual holds on this deal. Null is read as none. */
+        Set<PersonRole> personRoles,
         String reference,
         /** Free-text notes on the node. The create dialog has always shown this field; until
          *  V34 the request had nowhere to put it and it was silently discarded. */

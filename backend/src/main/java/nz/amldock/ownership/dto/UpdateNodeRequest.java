@@ -1,6 +1,8 @@
 package nz.amldock.ownership.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NomineeStatus;
 import nz.amldock.ownership.TrustHoldingComplexity;
@@ -8,7 +10,9 @@ import nz.amldock.ownership.TrustType;
 import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.PersonRole;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Set;
 
 /** All fields optional — only non-null values are applied. */
 public record UpdateNodeRequest(
@@ -48,11 +52,20 @@ public record UpdateNodeRequest(
 
         /** Where an entity says its money comes from. Not the person-level field. */
         String sourceOfFunds,
+        /**
+         * Share of the property, 0.00 – 100.00. Only meaningful for a node at the top of the
+         * chain; cleared by the server the moment the node gains an owner above it.
+         */
+        @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal propertyPercentage,
 
         String extraJson,
 
-        /** The capacity this individual appears in on this deal. */
-        PersonRole personRole,
+        /**
+         * Every capacity this individual holds on this deal. Null leaves them alone, matching every
+         * other field here; an <em>empty</em> set is a value and clears them, the same way an empty
+         * string clears a text field.
+         */
+        Set<PersonRole> personRoles,
         /** Free text; the form prompts for a link to a previous deal. */
         String reference,
 

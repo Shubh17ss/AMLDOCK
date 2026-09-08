@@ -34,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import nz.amldock.deal.access.DealUserRepository;
 
 /**
  * Who may open a deal, and on whose branch.
@@ -72,7 +74,7 @@ class DealCreateAuthorizationTest {
     @BeforeEach
     void setUp() {
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService(), new DealNoteService(dealNotes, documents, users),
+                new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, audit),
                 ownership, audit, notifier, versions);
 

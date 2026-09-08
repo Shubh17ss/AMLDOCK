@@ -65,7 +65,7 @@ public class IndividualService {
     }
 
     @Transactional(readOnly = true)
-    public List<IndividualRowDto> list(Long firmId, Long branchId) {
+    public List<IndividualRowDto> list(Long firmId, Long branchId, boolean allTypes) {
         List<Deal> deals = dealService.readableDeals(null, firmId, branchId);
         if (deals.isEmpty()) return List.of();
 
@@ -76,8 +76,12 @@ public class IndividualService {
         Map<Long, Long> dealIdByStructureId = structureList.stream()
                 .collect(Collectors.toMap(OwnershipStructure::getId, OwnershipStructure::getDealId));
 
-        List<OwnershipNode> individuals = nodes
-                .findAllByOwnershipStructureIdInAndNodeTypeOrderByIdAsc(
+        // The registers want every owner; the picker wants people it can copy onto a new
+        // individual. One query each rather than fetching the wider set and filtering, so the
+        // narrow caller keeps paying for exactly what it reads.
+        List<OwnershipNode> individuals = allTypes
+                ? nodes.findAllByOwnershipStructureIdInOrderByIdAsc(dealIdByStructureId.keySet())
+                : nodes.findAllByOwnershipStructureIdInAndNodeTypeOrderByIdAsc(
                         dealIdByStructureId.keySet(), NodeType.INDIVIDUAL);
         if (individuals.isEmpty()) return List.of();
 
@@ -100,6 +104,7 @@ public class IndividualService {
 
             return new IndividualRowDto(
                     n.getId(),
+                    n.getNodeType(),
                     deal.getId(),
                     // Matches how the deals list renders a reference that was never generated.
                     deal.getReference() != null ? deal.getReference() : "#" + deal.getId(),
@@ -107,10 +112,15 @@ public class IndividualService {
                     n.getDisplayName(),
                     // The node's copy first: extraction writes the person's and pushes it down, so
                     // the node carries what this deal was told, which is what this row is about.
+                    // Both of the next two are person-shaped and come back null for a company or
+                    // a trust — those never link to a beneficial_owner, and a company has an
+                    // incorporation date rather than a birthday. The registers render the gap as a
+                    // dash; the Overseas one keeps to natural persons so the gap is never read as
+                    // "nobody asked".
                     n.getDateOfBirth() != null ? n.getDateOfBirth()
                             : (person == null ? null : person.getDateOfBirth()),
                     person == null ? null : person.getCountryOfResidence(),
-                    n.getPersonRole(),
+                    n.getPersonRoles(),
                     n.getVerificationStatus());
         }).filter(java.util.Objects::nonNull).toList();
     }
@@ -161,7 +171,7 @@ public class IndividualService {
                 node.getIdDocumentType(),
                 node.getIdDocumentNumber(),
                 node.getIdDocumentCountry(),
-                node.getPersonRole(),
+                node.getPersonRoles(),
                 node.getVerificationStatus(),
                 person == null ? null : PersonDto.from(person),
                 // Through DocumentService rather than the repositories, so this list and the node

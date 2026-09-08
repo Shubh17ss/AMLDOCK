@@ -36,7 +36,19 @@ export function DocumentUploader({
    */
   compact = false,
   canUpload = true,
+  /**
+   * Show only the deal's own files — those with no ownership node behind them. The server's
+   * deal-scoped list returns everything filed against the deal, party evidence included
+   * (DocumentService.listForDeal), which is the right answer for a document index and the wrong
+   * one for a panel that is meant to be the deal's counterpart to a node's own list. Filtered
+   * here rather than through a new endpoint so the ['documents', dealId] cache and every
+   * invalidation of it keep working.
+   *
+   * Ignored when the uploader is node-scoped, where the question does not arise.
+   */
+  dealOnly = false,
   title = 'Documents',
+  /** Receives the whole document row, ready to hand to DocumentViewerDialog. */
   onViewDocument = null,
   hideVoiceNotes = false,
   scrollTable = false,
@@ -120,9 +132,11 @@ export function DocumentUploader({
 
   // Optionally drop voice notes — some screens surface them separately (e.g. a Broker
   // notes card) and don't want them repeated in the document table.
-  const rows = (source ?? []).filter(
-    (d) => !(hideVoiceNotes && AUDIO_DOCUMENT_TYPES.includes(d.documentType)),
-  );
+  const rows = (source ?? [])
+    .filter((d) => !(hideVoiceNotes && AUDIO_DOCUMENT_TYPES.includes(d.documentType)))
+    // Applies to a frozen list as well as a live one: a version's deal panel should show the
+    // deal's own files as they were signed off, not the whole snapshot.
+    .filter((d) => !dealOnly || isNodeScoped || d.ownershipNodeId == null);
 
   /**
    * A node's list also carries the ID scans of the person behind it, which live on the person
@@ -259,7 +273,7 @@ export function DocumentUploader({
                 <TableCell align="right">
                   {onViewDocument && (
                     <Tooltip title="View in PDF pane">
-                      <IconButton size="small" onClick={() => onViewDocument(d.id)}>
+                      <IconButton size="small" onClick={() => onViewDocument(d)}>
                         <VisibilityIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>

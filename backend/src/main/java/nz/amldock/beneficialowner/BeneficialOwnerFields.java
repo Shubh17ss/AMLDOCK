@@ -72,6 +72,17 @@ public abstract class BeneficialOwnerFields extends BaseEntity {
     @Column(name = "country_of_residence", length = 2)
     private String countryOfResidence;
 
+    /**
+     * Where this person actually lives, as they gave it.
+     *
+     * <p>Free text and no lookup behind it: an overseas address has no local format to normalise
+     * to, and a suggestion the client never made is not evidence. Its job is to be compared with
+     * whatever proof of address is on the file, which needs the words they used, not a tidied
+     * version of them.
+     */
+    @Column(name = "physical_address", columnDefinition = "text")
+    private String physicalAddress;
+
     public Long getRealEstateFirmId() { return realEstateFirmId; }
     public void setRealEstateFirmId(Long v) { this.realEstateFirmId = v; }
     public String getFullName() { return fullName; }
@@ -96,6 +107,8 @@ public abstract class BeneficialOwnerFields extends BaseEntity {
     public void setSourceOfFunds(String v) { this.sourceOfFunds = v; }
     public String getCountryOfResidence() { return countryOfResidence; }
     public void setCountryOfResidence(String v) { this.countryOfResidence = v; }
+    public String getPhysicalAddress() { return physicalAddress; }
+    public void setPhysicalAddress(String v) { this.physicalAddress = v; }
 
     /**
      * The id of the person these columns describe.

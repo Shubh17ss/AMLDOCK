@@ -55,10 +55,14 @@ export const nameLabelFor = (nodeType) => NAME_LABEL[nodeType] ?? 'Display name'
 export const isLeafOnlyType = (value) => value === 'INDIVIDUAL';
 
 /**
- * The capacity an individual appears in on one deal. An edge between two nodes carries the
+ * The capacities an individual appears in on one deal. An edge between two nodes carries the
  * ownership percentage; this is the answer to what the person is, and the only role the UI sets.
  *
- * Keep in sync with `nz.amldock.ownership.PersonRole` and `chk_ownership_node_person_role`.
+ * A node holds a set of these, not one — the same human is routinely settlor, trustee and
+ * appointer of the same family trust, and until V43 only the first of those could be recorded.
+ *
+ * Keep in sync with `nz.amldock.ownership.PersonRole`. There is no longer a CHECK constraint to
+ * match: the column is a delimited list, and PersonRoleSetConverter enforces the vocabulary.
  */
 export const PERSON_ROLES = [
   { value: 'OWNER_25_PLUS', label: '25%+ ownership' },
@@ -75,6 +79,13 @@ export const PERSON_ROLES = [
 
 export const personRoleLabel = (value) =>
   PERSON_ROLES.find((r) => r.value === value)?.label ?? value ?? '—';
+
+/**
+ * A node's whole set of capacities, in one line. Empty is null rather than a dash, so callers can
+ * leave the row out entirely instead of printing a placeholder nobody asked for.
+ */
+export const personRolesLabel = (roles) =>
+  (roles?.length ? roles.map(personRoleLabel).join(', ') : null);
 
 /**
  * What a node of each type will accept on its Documents tab.

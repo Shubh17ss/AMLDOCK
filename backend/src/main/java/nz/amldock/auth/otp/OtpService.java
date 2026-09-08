@@ -126,13 +126,13 @@ public class OtpService {
     }
 
     private EmailMessage renderSignIn(String to, String code) {
-        String subject = "Your AML_DOCK sign-in code";
+        String subject = "Your AMLDOCK sign-in code";
         String text = """
-                Your AML_DOCK one-time sign-in code is: %s
+                Your AMLDOCK one-time sign-in code is: %s
 
                 It expires in %d minutes. If you didn't request this, you can ignore this email.
 
-                — AML_DOCK
+                — AMLDOCK
                 """.formatted(code, ttl.toMinutes());
         String html = """
                 <!doctype html>
@@ -141,7 +141,7 @@ public class OtpService {
                   <p>Use this one-time code to finish signing in:</p>
                   <p style="font-size: 30px; font-weight: 800; letter-spacing: 6px; color:#1f4b7a; margin: 16px 0;">%s</p>
                   <p style="color:#6b7280; font-size: 13px;">It expires in %d minutes. If you didn't request this, you can ignore this email.</p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AML_DOCK</p>
+                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
                 </body></html>
                 """.formatted(code, ttl.toMinutes());
         return EmailMessage.of(to, subject, html, text);
@@ -150,31 +150,31 @@ public class OtpService {
     /**
      * Deliberately different wording from the sign-in code.
      *
-     * <p>This one lands in an inbox that has, most likely, never heard of AML_DOCK, and it says what
+     * <p>This one lands in an inbox that has, most likely, never heard of AMLDOCK, and it says what
      * is being asked for — otherwise a stranger's six-digit code is indistinguishable from phishing.
      * It also tells someone who did not ask for it to do nothing, which is the correct response: an
      * unspent code changes nothing.
      */
     private EmailMessage renderEmailChange(String to, String code) {
-        String subject = "Confirm your new AML_DOCK email address";
+        String subject = "Confirm your new AMLDOCK email address";
         String text = """
-                Someone asked to use this address for their AML_DOCK account.
+                Someone asked to use this address for their AMLDOCK account.
 
                 Your confirmation code is: %s
 
                 It expires in %d minutes. If this wasn't you, ignore this email — nothing changes
                 until the code is entered.
 
-                — AML_DOCK
+                — AMLDOCK
                 """.formatted(code, ttl.toMinutes());
         String html = """
                 <!doctype html>
                 <html><body style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937; max-width: 480px; margin:0 auto; padding: 24px;">
                   <h2 style="color:#1f4b7a; margin-top:0;">Confirm your email address</h2>
-                  <p>Someone asked to use this address for their AML_DOCK account. Enter this code to confirm it:</p>
+                  <p>Someone asked to use this address for their AMLDOCK account. Enter this code to confirm it:</p>
                   <p style="font-size: 30px; font-weight: 800; letter-spacing: 6px; color:#1f4b7a; margin: 16px 0;">%s</p>
                   <p style="color:#6b7280; font-size: 13px;">It expires in %d minutes. If this wasn't you, ignore this email — nothing changes until the code is entered.</p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AML_DOCK</p>
+                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
                 </body></html>
                 """.formatted(code, ttl.toMinutes());
         return EmailMessage.of(to, subject, html, text);

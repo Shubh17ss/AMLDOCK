@@ -8,8 +8,10 @@ import nz.amldock.ownership.TrustType;
 import nz.amldock.ownership.OwnershipNodeFields;
 import nz.amldock.ownership.PersonRole;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Set;
 
 /**
  * One node of a deal's ownership structure.
@@ -50,11 +52,17 @@ public record NodeDto(
         Boolean trustDiscretionary,
         TrustHoldingComplexity trustHoldingComplexity,
         String sourceOfFunds,
+        /**
+         * Share of the property, 0.00 – 100.00. Only meaningful for a node at the top of the
+         * chain; cleared by the server the moment the node gains an owner above it.
+         */
+        BigDecimal propertyPercentage,
 
         String extraJson,
         Long beneficialOwnerId,
         PersonDto person,
-        PersonRole personRole,
+        /** Every capacity this individual holds on this deal. Empty rather than null. */
+        Set<PersonRole> personRoles,
         String reference,
         NodeVerificationStatus verificationStatus,
         String notes,
@@ -75,9 +83,9 @@ public record NodeDto(
                 n.getJurisdictionCountry(), n.getCompanyHasConstitution(), n.getNomineeStatus(),
                 n.getCompanyComplexOwnership(), n.getCompanyPersonalAssets(), n.getCompanyNewDeveloper(),
                 n.getTrustType(), n.getTrustDiscretionary(), n.getTrustHoldingComplexity(),
-                n.getSourceOfFunds(),
+                n.getSourceOfFunds(), n.getPropertyPercentage(),
                 n.getExtraJson(), n.getBeneficialOwnerId(), person,
-                n.getPersonRole(), n.getReference(), n.getVerificationStatus(),
+                n.getPersonRoles(), n.getReference(), n.getVerificationStatus(),
                 n.getNotes(), n.getVerificationNotes(),
                 n.getCreatedAt(), n.getUpdatedAt());
     }
