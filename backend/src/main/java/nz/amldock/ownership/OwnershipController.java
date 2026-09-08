@@ -7,6 +7,7 @@ import nz.amldock.ownership.dto.CreateEdgeRequest;
 import nz.amldock.ownership.dto.CreateNodeRequest;
 import nz.amldock.ownership.dto.EdgeDto;
 import nz.amldock.ownership.dto.NodeDto;
+import nz.amldock.ownership.dto.ReorderRequest;
 import nz.amldock.ownership.dto.SetRootRequest;
 import nz.amldock.ownership.dto.TreeDto;
 import nz.amldock.ownership.dto.UpdateEdgeRequest;
@@ -111,6 +112,28 @@ public class OwnershipController {
         ownership.deleteEdge(dealId, edgeId);
         audit.record(AuditAction.EDGE_DELETED, "OwnershipEdge", edgeId, "Removed edge " + edgeId);
         return ResponseEntity.noContent().build();
+    }
+
+    /* ---------- sibling order ---------- */
+
+    /**
+     * Rearranges one owner’s children, or the owners at the top of the chain.
+     *
+     * <p>One request for the whole sibling group rather than a PATCH per edge: dragging a row two
+     * places up renumbers everything it passed, and sending those as separate writes would leave
+     * the structure in orders nobody asked for if one of them failed. It returns the whole tree
+     * for the same reason — the caller’s copy of the order is stale the moment it drags.
+     */
+    @PostMapping("/order")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
+    public TreeDto reorder(@PathVariable Long dealId, @Valid @RequestBody ReorderRequest req) {
+        TreeDto tree = ownership.reorderSiblings(dealId, req);
+        audit.record(AuditAction.STRUCTURE_REORDERED, "OwnershipStructure", tree.ownershipStructureId(),
+                req.parentNodeId() == null
+                        ? "Reordered the top-level owners of deal " + dealId
+                        : "Reordered the children of node " + req.parentNodeId(),
+                "{\"order\":" + req.childNodeIds() + "}");
+        return tree;
     }
 
     /* ---------- root ---------- */

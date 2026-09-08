@@ -205,6 +205,17 @@ public abstract class OwnershipNodeFields extends BaseEntity {
     @Column(name = "property_percentage", precision = 5, scale = 2)
     private BigDecimal propertyPercentage;
 
+    /**
+     * Where this node sits among the other top-level owners, or null for "never positioned".
+     *
+     * <p>Read only for a node with nothing above it. Everything else is placed by its incoming
+     * edge — see {@code OwnershipEdgeFields.sortOrder} — and this column is ignored there, for
+     * the same reason {@code propertyPercentage} above is: a node with an owner is described by
+     * the link, not by itself.
+     */
+    @Column(name = "sort_order")
+    private Integer sortOrder;
+
     public Long getOwnershipStructureId() { return ownershipStructureId; }
     public void setOwnershipStructureId(Long v) { this.ownershipStructureId = v; }
     public NodeType getNodeType() { return nodeType; }
@@ -279,6 +290,8 @@ public abstract class OwnershipNodeFields extends BaseEntity {
     public void setSourceOfFunds(String v) { this.sourceOfFunds = v; }
     public BigDecimal getPropertyPercentage() { return propertyPercentage; }
     public void setPropertyPercentage(BigDecimal v) { this.propertyPercentage = v; }
+    public Integer getSortOrder() { return sortOrder; }
+    public void setSortOrder(Integer v) { this.sortOrder = v; }
 
     /**
      * The id of the node these columns describe.

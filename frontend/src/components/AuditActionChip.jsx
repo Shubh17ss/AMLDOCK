@@ -25,6 +25,7 @@ const COLOR = {
   EDGE_CREATED: 'info',
   EDGE_UPDATED: 'default',
   EDGE_DELETED: 'error',
+  STRUCTURE_REORDERED: 'default',
   DOCUMENT_UPLOADED: 'info',
   DOCUMENT_DOWNLOADED: 'default',
   DOCUMENT_DELETED: 'error',

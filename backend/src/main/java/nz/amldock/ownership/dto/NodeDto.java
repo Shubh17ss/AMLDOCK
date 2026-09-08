@@ -67,6 +67,8 @@ public record NodeDto(
         NodeVerificationStatus verificationStatus,
         String notes,
         String verificationNotes,
+    /** Where this node sits among the top-level owners. Ignored once it has one. */
+        Integer sortOrder,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -86,7 +88,7 @@ public record NodeDto(
                 n.getSourceOfFunds(), n.getPropertyPercentage(),
                 n.getExtraJson(), n.getBeneficialOwnerId(), person,
                 n.getPersonRoles(), n.getReference(), n.getVerificationStatus(),
-                n.getNotes(), n.getVerificationNotes(),
+                n.getNotes(), n.getVerificationNotes(), n.getSortOrder(),
                 n.getCreatedAt(), n.getUpdatedAt());
     }
 }

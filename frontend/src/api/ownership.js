@@ -201,3 +201,17 @@ export async function deleteEdge(dealId, edgeId) {
   await apiClient.delete(`/deals/${dealId}/ownership/edges/${edgeId}`);
 }
 
+/**
+ * Sets the order one owner’s children are drawn in, or the top-level owners’ own order.
+ *
+ * <p>`parentNodeId: null` means the top of the chain, whose rows have no edge to carry a
+ * position. `childNodeIds` must name the whole sibling group in its new order — the server
+ * writes a dense 0..n-1 over all of them and refuses a partial list. Returns the whole tree.
+ */
+export async function reorder(dealId, { parentNodeId = null, childNodeIds }) {
+  const { data } = await apiClient.post(`/deals/${dealId}/ownership/order`, {
+    parentNodeId, childNodeIds,
+  });
+  return data;
+}
+

@@ -381,6 +381,10 @@ export function DealReviewScreen() {
             onDetachFromParent={mayEdit ? (edgeId) => tree.deleteEdge.mutate(edgeId) : undefined}
             onDeleteNode={mayEdit ? setDeleteNodeId : undefined}
             readOnly={!mayEdit}
+            // The live mutations, for dragging a row onto a new owner. Always the live tree,
+            // even when a version is on screen: readOnly is what turns dragging off there, and
+            // a snapshot has nothing to move.
+            useTree={liveTree}
             // Two right-hand drawers open at once would stack two backdrops on each other, so
             // opening either closes the other.
             onOpenDeal={() => { setSelectedNodeId(null); setDealDrawerOpen(true); }}
