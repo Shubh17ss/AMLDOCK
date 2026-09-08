@@ -1,5 +1,5 @@
 import {
-  Box, Checkbox, Chip, Divider, FormControl, FormHelperText, FormLabel, InputLabel, ListItemText,
+  Box, Checkbox, Chip, FormControl, FormHelperText, FormLabel, InputLabel, ListItemText,
   MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import {
@@ -175,6 +175,49 @@ export function NodeFormFields({
 
       {value.nodeType === 'INDIVIDUAL' && (
         <>
+          {/* Two records, one form, and the order interleaves them: date of birth and type are
+              what THIS deal says about the person, while where they live, how to reach them and
+              what they do belong to the person’s own record and are shared with every deal they
+              appear on. That warning used to be a heading over a contiguous block of shared
+              fields; the two kinds now alternate, so a heading in the middle would be pointing at
+              the wrong things and it sits over the whole form instead. An officer who does not
+              know which is which will eventually edit a closed deal’s evidence by accident. */}
+          <Typography variant="caption" sx={{ color: tokens.muted }}>
+            Country, address, email, phone, occupation and source of funds belong to this person
+            and are shared with every deal they appear on — editing them here changes what those
+            deals show. Date of birth and type are what this deal says about them.
+          </Typography>
+
+          {/* The node’s own column, not the person’s. Extraction keeps the two in step through
+              refreshExtractedIndividual, and reading one while writing the other would make an
+              edit look like it had not taken.
+
+              The ID document’s own type, number and country used to be asked for here. They are
+              facts about a document, and the document is one tab across — asking twice invites two
+              answers. */}
+          <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
+                     value={value.dateOfBirth ?? ''}
+                     onChange={(e) => set({ dateOfBirth: e.target.value })} />
+
+          {/* Not defaulted to the reporting entity’s country, unlike the dial code below it.
+              A dial code is a convenience the user overtypes; where someone lives is a CDD answer,
+              and one nobody has given must stay blank rather than arrive pre-agreed. The Overseas
+              Residents register reads this and cannot tell a default from an answer. */}
+          <CountrySelect
+            label="Country of residence"
+            value={person.countryOfResidence ?? null}
+            onChange={(code) => setPerson({ countryOfResidence: code })}
+          />
+
+          {/* Deliberately a plain field, not the AddressFinder the deal’s property uses. An
+              overseas address has no local format to normalise to, and a suggestion the client
+              never made is not evidence — this has to hold the words they actually gave, because
+              matching them against the proof of address on file is the whole point. */}
+          <TextField label="Physical address" value={person.physicalAddress ?? ''}
+                     onChange={(e) => setPerson({ physicalAddress: e.target.value })}
+                     multiline minRows={2}
+                     helperText="Where this person lives. Typed as given — not looked up." />
+
           {/* Multi-select, because one capacity was never enough: the same person is routinely
               settlor, trustee and appointer of the same family trust, and the two nobody could
               record used to end up in the notes, where no register can read them.
@@ -214,47 +257,8 @@ export function NodeFormFields({
             </FormHelperText>
           </FormControl>
 
-          <Divider />
-          <Box>
-            <Typography variant="subtitle2">About this person</Typography>
-            <Typography variant="caption" sx={{ color: tokens.muted }}>
-              Shared with every deal this person appears on — editing here changes what those
-              deals show.
-            </Typography>
-          </Box>
-
-          {/* Not defaulted to the reporting entity's country, unlike the dial code below it.
-              A dial code is a convenience the user overtypes; where someone lives is a CDD answer,
-              and one nobody has given must stay blank rather than arrive pre-agreed. The Overseas
-              Residents register reads this and cannot tell a default from an answer. */}
-          <CountrySelect
-            label="Country of residence"
-            value={person.countryOfResidence ?? null}
-            onChange={(code) => setPerson({ countryOfResidence: code })}
-          />
-
-          {/* Deliberately a plain field, not the AddressFinder the deal's property uses. An
-              overseas address has no local format to normalise to, and a suggestion the client
-              never made is not evidence — this has to hold the words they actually gave, because
-              matching them against the proof of address on file is the whole point. */}
-          <TextField label="Physical address" value={person.physicalAddress ?? ''}
-                     onChange={(e) => setPerson({ physicalAddress: e.target.value })}
-                     multiline minRows={2}
-                     helperText="Where this person lives. Typed as given — not looked up." />
-
           <TextField label="Email address" type="email" value={person.email ?? ''}
                      onChange={(e) => setPerson({ email: e.target.value })} />
-
-          {/* The node's own column, not the person's. Extraction keeps the two in step through
-              refreshExtractedIndividual, and reading one while writing the other would make an
-              edit look like it had not taken.
-
-              The ID document's own type, number and country used to be asked for here. They are
-              facts about a document, and the document is one tab across — asking twice invites two
-              answers. */}
-          <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
-                     value={value.dateOfBirth ?? ''}
-                     onChange={(e) => set({ dateOfBirth: e.target.value })} />
 
           <PhoneField
             value={{ country: person.phoneCountry ?? null, number: person.phoneNumber ?? '' }}
