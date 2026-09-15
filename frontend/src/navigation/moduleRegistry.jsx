@@ -16,7 +16,7 @@ import PublicIcon from '@mui/icons-material/Public';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
 import VerifiedUserRoundedIcon from '@mui/icons-material/VerifiedUserRounded';
 import WorkspacePremiumRoundedIcon from '@mui/icons-material/WorkspacePremiumRounded';
-import MonitorHeartRoundedIcon from '@mui/icons-material/MonitorHeartRounded';
+import LeaderboardRoundedIcon from '@mui/icons-material/LeaderboardRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import HistoryIcon from '@mui/icons-material/History';
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
@@ -36,8 +36,8 @@ export const CDD_REGISTER_PATH = '/cdd';
 export const DEALS_PATH = '/cdd/deals';
 export const BENEFICIAL_OWNERS_PATH = '/cdd/beneficial-owners';
 export const OVERSEAS_RESIDENTS_PATH = '/cdd/overseas-residents';
-export const INTL_FUND_TRANSACTIONS_PATH = '/monitoring/international-fund-transaction-register';
-export const SUSPICIOUS_ACTIVITIES_PATH = '/monitoring/suspicious-activities';
+export const INTL_FUND_TRANSACTIONS_PATH = '/reporting/international-fund-transaction-register';
+export const SUSPICIOUS_ACTIVITIES_PATH = '/reporting/suspicious-activities';
 export const STAFF_TRAINING_PATH = '/aml-training/staff-training';
 // The personal training view for branch staff. Not a module — it sits beside Dashboard in the
 // sidebar rather than inside the AML Training section, which stays privileged.
@@ -53,8 +53,6 @@ export const MODULE_GROUPS = [
         blurb: 'Upload risk assessment revisions and keep every past version on record.' },
       { id: 'compliance-programme', label: 'Compliance Programme', to: '/documents/compliance-programme', icon: <PolicyIcon />,
         blurb: 'Keep your AML compliance programme current with a full version history.' },
-      { id: 'annual-report',        label: 'Annual Report',        to: '/documents/annual-report',        icon: <SummarizeIcon />,
-        blurb: 'File each year’s annual report and track prior submissions.' },
     ],
   },
   {
@@ -84,11 +82,16 @@ export const MODULE_GROUPS = [
     ],
   },
   {
-    group: 'Monitoring', slug: 'monitoring', to: '/monitoring', title: 'Monitoring',
-    icon: <MonitorHeartRoundedIcon />,
+    group: 'Reporting', slug: 'reporting', to: '/reporting', title: 'Reporting',
+    icon: <LeaderboardRoundedIcon />,
     items: [
-      { id: 'management-reports',    label: 'Management Reports',                    to: '/monitoring/reports',                            icon: <InsightsIcon />,
+      { id: 'management-reports',    label: 'Management Reports',                    to: '/reporting/reports',                             icon: <InsightsIcon />,
         blurb: 'Board-level AML reporting on obligations, breaches and remediation.' },
+      // The annual report is a periodic filing rather than a living policy document, so it sits
+      // here with the other things you file — not beside the risk assessment and the compliance
+      // programme, which are documents you keep current.
+      { id: 'annual-report',         label: 'Annual Report',                         to: '/reporting/annual-report',                       icon: <SummarizeIcon />,
+        blurb: 'File each year’s annual report and track prior submissions.' },
       { id: 'suspicious-activities', label: 'Suspicious Activities',                to: SUSPICIOUS_ACTIVITIES_PATH,                       icon: <FlagIcon />,
         blurb: 'Record suspicious activity reports and their submission to the FIU.' },
       { id: 'intl-fund-transfers',   label: 'International Fund Transaction Register', to: INTL_FUND_TRANSACTIONS_PATH,                      icon: <CurrencyExchangeIcon />,
@@ -142,7 +145,7 @@ export const CDD_GROUP = MODULE_GROUPS.find((g) => g.slug === 'cdd');
  *
  *   ROOT / AML CO / Senior Manager → the whole workspace
  *   AUDIT                          → the whole workspace, read-only (canAccessAllModules)
- *   FINANCE                        → Monitoring, narrowed to its two modules
+ *   FINANCE                        → Reporting, narrowed to its two modules
  *   everyone else                  → the CDD section
  */
 export function visibleGroupsFor(role) {
@@ -152,16 +155,16 @@ export function visibleGroupsFor(role) {
   if (canAccessAllModules(role)) return MODULE_GROUPS.map(allowed);
   if (role === 'FINANCE') {
     return MODULE_GROUPS
-      .filter((g) => g.slug === 'monitoring')
+      .filter((g) => g.slug === 'reporting')
       .map((g) => ({ ...g, items: g.items.filter((i) => FINANCE_MODULE_IDS.includes(i.id)) }));
   }
   return MODULE_GROUPS.filter((g) => g.slug === 'cdd').map(allowed);
 }
 
-/** The routes FINANCE may open: the Monitoring landing plus its two modules. */
+/** The routes FINANCE may open: the Reporting landing plus its two modules. */
 export const FINANCE_PATHS = [
-  MODULE_GROUPS.find((g) => g.slug === 'monitoring').to,
-  ...MODULE_GROUPS.find((g) => g.slug === 'monitoring').items
+  MODULE_GROUPS.find((g) => g.slug === 'reporting').to,
+  ...MODULE_GROUPS.find((g) => g.slug === 'reporting').items
     .filter((i) => FINANCE_MODULE_IDS.includes(i.id))
     .map((i) => i.to),
 ];
@@ -186,7 +189,7 @@ export const IMPLEMENTED_PATHS = [
   OVERSEAS_RESIDENTS_PATH,
   '/documents/risk-assessment',
   '/documents/compliance-programme',
-  '/documents/annual-report',
+  '/reporting/annual-report',
   '/settings/users',
   '/settings/reporting-entities',
   AUDIT_LOG_PATH,

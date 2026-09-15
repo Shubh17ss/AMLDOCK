@@ -30,13 +30,18 @@ import { tokens, fonts } from '../../theme/theme.js';
 const PDF_MIME = 'application/pdf';
 
 /**
- * The three Documents modules — shared config for routes and page rendering. `id` is the
- * module-registry id, which doubles as the review key (document_review.module_key).
+ * The three versioned compliance-document modules — shared config for routes and page
+ * rendering. `id` is the module-registry id, which doubles as the review key
+ * (document_review.module_key).
+ *
+ * Two of them live under Documents and the annual report under Reporting, so this is no longer
+ * one section's list — but it is still one page serving all three, and the paths have to agree
+ * with the module registry.
  */
 export const DOCUMENT_MODULES = [
   { id: 'risk-assessment',      category: 'RISK_ASSESSMENT',      title: 'Risk Assessment',      path: '/documents/risk-assessment' },
   { id: 'compliance-programme', category: 'COMPLIANCE_PROGRAMME', title: 'Compliance Programme', path: '/documents/compliance-programme' },
-  { id: 'annual-report',        category: 'ANNUAL_REPORT',        title: 'Annual Report',        path: '/documents/annual-report' },
+  { id: 'annual-report',        category: 'ANNUAL_REPORT',        title: 'Annual Report',        path: '/reporting/annual-report' },
 ];
 
 const dateFmt = (iso) =>

@@ -18,7 +18,7 @@ import { isLeafOnlyType, nodeTypeLabel, personRolesLabel, trustTypeLabel } from 
 import { countryName } from '../../data/countries.js';
 import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
 import { propertyTypeLabel } from '../../data/propertyTypes.js';
-import { visualFor, tintOf } from './nodeTypeVisual.js';
+import { visualFor, tintOf, washOf, edgeOf } from './nodeTypeVisual.js';
 import {
   PROPERTY_DROP_ID, dragIdFor, dropIdForNode, gapDropId, sortSiblings,
 } from './dragModel.js';
@@ -337,10 +337,12 @@ function NodeGhost({ node }) {
       sx={{
         px: 1.5,
         py: 1,
-        borderRadius: 2.5,
+        borderRadius: '14px',
         maxWidth: 380,
         cursor: 'grabbing',
-        backgroundColor: tokens.tile,
+        // The same wash the row has, so a company does not turn white in mid-air. The blue border
+        // and the shadow are what say "in flight"; the fill still says what this is.
+        backgroundColor: node.nodeType === 'INDIVIDUAL' ? tokens.tile : washOf(visual.hue),
         border: `1px solid ${tokens.blue}`,
         boxShadow: '0 12px 28px rgba(15, 23, 42, 0.18)',
       }}
@@ -447,6 +449,11 @@ function NodeBranch({
   const riskReason = riskReasonFor(node);
   const visual = visualFor(node.nodeType);
 
+  // A person is not an entity, and the tree should say so without a legend: every other type gets
+  // a card in its own colour, and an individual — always a leaf — stays plain. Colour is the
+  // second signal here, never the only one; the glyph on the disc is what names the type.
+  const tinted = node.nodeType !== 'INDIVIDUAL';
+
   // The edge's figure where there is an edge, the node's own where there is not.
   const share = parentEdge ? parentEdge.percentage : node.propertyPercentage;
   const ownerName = parentEdge ? (nodesById.get(parentEdge.parentNodeId)?.displayName ?? 'its owner') : null;
@@ -539,13 +546,23 @@ function NodeBranch({
             px: 1.25,
             py: 1,
             my: 0.4,
-            borderRadius: 2.5,
+            borderRadius: '14px',
             cursor: 'pointer',
             // Stops a press-and-hold on touch turning into a text selection or a zoom while the
             // sensor is waiting to see whether this is a drag or a scroll.
             touchAction: dragEnabled ? 'manipulation' : undefined,
-            backgroundColor: isDropTarget || isSelected ? tokens.blueWash : tokens.tile,
-            border: `1px solid ${isDropTarget || isSelected ? tokens.blue : tokens.hairline}`,
+            // Selection and the drop target own the row's colour for as long as they last; the
+            // type takes it back the moment they let go. A tint that competed with the blue would
+            // make the tree harder to drag in, not easier.
+            //
+            // 'transparent' rather than no border on an individual: a row that drops its 1px edge
+            // is 2px shorter than its siblings and the whole column stops lining up.
+            backgroundColor: isDropTarget || isSelected
+              ? tokens.blueWash
+              : (tinted ? washOf(visual.hue) : 'transparent'),
+            border: `1px solid ${isDropTarget || isSelected
+              ? tokens.blue
+              : (tinted ? edgeOf(visual.hue) : 'transparent')}`,
             // The row being carried stays in place and steps back; the copy under the pointer is
             // the one that moves. Nothing here is ever transformed.
             opacity: isDragging ? 0.35 : (isForbidden ? 0.4 : 1),
@@ -561,7 +578,13 @@ function NodeBranch({
                 to: { opacity: 1, transform: 'none' },
               },
             } : {}),
-            '&:hover': { backgroundColor: isSelected ? tokens.blueWash : tokens.hover },
+            // A tinted row steps up to the disc's own strength on hover — one notch of the same
+            // colour rather than a fourth value invented for the purpose.
+            '&:hover': {
+              backgroundColor: isSelected
+                ? tokens.blueWash
+                : (tinted ? tintOf(visual.hue) : tokens.hover),
+            },
             '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
             // Row actions rest quietly and come forward on approach — but never disappear for
             // anyone arriving by keyboard.
@@ -596,12 +619,16 @@ function NodeBranch({
 
           <Box sx={{ minWidth: 0, flexGrow: 1 }}>
             <Stack direction="row" spacing={0.75} alignItems="center">
+              {/* Bold at the top of the chain and nowhere else. These are the owners a reviewer
+                  reads first — everyone below is reached through them — and the weight is added
+                  conditionally so no other row's rendering changes. */}
               <Typography
                 sx={{
                   fontFamily: fonts.display,
                   fontSize: '0.9rem',
                   color: tokens.ink,
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  ...(depth === 0 && { fontWeight: 700 }),
                 }}
               >
                 {node.displayName}
@@ -637,7 +664,12 @@ function NodeBranch({
               <Chip
                 size="small"
                 label={`${Number(share).toFixed(0)}%`}
-                sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', flexShrink: 0 }}
+                sx={{
+                  fontFamily: fonts.mono, fontSize: '0.66rem', flexShrink: 0,
+                  // The share of the property is the other fact worth reading first, so it takes
+                  // the same weight as the name beside it.
+                  ...(depth === 0 && { '& .MuiChip-label': { fontWeight: 700 } }),
+                }}
               />
             </Tooltip>
           )}

@@ -50,7 +50,7 @@ export function FirmDealsPage() {
       {/* Desktop: table */}
       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
         {q.isLoading
-          ? <SkeletonTable rows={6} columns={9} />
+          ? <SkeletonTable rows={6} columns={6} />
           : <DealsTable deals={deals} emptyMessage={status === 'ALL' ? 'No deals from your firm yet.' : 'No deals match this filter.'} />
         }
       </Box>

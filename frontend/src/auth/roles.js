@@ -79,7 +79,7 @@ export const canWrite = (role) => Boolean(role) && !isReadOnly(role);
 /** Sees every reporting entity rather than one — a visibility question, not a write grant. */
 export const seesAllFirms = (role) => role === 'ROOT' || role === 'AUDIT';
 
-/** FINANCE sees these two Monitoring modules and nothing else in the workspace. */
+/** FINANCE sees these two Reporting modules and nothing else in the workspace. */
 export const FINANCE_MODULE_IDS = ['management-reports', 'intl-fund-transfers'];
 
 // Privilege groups used by route guards / page checks.
@@ -140,10 +140,10 @@ export const DEAL_NOTIFICATION_EVENTS = [
 export const FULL_WORKSPACE_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 
 // Who may reach a section at all. AUDIT sees every section (read-only); FINANCE is narrowed to
-// two Monitoring modules by visibleGroupsFor, not by this list.
+// two Reporting modules by visibleGroupsFor, not by this list.
 export const SECTION_READ_ROLES = [...FULL_WORKSPACE_ROLES, 'AUDIT'];
 export const canAccessAllModules = (role) => SECTION_READ_ROLES.includes(role);
-/** Route guard for FINANCE_MODULE_IDS and the Monitoring landing they sit under. */
+/** Route guard for FINANCE_MODULE_IDS and the Reporting landing they sit under. */
 export const FINANCE_SECTION_ROLES = [...SECTION_READ_ROLES, 'FINANCE'];
 
 // Branch-level staff, as a route-guard list.

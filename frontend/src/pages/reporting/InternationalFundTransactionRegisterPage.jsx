@@ -68,7 +68,7 @@ const slug = (s) =>
   String(s ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 /**
- * Monitoring › International Fund Transaction Register — the log of international transfers
+ * Reporting › International Fund Transaction Register — the log of international transfers
  * tied to a listing. Scope-aware: the firm/branch selected in the sidebar drives which
  * register loads and which register new entries land in.
  */

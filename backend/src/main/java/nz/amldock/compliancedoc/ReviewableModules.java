@@ -20,7 +20,6 @@ public final class ReviewableModules {
             // Documents
             "risk-assessment",
             "compliance-programme",
-            "annual-report",
             // CDD
             "deals",
             "beneficial-owners",
@@ -29,8 +28,9 @@ public final class ReviewableModules {
             "overseas-residents",
             // AML Training
             "staff-training",
-            // Monitoring
+            // Reporting
             "management-reports",
+            "annual-report",
             "suspicious-activities",
             "intl-fund-transfers");
 

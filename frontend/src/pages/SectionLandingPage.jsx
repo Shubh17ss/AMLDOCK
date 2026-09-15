@@ -7,7 +7,7 @@ import { BentoTile, Eyebrow } from '../components/bento/BentoTile.jsx';
 import { ReviewDialog } from '../components/documents/ReviewDialog.jsx';
 import { reviewMetaFor } from '../components/documents/reviewStatus.jsx';
 import { listDocumentReviews, reviewStatusOf } from '../api/documentReviews.js';
-import { isReviewableModule } from '../navigation/moduleRegistry.jsx';
+import { isReviewableModule, visibleGroupsFor } from '../navigation/moduleRegistry.jsx';
 import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canManageReview } from '../auth/roles.js';
@@ -29,7 +29,13 @@ export function SectionLandingPage({ group }) {
   const [reviewing, setReviewing] = useState(null);
 
   const mayReview = canManageReview(user?.role);
-  const sectionHasReviews = group.items.some((i) => isReviewableModule(i.id));
+
+  // The router hands this page the registry group unfiltered, so the role narrowing that the
+  // sidebar and the dashboard already apply has to be repeated here — otherwise FINANCE, who may
+  // open this landing for its two modules, sees a card per module in the whole section.
+  const items = visibleGroupsFor(user?.role).find((g) => g.to === group.to)?.items ?? group.items;
+
+  const sectionHasReviews = items.some((i) => isReviewableModule(i.id));
 
   // One fetch for the whole section; every card reads its own row out of the result.
   const reviewsQ = useQuery({
@@ -39,7 +45,7 @@ export function SectionLandingPage({ group }) {
   });
   const reviewByModule = Object.fromEntries((reviewsQ.data ?? []).map((r) => [r.moduleKey, r]));
 
-  const count = group.items.length;
+  const count = items.length;
 
   return (
     <Stack spacing={2.5}>
@@ -57,7 +63,7 @@ export function SectionLandingPage({ group }) {
         gap: { xs: 1.5, md: 2 },
         gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(280px, 1fr))' },
       }}>
-        {group.items.map((item, i) => {
+        {items.map((item, i) => {
           const reviewable = isReviewableModule(item.id);
           const review = reviewable ? reviewByModule[item.id] ?? null : null;
           const meta = reviewable ? reviewMetaFor(reviewStatusOf(review)) : null;
