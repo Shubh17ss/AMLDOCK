@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { apiClient } from './client.js';
 
-// Monitoring > International Fund Transaction Register. Entries are scoped to the firm and
+// Reporting > International Fund Transaction Register. Entries are scoped to the firm and
 // branch selected in the sidebar. The supporting PDF is optional and follows the same
 // presigned S3 flow as compliance documents, attached after the entry exists.
 

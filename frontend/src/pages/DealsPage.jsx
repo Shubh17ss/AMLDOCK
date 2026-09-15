@@ -1,18 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import {
-  Alert, Box, Button, Paper, Stack, Tab, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, Tabs, Typography,
-} from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
+import { Alert, Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canCreateDeal, isDealAuthor } from '../auth/roles.js';
 import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
-import { useCurrency } from '../dashboard/useCurrency.js';
-import { DealStatusChip } from '../components/DealStatusChip.jsx';
-import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
+import { DealsTable } from '../components/DealsTable.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { SearchField, matchesSearch } from '../components/SearchField.jsx';
@@ -39,10 +34,8 @@ const DEFAULT_STATUS = 'NEW';
  * officer, so the review workspace is open to any reviewer from submission onward.
  */
 export function DealsPage() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
-  const money = useCurrency();
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [query, setQuery] = useState('');
 
@@ -71,17 +64,13 @@ export function DealsPage() {
   const mayCreate = canCreateDeal(user?.role);
 
   /**
-   * Where a row goes when you open it.
+   * Whether this deal opens as the capture form rather than as the deal page — only the broker
+   * who owns it while it is still unfinished, because the thing to do with your own half-written
+   * deal is finish it.
    *
-   * Only the broker who owns an unfinished deal wants the form: the thing to do with their own
-   * half-written deal is finish it. Everyone else — reviewers included — wants the deal page,
-   * where the ownership structure is and where the record is editable in the drawer.
-   *
-   * The author test carries the owner check the page guards have always made. Without it a broker
-   * opening a colleague's NEW deal was linked to the form only to be bounced straight back.
+   * The table works this out for itself; this copy is for the mobile cards below.
    */
   const opensForm = (d) => opensDealForm(d, user);
-  const openPathFor = (d) => (opensForm(d) ? `/deals/${d.id}/edit` : `/deals/${d.id}`);
 
   return (
     <Stack spacing={2.5}>
@@ -191,76 +180,36 @@ export function DealsPage() {
 
       {/* Desktop: table */}
       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-        {dealsQ.isLoading && <SkeletonTable rows={6} columns={9} />}
-        {!dealsQ.isLoading && (
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Reference</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Risk</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Value ({money.code})</TableCell>
-                  {/* <TableCell>Reporting entity</TableCell> */}
-                  <TableCell>Client</TableCell>
-                  <TableCell>Property</TableCell>
-                  <TableCell>Updated</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {deals.map((d) => (
-                  <TableRow key={d.id} hover>
-                    <TableCell>{d.reference ?? `#${d.id}`}</TableCell>
-                    <TableCell><DealStatusChip status={d.status} /></TableCell>
-                    <TableCell><RiskRatingChip rating={d.riskRating} /></TableCell>
-                    <TableCell>{d.transactionType}</TableCell>
-                    <TableCell>{money.dealRange(d)}</TableCell>
-                    {/* <TableCell>{d.firmName ?? '—'}</TableCell> */}
-                    <TableCell>{d.clientDisplayName ?? '—'}</TableCell>
-                    <TableCell>{d.propertyAddress ?? '—'}</TableCell>
-                    <TableCell>{d.updatedAt ? new Date(d.updatedAt).toLocaleString() : '—'}</TableCell>
-                    <TableCell align="right">
-                      {/* One way in, labelled. `secondary` is the theme's ink-on-canvas button —
-                          black here, and it inverts with the rest of the surface in dark mode. */}
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="secondary"
-                        onClick={() => navigate(openPathFor(d))}
-                      >
-                        View
+        {dealsQ.isLoading
+          ? <SkeletonTable rows={6} columns={6} />
+          : (
+            <DealsTable
+              deals={deals}
+              emptyMessage="No deals match these filters."
+              // A first run is not the same as a filter that matched nothing, and it wants the one
+              // action that fixes it. A filtered-empty list gets the plain message above instead —
+              // creating a deal is not how you find an existing one.
+              emptyState={isEmpty ? (
+                <Box sx={{ py: 5, textAlign: 'center' }}>
+                  <Stack spacing={1.5} alignItems="center">
+                    <Typography sx={{ fontWeight: 700, color: tokens.ink }}>No deals yet</Typography>
+                    <Typography sx={{ fontSize: '0.875rem', color: tokens.muted, maxWidth: 420 }}>
+                      Start your first deal — capture the property and client, attach IDs, and
+                      submit it for review.
+                    </Typography>
+                    {mayCreate && (
+                      <Button variant="contained" component={RouterLink} to="/deals/new"
+                              startIcon={<AddIcon />}>
+                        Create your first deal
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {deals.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 5, color: tokens.muted }}>
-                      {isEmpty ? (
-                        <Stack spacing={1.5} alignItems="center">
-                          <Typography sx={{ fontWeight: 700, color: tokens.ink }}>No deals yet</Typography>
-                          <Typography sx={{ fontSize: '0.875rem', color: tokens.muted, maxWidth: 420 }}>
-                            Start your first deal — capture the property and client, attach IDs, and
-                            submit it for review.
-                          </Typography>
-                          {mayCreate && (
-                            <Button variant="contained" component={RouterLink} to="/deals/new"
-                                    startIcon={<AddIcon />}>
-                              Create your first deal
-                            </Button>
-                          )}
-                        </Stack>
-                      ) : 'No deals match these filters.'}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                    )}
+                  </Stack>
+                </Box>
+              ) : null}
+            />
+          )}
       </Box>
+
     </Stack>
   );
 }

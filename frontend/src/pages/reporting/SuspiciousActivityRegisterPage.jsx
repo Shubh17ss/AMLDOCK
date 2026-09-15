@@ -108,7 +108,7 @@ function DetailBlock({ label, text }) {
 }
 
 /**
- * Monitoring › Suspicious Activity Register — the log of potential suspicions raised by staff.
+ * Reporting › Suspicious Activity Register — the log of potential suspicions raised by staff.
  * Scope-aware: the firm/branch selected in the sidebar drives which register loads and which
  * register new entries land in.
  */

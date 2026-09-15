@@ -267,7 +267,10 @@ export function NodeEditorPane({
           {incomingEdge && (
             <>
               <Divider />
-              <Typography variant="subtitle2">Link from parent</Typography>
+              {/* Named for what it records rather than for the edge that holds it: the share
+                  this node holds in the parent above. "Link from parent" described the data
+                  model, which is not the question anyone is answering here. */}
+              <Typography variant="subtitle2">Voting Rights / Shareholding</Typography>
               {/* Percentage only. The edge used to carry a Link role as well, which was a second
                   answer to the question Type already asks on the node itself. */}
               <TextField label="Percentage" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }}

@@ -57,3 +57,15 @@ export const visualFor = (nodeType) => NODE_VISUAL[nodeType] ?? FALLBACK;
  * tile.
  */
 export const tintOf = (hue) => `${hue}1F`;
+
+/**
+ * The row's fill, for a node card in the tree.
+ *
+ * <p>Fainter than the disc that sits on it. At the same strength the disc would dissolve into its
+ * own row, and the glyph — which is what actually identifies a type to anyone who cannot separate
+ * teal from lime — would lose the ground it reads against.
+ */
+export const washOf = (hue) => `${hue}0F`;
+
+/** The row's edge: the type's hue at a quarter strength. Present, not loud. */
+export const edgeOf = (hue) => `${hue}40`;

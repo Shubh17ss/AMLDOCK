@@ -21,6 +21,9 @@ public record DealListItemDto(
         String propertyAddress,
         Long createdByUserId,
         String createdByEmail,
+        // The list shows who filed the deal by name; the email stays as the fallback for a user
+        // row that has since gone. Both come off the User the service already holds.
+        String createdByName,
         Instant createdAt,
         Instant updatedAt,
         // V28 — list rows show the risk chip and the valuation range. All three come off the
@@ -32,10 +35,10 @@ public record DealListItemDto(
     public static DealListItemDto from(Deal d,
                                        String firmName, String branchName,
                                        String clientName, String propertyAddress,
-                                       String createdByEmail) {
+                                       String createdByEmail, String createdByName) {
         return new DealListItemDto(d.getId(), d.getReference(), d.getStatus(), d.getTransactionType(),
                 d.getTransactionValue(), d.getFirmBranchId(), firmName, branchName,
-                clientName, propertyAddress, d.getCreatedByUserId(), createdByEmail,
+                clientName, propertyAddress, d.getCreatedByUserId(), createdByEmail, createdByName,
                 d.getCreatedAt(), d.getUpdatedAt(),
                 d.getRiskRating(), d.getValuationMin(), d.getValuationMax());
     }

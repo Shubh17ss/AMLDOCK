@@ -161,7 +161,8 @@ public class DealService {
                     b == null ? null : b.getName(),
                     c == null ? null : c.getDisplayName(),
                     p == null ? null : formatAddress(p),
-                    u == null ? null : u.getEmail());
+                    u == null ? null : u.getEmail(),
+                    u == null ? null : u.getFullName());
         }).toList();
     }
 

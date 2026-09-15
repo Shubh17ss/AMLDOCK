@@ -27,8 +27,8 @@ import {
 } from '../navigation/moduleRegistry.jsx';
 import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
 import { SectionLandingPage } from '../pages/SectionLandingPage.jsx';
-import { InternationalFundTransactionRegisterPage } from '../pages/monitoring/InternationalFundTransactionRegisterPage.jsx';
-import { SuspiciousActivityRegisterPage } from '../pages/monitoring/SuspiciousActivityRegisterPage.jsx';
+import { InternationalFundTransactionRegisterPage } from '../pages/reporting/InternationalFundTransactionRegisterPage.jsx';
+import { SuspiciousActivityRegisterPage } from '../pages/reporting/SuspiciousActivityRegisterPage.jsx';
 import { StaffTrainingPage } from '../pages/training/StaffTrainingPage.jsx';
 import { MyTrainingPage } from '../pages/training/MyTrainingPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
@@ -45,7 +45,7 @@ import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 
 /**
  * Who may open a section landing or module route. Everything is section-read except the two
- * Monitoring modules FINANCE works in, plus the landing they sit under.
+ * Reporting modules FINANCE works in, plus the landing they sit under.
  */
 const rolesFor = (path) =>
   (FINANCE_PATHS.includes(path) ? FINANCE_SECTION_ROLES : SECTION_READ_ROLES);
@@ -91,8 +91,9 @@ export function AppRoutes() {
           );
         })}
 
-        {/* Versioned compliance document registers (upload + history). Outside the CDD
-            section, so restricted to the full-workspace roles. */}
+        {/* Versioned compliance document registers (upload + history) — two under Documents,
+            the annual report under Reporting. Outside the CDD section, so restricted to the
+            full-workspace roles. */}
         {DOCUMENT_MODULES.map((m) => (
           <Route
             key={m.path}
@@ -105,15 +106,15 @@ export function AppRoutes() {
           />
         ))}
 
-        {/* Monitoring › International Fund Transaction Register. Outside the CDD section, so
-            restricted to the full-workspace roles like the Documents registers. */}
+        {/* Reporting › International Fund Transaction Register. Outside the CDD section, so
+            restricted to the full-workspace roles like the document registers. */}
         <Route path={INTL_FUND_TRANSACTIONS_PATH} element={
           <ProtectedRoute roles={FINANCE_SECTION_ROLES}>
             <InternationalFundTransactionRegisterPage />
           </ProtectedRoute>
         } />
 
-        {/* Monitoring › Suspicious Activity Register — same gating as the register above. */}
+        {/* Reporting › Suspicious Activity Register — same gating as the register above. */}
         <Route path={SUSPICIOUS_ACTIVITIES_PATH} element={
           <ProtectedRoute roles={SECTION_READ_ROLES}>
             <SuspiciousActivityRegisterPage />
@@ -224,6 +225,10 @@ export function AppRoutes() {
         } />
         {/* The trail used to live under /admin; keep old links and bookmarks working. */}
         <Route path="/admin/audit" element={<Navigate to={AUDIT_LOG_PATH} replace />} />
+        {/* The annual report moved out of Documents when Monitoring became Reporting — it is a
+            periodic filing, not a living policy document. Same reason as the redirect above. */}
+        <Route path="/documents/annual-report"
+               element={<Navigate to="/reporting/annual-report" replace />} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

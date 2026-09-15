@@ -10,13 +10,6 @@ import { CountrySelect } from '../../components/CountrySelect.jsx';
 import { PhoneField } from '../../components/PhoneField.jsx';
 import { tokens, motion } from '../../theme/theme.js';
 
-/** The registration number's name changes with the jurisdiction; the field does not. */
-function businessNumberLabel(country) {
-  if (country === 'NZ') return 'New Zealand business number (NZBN)';
-  if (country === 'AU') return 'Australian business number (ABN)';
-  return 'Registration number';
-}
-
 const YES_NO = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
 
 /**
@@ -129,8 +122,9 @@ function YesNoField({ label, value, onChange, options = YES_NO, helper }) {
 export function NodeFormFields({
   value, onChange, includeTypeSelector = true,
   /**
-   * Show "Share of the property". True only for a node at the top of the chain — everyone else
-   * owns a share of their parent, and that number lives on the link rather than here.
+   * Show "Beneficial Ownership" — the share of the property itself. True only for a node at the
+   * top of the chain — everyone else owns a share of their parent, and that number lives on the
+   * link rather than here.
    */
   showPropertyShare = false,
 }) {
@@ -154,22 +148,23 @@ export function NodeFormFields({
                  value={value.displayName ?? ''}
                  onChange={(e) => set({ displayName: e.target.value })} required />
 
-      {/* Only for an owner with nothing above it. Everyone lower down owns a share of their
-          parent, and that figure belongs to the link — asking both of one node would be two
-          answers to different questions sitting in the same column.
+      {/* Only for an owner with nothing above it — its beneficial ownership is of the property
+          itself. Everyone lower down owns a share of their parent, and that figure belongs to the
+          link — asking both of one node would be two answers to different questions sitting in
+          the same column.
 
           Nothing checks that the top-level shares add up to 100. A structure under review is
           routinely part-answered, and refusing to record what the client actually said would be
           worse than a register that does not balance. */}
       {showPropertyShare && (
         <TextField
-          label="Share of the property"
+          label="Beneficial Ownership"
           type="number"
           inputProps={{ min: 0, max: 100, step: 0.01 }}
           value={value.propertyPercentage ?? ''}
           onChange={(e) => set({ propertyPercentage: e.target.value })}
           sx={{ width: 220 }}
-          helperText="How much of the property this owner holds. Leave empty if not stated."
+          helperText="Percentage of the property this owner beneficially holds."
         />
       )}
 
@@ -287,10 +282,11 @@ export function NodeFormFields({
           <TextField label="Incorporation number" value={value.companyNumber ?? ''}
                      onChange={(e) => set({ companyNumber: e.target.value })} />
 
-          {/* One field, three names. The number a company is registered under is called
-              something different in each jurisdiction, but it is the same fact and the same
-              column — only the label follows the country. */}
-          <TextField label={businessNumberLabel(value.jurisdictionCountry)}
+          {/* The label used to follow the country of incorporation — NZBN here, ABN there, a
+              generic "Registration number" everywhere else. It is one fact in one column either
+              way, and naming both numbers outright reads the same wherever the company sits.
+              Same label as the trustee company below, which never had a country to follow. */}
+          <TextField label="NZBN or ABN"
                      value={value.businessNumber ?? ''}
                      onChange={(e) => set({ businessNumber: e.target.value })} />
 
