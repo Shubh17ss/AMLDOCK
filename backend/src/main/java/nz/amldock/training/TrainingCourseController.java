@@ -70,7 +70,9 @@ public class TrainingCourseController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
+    // Mirrors Role.canDeleteRecords(), which the service re-checks. A SpEL annotation cannot call
+    // the enum cleanly, so the outer gate stays a literal list — as DocumentReviewController's does.
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         courses.delete(id);
         return ResponseEntity.noContent().build();

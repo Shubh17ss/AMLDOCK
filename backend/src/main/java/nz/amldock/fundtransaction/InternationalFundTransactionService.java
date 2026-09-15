@@ -178,14 +178,15 @@ public class InternationalFundTransactionService {
         return new DownloadUrlResponse(url, (int) downloadTtl.toSeconds());
     }
 
-    /** Deletes are restricted to ROOT and SENIOR_MANAGER (also gated by @PreAuthorize). */
+    /** Deletes are gated by Role.canDeleteRecords() — and by @PreAuthorize on the controller. */
     @Transactional
     public void delete(Long id) {
         InternationalFundTransaction t = transactions.findById(id)
                 .orElseThrow(() -> new NotFoundException("Transaction " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
-        if (actor.role() != Role.ROOT && actor.role() != Role.SENIOR_MANAGER) {
-            throw new ForbiddenException("Only ROOT or a senior manager may delete a register entry");
+        if (!actor.role().canDeleteRecords()) {
+            throw new ForbiddenException(
+                    "Only ROOT, a senior manager or a compliance officer may delete a register entry");
         }
         if (actor.role() != Role.ROOT) assertSameScope(actor, t);
 

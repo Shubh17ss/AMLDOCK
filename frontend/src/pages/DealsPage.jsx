@@ -95,13 +95,17 @@ export function DealsPage() {
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{
-          minHeight: 40,
           borderBottom: `1px solid ${tokens.hairline}`,
-          '& .MuiTab-root': {
-            minHeight: 40, textTransform: 'none', fontWeight: 600,
-            fontSize: '0.82rem', color: tokens.muted,
-          },
-          '& .Mui-selected': { color: tokens.blue },
+          // Only what differs from the theme's segmented control. This block used to restate the
+          // theme, including a blue `.Mui-selected` colour left over from the old underline tabs.
+          // That tied with the theme's white one on specificity — two classes each — so the winner
+          // came down to whichever rule emotion had injected last, and the active tab's label
+          // rendered blue on the blue pill, invisibly, depending on how you had reached the page.
+          //
+          // No minHeight either, here or on the tab: the theme's track is 5px of padding around a
+          // 38px pill, and overriding half of that sum leaves the pill off-centre — the same trap
+          // DealDrawer and NodeDrawer both record having hit.
+          '& .MuiTab-root': { fontSize: '0.82rem' },
         }}
       >
         {STATUSES.map((s) => <Tab key={s} value={s} label={dealStatusLabel(s)} />)}

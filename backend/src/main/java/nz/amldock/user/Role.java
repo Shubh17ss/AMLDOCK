@@ -82,6 +82,27 @@ public enum Role {
         return this == AML_COMPLIANCE_OFFICER || this == SENIOR_MANAGER;
     }
 
+    /**
+     * May delete a record from a register — a compliance document version, a register entry, a
+     * training course, provider or session.
+     *
+     * <p>The firm's compliance staff plus the platform owner. The compliance officer was excluded
+     * until now, which sat oddly beside the review rights they already hold over the same
+     * registers: they could declare a document reviewed but not remove a version filed in error.
+     *
+     * <p>Listed rather than derived from {@link #isFirmLevel()}, which it happens to coincide
+     * with: who may delete and who is firm-level staff are different questions, and one should be
+     * able to move without dragging the other.
+     *
+     * <p>Deleting a <em>deal</em> is a different question again, with its own rule — the deal's
+     * author may delete their own — and does not read this. See DealService.
+     *
+     * <p>Mirrored by DELETE_ROLES in frontend/src/auth/roles.js.
+     */
+    public boolean canDeleteRecords() {
+        return this == ROOT || this == SENIOR_MANAGER || this == AML_COMPLIANCE_OFFICER;
+    }
+
     /** Branch-level staff: scoped to a single branch within a firm. */
     public boolean isBranchLevel() {
         return this == SALES_MANAGER || this == AGENT || this == AGENT_PA || this == ADMIN;
