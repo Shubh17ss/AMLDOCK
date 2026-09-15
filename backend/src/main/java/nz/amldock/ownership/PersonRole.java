@@ -7,16 +7,21 @@ package nz.amldock.ownership;
  * one transaction: the same human can be a trustee on one deal and a guarantor on the next, and
  * both are true.
  *
- * <p>One per individual. A person who genuinely holds two capacities is recorded under the one
- * that matters most to the assessment, with the rest in the node's notes — a deliberate
- * simplification, not an oversight.
+ * <p>A set, not one value. Until V43 a node held a single role and a person with two capacities
+ * was recorded under whichever mattered most, the rest going into the node's notes. A family trust
+ * makes that untenable — the same human is routinely settlor, trustee and appointer — and notes
+ * are not a field any register can read, so the capacities nobody could record were invisible
+ * rather than merely secondary.
  *
  * <p>Distinct from {@link EdgeRole}, which describes a <em>link</em> between two nodes and
  * carries the ownership percentage. The two vocabularies overlap on a few words; the UI labels
  * this one "Type" and that one "Link role".
  *
- * <p><strong>Keep in sync with</strong> {@code chk_ownership_node_person_role} (V34) and
- * {@code PERSON_ROLES} in {@code frontend/src/api/ownership.js}.
+ * <p><strong>Keep in sync with</strong> {@code PERSON_ROLES} in
+ * {@code frontend/src/api/ownership.js}. There is no longer a CHECK constraint to match: V43
+ * replaced {@code person_role} with the delimited {@code person_roles}, and a list cannot be
+ * checked in SQL the way a scalar vocabulary could. {@link PersonRoleSetConverter} is what
+ * enforces it now, and it is the only thing that writes the column.
  */
 public enum PersonRole {
 

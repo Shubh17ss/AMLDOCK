@@ -51,7 +51,7 @@ public class TrainingAssignmentEmail {
                 Open My Training to see it and mark it complete once you've attended:
                 %s
 
-                — AML_DOCK
+                — AMLDOCK
                 """.formatted(
                 fullName,
                 session.getName(),
@@ -86,7 +86,7 @@ public class TrainingAssignmentEmail {
                   <p style="color:#6b7280; font-size: 13px;">
                     Mark the session complete in My Training once you've attended.
                   </p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AML_DOCK</p>
+                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
                 </body></html>
                 """.formatted(
                 escape(fullName),
@@ -128,7 +128,7 @@ public class TrainingAssignmentEmail {
                 Open My Training to read the material and take the assessment:
                 %s
 
-                — AML_DOCK
+                — AMLDOCK
                 """.formatted(
                 fullName,
                 course.getName(),
@@ -157,7 +157,7 @@ public class TrainingAssignmentEmail {
                   <p style="color:#6b7280; font-size: 13px;">
                     The course material is available to download in My Training.
                   </p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AML_DOCK</p>
+                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
                 </body></html>
                 """.formatted(
                 escape(fullName),

@@ -8,8 +8,15 @@ import { apiClient } from './client.js';
  * advisory — the server narrows them further by the caller's role, so an agent gets the people on
  * their own deals whatever is passed.
  */
-export async function listIndividuals({ firmId, branchId } = {}) {
-  const { data } = await apiClient.get('/individuals', { params: { firmId, branchId } });
+/**
+ * `allTypes` widens the list from natural persons to every kind of owner — trusts, companies, the
+ * lot. Opt-in rather than the default because the owner picker shares this call to offer a person
+ * to copy onto a new individual, and a trust in that list means nothing.
+ */
+export async function listIndividuals({ firmId, branchId, allTypes } = {}) {
+  const { data } = await apiClient.get('/individuals', {
+    params: { firmId, branchId, ...(allTypes ? { allTypes: true } : {}) },
+  });
   return data;
 }
 

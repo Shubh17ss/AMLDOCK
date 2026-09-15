@@ -11,20 +11,30 @@ import { useToast } from '../../components/ToastProvider.jsx';
 import { countryName } from '../../data/countries.js';
 import { buildCsv } from '../../utils/csv.js';
 import { IndividualsTable, formatDob } from './IndividualsTable.jsx';
+import { nodeTypeLabel } from '../../api/ownership.js';
 
 const slug = (s) => String(s ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-export const csvHeaders = ['Name', 'Date of birth', 'Country of residence', 'Property', 'Deal'];
+export const csvHeaders = ['Name', 'Type', 'Date of birth', 'Country of residence', 'Property', 'Deal'];
 export const csvRowFor = (r) => [
   r.displayName,
+  nodeTypeLabel(r.nodeType),
   r.dateOfBirth ?? '',
   r.countryOfResidence ? (countryName(r.countryOfResidence) ?? r.countryOfResidence) : '',
   r.propertyAddress ?? '',
   r.dealReference,
 ];
 
-/** Downloads `rows` as a CSV named for the scope and today. Shared with the overseas register. */
-export function exportIndividualsCsv({ rows, prefix, firm, branch, showToast }) {
+/**
+ * Downloads `rows` as a CSV named for the scope and today. Shared with the overseas register.
+ *
+ * <p>`noun` because the two registers count different things: this one lists every kind of owner,
+ * that one only natural persons, and "Exported 12 people" would be wrong on exactly one of them.
+ * Given as a [singular, plural] pair rather than suffixed, so an irregular plural stays possible.
+ */
+export function exportIndividualsCsv({
+  rows, prefix, firm, branch, showToast, noun = ['owner', 'owners'],
+}) {
   const csv = buildCsv(csvHeaders, rows.map(csvRowFor));
   const name = [prefix, slug(firm?.name), slug(branch?.name), new Date().toISOString().slice(0, 10)]
     .filter(Boolean).join('-');
@@ -36,13 +46,13 @@ export function exportIndividualsCsv({ rows, prefix, firm, branch, showToast }) 
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  showToast({ severity: 'success', message: `Exported ${rows.length} ${rows.length === 1 ? 'person' : 'people'}` });
+  showToast({ severity: 'success', message: `Exported ${rows.length} ${rows.length === 1 ? noun[0] : noun[1]}` });
 }
 
 /**
- * Every natural person behind the scoped branch's deals.
+ * Every owner behind the scoped branch's deals — people and entities alike.
  *
- * <p>The server decides who "every" means: an agent sees the people on their own deals, a branch
+ * <p>The server decides who "every" means: an agent sees the owners on their own deals, a branch
  * admin their branch's, a compliance officer their firm's. This page passes the scope and renders
  * what comes back rather than filtering again.
  */
@@ -52,8 +62,10 @@ export function BeneficialOwnersPage() {
   const [query, setQuery] = useState('');
 
   const q = useQuery({
-    queryKey: ['individuals', firm?.id ?? null, branch?.id ?? null],
-    queryFn: () => listIndividuals({ firmId: firm?.id, branchId: branch?.id }),
+    // A distinct key from the Overseas register's: that one asks for natural persons only, and
+    // two different result sets must not share one cache entry.
+    queryKey: ['individuals', 'all-types', firm?.id ?? null, branch?.id ?? null],
+    queryFn: () => listIndividuals({ firmId: firm?.id, branchId: branch?.id, allTypes: true }),
   });
 
   const all = q.data ?? [];
@@ -66,7 +78,7 @@ export function BeneficialOwnersPage() {
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${rows.length} ${rows.length === 1 ? 'person' : 'people'} on record`,
+          `${rows.length} ${rows.length === 1 ? 'owner' : 'owners'} on record`,
           firm?.name,
           branch?.name,
         ].filter(Boolean).join(' · ')}

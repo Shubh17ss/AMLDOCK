@@ -27,11 +27,20 @@ public class IndividualController {
         this.individuals = individuals;
     }
 
-    /** Both filters are advisory — the caller's own role narrows them further, or ignores them. */
+    /**
+     * Both filters are advisory — the caller's own role narrows them further, or ignores them.
+     *
+     * <p>{@code allTypes} widens the walk from natural persons to every kind of owner, and is
+     * <strong>opt-in</strong> rather than the default on purpose. The owner picker shares this
+     * endpoint to offer an existing person to copy onto a new INDIVIDUAL node; widening it for
+     * everyone would put trusts and companies in that list, where copying one means nothing.
+     * The CDD registers ask for the wider set; the picker does not.
+     */
     @GetMapping
     public List<IndividualRowDto> list(@RequestParam(required = false) Long firmId,
-                                       @RequestParam(required = false) Long branchId) {
-        return individuals.list(firmId, branchId);
+                                       @RequestParam(required = false) Long branchId,
+                                       @RequestParam(defaultValue = "false") boolean allTypes) {
+        return individuals.list(firmId, branchId, allTypes);
     }
 
     /**

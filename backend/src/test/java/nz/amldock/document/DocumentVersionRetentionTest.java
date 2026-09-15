@@ -34,6 +34,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import nz.amldock.deal.access.DealUserRepository;
 
 /**
  * Deleting a document must not reach into a version that was signed off with it.
@@ -73,7 +75,7 @@ class DocumentVersionRetentionTest {
     @BeforeEach
     void setUp() {
         service = new DocumentService(documents, deals, branches, ownershipNodes, ownershipStructures,
-                users, storage, new DealLifecycleService(), beneficialOwners, audit,
+                users, storage, new DealLifecycleService(mock(DealUserRepository.class)), beneficialOwners, audit,
                 versionDocuments, 26214400L, 5L, 5L);
 
         // REVIEW, because that is the status a reopened deal is in — the only one in which a

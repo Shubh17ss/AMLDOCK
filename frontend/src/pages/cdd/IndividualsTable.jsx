@@ -3,6 +3,7 @@ import {
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { countryName, flagClass } from '../../data/countries.js';
+import { nodeTypeLabel } from '../../api/ownership.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
 const dateFmt = new Intl.DateTimeFormat('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -26,7 +27,7 @@ export function CountryCell({ code }) {
 }
 
 /**
- * The rows both CDD people-registers show.
+ * The rows both CDD registers show.
  *
  * <p>The same person on two deals is two rows on purpose. These registers answer "who has this
  * branch done diligence on, and against which file" — the file is half the answer, and collapsing
@@ -39,6 +40,7 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
         <TableHead>
           <TableRow>
             <TableCell>Name</TableCell>
+            <TableCell>Type</TableCell>
             <TableCell>Date of birth</TableCell>
             <TableCell>Country of residence</TableCell>
             <TableCell>Property</TableCell>
@@ -49,6 +51,10 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
           {rows.map((r) => (
             <TableRow key={r.nodeId} hover>
               <TableCell>{r.displayName}</TableCell>
+              {/* A trust and the person behind it are two rows that otherwise look alike and read
+                  very differently. The columns after this one are person-shaped and show a dash
+                  for an entity — a company has an incorporation date, not a birthday. */}
+              <TableCell sx={{ color: tokens.muted }}>{nodeTypeLabel(r.nodeType)}</TableCell>
               <TableCell sx={{ fontFamily: fonts.mono, fontSize: '0.8rem' }}>
                 {formatDob(r.dateOfBirth)}
               </TableCell>
@@ -72,7 +78,7 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
           ))}
           {!loading && rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} align="center" sx={{ py: 5, color: tokens.muted }}>
+              <TableCell colSpan={6} align="center" sx={{ py: 5, color: tokens.muted }}>
                 {emptyMessage}
               </TableCell>
             </TableRow>

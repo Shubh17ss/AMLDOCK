@@ -20,7 +20,9 @@ import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, opensDealForm } from 
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
 
-const DEFAULT_STATUS = 'ALL';
+// New, not All: the list opens on the deals still being worked. ALL remains a client-side
+// sentinel stripped before the request — see the params block below.
+const DEFAULT_STATUS = 'NEW';
 
 /**
  * Deals — the full deal list, filtered by status tabs and searched by property.

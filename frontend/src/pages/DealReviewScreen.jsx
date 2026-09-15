@@ -381,6 +381,10 @@ export function DealReviewScreen() {
             onDetachFromParent={mayEdit ? (edgeId) => tree.deleteEdge.mutate(edgeId) : undefined}
             onDeleteNode={mayEdit ? setDeleteNodeId : undefined}
             readOnly={!mayEdit}
+            // The live mutations, for dragging a row onto a new owner. Always the live tree,
+            // even when a version is on screen: readOnly is what turns dragging off there, and
+            // a snapshot has nothing to move.
+            useTree={liveTree}
             // Two right-hand drawers open at once would stack two backdrops on each other, so
             // opening either closes the other.
             onOpenDeal={() => { setSelectedNodeId(null); setDealDrawerOpen(true); }}
@@ -417,6 +421,9 @@ export function DealReviewScreen() {
         // The thread as it stood at the sign-off, which also turns off the composer and the live
         // audit tab. Null on the live deal, where the drawer fetches its own.
         frozenNotes={snapshot?.notes ?? null}
+        // The same snapshot scope NodeDrawer gets, for the same reason: the Documents tab must
+        // show the files this version was signed off with, not the deal's current ones.
+        version={documentScope}
       />
 
       {/* ── The selected owner ──────────────────────────────────────────── */}

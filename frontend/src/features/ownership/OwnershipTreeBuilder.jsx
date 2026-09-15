@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Chip, IconButton, Menu, MenuItem, Stack, Tooltip, Typography,
 } from '@mui/material';
+import { DndContext, DragOverlay, useDraggable, useDroppable } from '@dnd-kit/core';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -11,12 +12,17 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddLinkIcon from '@mui/icons-material/AddLink';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
-import { isLeafOnlyType, nodeTypeLabel, personRoleLabel, trustTypeLabel } from '../../api/ownership.js';
+import { isLeafOnlyType, nodeTypeLabel, personRolesLabel, trustTypeLabel } from '../../api/ownership.js';
 import { countryName } from '../../data/countries.js';
 import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
 import { propertyTypeLabel } from '../../data/propertyTypes.js';
 import { visualFor, tintOf } from './nodeTypeVisual.js';
+import {
+  PROPERTY_DROP_ID, dragIdFor, dropIdForNode, gapDropId, sortSiblings,
+} from './dragModel.js';
+import { useOwnershipDrag } from './useOwnershipDrag.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
 
 const VERIFICATION_COLOR = {
@@ -30,6 +36,16 @@ const VERIFICATION_COLOR = {
 const STAGGER_MS = 30;
 const STAGGER_CAP = 10;   // ~300ms for the whole tree, however deep it goes
 
+/** Nothing is dragging, so nothing needs dimming. One frozen object rather than a new one a render. */
+const NO_DRAG = {
+  enabled: false,
+  settled: false,
+  activeDrag: null,
+  overId: null,
+  rejections: new Map(),
+  forceExpandedIds: new Set(),
+};
+
 /**
  * The second line of a node card: what this owner is to this deal.
  *
@@ -39,7 +55,9 @@ const STAGGER_CAP = 10;   // ~300ms for the whole tree, however deep it goes
  */
 function subtitleFor(node) {
   const parts = [nodeTypeLabel(node.nodeType)];
-  if (node.personRole) parts.push(personRoleLabel(node.personRole));
+  // Every capacity, not the first: a settlor who is also the trustee is a different read.
+  const roles = personRolesLabel(node.personRoles);
+  if (roles) parts.push(roles);
   if (node.jurisdictionCountry) parts.push(countryName(node.jurisdictionCountry));
   if (node.trustType) parts.push(trustTypeLabel(node.trustType));
   return parts.join(' · ');
@@ -81,11 +99,21 @@ export function OwnershipTreeBuilder({
   // Hides every control that changes the chain, leaving the chain itself readable. Selecting a
   // node still works — looking at an owner is not editing one.
   readOnly = false,
+  /**
+   * The live tree's mutations, for dragging a row to a new owner. Absent on a historical version,
+   * which has nothing to mutate, and unused when `readOnly` — in either case the tree draws
+   * exactly as it always did, with no drag context and no listeners on any row.
+   */
+  useTree = null,
   /** Opens the deal itself, from the property at the head of the chain. */
   onOpenDeal,
   dealSelected = false,
 }) {
   const { nodesById, childrenByParent, parentIdByChild } = useMemo(() => indexTree(tree), [tree]);
+
+  const dragEnabled = !readOnly && Boolean(useTree?.moveNode);
+  const liveDrag = useOwnershipDrag({ tree, useTree, enabled: dragEnabled });
+  const drag = dragEnabled ? liveDrag : NO_DRAG;
 
   // Every node with no owner above it, on equal terms. There is no privileged head of the chain:
   // a node sitting at the top level is a finished answer — "this person owns the property" — and
@@ -94,7 +122,7 @@ export function OwnershipTreeBuilder({
   // "make top of the chain" that moved the pointer without moving the edge, so the node drew twice.
   const topLevel = useMemo(() => (tree?.nodes ?? [])
     .filter((n) => !parentIdByChild.has(n.id))
-    .sort((a, b) => a.id - b.id), [tree, parentIdByChild]);
+    .sort(sortSiblings), [tree, parentIdByChild]);
 
   if (!tree) return null;
 
@@ -113,8 +141,55 @@ export function OwnershipTreeBuilder({
     onDetachFromParent,
     onDeleteNode,
     readOnly,
+    dragEnabled,
+    drag,
     order,
   };
+
+  const body = (
+    <Box
+      sx={{
+        border: `1px solid ${tokens.hairline}`,
+        borderRadius: 3,
+        backgroundColor: tokens.tile,
+        overflow: 'hidden',
+      }}
+    >
+      {deal && (
+        <PropertyAnchor
+          deal={deal}
+          onOpen={onOpenDeal}
+          selected={dealSelected}
+          drag={drag}
+          dragEnabled={dragEnabled}
+        />
+      )}
+
+      <Box sx={{ px: { xs: 1, sm: 2 }, py: 2 }}>
+        {tree.nodes.length === 0 ? (
+          <Alert severity="info" sx={{ m: 0 }}>
+            Nothing here yet. Add the entity or person that owns this property — everyone else
+            hangs off them.
+          </Alert>
+        ) : (
+          <>
+            {topLevel.map((n, i) => (
+              <Fragment key={n.id}>
+                <SiblingGap parentKey="top" index={i} drag={drag} dragEnabled={dragEnabled} />
+                <NodeBranch node={n} parentEdge={null} depth={0} {...branchProps} />
+              </Fragment>
+            ))}
+            <SiblingGap
+              parentKey="top"
+              index={topLevel.length}
+              drag={drag}
+              dragEnabled={dragEnabled}
+            />
+          </>
+        )}
+      </Box>
+    </Box>
+  );
 
   return (
     <Stack spacing={2}>
@@ -124,7 +199,9 @@ export function OwnershipTreeBuilder({
             Ownership structure
           </Typography>
           <Typography variant="caption" sx={{ color: tokens.muted }}>
-            Who stands behind this property, down to the people
+            {dragEnabled
+              ? 'Who stands behind this property, down to the people — drag a row onto an owner to move it'
+              : 'Who stands behind this property, down to the people'}
           </Typography>
         </Box>
         {!readOnly && (
@@ -134,31 +211,20 @@ export function OwnershipTreeBuilder({
         )}
       </Stack>
 
-      <Box
-        sx={{
-          border: `1px solid ${tokens.hairline}`,
-          borderRadius: 3,
-          backgroundColor: tokens.tile,
-          overflow: 'hidden',
-        }}
-      >
-        {deal && <PropertyAnchor deal={deal} onOpen={onOpenDeal} selected={dealSelected} />}
-
-        <Box sx={{ px: { xs: 1, sm: 2 }, py: 2 }}>
-          {tree.nodes.length === 0 ? (
-            <Alert severity="info" sx={{ m: 0 }}>
-              Nothing here yet. Add the entity or person that owns this property — everyone else
-              hangs off them.
-            </Alert>
-          ) : (
-            <>
-              {topLevel.map((n) => (
-                <NodeBranch key={n.id} node={n} parentEdge={null} depth={0} {...branchProps} />
-              ))}
-            </>
-          )}
-        </Box>
-      </Box>
+      {/* Read-only renders the same markup with no context around it — the version snapshot has no
+          mutations to call, and an auditor has nothing to move. */}
+      {dragEnabled ? (
+        <DndContext {...drag.contextProps}>
+          {body}
+          {/* The carried card lives in a portal at the document root, so the row it came from is
+              never transformed and no ancestor's overflow or transform can clip it. That is also
+              what keeps Safari honest: a drag image anchored inside a transformed ancestor is the
+              oldest bug in this area. */}
+          <DragOverlay dropAnimation={{ duration: 180, easing: motion.ease }}>
+            {drag.activeDrag?.node ? <NodeGhost node={drag.activeDrag.node} /> : null}
+          </DragOverlay>
+        </DndContext>
+      ) : body}
     </Stack>
   );
 }
@@ -175,8 +241,12 @@ export function OwnershipTreeBuilder({
  * it, and the property is where a reader already looks for "what is this deal" — so it opens the
  * deal drawer rather than an owner one. Opening is not editing, so `readOnly` does not gate it,
  * exactly as it does not gate selecting a node.
+ *
+ * <p>During a drag it is also the one place to drop a row that should stop belonging to anyone:
+ * releasing here cuts the link above it and returns it to the top of the chain. That is the same
+ * edit as "Detach from parent", aimed rather than chosen.
  */
-function PropertyAnchor({ deal, onOpen, selected = false }) {
+function PropertyAnchor({ deal, onOpen, selected = false, drag = NO_DRAG, dragEnabled = false }) {
   const p = deal.property ?? {};
   const address = formatPropertyAddress(p) || 'Property address not recorded';
   const detail = [
@@ -184,8 +254,15 @@ function PropertyAnchor({ deal, onOpen, selected = false }) {
     'the property this deal concerns',
   ].filter(Boolean).join(' · ');
 
+  const { setNodeRef } = useDroppable({ id: PROPERTY_DROP_ID, disabled: !dragEnabled });
+  // Only a row that has an owner has anything to detach, so the band offers itself to those and
+  // stays quiet for a row already at the top of the chain.
+  const armed = Boolean(drag.activeDrag?.edgeId);
+  const isOver = armed && drag.overId === PROPERTY_DROP_ID;
+
   return (
     <Stack
+      ref={setNodeRef}
       direction="row"
       spacing={1.5}
       alignItems="center"
@@ -200,12 +277,15 @@ function PropertyAnchor({ deal, onOpen, selected = false }) {
       sx={motion.respectful({
         px: { xs: 1.5, sm: 2.5 },
         py: 1.75,
-        backgroundColor: selected ? tokens.blueWash : tokens.tileRaised,
+        backgroundColor: isOver ? tokens.blueWash : (selected ? tokens.blueWash : tokens.tileRaised),
         borderBottom: `1px solid ${tokens.hairline}`,
         cursor: onOpen ? 'pointer' : 'default',
         // An inset bar rather than a border: this band is full-bleed with no border of its own,
         // so anything outset would either be clipped by the parent's overflow or move the row.
-        boxShadow: selected ? `inset 3px 0 0 ${tokens.blue}` : 'none',
+        // Under a drag it thickens into a full ring — the band is a target now, not a header.
+        boxShadow: isOver
+          ? `inset 0 0 0 2px ${tokens.blue}`
+          : (selected ? `inset 3px 0 0 ${tokens.blue}` : 'none'),
         transition: `background-color ${motion.swift} ease, box-shadow ${motion.swift} ease`,
         '&:hover': onOpen
           ? { backgroundColor: selected ? tokens.blueWash : tokens.hover }
@@ -231,19 +311,134 @@ function PropertyAnchor({ deal, onOpen, selected = false }) {
         >
           {address}
         </Typography>
-        <Typography variant="caption" sx={{ color: tokens.muted }}>{detail}</Typography>
+        <Typography variant="caption" sx={{ color: tokens.muted }}>
+          {/* The band says what it is at rest and what it will do mid-drag. A drop target that
+              looks like a target but never says what dropping means is a guess. */}
+          {armed ? 'Drop here to remove this owner’s owner' : detail}
+        </Typography>
       </Box>
     </Stack>
+  );
+}
+
+/**
+ * The card that follows the pointer.
+ *
+ * <p>A quieter copy of the row rather than the row itself: no chips, no actions, nothing that
+ * invites a click while it is in the air.
+ */
+function NodeGhost({ node }) {
+  const visual = visualFor(node.nodeType);
+  return (
+    <Stack
+      direction="row"
+      spacing={1.25}
+      alignItems="center"
+      sx={{
+        px: 1.5,
+        py: 1,
+        borderRadius: 2.5,
+        maxWidth: 380,
+        cursor: 'grabbing',
+        backgroundColor: tokens.tile,
+        border: `1px solid ${tokens.blue}`,
+        boxShadow: '0 12px 28px rgba(15, 23, 42, 0.18)',
+      }}
+    >
+      <Box
+        sx={{
+          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+          display: 'grid', placeItems: 'center',
+          backgroundColor: tintOf(visual.hue),
+          color: visual.hue,
+        }}
+      >
+        <visual.Icon fontSize="small" />
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          sx={{
+            fontFamily: fonts.display, fontSize: '0.9rem', color: tokens.ink,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+        >
+          {node.displayName}
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{
+            color: tokens.muted, display: 'block',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+        >
+          {subtitleFor(node)}
+        </Typography>
+      </Box>
+    </Stack>
+  );
+}
+
+/**
+ * The slot between two siblings: drop here to put a row in this position rather than merely
+ * under this owner.
+ *
+ * <p>Takes up no space. The strip that catches the pointer is absolutely positioned across the
+ * boundary and out of flow, so the tree measures identically whether a drag is happening or not.
+ * A gap that appeared mid-drag would push every row below it down, and dnd-kit would be aiming at
+ * rectangles that had already moved — which is exactly how a drag starts feeling unreliable.
+ *
+ * <p>It overlaps a few pixels of the rows on either side. Near the boundary both it and the row
+ * are under the pointer, and `pointerWithin` prefers whichever centre is closer — the strip’s
+ * centre is the boundary itself, so the edges of a row mean "between" and its middle means
+ * "under". That is the whole distinction, and it needs no modifier key.
+ */
+function SiblingGap({ parentKey, index, drag, dragEnabled }) {
+  const id = gapDropId(parentKey, index);
+  const { setNodeRef } = useDroppable({ id, disabled: !dragEnabled });
+  const dragging = Boolean(drag.activeDrag);
+  const isOver = dragging && drag.overId === id;
+
+  return (
+    <Box sx={{ position: 'relative', height: 0 }}>
+      <Box
+        ref={setNodeRef}
+        // Announced through the drag’s own live region rather than as an element of its own:
+        // a reader tabbing the tree has no use for a run of empty slots between every row.
+        aria-hidden
+        sx={motion.respectful({
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: -7,
+          height: 14,
+          zIndex: 1,
+          // Inert until something is actually in the air, so the strips never intercept a click
+          // aimed at the row above or below them.
+          pointerEvents: dragging ? 'auto' : 'none',
+          display: 'flex',
+          alignItems: 'center',
+          '&::after': {
+            content: '""',
+            flexGrow: 1,
+            height: 2,
+            borderRadius: 1,
+            backgroundColor: isOver ? tokens.blue : 'transparent',
+            transition: `background-color ${motion.swift} ease`,
+          },
+        })}
+      />
+    </Box>
   );
 }
 
 function NodeBranch({
   node, parentEdge, depth,
   nodesById, childrenByParent, selectedNodeId, onSelectNode, onAddChild,
-  onAttachDetached, onChangeOwner, onDetachFromParent, onDeleteNode, readOnly, order,
+  onAttachDetached, onChangeOwner, onDetachFromParent, onDeleteNode, readOnly,
+  dragEnabled, drag, order,
 }) {
   const children = childrenByParent.get(node.id) ?? [];
-  const [expanded, setExpanded] = useState(true);
+  const [locallyExpanded, setLocallyExpanded] = useState(true);
   const [menuAnchor, setMenuAnchor] = useState(null);
 
   const isSelected = selectedNodeId === node.id;
@@ -252,9 +447,56 @@ function NodeBranch({
   const riskReason = riskReasonFor(node);
   const visual = visualFor(node.nodeType);
 
+  // The edge's figure where there is an edge, the node's own where there is not.
+  const share = parentEdge ? parentEdge.percentage : node.propertyPercentage;
+  const ownerName = parentEdge ? (nodesById.get(parentEdge.parentNodeId)?.displayName ?? 'its owner') : null;
+
+  // ── The drag ──────────────────────────────────────────────────────────────
+  // Identity is the edge, because the structure is a graph: a node owned by two parents is drawn
+  // twice, and dragging one instance must move that link alone.
+  const dropId = dropIdForNode(node.id);
+  const {
+    attributes, listeners, setNodeRef: setDragRef, isDragging,
+  } = useDraggable({
+    id: dragIdFor(node, parentEdge),
+    disabled: !dragEnabled,
+    data: { nodeId: node.id, edgeId: parentEdge?.id ?? null, node },
+  });
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: dropId,
+    disabled: !dragEnabled,
+    data: { node },
+  });
+  const setRowRef = useCallback((el) => { setDragRef(el); setDropRef(el); }, [setDragRef, setDropRef]);
+
+  const rejection = drag.rejections.get(dropId) ?? null;
+  const dragging = Boolean(drag.activeDrag);
+  const isDropTarget = dragging && drag.overId === dropId && !rejection;
+  const isRefusing = dragging && drag.overId === dropId && Boolean(rejection);
+  // Dimmed for the whole drag, not only on approach: what cannot take this row should be readable
+  // as such while you are still deciding where to go.
+  const isForbidden = dragging && Boolean(rejection);
+
+  // A mousedown on the ⋮, the ＋ or the chevron is aimed at that control, not at the row. Without
+  // this the sensor arms on those too, and a slightly unsteady click on a menu button drags the
+  // whole branch instead of opening it.
+  const fromControl = (e) => Boolean(e.target?.closest?.('button, a, [role="menuitem"]'));
+  const rowDragListeners = dragEnabled ? {
+    onMouseDown: (e) => { if (!fromControl(e)) listeners?.onMouseDown?.(e); },
+    onTouchStart: (e) => { if (!fromControl(e)) listeners?.onTouchStart?.(e); },
+  } : {};
+
+  // The branch opens itself when it is hovered long enough during a drag, so a collapsed owner is
+  // still reachable. Merged rather than assigned: whatever the reader had opened stays open.
+  const expanded = locallyExpanded || drag.forceExpandedIds.has(node.id);
+
   // Captured at first render and never recomputed: a tree that re-animated on every save would
-  // be exhausting to work in.
-  const [delay] = useState(() => Math.min(order.i++, STAGGER_CAP) * STAGGER_MS);
+  // be exhausting to work in. Once something has been dragged the entrance is retired outright —
+  // a moved row is a new edge, so a new key, so a remount, and replaying the fade on every drop
+  // reads as the page reloading underneath you.
+  const [entrance] = useState(() => (drag.settled
+    ? null
+    : `nodeIn ${motion.swift} ${motion.ease} ${Math.min(order.i++, STAGGER_CAP) * STAGGER_MS}ms both`));
 
   return (
     <Box>
@@ -281,12 +523,14 @@ function NodeBranch({
         }}
       >
         <Stack
+          ref={setRowRef}
           direction="row"
           spacing={1.25}
           alignItems="center"
           role="button"
           tabIndex={0}
           aria-pressed={isSelected}
+          {...rowDragListeners}
           onClick={() => onSelectNode(node.id)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectNode(node.id); }
@@ -297,25 +541,40 @@ function NodeBranch({
             my: 0.4,
             borderRadius: 2.5,
             cursor: 'pointer',
-            backgroundColor: isSelected ? tokens.blueWash : tokens.tile,
-            border: `1px solid ${isSelected ? tokens.blue : tokens.hairline}`,
-            transition: `background-color ${motion.swift} ease, border-color ${motion.swift} ease`,
-            animation: `nodeIn ${motion.swift} ${motion.ease} ${delay}ms both`,
-            '@keyframes nodeIn': {
-              from: { opacity: 0, transform: 'translateX(-6px)' },
-              to: { opacity: 1, transform: 'none' },
-            },
+            // Stops a press-and-hold on touch turning into a text selection or a zoom while the
+            // sensor is waiting to see whether this is a drag or a scroll.
+            touchAction: dragEnabled ? 'manipulation' : undefined,
+            backgroundColor: isDropTarget || isSelected ? tokens.blueWash : tokens.tile,
+            border: `1px solid ${isDropTarget || isSelected ? tokens.blue : tokens.hairline}`,
+            // The row being carried stays in place and steps back; the copy under the pointer is
+            // the one that moves. Nothing here is ever transformed.
+            opacity: isDragging ? 0.35 : (isForbidden ? 0.4 : 1),
+            // A ring rather than a border swap, so the row does not shift by a pixel as it
+            // becomes a target.
+            boxShadow: isDropTarget ? `inset 0 0 0 1px ${tokens.blue}` : 'none',
+            transition: `background-color ${motion.swift} ease, border-color ${motion.swift} ease,`
+              + ` opacity ${motion.swift} ease, box-shadow ${motion.swift} ease`,
+            ...(entrance ? {
+              animation: entrance,
+              '@keyframes nodeIn': {
+                from: { opacity: 0, transform: 'translateX(-6px)' },
+                to: { opacity: 1, transform: 'none' },
+              },
+            } : {}),
             '&:hover': { backgroundColor: isSelected ? tokens.blueWash : tokens.hover },
             '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
             // Row actions rest quietly and come forward on approach — but never disappear for
             // anyone arriving by keyboard.
             '&:hover .rowAction, &:focus-within .rowAction': { opacity: 1 },
+            // Nothing inside the row should be reachable while it is being dragged over, or the
+            // pointer lands on a chip instead of the row it is aimed at.
+            ...(dragging ? { '& .rowAction': { pointerEvents: 'none' } } : {}),
           })}
         >
           <IconButton
             size="small"
             aria-label={expanded ? 'Collapse' : 'Expand'}
-            onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setLocallyExpanded((v) => !v); }}
             disabled={children.length === 0}
             sx={{ visibility: children.length > 0 ? 'visible' : 'hidden', p: 0.25 }}
           >
@@ -362,16 +621,25 @@ function NodeBranch({
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}
             >
-              {subtitleFor(node)}
+              {/* Mid-drag the second line answers the only question being asked of this row: can
+                  it take the one in the air, and if not, why. It goes back to describing itself
+                  the moment the drag ends. */}
+              {isRefusing ? rejection.message : subtitleFor(node)}
             </Typography>
           </Box>
 
-          {parentEdge?.percentage != null && (
-            <Chip
-              size="small"
-              label={`${Number(parentEdge.percentage).toFixed(0)}%`}
-              sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', flexShrink: 0 }}
-            />
+          {/* One chip, two questions. A row under an owner shows its share of that owner; a row at
+              the top of the chain shows its share of the property, which lives on the node because
+              there is no link to hang it on. They look alike deliberately — it is the same kind of
+              answer — so the tooltip is what tells them apart. */}
+          {share != null && (
+            <Tooltip title={parentEdge ? `${share}% of ${ownerName}` : `${share}% of the property`}>
+              <Chip
+                size="small"
+                label={`${Number(share).toFixed(0)}%`}
+                sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', flexShrink: 0 }}
+              />
+            </Tooltip>
           )}
           <Chip
             size="small"
@@ -380,6 +648,34 @@ function NodeBranch({
             label={node.verificationStatus.replaceAll('_', ' ').toLowerCase()}
             sx={{ fontSize: '0.66rem', flexShrink: 0, display: { xs: 'none', md: 'flex' } }}
           />
+
+          {/* The whole row is draggable with a mouse or a finger; this is the grip that says so,
+              and the only way in by keyboard. The row's own Enter and Space open the drawer, so
+              the drag's keyboard activator has to live somewhere else — here — or one key would
+              mean two things. */}
+          {dragEnabled && (
+            <Tooltip title="Drag to move this owner">
+              <IconButton
+                className="rowAction"
+                size="small"
+                disableRipple
+                {...attributes}
+                {...listeners}
+                onClick={(e) => e.stopPropagation()}
+                sx={motion.respectful({
+                  opacity: 0,
+                  transition: `opacity ${motion.swift} ease`,
+                  flexShrink: 0,
+                  cursor: 'grab',
+                  color: tokens.muted,
+                  touchAction: 'none',
+                  '&:active': { cursor: 'grabbing' },
+                })}
+              >
+                <DragIndicatorIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
 
           {/* An individual owns nothing, so there is no child to add. */}
           {!readOnly && !isLeafOnlyType(node.nodeType) && (
@@ -397,7 +693,8 @@ function NodeBranch({
             </Tooltip>
           )}
           {/* Every item in this menu rewrites the chain, so the trigger goes when they do —
-              an empty menu is worse than no menu. */}
+              an empty menu is worse than no menu. Dragging does not replace any of them: this is
+              still the keyboard route, and still the only way to set a percentage as you move. */}
           {!readOnly && (
             <Tooltip title="More">
               <IconButton
@@ -447,12 +744,18 @@ function NodeBranch({
           </Menu>
         </Stack>
 
-        {expanded && children.map((edge) => {
+        {expanded && children.map((edge, i) => {
           const child = nodesById.get(edge.childNodeId);
           if (!child) return null;
           return (
+            <Fragment key={edge.id}>
+              <SiblingGap
+                parentKey={node.id}
+                index={i}
+                drag={drag}
+                dragEnabled={dragEnabled}
+              />
             <NodeBranch
-              key={edge.id}
               node={child}
               parentEdge={edge}
               depth={depth + 1}
@@ -466,10 +769,21 @@ function NodeBranch({
               onDetachFromParent={onDetachFromParent}
               onDeleteNode={onDeleteNode}
               readOnly={readOnly}
+              dragEnabled={dragEnabled}
+              drag={drag}
               order={order}
             />
+            </Fragment>
           );
         })}
+        {expanded && children.length > 0 && (
+          <SiblingGap
+            parentKey={node.id}
+            index={children.length}
+            drag={drag}
+            dragEnabled={dragEnabled}
+          />
+        )}
       </Box>
     </Box>
   );
@@ -487,6 +801,6 @@ function indexTree(tree) {
     parentIdByChild.set(e.childNodeId, e.parentNodeId);
   });
   // Sort children by edge id so the order is stable.
-  childrenByParent.forEach((arr) => arr.sort((a, b) => a.id - b.id));
+  childrenByParent.forEach((arr) => arr.sort(sortSiblings));
   return { nodesById, childrenByParent, parentIdByChild };
 }

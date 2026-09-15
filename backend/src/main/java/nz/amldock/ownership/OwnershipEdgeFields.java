@@ -31,6 +31,20 @@ public abstract class OwnershipEdgeFields {
     @Column(length = 32)
     private EdgeRole role;
 
+    /**
+     * Where this link sits among the ones sharing its parent, or null for "never positioned".
+     *
+     * <p>Position lives on the link rather than on the child because the structure is a graph: a
+     * node owned by two parents is drawn twice, and its place under one says nothing about its
+     * place under the other.
+     *
+     * <p>Null is the ordinary state, and the reason nothing had to be backfilled — the tree falls
+     * back to the id, which is the creation order it has always drawn in. Ties are allowed; the
+     * id breaks them.
+     */
+    @Column(name = "sort_order")
+    private Integer sortOrder;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -42,6 +56,8 @@ public abstract class OwnershipEdgeFields {
     public void setPercentage(BigDecimal v) { this.percentage = v; }
     public EdgeRole getRole() { return role; }
     public void setRole(EdgeRole v) { this.role = v; }
+    public Integer getSortOrder() { return sortOrder; }
+    public void setSortOrder(Integer v) { this.sortOrder = v; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant v) { this.createdAt = v; }
 

@@ -1,6 +1,7 @@
 package nz.amldock.ownership;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.MappedSuperclass;
@@ -8,7 +9,10 @@ import nz.amldock.common.audit.BaseEntity;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * Every column an ownership node carries, spelled once.
@@ -96,14 +100,19 @@ public abstract class OwnershipNodeFields extends BaseEntity {
     private Long beneficialOwnerId;
 
     /**
-     * The capacity this individual appears in <em>on this deal</em>. Null for entity types.
+     * The capacities this individual appears in <em>on this deal</em>. Empty for entity types, and
+     * empty rather than null when nobody has said — "not stated" is one answer, not none.
      *
      * <p>Per-deal by design: shared person facts live on {@code beneficial_owner}, but a trustee
      * here can be a guarantor on the next deal.
+     *
+     * <p>A set since V43. One column rather than a join table, because this class is a
+     * {@code @MappedSuperclass} and {@code DealVersionNode.copyOf} is a
+     * {@code BeanUtils.copyProperties} — see {@link PersonRoleSetConverter}.
      */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "person_role", length = 32)
-    private PersonRole personRole;
+    @Convert(converter = PersonRoleSetConverter.class)
+    @Column(name = "person_roles", length = 512)
+    private Set<PersonRole> personRoles = EnumSet.noneOf(PersonRole.class);
 
     /**
      * Free text. The form prompts for a link to a previous deal, but a file-note or external
@@ -175,6 +184,38 @@ public abstract class OwnershipNodeFields extends BaseEntity {
     @Column(name = "source_of_funds", columnDefinition = "text")
     private String sourceOfFunds;
 
+    /* ---------- share of the property (V44) ---------- */
+
+    /**
+     * What share of the <em>property</em> this owner holds, 0.00 – 100.00. Null where nobody has
+     * said, which is not the same as none.
+     *
+     * <p>Only meaningful while the node sits at the top of the chain. Ownership of an entity is
+     * carried by {@code ownership_edge.percentage} — "this child owns X% of its parent" — and a
+     * node with nothing above it has no edge to put a figure on, which is why this column exists.
+     *
+     * <p>{@code OwnershipService.createEdge} nulls it the moment the node gains an owner: a node
+     * that no longer owns the property directly must not keep a figure saying it does. Detaching
+     * leaves it blank rather than restoring the old number, because a value nobody re-entered is
+     * not an answer anybody gave.
+     *
+     * <p>Nothing checks that the top-level shares sum to 100, exactly as nothing checks it for
+     * sibling edges. A structure under review is routinely incomplete.
+     */
+    @Column(name = "property_percentage", precision = 5, scale = 2)
+    private BigDecimal propertyPercentage;
+
+    /**
+     * Where this node sits among the other top-level owners, or null for "never positioned".
+     *
+     * <p>Read only for a node with nothing above it. Everything else is placed by its incoming
+     * edge — see {@code OwnershipEdgeFields.sortOrder} — and this column is ignored there, for
+     * the same reason {@code propertyPercentage} above is: a node with an owner is described by
+     * the link, not by itself.
+     */
+    @Column(name = "sort_order")
+    private Integer sortOrder;
+
     public Long getOwnershipStructureId() { return ownershipStructureId; }
     public void setOwnershipStructureId(Long v) { this.ownershipStructureId = v; }
     public NodeType getNodeType() { return nodeType; }
@@ -213,8 +254,18 @@ public abstract class OwnershipNodeFields extends BaseEntity {
     public void setVerificationNotes(String v) { this.verificationNotes = v; }
     public Long getBeneficialOwnerId() { return beneficialOwnerId; }
     public void setBeneficialOwnerId(Long v) { this.beneficialOwnerId = v; }
-    public PersonRole getPersonRole() { return personRole; }
-    public void setPersonRole(PersonRole v) { this.personRole = v; }
+    /**
+     * A copy, both ways. {@code DealVersionNode.copyOf} hands this set straight from the live node
+     * to the snapshot; sharing the instance would let a later edit rewrite what a verified deal
+     * says it checked, which is the one thing a version exists to prevent.
+     */
+    public Set<PersonRole> getPersonRoles() { return EnumSet.copyOf(orEmpty(personRoles)); }
+    public void setPersonRoles(Set<PersonRole> v) { this.personRoles = EnumSet.copyOf(orEmpty(v)); }
+
+    private static Set<PersonRole> orEmpty(Set<PersonRole> v) {
+        // EnumSet.copyOf refuses an empty plain collection — it has no class to infer.
+        return v == null || v.isEmpty() ? EnumSet.noneOf(PersonRole.class) : v;
+    }
     public String getReference() { return reference; }
     public void setReference(String v) { this.reference = v; }
     public String getJurisdictionCountry() { return jurisdictionCountry; }
@@ -237,6 +288,10 @@ public abstract class OwnershipNodeFields extends BaseEntity {
     public void setTrustHoldingComplexity(TrustHoldingComplexity v) { this.trustHoldingComplexity = v; }
     public String getSourceOfFunds() { return sourceOfFunds; }
     public void setSourceOfFunds(String v) { this.sourceOfFunds = v; }
+    public BigDecimal getPropertyPercentage() { return propertyPercentage; }
+    public void setPropertyPercentage(BigDecimal v) { this.propertyPercentage = v; }
+    public Integer getSortOrder() { return sortOrder; }
+    public void setSortOrder(Integer v) { this.sortOrder = v; }
 
     /**
      * The id of the node these columns describe.

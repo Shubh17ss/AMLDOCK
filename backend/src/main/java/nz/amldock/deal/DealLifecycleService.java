@@ -2,6 +2,7 @@ package nz.amldock.deal;
 
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
+import nz.amldock.deal.access.DealUserRepository;
 import nz.amldock.user.Role;
 import nz.amldock.user.UserPrincipal;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,19 @@ import java.util.Set;
  */
 @Service
 public class DealLifecycleService {
+
+    /**
+     * The grants that let an agent onto a deal they did not create.
+     *
+     * <p>The one dependency this class has, and it earns it: "may this actor read this deal" is
+     * exactly the question here, and the answer now has a row behind it. Every other rule is still
+     * a pure function of the deal, the actor and the firm.
+     */
+    private final DealUserRepository dealUsers;
+
+    public DealLifecycleService(DealUserRepository dealUsers) {
+        this.dealUsers = dealUsers;
+    }
 
     /** Who a rule admits. Both are additionally scoped to the deal's own firm. */
     private enum Who {
@@ -222,7 +236,9 @@ public class DealLifecycleService {
     public void assertCanRead(Deal deal, UserPrincipal actor, Long branchFirmId) {
         switch (actor.role()) {
             case AGENT, AGENT_PA -> {
-                if (!actor.id().equals(deal.getCreatedByUserId())) {
+                // Their own deal, or one they have been added to. Additive only: without a grant
+                // this is the same check it has always been.
+                if (!actor.id().equals(deal.getCreatedByUserId()) && !isGranted(deal, actor)) {
                     throw new ForbiddenException("Not your deal");
                 }
             }
@@ -251,7 +267,10 @@ public class DealLifecycleService {
             return;
         }
         if (who == Who.EDITOR && isDealAuthor(actor.role())) {
-            if (!actor.id().equals(deal.getCreatedByUserId())) {
+            // Same widening as assertCanRead. An agent added to a colleague's deal who could open
+            // it but not touch it while it is NEW could not actually work it, which is the whole
+            // point of adding them.
+            if (!actor.id().equals(deal.getCreatedByUserId()) && !isGranted(deal, actor)) {
                 throw new ForbiddenException("Not your deal");
             }
             return;
@@ -260,6 +279,16 @@ public class DealLifecycleService {
                 ? "Only the broker who created this deal, or a compliance officer or senior manager "
                   + "of the firm, may change it"
                 : "Only a compliance officer or senior manager of the firm may do this");
+    }
+
+    /**
+     * Whether this actor has been let onto this deal explicitly.
+     *
+     * <p>Only ever consulted after the ordinary rule has already said no, so a deal someone can
+     * reach anyway costs no query.
+     */
+    private boolean isGranted(Deal deal, UserPrincipal actor) {
+        return deal.getId() != null && dealUsers.existsByDealIdAndUserId(deal.getId(), actor.id());
     }
 
     private void assertSameFirm(UserPrincipal actor, Long dealFirmId) {

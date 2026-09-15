@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class WelcomeEmail {
 
-    private static final String SUBJECT = "Welcome to AML_DOCK — your account is ready";
+    private static final String SUBJECT = "Welcome to AMLDOCK — your account is ready";
 
     private final String appBaseUrl;
 
@@ -30,7 +30,7 @@ public class WelcomeEmail {
         String text = """
                 Hi %s,
 
-                An AML_DOCK account has been created for you with the role: %s.
+                An AMLDOCK account has been created for you with the role: %s.
 
                 Sign in at: %s
                 Email:      %s
@@ -40,15 +40,15 @@ public class WelcomeEmail {
 
                 If you weren't expecting this email, please contact your administrator.
 
-                — AML_DOCK
+                — AMLDOCK
                 """.formatted(fullName, roleLabel, loginUrl, recipientEmail);
 
         String html = """
                 <!doctype html>
                 <html><body style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937; max-width: 520px; margin:0 auto; padding: 24px;">
-                  <h2 style="color:#1f4b7a; margin-top:0;">Welcome to AML_DOCK</h2>
+                  <h2 style="color:#1f4b7a; margin-top:0;">Welcome to AMLDOCK</h2>
                   <p>Hi %s,</p>
-                  <p>An AML_DOCK account has been created for you with the role <strong>%s</strong>.</p>
+                  <p>An AMLDOCK account has been created for you with the role <strong>%s</strong>.</p>
 
                   <table style="border-collapse: collapse; margin: 16px 0;">
                     <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Email</td><td><strong>%s</strong></td></tr>
@@ -64,7 +64,7 @@ public class WelcomeEmail {
                   <p style="color:#6b7280; font-size: 13px;">
                     If you weren't expecting this email, contact your administrator.
                   </p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AML_DOCK</p>
+                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
                 </body></html>
                 """.formatted(escape(fullName), escape(roleLabel), escape(recipientEmail), loginUrl);
 

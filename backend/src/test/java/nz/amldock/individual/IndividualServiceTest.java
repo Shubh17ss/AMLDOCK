@@ -87,7 +87,7 @@ class IndividualServiceTest {
         assertThat(d.nodeId()).isEqualTo(NODE_ID);
         assertThat(d.displayName()).isEqualTo("John Aroha Smith");
         assertThat(d.dateOfBirth()).isEqualTo(LocalDate.of(1978, 3, 12));
-        assertThat(d.personRole()).isEqualTo(PersonRole.EFFECTIVE_CONTROLLER);
+        assertThat(d.personRoles()).containsExactly(PersonRole.EFFECTIVE_CONTROLLER);
         assertThat(d.verificationStatus()).isEqualTo(NodeVerificationStatus.VERIFIED);
         // The two lines that tell apart two people who happen to share a name.
         assertThat(d.dealReference()).isEqualTo("D-2291");
@@ -178,7 +178,7 @@ class IndividualServiceTest {
         n.setNodeType(NodeType.INDIVIDUAL);
         n.setDisplayName("John Aroha Smith");
         n.setDateOfBirth(LocalDate.of(1978, 3, 12));
-        n.setPersonRole(PersonRole.EFFECTIVE_CONTROLLER);
+        n.setPersonRoles(java.util.Set.of(PersonRole.EFFECTIVE_CONTROLLER));
         n.setVerificationStatus(NodeVerificationStatus.VERIFIED);
         n.setBeneficialOwnerId(PERSON_ID);
         return n;

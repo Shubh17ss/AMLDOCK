@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import WarningRoundedIcon from '@mui/icons-material/WarningRounded';
@@ -14,6 +14,9 @@ const ToastContext = createContext(null);
  *
  *   const { showToast } = useToast();
  *   showToast({ message: 'Saved', severity: 'success' });
+ *
+ * An optional `action: { label, onClick }` puts one button after the message — what an Undo needs,
+ * and nothing more. Omitted, the toast is exactly what it always was.
  *
  * The `useToast()` façade is kept deliberately — there are 40-odd call sites, and none of them
  * should have to know which library is underneath. `anchorOrigin` is accepted and ignored:
@@ -40,7 +43,7 @@ const TONE = {
  * react-hot-toast's own enter/leave flag, so the same transition runs in both directions and the
  * element is only unmounted once it has finished.
  */
-function ToastBody({ t, message, severity }) {
+function ToastBody({ t, message, severity, action, onActionDone }) {
   const tone = TONE[severity] ?? TONE.info;
   const { Icon } = tone;
 
@@ -77,14 +80,44 @@ function ToastBody({ t, message, severity }) {
       }}>
         {message}
       </Typography>
+      {/* Dismissing on click is the point: an Undo that leaves its own toast on screen reads as
+          though it did not take. */}
+      {action && (
+        <Button
+          size="small"
+          onClick={() => { action.onClick?.(); onActionDone?.(); }}
+          sx={{
+            ml: 'auto',
+            flexShrink: 0,
+            fontFamily: fonts.body,
+            fontSize: '0.8125rem',
+            fontWeight: 700,
+            color: tone.color,
+            textTransform: 'none',
+            px: 1,
+            minWidth: 0,
+            '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' },
+          }}
+        >
+          {action.label}
+        </Button>
+      )}
     </Box>
   );
 }
 
 export function ToastProvider({ children }) {
-  const showToast = useCallback(({ message, severity = 'info', autoHideMs = 5000 }) => {
+  const showToast = useCallback(({ message, severity = 'info', autoHideMs = 5000, action }) => {
     toast.custom(
-      (t) => <ToastBody t={t} message={message} severity={severity} />,
+      (t) => (
+        <ToastBody
+          t={t}
+          message={message}
+          severity={severity}
+          action={action}
+          onActionDone={() => toast.dismiss(t.id)}
+        />
+      ),
       { duration: autoHideMs },
     );
   }, []);

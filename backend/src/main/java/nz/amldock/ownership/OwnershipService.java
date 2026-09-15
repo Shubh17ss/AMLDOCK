@@ -26,6 +26,7 @@ import nz.amldock.ownership.dto.EdgeDto;
 import nz.amldock.ownership.dto.NodeDto;
 import nz.amldock.ownership.dto.PersonDto;
 import nz.amldock.ownership.dto.PersonPatch;
+import nz.amldock.ownership.dto.ReorderRequest;
 import nz.amldock.ownership.dto.TreeDto;
 import nz.amldock.ownership.dto.UpdateEdgeRequest;
 import nz.amldock.ownership.dto.UpdateNodeRequest;
@@ -130,9 +131,12 @@ public class OwnershipService {
         n.setOwnershipStructureId(structure.getId());
         n.setNodeType(req.nodeType());
         n.setDisplayName(req.displayName());
-        n.setPersonRole(req.personRole());
+        // Null and empty are the same thing on create: nobody has said. The set is never null on
+        // the node, so there is no third state for the form to land in.
+        n.setPersonRoles(req.personRoles() == null ? java.util.Set.of() : req.personRoles());
         n.setReference(req.reference());
         n.setNotes(req.notes());
+        n.setPropertyPercentage(normalisePercentage(req.propertyPercentage()));
         // Null leaves the entity default in place; only the owner picker, copying a person this
         // firm has already cleared elsewhere, ever sends one.
         if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
@@ -186,11 +190,23 @@ public class OwnershipService {
         if (req.trustDeedDocumentId() != null) n.setTrustDeedDocumentId(req.trustDeedDocumentId());
         if (req.settlorName() != null) n.setSettlorName(req.settlorName());
         if (req.extraJson() != null) n.setExtraJson(req.extraJson());
-        if (req.personRole() != null) n.setPersonRole(req.personRole());
+        // Null leaves them alone, like every other field here. An *empty* set is a value and
+        // clears them — the same distinction applyPersonPatch draws between null and "".
+        if (req.personRoles() != null) n.setPersonRoles(req.personRoles());
         if (req.reference() != null) n.setReference(req.reference());
         if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
         if (req.notes() != null) n.setNotes(req.notes());
         if (req.verificationNotes() != null) n.setVerificationNotes(req.verificationNotes());
+        // Written unconditionally, and the one field here that breaks the leave-alone rule. A
+        // percentage has to be clearable back to "not stated", and null is the only way a number
+        // can say that — so an absent value has to mean erase, or emptying the field would report
+        // success and change nothing, which is the silent no-op just fixed on the edge.
+        //
+        // The cost is that every caller must send it, including partial patches that care about
+        // something else entirely. Both in-tree callers do: the details form through
+        // buildNodePayload, and the verification save by carrying the node's stored value back
+        // unchanged. A new partial caller that forgets will clear it.
+        n.setPropertyPercentage(normalisePercentage(req.propertyPercentage()));
         applyEntityFields(n, req.jurisdictionCountry(), req.companyHasConstitution(),
                 req.nomineeStatus(), req.companyComplexOwnership(),
                 req.companyPersonalAssets(), req.companyNewDeveloper(),
@@ -393,6 +409,16 @@ public class OwnershipService {
             throw new BadRequestException("Adding this edge would create a cycle");
         }
 
+        // The child now has an owner above it, so it no longer holds the property directly and its
+        // share of it goes. Enforced here rather than in the UI because that is the only place
+        // every route in passes through: "Change owner" is composed client-side as create-then-
+        // delete, so a check in the dialog would have to be repeated in the attach path and could
+        // still be walked around by a caller hitting the API.
+        //
+        // Not restored on detach. A figure nobody re-entered after the move is not an answer
+        // anybody gave, and the node comes back to the top of the chain blank.
+        child.setPropertyPercentage(null);
+
         OwnershipEdge e = new OwnershipEdge();
         e.setParentNodeId(parent.getId());
         e.setChildNodeId(child.getId());
@@ -407,9 +433,13 @@ public class OwnershipService {
         OwnershipEdge edge = edges.findById(edgeId)
                 .orElseThrow(() -> new NotFoundException("Edge " + edgeId + " not found"));
         // Sanity: the edge's nodes must belong to this deal's structure.
-        OwnershipNode parent = mustLoadNodeForDeal(deal, edge.getParentNodeId());
-        // parent load implicitly asserts structure linkage to this deal.
-        if (req.percentage() != null) edge.setPercentage(normalisePercentage(req.percentage()));
+        mustLoadNodeForDeal(deal, edge.getParentNodeId());
+        // Written unconditionally, unlike the node patches: a percentage has to be clearable, and
+        // the drawer already sends null for an emptied field. Reading null as "leave alone" here
+        // made clearing one a silent no-op that still reported success. `role` keeps the
+        // leave-alone rule — the form has no way to send it, so a null there means "not mentioned"
+        // rather than "erase it".
+        edge.setPercentage(normalisePercentage(req.percentage()));
         if (req.role() != null) edge.setRole(req.role());
         return EdgeDto.from(edge);
     }
@@ -421,6 +451,90 @@ public class OwnershipService {
                 .orElseThrow(() -> new NotFoundException("Edge " + edgeId + " not found"));
         mustLoadNodeForDeal(deal, edge.getParentNodeId());
         edges.delete(edge);
+    }
+
+    /* ---------- sibling order ---------- */
+
+    /**
+     * Sets the order one owner’s children are drawn in, or the order of the top-level owners.
+     *
+     * <p>Position belongs to the LINK, not to the child: the structure is a graph, so a node owned
+     * by two parents is drawn twice and its place under one owner says nothing about its place
+     * under the other. Only a node at the top of the chain has no link to carry the answer, and
+     * that is the one case where the node’s own column is read.
+     *
+     * <p>Written as a dense 0..n-1 over the whole sibling group in one transaction, which is why
+     * the request has to name every sibling. Anything left out would keep whatever it had — most
+     * often null, which sorts ahead of everything — and the caller would get an order it did not
+     * ask for. Naming them all also catches a caller working from a tree that has gained a sibling
+     * since it was loaded, instead of quietly rearranging around a row it cannot see.
+     */
+    @Transactional
+    public TreeDto reorderSiblings(Long dealId, ReorderRequest req) {
+        Deal deal = assertReadable(dealId);
+        OwnershipStructure structure = structures.findByDealId(deal.getId())
+                .orElseThrow(() -> new NotFoundException(
+                        "Deal " + dealId + " has no ownership structure to reorder"));
+
+        List<Long> wanted = req.childNodeIds();
+        if (new HashSet<>(wanted).size() != wanted.size()) {
+            throw new BadRequestException("The same node is listed twice in the new order");
+        }
+
+        if (req.parentNodeId() == null) {
+            reorderTopLevel(structure, wanted);
+        } else {
+            reorderChildren(deal, req.parentNodeId(), wanted);
+        }
+        return loadTree(structure);
+    }
+
+    /** The nodes with nothing above them, positioned on themselves for want of an edge. */
+    private void reorderTopLevel(OwnershipStructure structure, List<Long> wanted) {
+        List<OwnershipNode> all = nodes.findAllByOwnershipStructureIdOrderByIdAsc(structure.getId());
+        List<Long> ids = all.stream().map(OwnershipNode::getId).toList();
+        // Guarded like loadTree does: an IN over an empty list is not worth asking the database.
+        Set<Long> owned = ids.isEmpty() ? Set.of() : edges.findAllByParentNodeIdIn(ids)
+                .stream().map(OwnershipEdge::getChildNodeId).collect(java.util.stream.Collectors.toSet());
+        Map<Long, OwnershipNode> byId = new LinkedHashMap<>();
+        all.stream().filter(n -> !owned.contains(n.getId())).forEach(n -> byId.put(n.getId(), n));
+
+        assertCoversExactly(byId.keySet(), wanted, "top-level owner");
+        for (int i = 0; i < wanted.size(); i++) {
+            byId.get(wanted.get(i)).setSortOrder(i);
+        }
+    }
+
+    /** One owner’s children, positioned on the edges that hold them there. */
+    private void reorderChildren(Deal deal, Long parentNodeId, List<Long> wanted) {
+        OwnershipNode parent = mustLoadNodeForDeal(deal, parentNodeId);
+        Map<Long, OwnershipEdge> byChild = new LinkedHashMap<>();
+        edges.findAllByParentNodeId(parent.getId())
+                .forEach(e -> byChild.put(e.getChildNodeId(), e));
+
+        assertCoversExactly(byChild.keySet(), wanted, "child of " + parent.getDisplayName());
+        for (int i = 0; i < wanted.size(); i++) {
+            byChild.get(wanted.get(i)).setSortOrder(i);
+        }
+    }
+
+    /**
+     * The new order must name the sibling group exactly — no strangers, nobody missed.
+     *
+     * <p>Both halves are reported by name rather than as one "does not match", because they mean
+     * different things to whoever has to fix it: a stranger is a bad request, while a missing one
+     * almost always means the caller’s copy of the tree is behind.
+     */
+    private void assertCoversExactly(Set<Long> actual, List<Long> wanted, String what) {
+        List<Long> strangers = wanted.stream().filter(id -> !actual.contains(id)).toList();
+        if (!strangers.isEmpty()) {
+            throw new BadRequestException("Not a " + what + ": " + strangers);
+        }
+        List<Long> missing = actual.stream().filter(id -> !wanted.contains(id)).toList();
+        if (!missing.isEmpty()) {
+            throw new BadRequestException(
+                    "The new order leaves out " + missing + " — reload the structure and try again");
+        }
     }
 
     /* ---------- root ---------- */
@@ -620,6 +734,9 @@ public class OwnershipService {
         if (patch.sourceOfFunds() != null) person.setSourceOfFunds(emptyToNull(patch.sourceOfFunds()));
         if (patch.countryOfResidence() != null) {
             person.setCountryOfResidence(emptyToNull(patch.countryOfResidence()));
+        }
+        if (patch.physicalAddress() != null) {
+            person.setPhysicalAddress(emptyToNull(patch.physicalAddress()));
         }
     }
 

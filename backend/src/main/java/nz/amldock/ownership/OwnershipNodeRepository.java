@@ -18,4 +18,10 @@ public interface OwnershipNodeRepository extends JpaRepository<OwnershipNode, Lo
      */
     List<OwnershipNode> findAllByOwnershipStructureIdInAndNodeTypeOrderByIdAsc(
             Collection<Long> structureIds, NodeType nodeType);
+
+    /**
+     * The same walk, every type. The CDD registers list whoever stands behind a branch's deals,
+     * and a trust holding the property is as much an owner on the register as the person behind it.
+     */
+    List<OwnershipNode> findAllByOwnershipStructureIdInOrderByIdAsc(Collection<Long> structureIds);
 }

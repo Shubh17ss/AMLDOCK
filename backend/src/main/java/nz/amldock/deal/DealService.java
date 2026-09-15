@@ -117,6 +117,8 @@ public class DealService {
         Long effectiveFirm = firmIdFilter;
         Long effectiveBranch = branchIdFilter;
         switch (actor.role()) {
+            // Their own deals plus any they have been added to — DealRepository.search reads
+            // this id both ways.
             case AGENT, AGENT_PA -> effectiveCreator = actor.id();
             case ADMIN, SALES_MANAGER -> effectiveBranch = actor.firmBranchId();
             case AML_COMPLIANCE_OFFICER, SENIOR_MANAGER -> effectiveFirm = actor.realEstateFirmId();

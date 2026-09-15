@@ -14,7 +14,6 @@ import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
 import { VoiceClip } from '../../components/VoiceClip.jsx';
 import { DocumentViewerDialog } from '../../components/DocumentViewerDialog.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
-import { DealDocumentList } from '../deal/review/DealDocumentList.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
 import { tokens } from '../../theme/theme.js';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
@@ -95,7 +94,8 @@ export function NodeEditorPane({
         trustType: selected.trustType ?? '',
         trustDiscretionary: selected.trustDiscretionary ?? false,
         trustHoldingComplexity: selected.trustHoldingComplexity ?? '',
-        personRole: selected.personRole ?? '',
+        personRoles: selected.personRoles ?? [],
+        propertyPercentage: selected.propertyPercentage ?? '',
         reference: selected.reference ?? '',
         notes: selected.notes ?? '',
         // The shared record behind an individual. Absent on every entity type.
@@ -107,6 +107,7 @@ export function NodeEditorPane({
             occupation: selected.person.occupation ?? '',
             sourceOfFunds: selected.person.sourceOfFunds ?? '',
             countryOfResidence: selected.person.countryOfResidence ?? null,
+            physicalAddress: selected.person.physicalAddress ?? '',
           }
           : null,
       });
@@ -168,6 +169,11 @@ export function NodeEditorPane({
           // Empty string normalises to null on the backend's `if not null` patch — but the
           // backend treats null as "leave alone". Send "" so admins can clear notes if needed.
           verificationNotes: verification.notes ?? '',
+          // Carried through unchanged. updateNode writes this one unconditionally so that an
+          // emptied field really clears, which means a partial patch that omitted it would erase
+          // the figure as a side effect of saving a verification note. Read from the node rather
+          // than the form, so an unsaved edit on the Details tab is not committed from here.
+          propertyPercentage: selected.propertyPercentage ?? null,
         },
       });
 
@@ -250,7 +256,13 @@ export function NodeEditorPane({
           disabled={readOnly}
           sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}
         >
-          <NodeFormFields value={form} onChange={setForm} includeTypeSelector={false} />
+          <NodeFormFields
+            value={form}
+            onChange={setForm}
+            includeTypeSelector={false}
+            // Top of the chain — nothing owns it, so its share is of the property itself.
+            showPropertyShare={!incomingEdge}
+          />
 
           {incomingEdge && (
             <>
@@ -299,8 +311,11 @@ export function NodeEditorPane({
 
       {tab === 'documents' && (
         <Stack spacing={1.5}>
-          {/* The list below includes the ID scans the broker captured — those are linked to the
-              person, not to this node, and were invisible here until now. */}
+          {/* This tab is the node's own file and nothing else. The deal's whole document set used
+              to sit underneath it, which meant reading about one party showed you every file on
+              the deal; it now lives on the deal, where a reader already goes to ask what the deal
+              is. The ID scans below are the exception that proves the rule — they are linked to
+              the person rather than to this node, and they are still this node's evidence. */}
           {selected.nodeType === 'INDIVIDUAL' && (
             <Typography variant="caption" sx={{ color: tokens.muted }}>
               Includes the ID scans captured for this person. Anything added here is filed as
@@ -316,22 +331,7 @@ export function NodeEditorPane({
             canUpload={!readOnly}
             frozenDocuments={versionNodeDocs}
             title={`Documents on ${selected.displayName}`}
-            onViewDocument={(id) => {
-              // The node's own rows open the same viewer as the deal list below. One viewer,
-              // two ways in — the alternative is two that drift.
-              const found = nodeDocs.find((d) => d.id === id);
-              if (found) setViewingDoc(found);
-            }}
-          />
-
-          {/* The deal's whole document set. It used to have a third of the review screen to
-              itself and opened on whichever file happened to be first; now it is a list, and
-              reading one is a deliberate act. */}
-          <Divider />
-          <DealDocumentList
-            dealId={dealId}
-            onOpen={setViewingDoc}
-            frozenDocuments={version?.documents ?? null}
+            onViewDocument={setViewingDoc}
           />
         </Stack>
       )}

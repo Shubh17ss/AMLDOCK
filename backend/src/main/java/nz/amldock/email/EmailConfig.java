@@ -51,7 +51,7 @@ public class EmailConfig {
             @Value("${amldock.mail.enabled:false}") boolean enabled,
             @Value("${amldock.notifications.transport:ses}") String transport,
             @Value("${amldock.mail.from:noreply@amldock.local}") String fromAddress,
-            @Value("${amldock.mail.from-name:AML_DOCK}") String fromName,
+            @Value("${amldock.mail.from-name:AMLDOCK}") String fromName,
             @Value("${amldock.mail.reply-to:}") String replyTo,
             @Value("${amldock.notifications.configuration-set:}") String configurationSet,
             ObjectProvider<SesV2Client> ses,
@@ -117,7 +117,7 @@ public class EmailConfig {
     public BulkEmailSender bulkEmailSender(
             @Value("${amldock.notifications.transport:ses}") String transport,
             @Value("${amldock.mail.from:noreply@amldock.local}") String fromAddress,
-            @Value("${amldock.mail.from-name:AML_DOCK}") String fromName,
+            @Value("${amldock.mail.from-name:AMLDOCK}") String fromName,
             @Value("${amldock.mail.reply-to:}") String replyTo,
             @Value("${amldock.notifications.configuration-set:}") String configurationSet,
             EmailTemplateStore templates,

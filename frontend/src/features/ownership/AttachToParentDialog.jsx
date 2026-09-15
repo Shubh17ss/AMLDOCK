@@ -4,6 +4,7 @@ import {
   FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import { isLeafOnlyType, nodeTypeLabel } from '../../api/ownership.js';
+import { descendantsOf } from './dragModel.js';
 import { tokens } from '../../theme/theme.js';
 
 /**
@@ -34,23 +35,13 @@ export function AttachToParentDialog({ open, onClose, node, tree, useTree, repla
   }, [open, node?.id, replaceEdge?.id]);
 
   // Valid parents = every node except `node`, the subtree rooted at `node`, and — when moving —
-  // the owner it already has.
+  // the owner it already has. The walk itself lives in dragModel, which the drag layer reads too:
+  // "which parents are legal" answered in two places would drift, and this dialog and a drop have
+  // to agree on it exactly.
   const validParents = useMemo(() => {
     if (!node || !tree) return [];
-    const forbidden = new Set([node.id]);
+    const forbidden = new Set([node.id, ...descendantsOf(tree, node.id)]);
     if (replaceEdge) forbidden.add(replaceEdge.parentNodeId);
-    const queue = [node.id];
-    while (queue.length > 0) {
-      const id = queue.shift();
-      tree.edges
-        .filter((e) => e.parentNodeId === id)
-        .forEach((e) => {
-          if (!forbidden.has(e.childNodeId)) {
-            forbidden.add(e.childNodeId);
-            queue.push(e.childNodeId);
-          }
-        });
-    }
     return tree.nodes
       // Individuals are excluded outright: they own nothing, so they can never be a parent.
       .filter((n) => !forbidden.has(n.id) && !isLeafOnlyType(n.nodeType))

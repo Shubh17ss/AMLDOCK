@@ -37,6 +37,13 @@ public enum AuditAction {
     DEAL_NOTE_ADDED,
     DEAL_OVERRIDDEN,
     /**
+     * An agent was let onto, or taken off, a deal they did not create. Recorded against the deal
+     * rather than the user: the question anyone comes back with is who could see this file, and
+     * when.
+     */
+    DEAL_USER_ADDED,
+    DEAL_USER_REMOVED,
+    /**
      * The derived rating moved because something outside the deal changed — today, an ownership
      * node answering one of the risk-raising questions. Deal edits are already covered by
      * DEAL_UPDATED; this exists so a rating that changes with no deal edit still has a cause on
@@ -49,6 +56,7 @@ public enum AuditAction {
     EDGE_CREATED,
     EDGE_UPDATED,
     EDGE_DELETED,
+    STRUCTURE_REORDERED,
     DOCUMENT_UPLOADED,
     DOCUMENT_DOWNLOADED,
     DOCUMENT_DELETED,

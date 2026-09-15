@@ -78,7 +78,7 @@ class EmailConfigTest {
     private EmailService emailService(boolean enabled, String transport,
                                       SesV2Client ses, JavaMailSender mail) {
         return config.emailService(enabled, transport,
-                "admin@amldock.com", "AML_DOCK", "", "",
+                "admin@amldock.com", "AMLDOCK", "", "",
                 provider(ses), provider(mail));
     }
 

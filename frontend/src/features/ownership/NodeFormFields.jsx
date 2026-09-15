@@ -1,8 +1,10 @@
 import {
-  Box, Divider, FormControl, FormLabel, InputLabel, MenuItem, Select, Stack, TextField, Typography,
+  Box, Checkbox, Chip, FormControl, FormHelperText, FormLabel, InputLabel, ListItemText,
+  MenuItem, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import {
   NODE_TYPES, NOMINEE_OPTIONS, PERSON_ROLES, TRUST_HOLDING_COMPLEXITY, TRUST_TYPES, nameLabelFor,
+  personRoleLabel,
 } from '../../api/ownership.js';
 import { CountrySelect } from '../../components/CountrySelect.jsx';
 import { PhoneField } from '../../components/PhoneField.jsx';
@@ -124,7 +126,14 @@ function YesNoField({ label, value, onChange, options = YES_NO, helper }) {
  * they appear on; type, notes and reference are what this deal says about them. An officer who
  * does not know which is which will eventually edit a closed deal's evidence by accident.
  */
-export function NodeFormFields({ value, onChange, includeTypeSelector = true }) {
+export function NodeFormFields({
+  value, onChange, includeTypeSelector = true,
+  /**
+   * Show "Share of the property". True only for a node at the top of the chain — everyone else
+   * owns a share of their parent, and that number lives on the link rather than here.
+   */
+  showPropertyShare = false,
+}) {
   const set = (patch) => onChange({ ...value, ...patch });
   const setPerson = (patch) => onChange({ ...value, person: { ...(value.person ?? {}), ...patch } });
   const person = value.person ?? {};
@@ -145,28 +154,52 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
                  value={value.displayName ?? ''}
                  onChange={(e) => set({ displayName: e.target.value })} required />
 
+      {/* Only for an owner with nothing above it. Everyone lower down owns a share of their
+          parent, and that figure belongs to the link — asking both of one node would be two
+          answers to different questions sitting in the same column.
+
+          Nothing checks that the top-level shares add up to 100. A structure under review is
+          routinely part-answered, and refusing to record what the client actually said would be
+          worse than a register that does not balance. */}
+      {showPropertyShare && (
+        <TextField
+          label="Share of the property"
+          type="number"
+          inputProps={{ min: 0, max: 100, step: 0.01 }}
+          value={value.propertyPercentage ?? ''}
+          onChange={(e) => set({ propertyPercentage: e.target.value })}
+          sx={{ width: 220 }}
+          helperText="How much of the property this owner holds. Leave empty if not stated."
+        />
+      )}
+
       {value.nodeType === 'INDIVIDUAL' && (
         <>
-          <FormControl>
-            <InputLabel id="person-role-label">Type</InputLabel>
-            <Select labelId="person-role-label" label="Type"
-                    value={value.personRole ?? ''}
-                    onChange={(e) => set({ personRole: e.target.value || null })}>
-              <MenuItem value=""><em>Not stated</em></MenuItem>
-              {PERSON_ROLES.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}
-            </Select>
-          </FormControl>
+          {/* Two records, one form, and the order interleaves them: date of birth and type are
+              what THIS deal says about the person, while where they live, how to reach them and
+              what they do belong to the person’s own record and are shared with every deal they
+              appear on. That warning used to be a heading over a contiguous block of shared
+              fields; the two kinds now alternate, so a heading in the middle would be pointing at
+              the wrong things and it sits over the whole form instead. An officer who does not
+              know which is which will eventually edit a closed deal’s evidence by accident. */}
+          <Typography variant="caption" sx={{ color: tokens.muted }}>
+            Country, address, email, phone, occupation and source of funds belong to this person
+            and are shared with every deal they appear on — editing them here changes what those
+            deals show. Date of birth and type are what this deal says about them.
+          </Typography>
 
-          <Divider />
-          <Box>
-            <Typography variant="subtitle2">About this person</Typography>
-            <Typography variant="caption" sx={{ color: tokens.muted }}>
-              Shared with every deal this person appears on — editing here changes what those
-              deals show.
-            </Typography>
-          </Box>
+          {/* The node’s own column, not the person’s. Extraction keeps the two in step through
+              refreshExtractedIndividual, and reading one while writing the other would make an
+              edit look like it had not taken.
 
-          {/* Not defaulted to the reporting entity's country, unlike the dial code below it.
+              The ID document’s own type, number and country used to be asked for here. They are
+              facts about a document, and the document is one tab across — asking twice invites two
+              answers. */}
+          <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
+                     value={value.dateOfBirth ?? ''}
+                     onChange={(e) => set({ dateOfBirth: e.target.value })} />
+
+          {/* Not defaulted to the reporting entity’s country, unlike the dial code below it.
               A dial code is a convenience the user overtypes; where someone lives is a CDD answer,
               and one nobody has given must stay blank rather than arrive pre-agreed. The Overseas
               Residents register reads this and cannot tell a default from an answer. */}
@@ -176,19 +209,56 @@ export function NodeFormFields({ value, onChange, includeTypeSelector = true }) 
             onChange={(code) => setPerson({ countryOfResidence: code })}
           />
 
+          {/* Deliberately a plain field, not the AddressFinder the deal’s property uses. An
+              overseas address has no local format to normalise to, and a suggestion the client
+              never made is not evidence — this has to hold the words they actually gave, because
+              matching them against the proof of address on file is the whole point. */}
+          <TextField label="Physical address" value={person.physicalAddress ?? ''}
+                     onChange={(e) => setPerson({ physicalAddress: e.target.value })}
+                     multiline minRows={2}
+                     helperText="Where this person lives. Typed as given — not looked up." />
+
+          {/* Multi-select, because one capacity was never enough: the same person is routinely
+              settlor, trustee and appointer of the same family trust, and the two nobody could
+              record used to end up in the notes, where no register can read them.
+
+              No "Not stated" item — selecting nothing is what that means, and an item that
+              deselects everything else is a trap in a list of checkboxes. */}
+          <FormControl>
+            <InputLabel id="person-role-label">Type</InputLabel>
+            <Select
+              labelId="person-role-label"
+              label="Type"
+              multiple
+              value={value.personRoles ?? []}
+              onChange={(e) => set({
+                // MUI hands back a string on autofill; everywhere else it is already an array.
+                personRoles: typeof e.target.value === 'string'
+                  ? e.target.value.split(',')
+                  : e.target.value,
+              })}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {selected.map((v) => (
+                    <Chip key={v} size="small" label={personRoleLabel(v)} />
+                  ))}
+                </Box>
+              )}
+            >
+              {PERSON_ROLES.map((r) => (
+                <MenuItem key={r.value} value={r.value}>
+                  <Checkbox size="small" checked={(value.personRoles ?? []).includes(r.value)} />
+                  <ListItemText primary={r.label} />
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>
+              Every capacity this person holds on this deal. Leave empty if nobody has said.
+            </FormHelperText>
+          </FormControl>
+
           <TextField label="Email address" type="email" value={person.email ?? ''}
                      onChange={(e) => setPerson({ email: e.target.value })} />
-
-          {/* The node's own column, not the person's. Extraction keeps the two in step through
-              refreshExtractedIndividual, and reading one while writing the other would make an
-              edit look like it had not taken.
-
-              The ID document's own type, number and country used to be asked for here. They are
-              facts about a document, and the document is one tab across — asking twice invites two
-              answers. */}
-          <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
-                     value={value.dateOfBirth ?? ''}
-                     onChange={(e) => set({ dateOfBirth: e.target.value })} />
 
           <PhoneField
             value={{ country: person.phoneCountry ?? null, number: person.phoneNumber ?? '' }}
@@ -408,7 +478,15 @@ export function buildNodePayload(form) {
     companyNumber: norm(form.companyNumber),
     incorporationDate: norm(form.incorporationDate),
     registeredOffice: norm(form.registeredOffice),
-    personRole: norm(form.personRole),
+    // Always sent, and as an array. The backend reads null as "leave alone", so an empty array
+    // is what makes the field clearable — the same distinction the '' fields below rely on.
+    personRoles: form.personRoles ?? [],
+    // Always sent, and null when empty. The backend writes this one unconditionally so that
+    // clearing it actually clears it — which means every payload has to carry it, or a save that
+    // was about something else would wipe the figure.
+    propertyPercentage: form.propertyPercentage === '' || form.propertyPercentage == null
+      ? null
+      : Number(form.propertyPercentage),
     notes: form.notes ?? '',
   };
 
@@ -472,6 +550,7 @@ export function buildNodePayload(form) {
       // '' rather than null for the same reason as the fields above: applyPersonPatch reads null
       // as "leave alone", so a null here would make the country picker impossible to clear.
       countryOfResidence: p.countryOfResidence ?? '',
+      physicalAddress: p.physicalAddress ?? '',
     };
   }
   return payload;

@@ -1,12 +1,14 @@
 package nz.amldock.deal;
 
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.deal.access.DealUserRepository;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.user.Role;
 import nz.amldock.user.UserPrincipal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.EnumSet;
 import java.util.Set;
@@ -14,12 +16,16 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * The state machine and its permission checks.
  *
- * <p>No mocks: {@link DealLifecycleService} takes the deal, the actor and the deal's firm id as
- * arguments and touches nothing else, which is the point of it.
+ * <p>One mock, and only one: {@link DealLifecycleService} is a pure function of the deal, the actor
+ * and the deal's firm id apart from the per-deal grants that let an agent onto a file they did not
+ * create. A stubbed-empty repository is therefore the "no grants" world every other test here
+ * assumes — and {@link #dealIn} leaves the id null, so those tests never reach the lookup at all.
  */
 class DealLifecycleServiceTest {
 
@@ -27,7 +33,8 @@ class DealLifecycleServiceTest {
     static final Long FIRM_B = 2L;
     static final Long BROKER_ID = 7L;
 
-    final DealLifecycleService lifecycle = new DealLifecycleService();
+    final DealUserRepository dealUsers = mock(DealUserRepository.class);
+    final DealLifecycleService lifecycle = new DealLifecycleService(dealUsers);
 
     /** The agent who created the deal. */
     final UserPrincipal broker = new UserPrincipal(BROKER_ID, "broker@a.com", null, Role.AGENT, FIRM_A, 10L, true);
@@ -47,6 +54,13 @@ class DealLifecycleServiceTest {
         d.setStatus(status);
         d.setCreatedByUserId(BROKER_ID);
         d.setFirmBranchId(10L);
+        return d;
+    }
+
+    /** The same deal with a persisted id, which is what a grant is looked up against. */
+    static Deal savedDealIn(DealStatus status, Long id) {
+        Deal d = dealIn(status);
+        ReflectionTestUtils.setField(d, "id", id);
         return d;
     }
 
@@ -435,6 +449,24 @@ class DealLifecycleServiceTest {
         assertThatCode(() -> lifecycle.assertCanRead(d, amlco, FIRM_A)).doesNotThrowAnyException();
         assertThatThrownBy(() -> lifecycle.assertCanRead(d, foreignAmlco, FIRM_A))
                 .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void anAgentAddedToADealMayReadItAndWorkIt() {
+        Deal d = savedDealIn(DealStatus.NEW, 99L);
+        when(dealUsers.existsByDealIdAndUserId(99L, otherBroker.id())).thenReturn(true);
+
+        assertThatCode(() -> lifecycle.assertCanRead(d, otherBroker, FIRM_A)).doesNotThrowAnyException();
+        // Opening a deal you cannot touch is not working it — the grant carries both.
+        assertThatCode(() -> lifecycle.assertEditable(d, otherBroker, FIRM_A)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void aGrantOnOneDealDoesNotReachAnother() {
+        when(dealUsers.existsByDealIdAndUserId(99L, otherBroker.id())).thenReturn(true);
+
+        assertThatThrownBy(() -> lifecycle.assertCanRead(savedDealIn(DealStatus.NEW, 100L), otherBroker, FIRM_A))
+                .isInstanceOf(ForbiddenException.class).hasMessageContaining("Not your deal");
     }
 
     @Test

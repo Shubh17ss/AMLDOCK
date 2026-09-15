@@ -26,6 +26,8 @@ public record PersonDto(
         String sourceOfFunds,
         /** ISO 3166-1 alpha-2. Null means not asked, which is not the same as living here. */
         String countryOfResidence,
+        /** Free text, as the person gave it. Nothing parses or normalises it. */
+        String physicalAddress,
 
         LocalDate dateOfBirth,
         LocalDate idExpiryDate,
@@ -35,6 +37,7 @@ public record PersonDto(
         return new PersonDto(
                 o.getBeneficialOwnerId(), o.getFullName(), o.getEmail(), o.getPhoneCountry(), o.getPhoneNumber(),
                 o.getOccupation(), o.getSourceOfFunds(), o.getCountryOfResidence(),
+                o.getPhysicalAddress(),
                 o.getDateOfBirth(), o.getIdExpiryDate(), o.getReviewStatus());
     }
 }

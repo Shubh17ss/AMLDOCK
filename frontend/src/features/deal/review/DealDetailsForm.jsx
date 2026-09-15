@@ -275,17 +275,23 @@ export function DealDetailsForm({ deal, dealId, form, setForm, dirty, onSaved, r
 
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
+      {/* Right-aligned, alone on its row: it is the one thing on this tab that commits, and the
+          end of the line is where a reader looks for that after working down the form. */}
       {!readOnly && (
-        <Box>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
-            startIcon={<SaveIcon />}
+            // startIcon={<SaveIcon />}
             onClick={handleSave}
             // Not gated on `gaps`: pressing it says what is missing, which beats a dead button
             // the reviewer has to reverse-engineer.
             disabled={saving || !dirty}
+            // Wider than its text needs. It is the only commit on the tab and it sits alone at the
+            // end of a long form, so it has to read as the destination rather than as one more
+            // control — and the width holds steady while the label swaps to "Updating…".
+            sx={{ minWidth: 180 }}
           >
-            {saving ? 'Saving…' : 'Save changes'}
+            {saving ? 'Updating…' : 'Update'}
           </Button>
         </Box>
       )}

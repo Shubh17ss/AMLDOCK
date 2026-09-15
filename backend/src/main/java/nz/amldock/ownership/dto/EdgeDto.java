@@ -12,10 +12,12 @@ public record EdgeDto(
         Long childNodeId,
         BigDecimal percentage,
         EdgeRole role,
+    /** Where this link sits among its siblings, or null if nobody has arranged them. */
+        Integer sortOrder,
         Instant createdAt
 ) {
     public static EdgeDto from(OwnershipEdgeFields e) {
         return new EdgeDto(e.getEdgeId(), e.getParentNodeId(), e.getChildNodeId(),
-                e.getPercentage(), e.getRole(), e.getCreatedAt());
+                e.getPercentage(), e.getRole(), e.getSortOrder(), e.getCreatedAt());
     }
 }

@@ -42,6 +42,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import nz.amldock.deal.access.DealUserRepository;
 
 /**
  * Covers the two things the deal-creation rework depends on being true:
@@ -78,7 +80,7 @@ class DealServiceRiskAndPatchTest {
         // The real DealRiskService, not a mock: these tests exist to pin the derivation, and a
         // mocked one would assert only that DealService calls something.
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService(), new DealNoteService(dealNotes, documents, users),
+                new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, audit),
                 ownership, audit, notifier, versions);
         SecurityContextHolder.getContext().setAuthentication(
