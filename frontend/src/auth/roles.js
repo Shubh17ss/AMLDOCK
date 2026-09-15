@@ -93,7 +93,13 @@ export const DEAL_REVIEWER_ROLES = ['AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 export const DEAL_CREATOR_ROLES = [
   ...DEAL_AUTHOR_ROLES, 'SALES_MANAGER', ...DEAL_REVIEWER_ROLES,
 ];
-export const DELETE_ROLES = ['ROOT', 'SENIOR_MANAGER'];
+// Who may delete a record from a register — a compliance document version, a register entry, a
+// training course, provider or session. The firm's compliance staff plus the platform owner.
+//
+// Mirrors Role.canDeleteRecords(); the server is the authority and enforces it twice, at the
+// controller and again in each service. Deleting a *deal* is a separate rule — its author may
+// delete their own — and does not read this.
+export const DELETE_ROLES = ['ROOT', 'SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER'];
 // Who may set a document register's review date / mark it complete.
 export const REVIEW_MANAGER_ROLES = ['ROOT', 'SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER'];
 export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'SALES_MANAGER'];

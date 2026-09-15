@@ -155,14 +155,15 @@ public class TrainingSessionService {
         return toDtos(List.of(s), actor, true).get(0);
     }
 
-    /** Deletes are restricted to ROOT and SENIOR_MANAGER (also gated by @PreAuthorize). */
+    /** Deletes are gated by Role.canDeleteRecords() — and by @PreAuthorize on the controller. */
     @Transactional
     public void delete(Long id) {
         TrainingSession s = sessions.findById(id)
                 .orElseThrow(() -> new NotFoundException("Session " + id + " not found"));
         UserPrincipal actor = TrainingScope.currentPrincipal();
-        if (actor.role() != Role.ROOT && actor.role() != Role.SENIOR_MANAGER) {
-            throw new ForbiddenException("Only ROOT or a senior manager may delete a session");
+        if (!actor.role().canDeleteRecords()) {
+            throw new ForbiddenException(
+                    "Only ROOT, a senior manager or a compliance officer may delete a session");
         }
         if (actor.role() != Role.ROOT) {
             TrainingScope.assertSameFirm(actor, s.getRealEstateFirmId(), "session");

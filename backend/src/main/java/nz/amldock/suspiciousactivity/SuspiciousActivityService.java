@@ -179,14 +179,15 @@ public class SuspiciousActivityService {
         return new DownloadUrlResponse(url, (int) downloadTtl.toSeconds());
     }
 
-    /** Deletes are restricted to ROOT and SENIOR_MANAGER (also gated by @PreAuthorize). */
+    /** Deletes are gated by Role.canDeleteRecords() — and by @PreAuthorize on the controller. */
     @Transactional
     public void delete(Long id) {
         SuspiciousActivity s = activities.findById(id)
                 .orElseThrow(() -> new NotFoundException("Suspicious activity " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
-        if (actor.role() != Role.ROOT && actor.role() != Role.SENIOR_MANAGER) {
-            throw new ForbiddenException("Only ROOT or a senior manager may delete a register entry");
+        if (!actor.role().canDeleteRecords()) {
+            throw new ForbiddenException(
+                    "Only ROOT, a senior manager or a compliance officer may delete a register entry");
         }
         if (actor.role() != Role.ROOT) assertSameScope(actor, s);
 

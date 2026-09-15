@@ -171,14 +171,15 @@ public class ComplianceDocumentService {
         return new DownloadUrlResponse(url, (int) downloadTtl.toSeconds());
     }
 
-    /** Deletes are restricted to ROOT and SENIOR_MANAGER (gated by @PreAuthorize on the controller). */
+    /** Deletes are gated by Role.canDeleteRecords() — and by @PreAuthorize on the controller. */
     @Transactional
     public void delete(Long id) {
         ComplianceDocument d = docs.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
-        if (actor.role() != Role.ROOT && actor.role() != Role.SENIOR_MANAGER) {
-            throw new ForbiddenException("Only ROOT or a senior manager may delete a document");
+        if (!actor.role().canDeleteRecords()) {
+            throw new ForbiddenException(
+                    "Only ROOT, a senior manager or a compliance officer may delete a document");
         }
         if (actor.role() != Role.ROOT) assertSameScope(actor, d);
         if (d.getStatus() == DocumentStatus.DELETED) return;

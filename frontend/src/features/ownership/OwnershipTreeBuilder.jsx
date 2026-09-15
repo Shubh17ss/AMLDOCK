@@ -303,9 +303,12 @@ function PropertyAnchor({ deal, onOpen, selected = false, drag = NO_DRAG, dragEn
         <HomeWorkOutlinedIcon fontSize="small" />
       </Box>
       <Box sx={{ minWidth: 0 }}>
+        {/* Bold, like the owners directly beneath it. This is the head of the whole chain, and
+            at regular weight it read as subordinate to the nodes it owns. Unconditional — there
+            is only ever one property — and a notch larger than a node name at 0.9rem. */}
         <Typography
           sx={{
-            fontFamily: fonts.display, fontSize: '0.94rem', color: tokens.ink,
+            fontFamily: fonts.display, fontSize: '0.94rem', fontWeight: 700, color: tokens.ink,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
         >
