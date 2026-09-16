@@ -198,11 +198,11 @@ export function OwnershipTreeBuilder({
           <Typography sx={{ fontFamily: fonts.display, fontSize: '1.05rem', color: tokens.ink }}>
             Ownership structure
           </Typography>
-          <Typography variant="caption" sx={{ color: tokens.muted }}>
+          {/* <Typography variant="caption" sx={{ color: tokens.muted }}>
             {dragEnabled
               ? 'Who stands behind this property, down to the people — drag a row onto an owner to move it'
               : 'Who stands behind this property, down to the people'}
-          </Typography>
+          </Typography> */}
         </Box>
         {!readOnly && (
           <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={onAddRoot}>
@@ -302,7 +302,7 @@ function PropertyAnchor({ deal, onOpen, selected = false, drag = NO_DRAG, dragEn
       >
         <HomeWorkOutlinedIcon fontSize="small" />
       </Box>
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={{ minWidth: 0}}>
         {/* Bold, like the owners directly beneath it. This is the head of the whole chain, and
             at regular weight it read as subordinate to the nodes it owns. Unconditional — there
             is only ever one property — and a notch larger than a node name at 0.9rem. */}
@@ -312,7 +312,7 @@ function PropertyAnchor({ deal, onOpen, selected = false, drag = NO_DRAG, dragEn
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
         >
-          {address}
+          {address.toUpperCase()}
         </Typography>
         <Typography variant="caption" sx={{ color: tokens.muted }}>
           {/* The band says what it is at rest and what it will do mid-drag. A drop target that
