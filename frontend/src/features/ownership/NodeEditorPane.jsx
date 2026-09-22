@@ -319,13 +319,6 @@ export function NodeEditorPane({
               the deal; it now lives on the deal, where a reader already goes to ask what the deal
               is. The ID scans below are the exception that proves the rule — they are linked to
               the person rather than to this node, and they are still this node's evidence. */}
-          {selected.nodeType === 'INDIVIDUAL' && (
-            <Typography variant="caption" sx={{ color: tokens.muted }}>
-              Includes the ID scans captured for this person. Anything added here is filed as
-              evidence against this node — an ID uploaded here is not read automatically, and
-              does not create a second individual.
-            </Typography>
-          )}
           <DocumentUploader
             dealId={dealId}
             ownershipNodeId={selected.id}

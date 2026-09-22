@@ -164,7 +164,6 @@ export function NodeFormFields({
           value={value.propertyPercentage ?? ''}
           onChange={(e) => set({ propertyPercentage: e.target.value })}
           sx={{ width: 220 }}
-          helperText="Percentage of the property this owner beneficially holds."
         />
       )}
 
@@ -177,11 +176,6 @@ export function NodeFormFields({
               fields; the two kinds now alternate, so a heading in the middle would be pointing at
               the wrong things and it sits over the whole form instead. An officer who does not
               know which is which will eventually edit a closed deal’s evidence by accident. */}
-          <Typography variant="caption" sx={{ color: tokens.muted }}>
-            Country, address, email, phone, occupation and source of funds belong to this person
-            and are shared with every deal they appear on — editing them here changes what those
-            deals show. Date of birth and type are what this deal says about them.
-          </Typography>
 
           {/* The node’s own column, not the person’s. Extraction keeps the two in step through
               refreshExtractedIndividual, and reading one while writing the other would make an
@@ -211,7 +205,7 @@ export function NodeFormFields({
           <TextField label="Physical address" value={person.physicalAddress ?? ''}
                      onChange={(e) => setPerson({ physicalAddress: e.target.value })}
                      multiline minRows={2}
-                     helperText="Where this person lives. Typed as given — not looked up." />
+                      />
 
           {/* Multi-select, because one capacity was never enough: the same person is routinely
               settlor, trustee and appointer of the same family trust, and the two nobody could
@@ -247,9 +241,6 @@ export function NodeFormFields({
                 </MenuItem>
               ))}
             </Select>
-            <FormHelperText>
-              Every capacity this person holds on this deal. Leave empty if nobody has said.
-            </FormHelperText>
           </FormControl>
 
           <TextField label="Email address" type="email" value={person.email ?? ''}
@@ -301,14 +292,12 @@ export function NodeFormFields({
             value={value.nomineeStatus ?? 'NOT_ASKED'}
             onChange={(v) => set({ nomineeStatus: v })}
             options={NOMINEE_OPTIONS}
-            helper="Answering yes sets this deal's risk to High."
           />
 
           <YesNoField
             label="Complex ownership structure?"
             value={value.companyComplexOwnership}
             onChange={(v) => set({ companyComplexOwnership: v })}
-            helper="Answering yes sets this deal's risk to High."
           />
 
           <YesNoField
@@ -362,9 +351,6 @@ export function NodeFormFields({
                 <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
               ))}
             </Select>
-            <Typography variant="caption" sx={{ color: tokens.muted, mt: 0.5 }}>
-              An extensive / diverse asset portfolio sets this deal's risk to High.
-            </Typography>
           </FormControl>
         </>
       )}
@@ -393,7 +379,6 @@ export function NodeFormFields({
             value={value.nomineeStatus ?? 'NOT_ASKED'}
             onChange={(v) => set({ nomineeStatus: v })}
             options={NOMINEE_OPTIONS}
-            helper="Answering yes sets this deal's risk to High."
           />
         </>
       )}
@@ -436,7 +421,6 @@ export function NodeFormFields({
         multiline
         minRows={3}
         placeholder="Anything worth knowing about this node — context, exceptions, follow-ups."
-        helperText="Kept on this node. Not posted to the deal's timeline."
       />
 
       {WITH_REFERENCE.includes(value.nodeType) && (
