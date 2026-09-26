@@ -183,6 +183,17 @@ public abstract class DealFields extends BaseEntity {
     @Column(name = "risk_override_comment", columnDefinition = "text")
     private String riskOverrideComment;
 
+    /**
+     * Who pinned it, and when. Written on every override and never cleared: they are the record
+     * of a decision somebody took, and the decision happened whichever band came out of it -
+     * including the band the engine had already arrived at.
+     */
+    @Column(name = "risk_overridden_by_user_id")
+    private Long riskOverriddenByUserId;
+
+    @Column(name = "risk_overridden_at")
+    private Instant riskOverriddenAt;
+
     @Column(name = "risk_approved_by_user_id")
     private Long riskApprovedByUserId;
 
@@ -260,6 +271,10 @@ public abstract class DealFields extends BaseEntity {
     public void setRiskApproved(boolean v) { this.riskApproved = v; }
     public String getRiskOverrideComment() { return riskOverrideComment; }
     public void setRiskOverrideComment(String v) { this.riskOverrideComment = v; }
+    public Long getRiskOverriddenByUserId() { return riskOverriddenByUserId; }
+    public void setRiskOverriddenByUserId(Long v) { this.riskOverriddenByUserId = v; }
+    public Instant getRiskOverriddenAt() { return riskOverriddenAt; }
+    public void setRiskOverriddenAt(Instant v) { this.riskOverriddenAt = v; }
     public Long getRiskApprovedByUserId() { return riskApprovedByUserId; }
     public void setRiskApprovedByUserId(Long v) { this.riskApprovedByUserId = v; }
     public Instant getRiskApprovedAt() { return riskApprovedAt; }

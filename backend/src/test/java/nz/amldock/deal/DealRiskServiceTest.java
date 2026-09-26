@@ -411,6 +411,66 @@ class DealRiskServiceTest {
         assertThat(deal.getRiskApprovedByUserId()).isEqualTo(9L);
     }
 
+    @Test
+    void addingAnOwnerWithUnansweredQuestionsWithdrawsTheApproval() {
+        // THE REGRESSION. A new company on the structure starts with every risk question null,
+        // which adds gaps worth ZERO points. The score does not move at all, so a withdrawal
+        // rule that tested only the score left the deal reading as approved while carrying
+        // questions that would have refused the approval had anyone asked for it then.
+        deal.setRiskValue(0);
+        deal.setRiskApproved(true);
+        deal.setRiskApprovedByUserId(9L);
+        deal.setRiskApprovedAt(java.time.Instant.now());
+
+        withNodes(company(n -> { /* nothing answered, which is how a node arrives */ }));
+
+        service.apply(deal);
+
+        assertThat(deal.getRiskValue()).isZero();          // the score genuinely did not move
+        assertThat(deal.isRiskApproved()).isFalse();
+        assertThat(deal.getRiskApprovedByUserId()).isNull();
+        assertThat(deal.getRiskApprovedAt()).isNull();
+    }
+
+    @Test
+    void theWithdrawalSaysWhichOfTheTwoReasonsItWas() {
+        // An approval that disappears with nothing on the record is what an auditor asks about,
+        // and "the score moved" and "somebody added an owner" are different answers.
+        deal.setRiskValue(0);
+        deal.setRiskApproved(true);
+        deal.setReference("DEAL-2026-0001");
+        withNodes(company(n -> { }));
+
+        service.apply(deal);
+
+        verify(audit).record(eq(AuditAction.DEAL_RISK_APPROVAL_WITHDRAWN), eq("Deal"), eq(DEAL_ID),
+                contains("unanswered"));
+    }
+
+    @Test
+    void anUnapprovedDealGainingAnOwnerIsNotAudited() {
+        // Nothing was withdrawn, so there is nothing to say. Otherwise every node added to every
+        // unapproved deal in the system would write a line claiming a sign-off fell away.
+        withNodes(company(n -> { }));
+
+        service.apply(deal);
+
+        verify(audit, never()).record(eq(AuditAction.DEAL_RISK_APPROVAL_WITHDRAWN), anyString(),
+                anyLong(), anyString());
+    }
+
+    @Test
+    void aDealBeingCreatedHasNoApprovalToWithdrawAndNothingToAuditAgainst() {
+        // apply() runs on create before the row exists. Auditing there would record against a
+        // null id, and there is nothing that could have been approved yet anyway.
+        Deal fresh = new Deal();
+
+        service.apply(fresh);
+
+        assertThat(fresh.isRiskApproved()).isFalse();
+        verify(audit, never()).record(any(), anyString(), anyLong(), anyString());
+    }
+
     /* ---------- the audit trail ---------- */
 
     @Test
@@ -434,7 +494,7 @@ class DealRiskServiceTest {
         service.recomputeFor(DEAL_ID);
 
         verify(audit).record(eq(AuditAction.DEAL_RISK_CHANGED), eq("Deal"), eq(DEAL_ID),
-                contains("nominee limited partner"));
+                contains("Nominee limited partner"));
     }
 
     @Test

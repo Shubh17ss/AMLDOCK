@@ -52,7 +52,13 @@ public enum AuditAction {
     DEAL_RISK_CHANGED,
     /** A reviewer signed off the deal's risk position. */
     DEAL_RISK_APPROVED,
-    /** A reviewer set the risk band by hand, or released it back to the derived one. */
+    /**
+     * A sign-off fell away on its own, because the score moved or because the deal gained a
+     * question nobody has answered. Nothing a person did, which is exactly why it needs a line:
+     * an approval that disappears silently is the kind of change an auditor asks about.
+     */
+    DEAL_RISK_APPROVAL_WITHDRAWN,
+    /** A reviewer set the risk band by hand, whether overruling the engine or agreeing with it. */
     DEAL_RISK_OVERRIDDEN,
     NODE_CREATED,
     NODE_UPDATED,

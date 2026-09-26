@@ -510,40 +510,52 @@ public class DealService {
     }
 
     /**
-     * Pins the deal's risk band by hand, or releases it back to the derived one.
+     * Pins the deal's risk band by hand.
      *
-     * <p>Choosing the band the score already produces is how an override is lifted — otherwise
-     * there would be no way back to DERIVED short of a migration, and a deal would carry a pin
-     * long after the answers underneath had caught up with it.
+     * <p>An override is an override whatever band it names, <em>including the one the engine
+     * already arrived at</em>. A reviewer who pins a deal to the calculated band is agreeing with
+     * it deliberately, on the record, with a reason; treating that as a withdrawal — flipping
+     * back to DERIVED and deleting the comment, the author and the timestamp — would leave the
+     * file saying nobody ever made a decision. The intent is identical either way and only the
+     * value differs, which is not what makes something an override.
      *
-     * <p>Either way the approval is withdrawn. The reviewer approving a rating and the reviewer
+     * <p>The consequence is that DERIVED is a one-way door: once a deal has been overridden its
+     * band stops tracking the score, which keeps moving underneath and is still shown beside it.
+     * A reviewer can set any band they like, so nothing is unreachable; what is gone is going
+     * back to following the rules automatically. That is deliberate — a human determination
+     * stands until a human revisits it.
+     *
+     * <p>The approval is withdrawn either way. The reviewer approving a rating and the reviewer
      * changing it are not necessarily the same person, and a sign-off does not carry across to a
      * band nobody signed off.
      */
     @Transactional
     public RiskAssessmentDto overrideRisk(Long id, RiskRating rating, String comment) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
-        mustBeDecider(d);
+        UserPrincipal actor = mustBeDecider(d);
 
         RiskAssessment assessment = risk.assess(d);
         RiskRating previous = d.getRiskRating();
-        boolean releasing = rating == assessment.rating();
 
         d.setRiskValue(assessment.value());
         d.setRiskRating(rating);
-        d.setRiskRatingSource(releasing ? RiskRatingSource.DERIVED : RiskRatingSource.OVERRIDE);
-        d.setRiskOverrideComment(releasing ? null : comment);
+        d.setRiskRatingSource(RiskRatingSource.OVERRIDE);
+        // The comment and its byline stand or fall together, and here they always stand: they
+        // are the record of a decision somebody took, and the decision happened whichever band
+        // came out of it.
+        d.setRiskOverrideComment(comment);
+        d.setRiskOverriddenByUserId(actor.id());
+        d.setRiskOverriddenAt(Instant.now());
         d.setRiskApproved(false);
         d.setRiskApprovedByUserId(null);
         d.setRiskApprovedAt(null);
 
+        // Names both bands, so the line shows whether the reviewer was overruling the engine or
+        // agreeing with it — the two look identical afterwards and only this says which it was.
         audit.record(AuditAction.DEAL_RISK_OVERRIDDEN, "Deal", d.getId(),
-                releasing
-                        ? "Risk override lifted on deal " + d.getReference() + " — back to the"
-                          + " calculated " + rating + " (score " + assessment.value() + "): " + comment
-                        : "Risk " + previous + " -> " + rating + " set by hand on deal "
-                          + d.getReference() + ", against a calculated " + assessment.rating()
-                          + " (score " + assessment.value() + "): " + comment);
+                "Risk " + previous + " -> " + rating + " set by hand on deal "
+                        + d.getReference() + ", against a calculated " + assessment.rating()
+                        + " (score " + assessment.value() + "): " + comment);
         return riskDto(d);
     }
 
@@ -564,9 +576,23 @@ public class DealService {
     }
 
     private RiskAssessmentDto riskDto(Deal d) {
-        String approvedBy = d.getRiskApprovedByUserId() == null ? null
-                : users.findById(d.getRiskApprovedByUserId()).map(User::getEmail).orElse(null);
-        return RiskAssessmentDto.of(d, risk.assess(d), approvedBy);
+        return RiskAssessmentDto.of(d, risk.assess(d),
+                nameOf(d.getRiskApprovedByUserId()), nameOf(d.getRiskOverriddenByUserId()));
+    }
+
+    /**
+     * A user's name for a byline, or null.
+     *
+     * <p>The name rather than the email: a byline is read by a person asking who decided this,
+     * and an address answers which account did it. The id travels on the DTO beside it for
+     * anything that needs to identify the user rather than name them.
+     *
+     * <p>Null for a user who has since been deleted rather than an error: the record of who took
+     * a decision outlives their account, and a deal must not fail to load because somebody left.
+     */
+    private String nameOf(Long userId) {
+        return userId == null ? null
+                : users.findById(userId).map(User::getFullName).orElse(null);
     }
 
     /** Returns a pair of (deal, previousStatus) so the controller can audit the transition. */

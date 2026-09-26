@@ -119,8 +119,12 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
             </Group>
 
             <Group title="Transaction & risk">
+              {/* The band and what was decided about it. The numeric score is deliberately
+                  absent here as well as on the Risk tab — it is what the band is computed from,
+                  not something a reviewer acts on, and showing it in one place while hiding it
+                  in the other would be the worst of both. */}
               <Row label="Risk rating" value={deal.riskRating
-                ? `${deal.riskRating} (score ${deal.riskValue ?? 0})`
+                ? `${deal.riskRating}`
                   + `${deal.riskRatingSource === 'OVERRIDE' ? ', set by compliance' : ''}`
                   + `${deal.riskApproved ? ' — approved' : ''}`
                 : 'Not assessed'} />

@@ -11,6 +11,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -44,14 +45,18 @@ class RiskEndpointsWebTest {
     @Autowired MockMvc mvc;
     @MockBean DealService deals;
 
+    private static final Instant OVERRIDDEN_AT = Instant.parse("2026-09-26T12:04:00Z");
+
     private static final RiskAssessmentDto ASSESSMENT = new RiskAssessmentDto(
             1L, 8, RiskRating.HIGH, RiskRating.MEDIUM, RiskRatingSource.OVERRIDE,
-            "Known to the firm", false, null, null, null, false,
-            List.of(new RiskAssessmentDto.FactorDto("TENURE", "Owned for 6 months", 6, null, null),
-                    new RiskAssessmentDto.FactorDto("COUNTRY", "Country of residence: GB", 1,
-                            42L, "Jane Marsh")),
-            List.of(new RiskAssessmentDto.GapDto("NOMINEE", "Whether there is a nominee",
-                    43L, "Marsh Holdings")));
+            "Known to the firm", "Abhi Saluja", OVERRIDDEN_AT,
+            false, null, null, null, false,
+            List.of(new RiskAssessmentDto.FactorDto("TENURE", "Ownership tenure", "6 months", 6,
+                            null, null, null, null),
+                    new RiskAssessmentDto.FactorDto("COUNTRY", "Country of residence", null, 1,
+                            42L, "Jane Marsh", "INDIVIDUAL", "GB")),
+            List.of(new RiskAssessmentDto.GapDto("NOMINEE", "Nominee director/shareholder",
+                    43L, "Marsh Holdings", "PRIVATE_COMPANY")));
 
     /* ---------- the read ---------- */
 
@@ -67,14 +72,32 @@ class RiskEndpointsWebTest {
                 .andExpect(jsonPath("$.rating").value("MEDIUM"))
                 .andExpect(jsonPath("$.source").value("OVERRIDE"))
                 .andExpect(jsonPath("$.overrideComment").value("Known to the firm"))
+                // The byline the override box renders. Without these the comment reads as the
+                // deal saying something about itself rather than a named person deciding - and
+                // it is the person's name, not the login behind it.
+                .andExpect(jsonPath("$.overriddenByName").value("Abhi Saluja"))
+                .andExpect(jsonPath("$.overriddenByEmail").doesNotExist())
+                .andExpect(jsonPath("$.overriddenAt").exists())
                 .andExpect(jsonPath("$.approved").value(false))
                 .andExpect(jsonPath("$.complete").value(false))
-                .andExpect(jsonPath("$.factors[0].label").value("Owned for 6 months"))
+                // The question and the answer arrive apart, which is what lets the card lay
+                // them out as "Ownership tenure: 6 months" rather than print a fixed sentence.
+                .andExpect(jsonPath("$.factors[0].label").value("Ownership tenure"))
+                .andExpect(jsonPath("$.factors[0].value").value("6 months"))
                 .andExpect(jsonPath("$.factors[0].points").value(6))
+                .andExpect(jsonPath("$.factors[0].nodeType").doesNotExist())
                 .andExpect(jsonPath("$.factors[1].nodeId").value(42))
                 .andExpect(jsonPath("$.factors[1].nodeName").value("Jane Marsh"))
+                // Keys the owner-type glyph on the card's second row.
+                .andExpect(jsonPath("$.factors[1].nodeType").value("INDIVIDUAL"))
+                // The code travels separately from the label so the tab can render a flag and
+                // the full country name; a label of "Country of residence: GB" would force the
+                // browser to parse a display string back apart.
+                .andExpect(jsonPath("$.factors[1].countryCode").value("GB"))
+                .andExpect(jsonPath("$.factors[0].countryCode").doesNotExist())
                 .andExpect(jsonPath("$.unanswered[0].code").value("NOMINEE"))
-                .andExpect(jsonPath("$.unanswered[0].nodeName").value("Marsh Holdings"));
+                .andExpect(jsonPath("$.unanswered[0].nodeName").value("Marsh Holdings"))
+                .andExpect(jsonPath("$.unanswered[0].nodeType").value("PRIVATE_COMPANY"));
     }
 
     @Test

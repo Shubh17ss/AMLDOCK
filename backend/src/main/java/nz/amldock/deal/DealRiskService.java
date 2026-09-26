@@ -79,10 +79,33 @@ public class DealRiskService {
 
     private static final Logger log = LoggerFactory.getLogger(DealRiskService.class);
 
-    /** One contributing answer and what it was worth. */
-    public record RiskFactor(String code, String label, int points, Long nodeId, String nodeName) {
-        static RiskFactor deal(String code, String label, int points) {
-            return new RiskFactor(code, label, points, null, null);
+    /**
+     * One contributing answer and what it was worth.
+     *
+     * <p>The question and the answer travel separately - {@code label} is what was asked,
+     * {@code value} is what came back. Fused into one sentence they could not be laid out as a
+     * column a reviewer scans, and the wording of every card would be the server's decision.
+     *
+     * <p>{@code value} is null on the country factors, which carry {@code countryCode} instead:
+     * the browser renders a flag and the country's full name from it, which it could not do
+     * from a name baked in here.
+     *
+     * <p>{@code nodeType} is the {@code NodeType} enum name, which is exactly the key the
+     * frontend's NODE_VISUAL table is indexed by, so the glyph beside an owner here is the same
+     * glyph it has on the Structure tab. Null on the deal's own answers.
+     */
+    public record RiskFactor(String code, String label, String value, int points,
+                             Long nodeId, String nodeName, String nodeType, String countryCode) {
+
+        /** One of the deal's own answers: no owner behind it. */
+        static RiskFactor deal(String code, String label, String value, int points) {
+            return new RiskFactor(code, label, value, points, null, null, null, null);
+        }
+
+        /** An owner's answer. */
+        static RiskFactor of(String code, String label, String value, int points, OwnershipNode n) {
+            return new RiskFactor(code, label, value, points,
+                    n.getNodeId(), n.getDisplayName(), n.getNodeType().name(), null);
         }
     }
 
@@ -93,9 +116,16 @@ public class DealRiskService {
      * so a question nobody put to anybody has to be distinguishable from one that was asked and
      * came back negative — which is why the columns behind these are nullable in the first place.
      */
-    public record RiskGap(String code, String label, Long nodeId, String nodeName) {
+    public record RiskGap(String code, String label, Long nodeId, String nodeName,
+                          String nodeType) {
+
         static RiskGap deal(String code, String label) {
-            return new RiskGap(code, label, null, null);
+            return new RiskGap(code, label, null, null, null);
+        }
+
+        static RiskGap of(String code, String label, OwnershipNode n) {
+            return new RiskGap(code, label, n.getNodeId(), n.getDisplayName(),
+                    n.getNodeType().name());
         }
     }
 
@@ -130,8 +160,21 @@ public class DealRiskService {
      * may not exist yet.
      *
      * <p>Writes {@code riskValue} unconditionally and {@code riskRating} only while the rating is
-     * DERIVED. Moving the score also withdraws any approval: an approval is a sign-off on one
-     * number, and one that survived the answers it was given about would be a claim nobody made.
+     * DERIVED.
+     *
+     * <h3>When an approval is withdrawn</h3>
+     *
+     * <p>Two ways, and the second is easy to miss. <strong>The score moved</strong> - an approval
+     * is a sign-off on one number, and one that survived the answers it was given about would be
+     * a claim nobody made. <strong>Or the deal stopped being complete</strong>, which is what
+     * happens when an owner is added to the structure: its risk questions all start null, so the
+     * deal gains unanswered questions worth <em>zero points</em>. The score does not move at all,
+     * and testing only the score left the deal flagged as approved while carrying questions that
+     * would have refused the approval had anyone asked for it then.
+     *
+     * <p>Withdrawing on incomplete is safe as an unconditional rule because approval is only ever
+     * grantable while complete - see {@code DealService.approveRisk}. An approved deal that is
+     * now incomplete can therefore only have got there by something changing underneath it.
      *
      * @return true when the rating changed
      */
@@ -140,10 +183,24 @@ public class DealRiskService {
 
         int previousValue = deal.getRiskValue();
         deal.setRiskValue(assessment.value());
-        if (previousValue != assessment.value() && deal.isRiskApproved()) {
+
+        boolean scoreMoved = previousValue != assessment.value();
+        boolean nowIncomplete = !assessment.complete();
+        if (deal.isRiskApproved() && (scoreMoved || nowIncomplete)) {
             deal.setRiskApproved(false);
             deal.setRiskApprovedByUserId(null);
             deal.setRiskApprovedAt(null);
+            // Guarded on the id: apply() also runs on create, before the row exists, where there
+            // is nothing to have approved and nothing to audit against.
+            if (deal.getId() != null) {
+                audit.record(AuditAction.DEAL_RISK_APPROVAL_WITHDRAWN, "Deal", deal.getId(),
+                        "Risk approval withdrawn on deal " + deal.getReference() + " because "
+                                + (nowIncomplete
+                                        ? assessment.unanswered().size()
+                                          + " question(s) affecting the risk are unanswered"
+                                        : "the score moved " + previousValue + " -> "
+                                          + assessment.value()));
+            }
         }
 
         if (deal.getRiskRatingSource() == RiskRatingSource.OVERRIDE) return false;
@@ -221,33 +278,36 @@ public class DealRiskService {
 
     /* ---------- the deal's own answers ---------- */
 
+    private static final String TENURE = "Ownership tenure";
+    private static final String FACE_TO_FACE = "Met face to face, original IDs verified";
+    private static final String FOREIGN_EXPOSURE = "Foreign exposure";
+
     private static void scoreDeal(Deal deal, List<RiskFactor> factors, List<RiskGap> gaps) {
         Integer months = tenureMonths(deal);
         if (months == null) {
-            gaps.add(RiskGap.deal("TENURE", "How long the client has owned the property"));
+            gaps.add(RiskGap.deal("TENURE", TENURE));
         } else if (months <= 18) {
-            factors.add(RiskFactor.deal("TENURE", "Owned for " + months + " months", 6));
+            factors.add(RiskFactor.deal("TENURE", TENURE, months + " months", 6));
         } else if (months < 36) {
-            factors.add(RiskFactor.deal("TENURE", "Owned for " + months + " months", 2));
+            factors.add(RiskFactor.deal("TENURE", TENURE, months + " months", 2));
         }
 
         Boolean verified = deal.getFaceToFaceIdVerified();
         if (verified == null) {
-            gaps.add(RiskGap.deal("FACE_TO_FACE",
-                    "Whether the client was met face to face and their original IDs verified"));
+            gaps.add(RiskGap.deal("FACE_TO_FACE", FACE_TO_FACE));
         } else if (!verified) {
-            factors.add(RiskFactor.deal("FACE_TO_FACE",
-                    "Client not met face to face with original IDs verified", 2));
+            factors.add(RiskFactor.deal("FACE_TO_FACE", FACE_TO_FACE, "No", 2));
         }
 
         String exposure = deal.getForeignExposureCountry();
         if (exposure == null || exposure.isBlank()) {
-            gaps.add(RiskGap.deal("FOREIGN_EXPOSURE", "Foreign exposure"));
+            gaps.add(RiskGap.deal("FOREIGN_EXPOSURE", FOREIGN_EXPOSURE));
         } else {
             int points = CountryRisk.pointsFor(exposure);
             if (points > 0) {
-                factors.add(RiskFactor.deal("FOREIGN_EXPOSURE",
-                        "Foreign exposure to " + exposure, points));
+                // Same shape as an owner's country: the code travels, not a rendered name.
+                factors.add(new RiskFactor("FOREIGN_EXPOSURE", FOREIGN_EXPOSURE, null, points,
+                        null, null, null, exposure));
             }
         }
     }
@@ -287,9 +347,9 @@ public class DealRiskService {
         String name = n.getDisplayName();
 
         if (type == NodeType.INDIVIDUAL) {
-            country(factors, gaps, id, name, "Country of residence", personCountry);
+            country(factors, gaps, n, "Country of residence", personCountry);
         } else if (ASKED_FOR_COUNTRY.contains(type)) {
-            country(factors, gaps, id, name,
+            country(factors, gaps, n,
                     type == NodeType.TRUST ? "Jurisdiction" : "Country of incorporation",
                     n.getJurisdictionCountry());
         }
@@ -297,15 +357,15 @@ public class DealRiskService {
         if (type == NodeType.TRUST) {
             TrustHoldingComplexity holdings = n.getTrustHoldingComplexity();
             if (holdings == null) {
-                gaps.add(new RiskGap("TRUST_HOLDINGS", "What the trust holds", id, name));
+                gaps.add(RiskGap.of("TRUST_HOLDINGS", "Trust holdings", n));
             } else {
                 int points = pointsFor(holdings);
                 if (points > 0) {
-                    factors.add(new RiskFactor("TRUST_HOLDINGS", label(holdings), points, id, name));
+                    factors.add(RiskFactor.of("TRUST_HOLDINGS", "Trust holdings",
+                            label(holdings), points, n));
                 }
             }
-            no(factors, gaps, id, name, "TRUST_DISCRETIONARY",
-                    "Whether the trust is discretionary", "Not a discretionary trust",
+            no(factors, gaps, n, "TRUST_DISCRETIONARY", "Discretionary trust",
                     n.getTrustDiscretionary(), 2);
         }
 
@@ -314,52 +374,65 @@ public class DealRiskService {
             // shareholder, a limited partnership about a nominee limited partner. The consequence
             // is identical, so only the wording has to know which was actually put.
             String asked = type == NodeType.LIMITED_PARTNERSHIP
-                    ? "a nominee limited partner"
-                    : "a nominee director/shareholder";
+                    ? "Nominee limited partner"
+                    : "Nominee director/shareholder";
             NomineeStatus nominee = n.getNomineeStatus();
             if (nominee == null || nominee == NomineeStatus.NOT_ASKED) {
-                gaps.add(new RiskGap("NOMINEE", "Whether there is " + asked, id, name));
+                gaps.add(RiskGap.of("NOMINEE", asked, n));
             } else if (nominee == NomineeStatus.YES) {
-                factors.add(new RiskFactor("NOMINEE", "Reports " + asked, 6, id, name));
+                factors.add(RiskFactor.of("NOMINEE", asked, "Yes", 6, n));
             }
         }
 
         if (type == NodeType.PRIVATE_COMPANY) {
-            yes(factors, gaps, id, name, "COMPLEX_OWNERSHIP", "Whether the ownership is complex",
-                    "Complex ownership structure", n.getCompanyComplexOwnership(), 3);
-            yes(factors, gaps, id, name, "NEW_DEVELOPER", "Whether it is a new developer",
-                    "A new developer", n.getCompanyNewDeveloper(), 2);
-            yes(factors, gaps, id, name, "PERSONAL_ASSETS", "Whether it holds personal assets",
-                    "Used for personal assets", n.getCompanyPersonalAssets(), 2);
+            yes(factors, gaps, n, "COMPLEX_OWNERSHIP", "Complex ownership structure",
+                    n.getCompanyComplexOwnership(), 3);
+            yes(factors, gaps, n, "NEW_DEVELOPER", "New developer",
+                    n.getCompanyNewDeveloper(), 2);
+            yes(factors, gaps, n, "PERSONAL_ASSETS", "Used for personal assets",
+                    n.getCompanyPersonalAssets(), 2);
         }
     }
 
-    private static void country(List<RiskFactor> factors, List<RiskGap> gaps, Long id, String name,
+    /**
+     * A country answer, scored on the shared scale.
+     *
+     * <p>The label is the bare question and the code rides alongside, so the UI can render a flag
+     * and the full country name. {@link #phrase} puts the code back into the audit line, which is
+     * read as a sentence and has always named the country.
+     */
+    private static void country(List<RiskFactor> factors, List<RiskGap> gaps, OwnershipNode n,
                                 String question, String countryCode) {
         if (countryCode == null || countryCode.isBlank()) {
-            gaps.add(new RiskGap("COUNTRY", question, id, name));
+            gaps.add(RiskGap.of("COUNTRY", question, n));
             return;
         }
         int points = CountryRisk.pointsFor(countryCode);
         if (points > 0) {
-            factors.add(new RiskFactor("COUNTRY", question + ": " + countryCode, points, id, name));
+            factors.add(new RiskFactor("COUNTRY", question, null, points,
+                    n.getNodeId(), n.getDisplayName(), n.getNodeType().name(), countryCode));
         }
     }
 
-    /** A yes/no question where YES costs points. Null is a gap; false costs nothing. */
-    private static void yes(List<RiskFactor> factors, List<RiskGap> gaps, Long id, String name,
-                            String code, String question, String whenYes, Boolean answer,
-                            int points) {
-        if (answer == null) gaps.add(new RiskGap(code, question, id, name));
-        else if (answer) factors.add(new RiskFactor(code, whenYes, points, id, name));
+    /**
+     * A yes/no question where YES costs points. Null is a gap; false costs nothing.
+     *
+     * <p>One label, not two. These used to carry a separate sentence for the answered case
+     * ("Complex ownership structure") and the unanswered one ("Whether the ownership is
+     * complex"), which is the same question written twice and free to drift. The answer is now
+     * the literal Yes or No beside it.
+     */
+    private static void yes(List<RiskFactor> factors, List<RiskGap> gaps, OwnershipNode n,
+                            String code, String label, Boolean answer, int points) {
+        if (answer == null) gaps.add(RiskGap.of(code, label, n));
+        else if (answer) factors.add(RiskFactor.of(code, label, "Yes", points, n));
     }
 
     /** A yes/no question where NO costs points — the discretionary-trust question. */
-    private static void no(List<RiskFactor> factors, List<RiskGap> gaps, Long id, String name,
-                           String code, String question, String whenNo, Boolean answer,
-                           int points) {
-        if (answer == null) gaps.add(new RiskGap(code, question, id, name));
-        else if (!answer) factors.add(new RiskFactor(code, whenNo, points, id, name));
+    private static void no(List<RiskFactor> factors, List<RiskGap> gaps, OwnershipNode n,
+                           String code, String label, Boolean answer, int points) {
+        if (answer == null) gaps.add(RiskGap.of(code, label, n));
+        else if (!answer) factors.add(RiskFactor.of(code, label, "No", points, n));
     }
 
     private static int pointsFor(TrustHoldingComplexity holdings) {
@@ -371,12 +444,13 @@ public class DealRiskService {
         };
     }
 
+    /** The answer, not a sentence about it — it sits after "Trust holdings:" on the card. */
     private static String label(TrustHoldingComplexity holdings) {
         return switch (holdings) {
-            case UNASCERTAINABLE -> "Trust holdings unascertainable";
-            case EXTENSIVE_DIVERSE_PORTFOLIO -> "Holds an extensive or diverse asset portfolio";
-            case MORE_THAN_ONE_PROPERTY_ASSET -> "Holds more than one property or asset";
-            case SINGLE_PROPERTY_ASSET -> "Holds a single property or asset";
+            case UNASCERTAINABLE -> "Unascertainable";
+            case EXTENSIVE_DIVERSE_PORTFOLIO -> "Extensive or diverse portfolio";
+            case MORE_THAN_ONE_PROPERTY_ASSET -> "More than one property or asset";
+            case SINGLE_PROPERTY_ASSET -> "A single property or asset";
         };
     }
 
@@ -426,8 +500,11 @@ public class DealRiskService {
     }
 
     private static String phrase(RiskFactor f) {
-        return f.nodeName() == null
-                ? f.label()
-                : "\"" + f.nodeName() + "\": " + f.label();
+        // The label is only the question now, so the audit line has to put the answer back:
+        // "Nominee director/shareholder" on its own names something that was asked, not a cause
+        // anybody could act on. Country factors carry their code instead of a value.
+        String answer = f.value() != null ? f.value() : f.countryCode();
+        String what = answer == null ? f.label() : f.label() + ": " + answer;
+        return f.nodeName() == null ? what : "\"" + f.nodeName() + "\" — " + what;
     }
 }

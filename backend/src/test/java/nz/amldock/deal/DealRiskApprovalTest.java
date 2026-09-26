@@ -42,14 +42,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Approving a risk, and pinning one by hand.
  *
  * <p>Three rules are worth holding here because each of them is a thing the UI merely asks for
  * politely and the server has to actually enforce: approval is refused while a contributing
- * question is unanswered, an override withdraws an approval, and choosing the calculated band is
- * how an override is released — without that last one a deal would carry a pin forever.
+ * question is unanswered, an override withdraws an approval, and an override is an override
+ * whatever band it names — including the one the engine already arrived at.
  */
 @ExtendWith(MockitoExtension.class)
 class DealRiskApprovalTest {
@@ -170,6 +171,19 @@ class DealRiskApprovalTest {
     }
 
     @Test
+    void anOverrideIsStampedWithWhoSetItAndWhen() {
+        // A comment with no byline reads as the deal saying something about itself rather than a
+        // named person taking a decision, which is the whole point of allowing an override.
+        answerEverything();
+
+        RiskAssessmentDto dto = service.overrideRisk(DEAL_ID, RiskRating.HIGH, "Known PEP");
+
+        assertThat(deal.getRiskOverriddenByUserId()).isEqualTo(complianceOfficer.id());
+        assertThat(deal.getRiskOverriddenAt()).isNotNull();
+        assertThat(dto.overriddenAt()).isEqualTo(deal.getRiskOverriddenAt());
+    }
+
+    @Test
     void anOverrideWithdrawsAnApproval() {
         answerEverything();
         service.approveRisk(DEAL_ID);
@@ -183,19 +197,39 @@ class DealRiskApprovalTest {
     }
 
     @Test
-    void choosingTheCalculatedBandReleasesTheOverride() {
-        // Otherwise there is no way back to DERIVED, and a deal would carry a pin long after the
-        // answers underneath had caught up with it.
-        answerEverything();
+    void choosingTheCalculatedBandIsStillAnOverride() {
+        // A reviewer who pins a deal to the band the engine already reached is agreeing with it
+        // deliberately, on the record, with a reason. Treating that as "never mind" — flipping
+        // back to DERIVED and deleting the comment, the author and the timestamp — leaves the
+        // file saying nobody ever made a decision. The intent is identical either way; only the
+        // value differs, and the value is not what makes something an override.
+        answerEverything();                                   // the calculated band is LOW
         service.overrideRisk(DEAL_ID, RiskRating.HIGH, "Known PEP");
 
         RiskAssessmentDto dto = service.overrideRisk(DEAL_ID, RiskRating.LOW, "PEP check cleared");
 
-        assertThat(dto.source()).isEqualTo(RiskRatingSource.DERIVED);
+        assertThat(dto.source()).isEqualTo(RiskRatingSource.OVERRIDE);
         assertThat(dto.rating()).isEqualTo(RiskRating.LOW);
-        assertThat(dto.overrideComment()).isNull();
-        verify(audit).record(eq(AuditAction.DEAL_RISK_OVERRIDDEN), eq("Deal"), eq(DEAL_ID),
-                contains("lifted"));
+        assertThat(dto.calculatedRating()).isEqualTo(RiskRating.LOW);
+        assertThat(dto.overrideComment()).isEqualTo("PEP check cleared");
+        assertThat(deal.getRiskOverriddenByUserId()).isEqualTo(complianceOfficer.id());
+        assertThat(deal.getRiskOverriddenAt()).isNotNull();
+    }
+
+    @Test
+    void theBylineIsThePersonsNameRatherThanTheirLogin() {
+        // Every other case here asserts the byline is null, so wiring getEmail() back in by
+        // accident would pass all of them. This is the one that would fail.
+        nz.amldock.user.User officer = new nz.amldock.user.User();
+        officer.setFullName("Abhi Saluja");
+        officer.setEmail("amlco@firm.com");
+        when(users.findById(complianceOfficer.id())).thenReturn(Optional.of(officer));
+
+        answerEverything();
+
+        RiskAssessmentDto dto = service.overrideRisk(DEAL_ID, RiskRating.HIGH, "Known PEP");
+
+        assertThat(dto.overriddenByName()).isEqualTo("Abhi Saluja");
     }
 
     @Test

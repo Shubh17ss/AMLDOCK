@@ -223,7 +223,7 @@ public class DealController {
     }
 
     /**
-     * Sets the risk band by hand, or releases it by choosing the calculated one.
+     * Sets the risk band by hand.
      *
      * <p>Not SENIOR_MANAGER-only, unlike {@code /override}. That one overrules the lifecycle —
      * it can put a deal into any status from any other — whereas this is a compliance judgement
