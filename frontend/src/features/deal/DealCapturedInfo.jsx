@@ -8,7 +8,7 @@ import { useCurrency } from '../../dashboard/useCurrency.js';
 import { propertyTypeLabel, reasonForSellingLabel } from '../../data/propertyTypes.js';
 import { countryName } from '../../data/countries.js';
 import { IndividualsFromIds } from './IndividualsFromIds.jsx';
-import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
+import { formatPropertyAddress, formatPropertyAddressShort } from '../../data/addressFinderMeta.js';
 
 const TXN_LABEL = { PURCHASE: 'Purchase', SALE: 'Sale' };
 const CLIENT_TYPE_LABEL = { INDIVIDUAL: 'Individual', ENTITY: 'Entity' };
@@ -40,7 +40,7 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
   const p = deal.property ?? {};
   const c = deal.client ?? {};
 
-  const glance = [c.displayName, [p.addressLine1, p.suburb, p.district].filter(Boolean).join(', '), deal.firmName]
+  const glance = [c.displayName, formatPropertyAddressShort(p), deal.firmName]
     .filter(Boolean)
     .join('  ·  ');
 

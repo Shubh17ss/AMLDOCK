@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs, Typography,
+  Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
@@ -272,9 +272,9 @@ export function DealReviewScreen() {
             Back to queue
           </Button>
           <Box sx={{ flexGrow: 1 }} />
-          <Typography sx={{ fontFamily: fonts.display, fontSize: '1.1rem', color: tokens.ink }}>
-            {deal.reference ?? `Deal #${deal.id}`}
-          </Typography>
+          {/* The reference used to lead this row. It is not how anyone identifies a deal — the
+              property is, and that now sits in the app bar above, where it stays visible
+              whichever tab is open. */}
           <DealStatusChip status={deal.status} />
           <RiskRatingChip rating={deal.riskRating} hideWhenUnset />
           <Chip label={deal.transactionType} size="small" variant="outlined" />

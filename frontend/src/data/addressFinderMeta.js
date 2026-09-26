@@ -56,3 +56,18 @@ export function formatPropertyAddress(p) {
     .filter(Boolean)
     .join(', ');
 }
+
+/**
+ * The same address cut to what distinguishes one deal from another: street, suburb, district.
+ *
+ * For the places that have a single line and no room to spend on region and postcode - the app
+ * bar while a deal is open, the at-a-glance strip on the deal card. Those two are inside one
+ * firm's book, where the postcode is rarely the thing telling two properties apart.
+ *
+ * Returns '' rather than null when nothing is captured, matching formatPropertyAddress above so
+ * callers can treat the pair interchangeably.
+ */
+export function formatPropertyAddressShort(p) {
+  if (!p) return '';
+  return [p.addressLine1, p.suburb, p.district].filter(Boolean).join(', ');
+}
