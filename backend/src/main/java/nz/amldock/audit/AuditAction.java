@@ -50,6 +50,10 @@ public enum AuditAction {
      * the record.
      */
     DEAL_RISK_CHANGED,
+    /** A reviewer signed off the deal's risk position. */
+    DEAL_RISK_APPROVED,
+    /** A reviewer set the risk band by hand, or released it back to the derived one. */
+    DEAL_RISK_OVERRIDDEN,
     NODE_CREATED,
     NODE_UPDATED,
     NODE_DELETED,

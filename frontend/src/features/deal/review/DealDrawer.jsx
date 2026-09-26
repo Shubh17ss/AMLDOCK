@@ -38,7 +38,7 @@ const TABS = [
  * dismissed with unsaved work.
  */
 export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canComment = true,
-                            frozenNotes = null, version = null }) {
+                            frozenNotes = null, version = null, individuals = [] }) {
   const [tab, setTab] = useState('details');
 
   // Neither the audit trail nor the user list is part of a snapshot: one is a live event log, the
@@ -213,6 +213,10 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
             // stays lit after a successful save.
             onSaved={(dto) => setBaseline(dtoToForm(dto))}
             readOnly={readOnly}
+            // The people already on this deal, for the key-contact picker. Passed down rather
+            // than fetched here: the review screen holds the tree already, and a second
+            // subscription would show a different list for a frame after every node edit.
+            individuals={individuals}
           />
         )}
         {deal && current === 'documents' && (

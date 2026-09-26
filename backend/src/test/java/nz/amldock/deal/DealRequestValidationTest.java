@@ -42,8 +42,9 @@ class DealRequestValidationTest {
                 null, TransactionType.SALE, null,
                 "", null, "", "",           // poc name / role / phone / email, as section 2 sends them
                 "",                          // notes
-                "", null, null, value,       // transaction context
+                "", null, null, null, value, // transaction context, incl. the two tenure boxes
                 null,                        // clientRemote
+                null,                        // faceToFaceIdVerified
                 null, "", null, null,        // risk and valuation
                 new PropertyInput("12 Queen St", "", "", "", "", "", null, null, null, null, ""),
                 new ClientInput("", null, "", ""));
@@ -73,7 +74,7 @@ class DealRequestValidationTest {
         // Every autosave from section 2 onwards carries this until section 3 is answered.
         UpdateDealRequest req = new UpdateDealRequest(
                 null, TransactionType.SALE, null, "", null, "", "", "",
-                "", null, null, "", null, null, "", null, null);
+                "", null, null, null, null, null, "", null, null, "", null, null);
         assertThat(validator.validate(req)).isEmpty();
     }
 
@@ -81,7 +82,7 @@ class DealRequestValidationTest {
     void patchStillRejectsAMalformedCountryCode() {
         UpdateDealRequest req = new UpdateDealRequest(
                 null, null, null, null, null, null, null, null,
-                null, null, null, "nz", null, null, null, null, null);
+                null, null, null, null, null, null, "nz", null, null, null, null, null);
         assertThat(validator.validate(req))
                 .extracting(v -> v.getPropertyPath().toString())
                 .containsExactly("foreignExposureCountry");

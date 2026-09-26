@@ -175,15 +175,19 @@ class DealVersionServiceTest {
         when(versions.findTopByDealIdOrderByVersionNoDesc(DEAL_ID)).thenReturn(Optional.empty());
         Deal deal = dealIn(DealStatus.VERIFIED);
         deal.setTransactionPurpose("Relocating");
-        deal.setOnSoldQuickly(true);
+        deal.setOwnershipTenureYears(1);
+        deal.setOwnershipTenureMonths(6);
         deal.setForeignExposureCountry("AU");
+        deal.setRiskValue(8);
 
         DealVersion written = capture(deal, "checked the title");
 
         assertThat(written.getReference()).isEqualTo("DEAL-2026-0042");
         assertThat(written.getTransactionPurpose()).isEqualTo("Relocating");
-        assertThat(written.getOnSoldQuickly()).isTrue();
+        assertThat(written.getOwnershipTenureYears()).isEqualTo(1);
+        assertThat(written.getOwnershipTenureMonths()).isEqualTo(6);
         assertThat(written.getForeignExposureCountry()).isEqualTo("AU");
+        assertThat(written.getRiskValue()).isEqualTo(8);
         assertThat(written.getStatus()).isEqualTo(DealStatus.VERIFIED);
     }
 

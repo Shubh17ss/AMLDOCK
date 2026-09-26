@@ -40,11 +40,17 @@ const SOURCE_OF_WEALTH_ON_NODE = (nodeType) => Boolean(nodeType) && nodeType !==
  * <p>Takes `options` for the one question that has three answers — nominee director/shareholder,
  * where "Not asked" is the default because a YES carries a risk consequence and a defaulted NO
  * would be a negative answer nobody gave.
+ *
+ * <p>`nullable` is the two-option form of that same point: neither segment is selected while the
+ * answer is null, so a question nobody has put reads as unanswered rather than as No. Used on
+ * every question that feeds the risk score — the Risk tab lists the unanswered ones and will not
+ * let the risk be approved until they are gone, which only works if "not stated" is reachable.
  */
-function YesNoField({ label, value, onChange, options = YES_NO, helper }) {
+function YesNoField({ label, value, onChange, options = YES_NO, helper, nullable = false }) {
   const isTriState = options !== YES_NO;
-  const current = value === undefined || value === null
-    ? (isTriState ? options[0].value : false)
+  const unset = value === undefined || value === null;
+  const current = unset
+    ? (isTriState ? options[0].value : (nullable ? null : false))
     : value;
 
   return (
@@ -69,7 +75,7 @@ function YesNoField({ label, value, onChange, options = YES_NO, helper }) {
         }}
       >
         {options.map((o) => {
-          const selected = String(o.value) === String(current);
+          const selected = current !== null && String(o.value) === String(current);
           return (
             <Box
               key={String(o.value)}
@@ -298,18 +304,21 @@ export function NodeFormFields({
             label="Complex ownership structure?"
             value={value.companyComplexOwnership}
             onChange={(v) => set({ companyComplexOwnership: v })}
+            nullable
           />
 
           <YesNoField
             label="Used for personal assets?"
             value={value.companyPersonalAssets}
             onChange={(v) => set({ companyPersonalAssets: v })}
+            nullable
           />
 
           <YesNoField
             label="Is a new developer?"
             value={value.companyNewDeveloper}
             onChange={(v) => set({ companyNewDeveloper: v })}
+            nullable
           />
         </>
       )}
@@ -339,6 +348,8 @@ export function NodeFormFields({
             label="Is the trust a discretionary trust?"
             value={value.trustDiscretionary}
             onChange={(v) => set({ trustDiscretionary: v })}
+            helper="Answering No adds to the risk score."
+            nullable
           />
 
           <FormControl>
@@ -476,10 +487,13 @@ export function buildNodePayload(form) {
     payload.jurisdictionCountry = norm(form.jurisdictionCountry);
     payload.businessNumber = norm(form.businessNumber);
     payload.companyHasConstitution = form.companyHasConstitution ?? false;
+    // null rather than false for the three that feed the risk score. The API reads null as
+    // "leave alone", so an untouched question stays unanswered instead of being stamped No by a
+    // save that was about something else.
+    payload.companyComplexOwnership = form.companyComplexOwnership ?? null;
+    payload.companyPersonalAssets = form.companyPersonalAssets ?? null;
+    payload.companyNewDeveloper = form.companyNewDeveloper ?? null;
     payload.nomineeStatus = form.nomineeStatus || 'NOT_ASKED';
-    payload.companyComplexOwnership = form.companyComplexOwnership ?? false;
-    payload.companyPersonalAssets = form.companyPersonalAssets ?? false;
-    payload.companyNewDeveloper = form.companyNewDeveloper ?? false;
   }
 
   if (form.nodeType === 'TRUSTEE_COMPANY') {
@@ -506,7 +520,7 @@ export function buildNodePayload(form) {
   if (form.nodeType === 'TRUST') {
     payload.trustType = norm(form.trustType);
     payload.jurisdictionCountry = norm(form.jurisdictionCountry);
-    payload.trustDiscretionary = form.trustDiscretionary ?? false;
+    payload.trustDiscretionary = form.trustDiscretionary ?? null;
     payload.trustHoldingComplexity = norm(form.trustHoldingComplexity);
   }
 

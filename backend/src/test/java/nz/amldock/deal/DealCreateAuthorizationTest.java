@@ -60,6 +60,7 @@ class DealCreateAuthorizationTest {
     @Mock BeneficialOwnerService beneficialOwners;
     @Mock nz.amldock.ownership.OwnershipStructureRepository structures;
     @Mock nz.amldock.ownership.OwnershipNodeRepository nodes;
+    @Mock nz.amldock.beneficialowner.BeneficialOwnerRepository people;
     @Mock nz.amldock.audit.AuditService audit;
     @Mock nz.amldock.ownership.OwnershipService ownership;
     @Mock nz.amldock.notification.DealNotificationEnqueuer notifier;
@@ -75,7 +76,7 @@ class DealCreateAuthorizationTest {
     void setUp() {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
-                beneficialOwners, new DealRiskService(deals, structures, nodes, audit),
+                beneficialOwners, new DealRiskService(deals, structures, nodes, people, audit),
                 ownership, audit, notifier, versions);
 
         lenient().when(branches.findById(OWN_BRANCH)).thenReturn(Optional.of(branch(OWN_BRANCH, 1L)));
@@ -196,7 +197,7 @@ class DealCreateAuthorizationTest {
     private CreateDealRequest request(Long firmBranchId) {
         return new CreateDealRequest(
                 firmBranchId, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
                         null, PropertyType.RESIDENTIAL, "RETIREMENT"),
                 new ClientInput("Jane Marsh", null, null, null));

@@ -75,6 +75,7 @@ export const PERSON_ROLES = [
   { value: 'PARTNER', label: 'Partner' },
   { value: 'PROTECTOR', label: 'Protector' },
   { value: 'GUARANTOR', label: 'Guarantor' },
+  { value: 'BENEFICIARY', label: 'Beneficiary' },
 ];
 
 export const personRoleLabel = (value) =>
@@ -90,10 +91,24 @@ export const personRolesLabel = (roles) =>
 /**
  * What a node of each type will accept on its Documents tab.
  *
- * A type absent from this map has no restriction. Mirrors `NodeType.acceptedDocumentTypes()`,
- * which is where it is enforced — this only narrows the picker.
+ * A type absent from this map has no restriction, which since the individual list was added
+ * means OTHER alone. Mirrors `NodeType.acceptedDocumentTypes()`, which is where it is enforced —
+ * this only narrows the picker.
  */
 export const ACCEPTED_DOCUMENT_TYPES = {
+  // A person carries identity documents, the evidence behind an address or a source of funds,
+  // and the results of the checks run against them. Everything else on the catalogue belongs to
+  // an entity. Mirrors NodeType.INDIVIDUAL_DOCUMENTS, which is where it is enforced.
+  INDIVIDUAL: [
+    'NZ_PASSPORT', 'AU_PASSPORT', 'OVERSEAS_PASSPORT', 'NZ_DRIVER_LICENCE', 'AU_DRIVER_LICENCE',
+    'PROOF_OF_ADDRESS', 'BANK_CARD', 'BANK_STATEMENT', 'CERTIFICATE_OF_CITIZENSHIP',
+    'FOREIGN_CITIZENSHIP_CERTIFICATE', 'BIRTH_CERTIFICATE', 'MARRIAGE_CERTIFICATE',
+    'DEATH_CERTIFICATE', 'INTERNATIONAL_DRIVING_PERMIT', 'NATIONAL_IDENTITY_CARD',
+    'FOREIGN_IDENTITY_CARD', 'KIWI_ACCESS_CARD', 'GOVERNMENT_CARD', 'GOVERNMENT_STATEMENT',
+    'SOURCE_OF_FUNDS_WEALTH', 'TAX_RETURN', 'WAGE_SLIP', 'ELECTRONIC_ID_VERIFICATION_RESULT',
+    'BIOMETRIC_VERIFICATION_RESULT', 'ENDURING_POWER_OF_ATTORNEY', 'CERTIFICATE_OF_NON_REVOCATION',
+    'WEB_SEARCH_RESULT', 'LETTER_FROM_TRUSTED_REFEREE', 'REFUGEE_TRAVEL_DOCUMENT', 'OTHER',
+  ],
   TRUSTEE_COMPANY: ['COMPANY_CERT', 'COMPANY_EXTRACT', 'OTHER'],
   LIMITED_PARTNERSHIP: [
     'COMPANY_CERT', 'LIMITED_PARTNERSHIP_EXTRACT', 'PARTNERSHIP_STRUCTURE',
@@ -148,11 +163,19 @@ export const TRUST_TYPES = [
 export const trustTypeLabel = (value) =>
   TRUST_TYPES.find((t) => t.value === value)?.label ?? value ?? '';
 
-/** How much the trust holds. The third band sets the deal to High. */
+/**
+ * How much the trust holds, in ascending order of what it costs the deal: nothing, +2, +4, +6.
+ *
+ * Unascertainable scores highest, above an extensive portfolio, because not knowing what a trust
+ * holds is worse than knowing it holds a great deal. The points themselves live on the server
+ * (DealRiskService) and are deliberately not mirrored here - the Risk tab reads the workings
+ * back off the API rather than recomputing them.
+ */
 export const TRUST_HOLDING_COMPLEXITY = [
   { value: 'SINGLE_PROPERTY_ASSET', label: 'Single property asset' },
   { value: 'MORE_THAN_ONE_PROPERTY_ASSET', label: 'More than one property asset' },
   { value: 'EXTENSIVE_DIVERSE_PORTFOLIO', label: 'Extensive / diverse asset portfolio' },
+  { value: 'UNASCERTAINABLE', label: 'Unascertainable' },
 ];
 
 /** The nominee question's three states — the only tri-state answer on the company form. */

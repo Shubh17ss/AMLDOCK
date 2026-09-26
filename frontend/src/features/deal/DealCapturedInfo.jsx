@@ -120,12 +120,15 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
 
             <Group title="Transaction & risk">
               <Row label="Risk rating" value={deal.riskRating
-                ? `${deal.riskRating}${deal.riskRatingSource === 'OVERRIDE' ? ' (set by compliance)' : ''}`
+                ? `${deal.riskRating} (score ${deal.riskValue ?? 0})`
+                  + `${deal.riskRatingSource === 'OVERRIDE' ? ', set by compliance' : ''}`
+                  + `${deal.riskApproved ? ' — approved' : ''}`
                 : 'Not assessed'} />
               <Row label="Red flag"    value={yesNo(deal.redFlagPresent)} />
               <Row label="Purpose"     value={deal.transactionPurpose} />
               <Row label="Trust in ownership" value={yesNo(deal.trustInvolved)} />
-              <Row label="On-sold quickly"    value={yesNo(deal.onSoldQuickly)} />
+              <Row label="Ownership tenure"   value={tenureLabel(deal)} />
+              <Row label="Met face to face, IDs verified" value={yesNo(deal.faceToFaceIdVerified)} />
               <Row label="Foreign exposure"   value={foreignExposureLabel(deal.foreignExposureCountry)} />
               <Row label="Min value"   value={deal.valuationMin != null ? money.formatWithCode(deal.valuationMin) : null} />
               <Row label="Max value"   value={deal.valuationMax != null ? money.formatWithCode(deal.valuationMax) : null} />
@@ -135,6 +138,19 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * "1y 6m", or just the half that was answered. Null when neither box was, which the Row
+ * treats the same as any other unanswered field rather than printing a misleading "0m".
+ */
+function tenureLabel(deal) {
+  const years = deal.ownershipTenureYears;
+  const months = deal.ownershipTenureMonths;
+  if (years == null && months == null) return null;
+  return [years ? `${years}y` : null, months ? `${months}m` : null]
+    .filter(Boolean)
+    .join(' ') || '0m';
 }
 
 function Group({ title, children }) {

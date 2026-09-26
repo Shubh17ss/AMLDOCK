@@ -85,14 +85,17 @@ export function NodeEditorPane({
         companyHasConstitution: selected.companyHasConstitution ?? false,
         nomineeStatus: selected.nomineeStatus ?? 'NOT_ASKED',
         sourceOfFunds: selected.sourceOfFunds ?? '',
-        companyComplexOwnership: selected.companyComplexOwnership ?? false,
-        companyPersonalAssets: selected.companyPersonalAssets ?? false,
-        companyNewDeveloper: selected.companyNewDeveloper ?? false,
+        // null, not false: these four feed the risk score, and a defaulted No is a negative
+        // answer nobody gave sitting in a record that says the risk was assessed. The Risk tab
+        // lists an unanswered one as outstanding and refuses the approval until it is answered.
+        companyComplexOwnership: selected.companyComplexOwnership ?? null,
+        companyPersonalAssets: selected.companyPersonalAssets ?? null,
+        companyNewDeveloper: selected.companyNewDeveloper ?? null,
         companyNumber: selected.companyNumber ?? '',
         incorporationDate: selected.incorporationDate ?? '',
         registeredOffice: selected.registeredOffice ?? '',
         trustType: selected.trustType ?? '',
-        trustDiscretionary: selected.trustDiscretionary ?? false,
+        trustDiscretionary: selected.trustDiscretionary ?? null,
         trustHoldingComplexity: selected.trustHoldingComplexity ?? '',
         personRoles: selected.personRoles ?? [],
         propertyPercentage: selected.propertyPercentage ?? '',

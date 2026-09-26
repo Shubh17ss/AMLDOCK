@@ -22,6 +22,7 @@ import { NodeDrawer } from '../features/deal/review/NodeDrawer.jsx';
 import { DealDrawer } from '../features/deal/review/DealDrawer.jsx';
 import { ReviewTabPanel } from '../features/deal/review/ReviewTabPanel.jsx';
 import { ParkedPanel } from '../features/deal/review/ParkedPanel.jsx';
+import { RiskPanel } from '../features/deal/review/RiskPanel.jsx';
 import { DealStatusDialog } from '../features/deal/DealStatusDialog.jsx';
 import { DealVersionsMenu, VersionsIcon } from '../features/deal/DealVersionsMenu.jsx';
 import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
@@ -236,12 +237,29 @@ export function DealReviewScreen() {
 
   const selectedNode = tree.tree?.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
+  // The people on this deal, for the key-contact picker in the deal drawer. Read off the tree
+  // already in hand rather than fetched again, so the list cannot lag a node edit.
+  const individuals = (tree.tree?.nodes ?? [])
+    .filter((n) => n.nodeType === 'INDIVIDUAL')
+    .map((n) => ({ id: n.id, displayName: n.displayName }));
+
   // Whether the deal has anywhere to go, and whether this viewer is the one to take it there.
   // The role test used to be the router's job. Asked of the *live* status: the moves offered are
   // moves of the deal, and looking at v1 does not make them moves of v1.
   const canUpdateStatus = isDealReviewer(user?.role)
     && !snapshot
     && (transitionsFrom(liveDeal.status).length > 0 || showOverride);
+
+  /*
+   * Who may approve or override the risk.
+   *
+   * Narrower than canUpdateStatus in one way and wider in another, deliberately. It does not
+   * depend on the deal having a transition available — rating a deal is not a move along the
+   * lifecycle — and it is not gated on canEditContent either, because setting a risk level is a
+   * compliance act on a deal under review, which is exactly when the deal itself is closed to
+   * content changes. The server checks the same thing, scoped to the deal's own firm.
+   */
+  const canDecideRisk = isDealReviewer(user?.role) && canWrite(user?.role) && !snapshot;
 
   const versions = versionsQ.data ?? [];
 
@@ -401,11 +419,27 @@ export function DealReviewScreen() {
       </ReviewTabPanel>
 
       <ReviewTabPanel value="risk" current={tab}>
-        <ParkedPanel title="Risk assessment">
-          The rating in the header is derived from the deal's answers and its ownership structure.
-          The workings behind it — every factor, and what a reviewer decided about each — will be
-          shown here.
-        </ParkedPanel>
+        {snapshot ? (
+          // A version records what the deal said when it was signed off; the risk endpoint
+          // answers for the live deal only, and showing today's workings under a v1 heading
+          // would be a claim about the past that nothing behind it supports.
+          <ParkedPanel title="Risk assessment">
+            Switch back to the live deal to see the risk workings. This version records the
+            rating it was signed off with, which is shown in the header.
+          </ParkedPanel>
+        ) : (
+          <RiskPanel
+            dealId={dealId}
+            canDecide={canDecideRisk}
+            // A factor or a gap names an owner; clicking it opens that owner, so the field
+            // that answers the question is one step from the list that asked for it.
+            onSelectNode={(nodeId) => {
+              setDealDrawerOpen(false);
+              setSelectedNodeId(nodeId);
+              setTab('structure');
+            }}
+          />
+        )}
       </ReviewTabPanel>
 
       {/* ── The deal itself ─────────────────────────────────────────────── */}
@@ -424,6 +458,7 @@ export function DealReviewScreen() {
         // The same snapshot scope NodeDrawer gets, for the same reason: the Documents tab must
         // show the files this version was signed off with, not the deal's current ones.
         version={documentScope}
+        individuals={individuals}
       />
 
       {/* ── The selected owner ──────────────────────────────────────────── */}

@@ -37,8 +37,15 @@ export const EMPTY_FORM = {
   // Section 3
   transactionPurpose: '',
   trustInvolved: null,       // null = unanswered, distinct from false
-  onSoldQuickly: null,
+  // How long the client has held the property. Two boxes because that is how it is asked;
+  // months is the remainder beside years, so 18 months is 1 and 6. Either alone is an answer.
+  ownershipTenureYears: '',
+  ownershipTenureMonths: '',
+  faceToFaceIdVerified: null,
   foreignExposureCountry: '', // '' = unanswered, 'NONE' = asked and there is none
+  // Which individual on the ownership structure is the point of contact. Only the review
+  // drawer offers it — at creation there is no structure to choose from.
+  keyContactNodeId: '',
 
   // Section 4
   clientRemote: null,       // null = unanswered, distinct from "no"
@@ -62,7 +69,9 @@ export function buildDealPatch(form) {
     transactionType: TRANSACTION_TYPE_BY_CLIENT_ROLE[form.clientRole] ?? null,
     transactionPurpose: form.transactionPurpose,
     trustInvolved: form.trustInvolved,
-    onSoldQuickly: form.onSoldQuickly,
+    ownershipTenureYears: num(form.ownershipTenureYears),
+    ownershipTenureMonths: num(form.ownershipTenureMonths),
+    faceToFaceIdVerified: form.faceToFaceIdVerified,
     foreignExposureCountry: form.foreignExposureCountry,
     clientRemote: form.clientRemote,
     redFlagPresent: form.redFlagPresent,
@@ -103,7 +112,13 @@ export function buildDealDetailsPatch(form) {
   return {
     transactionPurpose: form.transactionPurpose,
     trustInvolved: form.trustInvolved,
-    onSoldQuickly: form.onSoldQuickly,
+    ownershipTenureYears: num(form.ownershipTenureYears),
+    ownershipTenureMonths: num(form.ownershipTenureMonths),
+    faceToFaceIdVerified: form.faceToFaceIdVerified,
+    // '' means "nobody chosen" and the API reads null as "leave alone", so clearing the
+    // nomination is deliberately not expressible — removing the owner is what clears it, and
+    // the FK does that server-side.
+    keyContactNodeId: form.keyContactNodeId === '' ? null : Number(form.keyContactNodeId),
     foreignExposureCountry: form.foreignExposureCountry,
     redFlagPresent: form.redFlagPresent,
     // Sent blank when the answer is No, which is how the API clears a flag named earlier.
@@ -190,7 +205,10 @@ export function dtoToForm(dto) {
     },
     transactionPurpose: dto.transactionPurpose ?? '',
     trustInvolved: dto.trustInvolved ?? null,
-    onSoldQuickly: dto.onSoldQuickly ?? null,
+    ownershipTenureYears: dto.ownershipTenureYears == null ? '' : String(dto.ownershipTenureYears),
+    ownershipTenureMonths: dto.ownershipTenureMonths == null ? '' : String(dto.ownershipTenureMonths),
+    faceToFaceIdVerified: dto.faceToFaceIdVerified ?? null,
+    keyContactNodeId: dto.keyContactNodeId == null ? '' : String(dto.keyContactNodeId),
     foreignExposureCountry: dto.foreignExposureCountry ?? '',
     clientRemote: dto.clientRemote ?? null,
     contactName: dto.pocName ?? '',
@@ -228,7 +246,17 @@ export function sectionGaps(section, form) {
     if (!p.propertyType) gaps.push('Property type');
     if (!p.reasonForSelling) gaps.push('Reason for selling');
     if (form.trustInvolved == null) gaps.push('Whether a trust is involved in beneficial ownership');
-    if (form.onSoldQuickly == null) gaps.push('Whether the property is being on-sold quickly');
+    // One box is enough: four years is answered by leaving months blank, and demanding a zero
+    // there would hold up a save over a complete answer.
+    if (form.ownershipTenureYears === '' && form.ownershipTenureMonths === '') {
+      gaps.push('How long the client has owned the property');
+    }
+    if (form.ownershipTenureMonths !== '' && Number(form.ownershipTenureMonths) > 11) {
+      gaps.push('Months must be 0-11 — put whole years in the Years box');
+    }
+    if (form.faceToFaceIdVerified == null) {
+      gaps.push('Whether you met the client face to face and verified their original IDs');
+    }
     if (!form.foreignExposureCountry) gaps.push('Foreign exposure (choose "None" if there is none)');
   }
   if (section === 4) {
@@ -247,14 +275,8 @@ export function sectionGaps(section, form) {
   return gaps;
 }
 
-/**
- * The risk rating the server will derive from these answers.
- *
- * A preview only — the server owns the real value and echoes it back on every save. It exists
- * so the broker sees the consequence of the on-sold answer as they make it, rather than
- * discovering it on the deal page afterwards.
- */
-export function previewRiskRating(form) {
-  if (form.onSoldQuickly == null) return null;
-  return form.onSoldQuickly ? 'HIGH' : 'LOW';
-}
+// previewRiskRating lived here until V46, mirroring "on-sold quickly means High" so the broker
+// saw the consequence as they answered. The rule is now a score drawn from the whole ownership
+// structure as well as the deal, and a browser copy of it could only be a second implementation
+// free to disagree with the number printed beside it. The server echoes the real rating back on
+// every save, and the Risk tab shows the workings.

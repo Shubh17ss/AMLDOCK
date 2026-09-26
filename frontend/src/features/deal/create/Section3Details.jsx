@@ -2,10 +2,9 @@ import { useEffect } from 'react';
 import { FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
 import { CountrySelect } from '../../../components/CountrySelect.jsx';
 import { VoiceRecorderField } from '../../../components/VoiceRecorderField.jsx';
-import { RiskRatingChip } from '../../../components/RiskRatingChip.jsx';
 import { PROPERTY_TYPES, reasonsForPropertyType } from '../../../data/propertyTypes.js';
-import { previewRiskRating } from './dealDraftModel.js';
 import { SectionCard, FieldGroup } from './SectionShell.jsx';
+import { TenureField } from './TenureField.jsx';
 import { YesNoField } from './YesNoField.jsx';
 import { tokens } from '../../../theme/theme.js';
 
@@ -13,7 +12,13 @@ import { tokens } from '../../../theme/theme.js';
  * Section 3 — what the property is, and why it's being sold.
  *
  * This is where the AML signal actually lives: the reason for selling, whether a trust sits in
- * the beneficial ownership, whether the property is being flipped, and any foreign exposure.
+ * the beneficial ownership, how long the client has held the property, whether they were met in
+ * person with their original IDs, and any foreign exposure.
+ *
+ * <p>There is no running risk preview here any more. The rating is a score drawn from the whole
+ * ownership structure as well as these answers, and the structure does not exist yet at this
+ * point in the form — a preview built from half the inputs would be wrong more often than not.
+ * It is shown on the deal page once there is something to show.
  *
  * It sits after the deal exists, so none of it blocks getting the file open — a broker can
  * leave at the address and come back to these answers.
@@ -31,8 +36,6 @@ export function Section3Details({ form, setNested, setField, voiceBlob, onVoiceC
     setNested('property', 'reasonForSelling')('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyType]);
-
-  const previewRisk = previewRiskRating(form);
 
   return (
     <SectionCard
@@ -103,23 +106,21 @@ export function Section3Details({ form, setNested, setField, voiceBlob, onVoiceC
           required
         />
 
-        <YesNoField
-          label="Is the property being on-sold quickly?"
-          help="A short hold between purchase and resale."
-          value={form.onSoldQuickly}
-          onChange={setField('onSoldQuickly')}
+        <TenureField
+          years={form.ownershipTenureYears}
+          months={form.ownershipTenureMonths}
+          onYearsChange={setField('ownershipTenureYears')}
+          onMonthsChange={setField('ownershipTenureMonths')}
           required
-          warnOnYes="This raises the deal's risk rating to High."
         />
 
-        {previewRisk && (
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="caption" sx={{ color: tokens.muted }}>
-              Risk rating so far:
-            </Typography>
-            <RiskRatingChip rating={previewRisk} />
-          </Stack>
-        )}
+        <YesNoField
+          label="Did you meet the client face to face and verify their original IDs?"
+          help="Both halves matter — seeing someone is not the same as sighting their documents."
+          value={form.faceToFaceIdVerified}
+          onChange={setField('faceToFaceIdVerified')}
+          required
+        />
 
         <CountrySelect
           label="Foreign exposure"

@@ -10,9 +10,11 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
+import nz.amldock.deal.dto.RiskAssessmentDto;
 import nz.amldock.deal.version.DealVersionService;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
+import nz.amldock.deal.DealRiskService.RiskAssessment;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.dealnote.DealNoteService;
@@ -37,6 +39,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -248,7 +251,9 @@ public class DealService {
         d.setNotes(req.notes());
         d.setTransactionPurpose(blankToNull(req.transactionPurpose()));
         d.setTrustInvolved(req.trustInvolved());
-        d.setOnSoldQuickly(req.onSoldQuickly());
+        d.setOwnershipTenureYears(req.ownershipTenureYears());
+        d.setOwnershipTenureMonths(req.ownershipTenureMonths());
+        d.setFaceToFaceIdVerified(req.faceToFaceIdVerified());
         d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         d.setClientRemote(req.clientRemote());
         d.setRedFlagPresent(req.redFlagPresent());
@@ -301,7 +306,10 @@ public class DealService {
         boolean trustJustAdded = Boolean.TRUE.equals(req.trustInvolved())
                 && !Boolean.TRUE.equals(d.getTrustInvolved());
         if (req.trustInvolved() != null) d.setTrustInvolved(req.trustInvolved());
-        if (req.onSoldQuickly() != null) d.setOnSoldQuickly(req.onSoldQuickly());
+        if (req.ownershipTenureYears() != null) d.setOwnershipTenureYears(req.ownershipTenureYears());
+        if (req.ownershipTenureMonths() != null) d.setOwnershipTenureMonths(req.ownershipTenureMonths());
+        if (req.faceToFaceIdVerified() != null) d.setFaceToFaceIdVerified(req.faceToFaceIdVerified());
+        if (req.keyContactNodeId() != null) d.setKeyContactNodeId(req.keyContactNodeId());
         if (req.foreignExposureCountry() != null) {
             d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         }
@@ -451,6 +459,114 @@ public class DealService {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
         return dealNotes.timeline(d);
+    }
+
+    /* ---------- the risk position ---------- */
+
+    /**
+     * The deal's risk score, its band, and the workings behind both.
+     *
+     * <p>Readable by anyone who may read the deal, including the auditor. The workings are the
+     * part worth showing widely: a rating nobody outside compliance can account for is the
+     * problem this replaced.
+     */
+    @Transactional(readOnly = true)
+    public RiskAssessmentDto risk(Long id) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
+        return riskDto(d);
+    }
+
+    /**
+     * Signs off the deal's current risk position.
+     *
+     * <p>Refused while anything that feeds the score is unanswered. An approval given over a
+     * half-answered file is a sign-off on a number that was never computed from a complete set of
+     * facts, and nothing downstream could tell the two apart afterwards.
+     *
+     * <p>Not gated on the deal being editable. Approving a risk is a compliance act on a deal
+     * under review, which is precisely when the deal itself is closed to content changes.
+     */
+    @Transactional
+    public RiskAssessmentDto approveRisk(Long id) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        UserPrincipal actor = mustBeDecider(d);
+
+        RiskAssessment assessment = risk.assess(d);
+        if (!assessment.complete()) {
+            throw new BadRequestException("Answer every question that affects the risk first — "
+                    + assessment.unanswered().size() + " still outstanding");
+        }
+        if (d.isRiskApproved()) return riskDto(d);
+
+        d.setRiskApproved(true);
+        d.setRiskApprovedByUserId(actor.id());
+        d.setRiskApprovedAt(Instant.now());
+
+        audit.record(AuditAction.DEAL_RISK_APPROVED, "Deal", d.getId(),
+                "Risk " + d.getRiskRating() + " (score " + d.getRiskValue() + ") approved on deal "
+                        + d.getReference());
+        return riskDto(d);
+    }
+
+    /**
+     * Pins the deal's risk band by hand, or releases it back to the derived one.
+     *
+     * <p>Choosing the band the score already produces is how an override is lifted — otherwise
+     * there would be no way back to DERIVED short of a migration, and a deal would carry a pin
+     * long after the answers underneath had caught up with it.
+     *
+     * <p>Either way the approval is withdrawn. The reviewer approving a rating and the reviewer
+     * changing it are not necessarily the same person, and a sign-off does not carry across to a
+     * band nobody signed off.
+     */
+    @Transactional
+    public RiskAssessmentDto overrideRisk(Long id, RiskRating rating, String comment) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        mustBeDecider(d);
+
+        RiskAssessment assessment = risk.assess(d);
+        RiskRating previous = d.getRiskRating();
+        boolean releasing = rating == assessment.rating();
+
+        d.setRiskValue(assessment.value());
+        d.setRiskRating(rating);
+        d.setRiskRatingSource(releasing ? RiskRatingSource.DERIVED : RiskRatingSource.OVERRIDE);
+        d.setRiskOverrideComment(releasing ? null : comment);
+        d.setRiskApproved(false);
+        d.setRiskApprovedByUserId(null);
+        d.setRiskApprovedAt(null);
+
+        audit.record(AuditAction.DEAL_RISK_OVERRIDDEN, "Deal", d.getId(),
+                releasing
+                        ? "Risk override lifted on deal " + d.getReference() + " — back to the"
+                          + " calculated " + rating + " (score " + assessment.value() + "): " + comment
+                        : "Risk " + previous + " -> " + rating + " set by hand on deal "
+                          + d.getReference() + ", against a calculated " + assessment.rating()
+                          + " (score " + assessment.value() + "): " + comment);
+        return riskDto(d);
+    }
+
+    /**
+     * Whoever is asking has to be one of the two roles that decide a deal.
+     *
+     * <p>The controller's {@code @PreAuthorize} says the same thing, and this says it again
+     * scoped to <em>this</em> deal's firm — the annotation cannot see which firm a deal belongs
+     * to, so on its own it would let a compliance officer of one firm rate another's deals.
+     */
+    private UserPrincipal mustBeDecider(Deal d) {
+        UserPrincipal actor = currentPrincipal();
+        lifecycle.assertCanRead(d, actor, firmIdOf(d));
+        if (!DealLifecycleService.isDecider(actor.role())) {
+            throw new ForbiddenException("Only compliance may set a deal's risk level");
+        }
+        return actor;
+    }
+
+    private RiskAssessmentDto riskDto(Deal d) {
+        String approvedBy = d.getRiskApprovedByUserId() == null ? null
+                : users.findById(d.getRiskApprovedByUserId()).map(User::getEmail).orElse(null);
+        return RiskAssessmentDto.of(d, risk.assess(d), approvedBy);
     }
 
     /** Returns a pair of (deal, previousStatus) so the controller can audit the transition. */

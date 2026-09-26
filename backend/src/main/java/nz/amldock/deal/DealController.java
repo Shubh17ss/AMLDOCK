@@ -9,6 +9,8 @@ import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.NoteRequest;
 import nz.amldock.deal.dto.OverrideRequest;
+import nz.amldock.deal.dto.RiskAssessmentDto;
+import nz.amldock.deal.dto.RiskOverrideRequest;
 import nz.amldock.deal.dto.UpdateDealRequest;
 import nz.amldock.dealnote.dto.DealNoteDto;
 import nz.amldock.property.dto.PropertyInput;
@@ -200,6 +202,39 @@ public class DealController {
                 "Deal " + result.deal().getReference()
                         + " overridden: " + result.previousStatus() + " → " + req.targetStatus());
         return deals.toDtoAfterMutation(result.deal());
+    }
+
+    /* ---------- the risk position ---------- */
+    // Read is open to anyone who may read the deal — the workings are the part worth showing
+    // widely, since a rating nobody outside compliance can account for is what this replaced.
+    // Both writes are REVIEWER_ROLES, and DealService re-checks against the deal's own firm:
+    // @PreAuthorize cannot see which firm a deal belongs to, so on its own it would let a
+    // compliance officer of one firm rate another's deals.
+
+    @GetMapping("/{id}/risk")
+    public RiskAssessmentDto risk(@PathVariable Long id) {
+        return deals.risk(id);
+    }
+
+    @PostMapping("/{id}/risk/approve")
+    @PreAuthorize(REVIEWER_ROLES)
+    public RiskAssessmentDto approveRisk(@PathVariable Long id) {
+        return deals.approveRisk(id);
+    }
+
+    /**
+     * Sets the risk band by hand, or releases it by choosing the calculated one.
+     *
+     * <p>Not SENIOR_MANAGER-only, unlike {@code /override}. That one overrules the lifecycle —
+     * it can put a deal into any status from any other — whereas this is a compliance judgement
+     * about a compliance figure, and rating a deal is what an AML compliance officer is for. The
+     * audit line records both ratings either way.
+     */
+    @PostMapping("/{id}/risk/override")
+    @PreAuthorize(REVIEWER_ROLES)
+    public RiskAssessmentDto overrideRisk(@PathVariable Long id,
+                                          @Valid @RequestBody RiskOverrideRequest req) {
+        return deals.overrideRisk(id, req.rating(), req.comment());
     }
 
     /* ---------- notes timeline ---------- */

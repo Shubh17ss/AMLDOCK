@@ -2,6 +2,7 @@ package nz.amldock.deal.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -31,7 +32,9 @@ public record CreateDealRequest(
 
         String transactionPurpose,
         Boolean trustInvolved,
-        Boolean onSoldQuickly,
+        /** How long the client has held the property. Months is the remainder beside years. */
+        @PositiveOrZero @Max(200) Integer ownershipTenureYears,
+        @PositiveOrZero @Max(11) Integer ownershipTenureMonths,
         /**
          * "NONE" or an ISO alpha-2 code. Null and "" both pass — the question is unanswered
          * until section 3 asks it, and the form sends "" for every field it owns on every save,
@@ -44,6 +47,12 @@ public record CreateDealRequest(
 
         /** Not met face to face. Drives remote identity verification later, not the risk rating. */
         Boolean clientRemote,
+
+        /**
+         * Met face to face <em>and</em> their original IDs sighted. Distinct from clientRemote
+         * above, which asks only whether they met — and unlike it, this one feeds the risk score.
+         */
+        Boolean faceToFaceIdVerified,
 
         /* ---------- section 4: risk and valuation ---------- */
 
