@@ -1,36 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Divider, FormControl, FormControlLabel, FormLabel,
-  Radio, RadioGroup, Stack, TextField, Typography,
+  Alert, Box, Button, Divider, Stack, TextField, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import SaveIcon from '@mui/icons-material/Save';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ACCEPTED_DOCUMENT_TYPES } from '../../api/ownership.js';
-import { listNodeDocuments, uploadToS3 } from '../../api/documents.js';
 import { NodeFormFields, buildNodePayload } from './NodeFormFields.jsx';
 import { DocumentUploader } from '../../components/DocumentUploader.jsx';
-import { VoiceRecorderField } from '../../components/VoiceRecorderField.jsx';
-import { VoiceClip } from '../../components/VoiceClip.jsx';
 import { DocumentViewerDialog } from '../../components/DocumentViewerDialog.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
-import { tokens } from '../../theme/theme.js';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
-
-// Three user-facing manual states mapped onto the existing backend enum.
-const VERIFICATION_OPTIONS = [
-  { value: 'VERIFIED', label: 'Verified', tone: 'success' },
-  { value: 'IN_PROGRESS', label: 'Under verification', tone: 'info' },
-  { value: 'FAILED', label: 'Not verified', tone: 'error' },
-];
 
 /**
  * Editor for a selected ownership node. Lets the user:
  *   - rename / patch type-specific fields
  *   - inspect the incoming edge and edit its percentage / role
  *   - delete the node (with cascade confirm if it has edges)
- * Documents and Verifications tabs are placeholders for M8 / M9.
+ * Documents is a placeholder for M8. Verification has its own component - the drawer renders
+ * NodeVerificationTab instead of this pane on that tab, because its action lives in the
+ * drawer footer rather than inline like every save here.
  */
 export function NodeEditorPane({
   tree, selectedNodeId, useTree, onRequestDelete, dealId,
@@ -51,14 +39,11 @@ export function NodeEditorPane({
 }) {
   const [form, setForm] = useState(null);
   const [edgeForm, setEdgeForm] = useState({ percentage: '' });
-  const [verification, setVerification] = useState({ status: 'IN_PROGRESS', notes: '' });
-  const [verificationVoice, setVerificationVoice] = useState(null); // Blob | null
   const [error, setError] = useState(null);
   const { showToast } = useToast();
   // The document open in the viewer, or null. Held whole rather than by id: both lists
   // already have the row in hand, and re-finding it would mean each knowing about the other.
   const [viewingDoc, setViewingDoc] = useState(null);
-  const qc = useQueryClient();
 
   const selected = useMemo(
     () => tree?.nodes?.find((n) => n.id === selectedNodeId) ?? null,
@@ -114,34 +99,20 @@ export function NodeEditorPane({
           }
           : null,
       });
-      setVerification({
-        status: selected.verificationStatus ?? 'IN_PROGRESS',
-        notes: selected.verificationNotes ?? '',
-      });
-      setVerificationVoice(null);
       setError(null);
     } else {
       setForm(null);
     }
   }, [selected?.id]);
 
-  // Existing per-node voice notes for the Verifications tab.
-  const nodeDocsQ = useQuery({
-    queryKey: ['documents', 'node', selectedNodeId],
-    queryFn: () => listNodeDocuments(selectedNodeId),
-    enabled: Boolean(selectedNodeId) && tab === 'verification' && !version,
-  });
-
   // A version carries the deal's whole document set; this node's share of it is that set filtered
   // the way the server filters the live one — the node's own files, plus the ID scans of the
-  // person behind it, which hang off the person rather than the node.
+  // person behind it, which hang off the person rather than the node. Null on the live deal,
+  // where DocumentUploader fetches for itself.
   const versionNodeDocs = version && selected
     ? (version.documents ?? []).filter((d) => d.ownershipNodeId === selected.id
         || (selected.beneficialOwnerId != null && d.beneficialOwnerId === selected.beneficialOwnerId))
     : null;
-
-  const nodeDocs = versionNodeDocs ?? nodeDocsQ.data ?? [];
-  const nodeVoiceNotes = nodeDocs.filter((d) => d.documentType === 'VOICE_NOTE');
 
   useEffect(() => {
     setEdgeForm({ percentage: incomingEdge?.percentage ?? '' });
@@ -158,50 +129,6 @@ export function NodeEditorPane({
       showToast({ severity: 'success', message: 'Deal updated' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save');
-    }
-  };
-
-  const saveVerification = async () => {
-    setError(null);
-    try {
-      // 1) Status + text notes
-      await useTree.updateNode.mutateAsync({
-        nodeId: selected.id,
-        payload: {
-          verificationStatus: verification.status,
-          // Empty string normalises to null on the backend's `if not null` patch — but the
-          // backend treats null as "leave alone". Send "" so admins can clear notes if needed.
-          verificationNotes: verification.notes ?? '',
-          // Carried through unchanged. updateNode writes this one unconditionally so that an
-          // emptied field really clears, which means a partial patch that omitted it would erase
-          // the figure as a side effect of saving a verification note. Read from the node rather
-          // than the form, so an unsaved edit on the Details tab is not committed from here.
-          propertyPercentage: selected.propertyPercentage ?? null,
-        },
-      });
-
-      // 2) Voice note (if recorded). Upload via the standard presigned-PUT pipeline,
-      //    attached to this node so it surfaces alongside the existing per-node docs.
-      if (verificationVoice) {
-        const filename = `verification-voice-${Date.now()}.webm`;
-        const file = new File([verificationVoice], filename, {
-          type: verificationVoice.type || 'audio/webm',
-        });
-        await uploadToS3({
-          file,
-          documentType: 'VOICE_NOTE',
-          dealId,
-          ownershipNodeId: selected.id,
-        });
-        setVerificationVoice(null);
-        // Refresh the per-node + per-deal document lists so the new clip appears below.
-        qc.invalidateQueries({ queryKey: ['documents', 'node', selected.id] });
-        if (dealId) qc.invalidateQueries({ queryKey: ['documents', dealId] });
-      }
-
-      showToast({ severity: 'success', message: 'Deal updated' });
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to update verification');
     }
   };
 
@@ -350,90 +277,6 @@ export function NodeEditorPane({
         version={version}
       />
 
-      {tab === 'verification' && (
-        <Stack
-          spacing={3}
-          component="fieldset"
-          disabled={readOnly}
-          sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}
-        >
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Manual verification</Typography>
-            <Typography variant="caption" sx={{ color: tokens.muted }}>
-              Mark this node's status while automated checks (LINZ / NZBN / IDV) are wired up.
-              The status badge in the tree updates as soon as you save.
-            </Typography>
-          </Box>
-
-          <FormControl>
-            <FormLabel id="verification-status-label">Status</FormLabel>
-            <RadioGroup
-              aria-labelledby="verification-status-label"
-              value={verification.status}
-              onChange={(e) => { setVerification((v) => ({ ...v, status: e.target.value })); }}
-            >
-              {VERIFICATION_OPTIONS.map((opt) => (
-                <FormControlLabel
-                  key={opt.value}
-                  value={opt.value}
-                  control={<Radio color={opt.tone} />}
-                  label={
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <span>{opt.label}</span>
-                      {verification.status === opt.value && (
-                        <Chip size="small" color={opt.tone} label="current" variant="outlined" />
-                      )}
-                    </Stack>
-                  }
-                />
-              ))}
-            </RadioGroup>
-          </FormControl>
-
-          <TextField
-            label="Verification notes"
-            value={verification.notes ?? ''}
-            onChange={(e) => { setVerification((v) => ({ ...v, notes: e.target.value })); }}
-            multiline
-            minRows={4}
-            placeholder="What did you check? Which document or call confirmed it? Anything that should be defensible later."
-          />
-
-          {/* Hidden rather than disabled: a recorder that cannot record reads as broken, and
-              the saved clips below are the part a read-only viewer actually wants. */}
-          {!readOnly && (
-            <VoiceRecorderField
-              value={verificationVoice}
-              onChange={(blob) => { setVerificationVoice(blob); }}
-              label="Voice rationale (optional)"
-              helper="Record a short voice note. Uploaded on Save verification — until then it stays local."
-            />
-          )}
-
-          {!readOnly && (
-            <Box>
-              <Button
-                variant="contained"
-                startIcon={<SaveIcon />}
-                onClick={saveVerification}
-                disabled={useTree.updateNode.isPending}
-              >
-                {useTree.updateNode.isPending ? 'Saving…' : 'Save verification'}
-              </Button>
-            </Box>
-          )}
-
-          {nodeVoiceNotes.length > 0 && (
-            <>
-              <Divider />
-              <Typography variant="subtitle2">Saved voice notes</Typography>
-              <Stack spacing={1.5}>
-                {nodeVoiceNotes.map((doc) => <VoiceClip key={doc.id} doc={doc} />)}
-              </Stack>
-            </>
-          )}
-        </Stack>
-      )}
     </Box>
   );
 }

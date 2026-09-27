@@ -5,12 +5,14 @@ import {
 } from '@mui/material';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import { getIndividual, listIndividuals } from '../../api/individuals.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { matchesSearch } from '../../components/SearchField.jsx';
 import { personRolesLabel } from '../../api/ownership.js';
 import { countryName } from '../../data/countries.js';
 import { formatBytes, formatDate } from '../../utils/formatters.js';
+import { verificationDisplay } from './verificationDisplay.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
 
 /** Past this many matches the list stops being a list and starts being a wall. */
@@ -283,16 +285,31 @@ function PersonFacts({ person }) {
       <CopiedDocuments documents={person.documents ?? []} />
       {/* Carried across with the rest, and said out loud: a status reached on another file is
           worth knowing about on this one. */}
-      {person.verificationStatus && (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ pt: 0.25 }}>
-          <FactLabel>Verification</FactLabel>
-          <Chip
-            size="small"
-            label={String(person.verificationStatus).replace(/_/g, ' ').toLowerCase()}
-            sx={{ height: 20, fontSize: '0.68rem', textTransform: 'capitalize' }}
-          />
-        </Stack>
-      )}
+      {person.verificationStatus && (() => {
+        // The same three states, and the same colours, as the tree row this person will become.
+        // A plain grey chip here saying "verified" next to a green one there is the same fact
+        // told two ways, which is how a reviewer ends up trusting neither.
+        const v = verificationDisplay(person.verificationStatus);
+        return (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ pt: 0.25 }}>
+            <FactLabel>Verification</FactLabel>
+            <Chip
+              size="small"
+              icon={v.exception
+                ? <ReportProblemOutlinedIcon sx={{ fontSize: '0.8rem !important' }} />
+                : undefined}
+              label={v.label}
+              sx={{
+                height: 20, fontSize: '0.68rem',
+                color: v.text,
+                backgroundColor: v.wash,
+                border: `1px solid ${v.border}`,
+                '& .MuiChip-icon': { color: 'var(--cl-warn-text)', ml: 0.5, mr: -0.25 },
+              }}
+            />
+          </Stack>
+        );
+      })()}
     </Stack>
   );
 }

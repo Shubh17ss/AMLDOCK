@@ -10,6 +10,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.Set;
@@ -90,6 +91,21 @@ public abstract class OwnershipNodeFields extends BaseEntity {
 
     @Column(name = "verification_notes", columnDefinition = "text")
     private String verificationNotes;
+
+    /*
+     * Who granted the verification, and when.
+     *
+     * No FK to app_user, matching risk_overridden_by_user_id on the deal: deactivating a user
+     * must not rewrite a decision they took while they were here, and a missing user renders as
+     * no byline rather than as an error. Both are stamped by the server on the verify verb and
+     * never accepted from a client - a caller that could name its own verifier would make the
+     * byline worthless.
+     */
+    @Column(name = "verified_by_user_id")
+    private Long verifiedByUserId;
+
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
 
     /**
      * The person this node represents. Every INDIVIDUAL has one from V34 — extraction-created
@@ -252,6 +268,10 @@ public abstract class OwnershipNodeFields extends BaseEntity {
     public void setNotes(String v) { this.notes = v; }
     public String getVerificationNotes() { return verificationNotes; }
     public void setVerificationNotes(String v) { this.verificationNotes = v; }
+    public Long getVerifiedByUserId() { return verifiedByUserId; }
+    public void setVerifiedByUserId(Long v) { this.verifiedByUserId = v; }
+    public Instant getVerifiedAt() { return verifiedAt; }
+    public void setVerifiedAt(Instant v) { this.verifiedAt = v; }
     public Long getBeneficialOwnerId() { return beneficialOwnerId; }
     public void setBeneficialOwnerId(Long v) { this.beneficialOwnerId = v; }
     /**

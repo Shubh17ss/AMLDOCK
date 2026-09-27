@@ -7,7 +7,6 @@ import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NomineeStatus;
 import nz.amldock.ownership.TrustHoldingComplexity;
 import nz.amldock.ownership.TrustType;
-import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.PersonRole;
 
 import java.math.BigDecimal;
@@ -75,10 +74,19 @@ public record UpdateNodeRequest(
          */
         @Valid PersonPatch person,
 
-        /** Manual verification mark from the Verifications tab. */
-        NodeVerificationStatus verificationStatus,
         /** General free-text notes on the node (Details tab). */
-        String notes,
-        /** Reasoning behind the manual verification mark (Verifications tab). */
-        String verificationNotes
-) {}
+        String notes
+) {
+        /*
+         * No verificationStatus or verificationNotes here, by design.
+         *
+         * They used to ride this patch, which meant any caller could set a node to VERIFIED with
+         * nobody named against it. The byline the Verification tab now renders is only
+         * trustworthy if the server is the only thing that can write it, so granting a
+         * verification moved to its own verb - see VerifyNodeRequest and
+         * POST /nodes/{nodeId}/verification.
+         *
+         * CreateNodeRequest keeps its verificationStatus: carrying an already-cleared individual
+         * across from another deal is a copy of a decision, not a new one.
+         */
+}

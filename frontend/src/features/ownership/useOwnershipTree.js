@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createEdge, createNode, deleteEdge, deleteNode,
-  getTree, reorder, updateEdge, updateNode,
+  getTree, reorder, updateEdge, updateNode, verifyNode,
 } from '../../api/ownership.js';
 
 /**
@@ -92,6 +92,12 @@ export function useOwnershipTree(dealId) {
     mutationFn: ({ nodeId, force }) => deleteNode(dealId, nodeId, { force }),
     onSuccess: invalidate,
   });
+  // Same invalidation as the rest. The status it writes is rendered on the tree row, so the
+  // structure has to be refetched for the badge to catch up with the decision just taken.
+  const verifyNodeMut = useMutation({
+    mutationFn: ({ nodeId, payload }) => verifyNode(dealId, nodeId, payload),
+    onSuccess: invalidate,
+  });
 
   const createEdgeMut = useMutation({ mutationFn: (payload) => createEdge(dealId, payload), onSuccess: invalidate });
 
@@ -175,6 +181,7 @@ export function useOwnershipTree(dealId) {
     createNode: createNodeMut,
     updateNode: updateNodeMut,
     deleteNode: deleteNodeMut,
+    verifyNode: verifyNodeMut,
     createEdge: createEdgeMut,
     moveNode: moveNodeMut,
     reorder: reorderMut,

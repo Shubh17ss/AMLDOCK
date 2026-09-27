@@ -12,6 +12,7 @@ import nz.amldock.ownership.dto.SetRootRequest;
 import nz.amldock.ownership.dto.TreeDto;
 import nz.amldock.ownership.dto.UpdateEdgeRequest;
 import nz.amldock.ownership.dto.UpdateNodeRequest;
+import nz.amldock.ownership.dto.VerifyNodeRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -61,6 +62,26 @@ public class OwnershipController {
         NodeDto node = ownership.updateNode(dealId, nodeId, req);
         audit.record(AuditAction.NODE_UPDATED, "OwnershipNode", node.id(),
                 "Updated node \"" + node.displayName() + "\"");
+        return node;
+    }
+
+    /**
+     * Grants a verification on one owner.
+     *
+     * <p>Same gate as the patch above: whoever may build the structure may say an owner in it has
+     * been checked. The byline is stamped by the service from the security context, so nothing in
+     * the body can decide who gets the credit.
+     */
+    @PostMapping("/nodes/{nodeId}/verification")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
+    public NodeDto verifyNode(@PathVariable Long dealId, @PathVariable Long nodeId,
+                              @Valid @RequestBody VerifyNodeRequest req) {
+        NodeDto node = ownership.verifyNode(dealId, nodeId, req);
+        audit.record(AuditAction.NODE_VERIFIED, "OwnershipNode", node.id(),
+                node.verificationStatus() == NodeVerificationStatus.VERIFIED_WITH_EXCEPTION
+                        ? "Verified node \"" + node.displayName() + "\" with exception: "
+                                + node.verificationNotes()
+                        : "Verified node \"" + node.displayName() + "\"");
         return node;
     }
 

@@ -19,18 +19,12 @@ import { countryName } from '../../data/countries.js';
 import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
 import { propertyTypeLabel } from '../../data/propertyTypes.js';
 import { visualFor, tintOf, washOf, edgeOf } from './nodeTypeVisual.js';
+import { verificationDisplay } from './verificationDisplay.js';
 import {
   PROPERTY_DROP_ID, dragIdFor, dropIdForNode, gapDropId, sortSiblings,
 } from './dragModel.js';
 import { useOwnershipDrag } from './useOwnershipDrag.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
-
-const VERIFICATION_COLOR = {
-  NOT_STARTED: 'default',
-  IN_PROGRESS: 'info',
-  VERIFIED: 'success',
-  FAILED: 'error',
-};
 
 /** Rows fade in one after another on first paint, and never again. */
 const STAGGER_MS = 30;
@@ -676,13 +670,32 @@ function NodeBranch({
               />
             </Tooltip>
           )}
-          <Chip
-            size="small"
-            variant="outlined"
-            color={VERIFICATION_COLOR[node.verificationStatus] ?? 'default'}
-            label={node.verificationStatus.replaceAll('_', ' ').toLowerCase()}
-            sx={{ fontSize: '0.66rem', flexShrink: 0, display: { xs: 'none', md: 'flex' } }}
-          />
+          {/* Whether this owner has been cleared — the one thing about a row that a reviewer
+              scans a whole structure for. Three states, not the five the server keeps: see
+              verificationDisplay for why the uncleared ones are one thing. The exception is an
+              alert glyph on an otherwise identical chip, because an owner verified by exception
+              is verified, and a second colour would read as a third outcome. */}
+          {(() => {
+            const v = verificationDisplay(node.verificationStatus);
+            return (
+              <Tooltip title={v.exception ? 'Verified with exception' : v.label}>
+                <Chip
+                  size="small"
+                  icon={v.exception
+                    ? <ReportProblemOutlinedIcon sx={{ fontSize: '0.85rem !important' }} />
+                    : undefined}
+                  label={v.label}
+                  sx={{
+                    fontSize: '0.66rem', flexShrink: 0, display: { xs: 'none', md: 'flex' },
+                    color: v.text,
+                    backgroundColor: v.wash,
+                    border: `1px solid ${v.border}`,
+                    '& .MuiChip-icon': { color: 'var(--cl-warn-text)', ml: 0.5, mr: -0.25 },
+                  }}
+                />
+              </Tooltip>
+            );
+          })()}
 
           {/* The whole row is draggable with a mouse or a finger; this is the grip that says so,
               and the only way in by keyboard. The row's own Enter and Space open the drawer, so

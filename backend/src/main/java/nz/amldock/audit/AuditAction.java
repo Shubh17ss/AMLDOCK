@@ -63,6 +63,12 @@ public enum AuditAction {
     NODE_CREATED,
     NODE_UPDATED,
     NODE_DELETED,
+    /**
+     * An owner was cleared, outright or by exception. Its own action rather than a NODE_UPDATED:
+     * a verification is the one node write somebody is personally accountable for, and it should
+     * be findable in the trail without reading every field edit on the deal.
+     */
+    NODE_VERIFIED,
     EDGE_CREATED,
     EDGE_UPDATED,
     EDGE_DELETED,

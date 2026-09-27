@@ -18,6 +18,7 @@ export const PROPERTY_TYPES = [
   { value: 'COMMERCIAL_LEASE', label: 'Commercial lease' },
   { value: 'RURAL', label: 'Rural' },
   { value: 'BUSINESS', label: 'Business' },
+  { value: 'DEVELOPMENT', label: 'Development' },
 ];
 
 // The AML-salient reasons — distress, urgency and forced sale — appear in every list. They are
@@ -28,7 +29,27 @@ const DISTRESS = [
   { value: 'URGENT_SALE', label: 'Urgent sale' },
 ];
 
-const RESIDENTIAL = [
+/**
+ * A type's own reasons, with the distress three in front of them.
+ *
+ * <p>They lead rather than trail because they are the answers this question exists to catch; a
+ * reviewer scanning the stored value should meet them first.
+ *
+ * <p>De-duplicated by code, not appended blindly: several lists already carry `MORTGAGEE_SALE`
+ * somewhere in the middle, and spreading the trio over the top of one would render the same
+ * option twice — twice in the dropdown, and twice under the same React key.
+ *
+ * <p>`omit` is for a list that already says the same thing under a different code. Commercial
+ * sale has `MORTGAGEE_SALE/LIQUIDATION`, which covers the ground `MORTGAGEE_SALE` would, and
+ * offering both side by side asks the broker to choose between two spellings of one answer.
+ */
+const withDistress = (list, omit = []) => {
+  const lead = DISTRESS.filter((d) => !omit.includes(d.value));
+  const leading = new Set(lead.map((d) => d.value));
+  return [...lead, ...list.filter((r) => !leading.has(r.value))];
+};
+
+const RESIDENTIAL_BASE = [
   { value: 'DECEASED ESTATE', label: 'Deceased estate' },
   { value: 'DOWNSIZING', label: 'Downsizing' },
   { value: 'DEBT REDUCTION', label: 'Debt reduction' },
@@ -50,17 +71,17 @@ const RESIDENTIAL = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const LIFESTYLE = [
-  ...RESIDENTIAL,
-  {value : 'MOVING CLOSER TO CITY', label: 'Moving closer to city'},
-  {value : 'SUCCESSION PLANNING', label: 'Succession planning'},
-]
+const LIFESTYLE_BASE = [
+  ...RESIDENTIAL_BASE,
+  { value: 'MOVING CLOSER TO CITY', label: 'Moving closer to city' },
+  { value: 'SUCCESSION PLANNING', label: 'Succession planning' },
+];
 
-const RURAL=[
-  ...LIFESTYLE
-]
+const RURAL_BASE = [
+  ...LIFESTYLE_BASE,
+];
 
-const COMMERCIAL_SALE=[
+const COMMERCIAL_SALE_BASE = [
   { value: 'DECEASED ESTATE', label: 'Deceased estate' },
   { value: 'DOWNSIZING ASSET PORTFOLIO', label: 'Downsizing Asset Portfolio' },
   { value: 'DEBT REDUCTION', label: 'Debt reduction' },
@@ -83,48 +104,68 @@ const COMMERCIAL_SALE=[
   { value: 'SUBDIVISION', label: 'Subdivision' },
   { value: 'UPSIZING', label: 'Upsizing' },
   { value: 'OTHER', label: 'Other' },
-]
+];
 
-const COMMERCIAL_LEASE=[
-  {value : 'EXISTING LEASE DUE TO EXPIRE', label: 'Existing lease due to expire'},
-  {value : 'EXISTING TENANT-SUB LEASING', label: 'Existing tenant-sub leasing'},
-  {value : 'EXISTING VACANT SPACE', label: 'Existing vacant space'},
-  {value : 'NEW COMMERCIAL DEVELOPMENT', label: 'New commercial development'},
-  {value : 'SUBDIVIDING THE BUILDING', label: 'Subdividing the building'},
-  {value : 'OTHER', label: 'Other'},
-]
+const COMMERCIAL_LEASE_BASE = [
+  { value: 'EXISTING LEASE DUE TO EXPIRE', label: 'Existing lease due to expire' },
+  { value: 'EXISTING TENANT-SUB LEASING', label: 'Existing tenant-sub leasing' },
+  { value: 'EXISTING VACANT SPACE', label: 'Existing vacant space' },
+  { value: 'NEW COMMERCIAL DEVELOPMENT', label: 'New commercial development' },
+  { value: 'SUBDIVIDING THE BUILDING', label: 'Subdividing the building' },
+  { value: 'OTHER', label: 'Other' },
+];
 
-const BUSINESS=[
-  {value:'DECEASED ESTATE', label: 'Deceased estate'},
-  {value:'DEBT REDUCTION', label: 'Debt reduction'},
-  {value:'RELATIONSHIP SPLIT', label: 'Relationship split'},
-  {value:'PARTNERSHIP SPLIT', label: 'Partnership split'},
-  {value:'RETIREMENT', label: 'Retirement'},
-  {value:'RELOCATING', label: 'Relocating'},
-  {value:'LOST INTEREST-EXIT', label: 'Lost interest-exit'},
-  {value:'RENTAL INVESTMENT SALE', label: 'Rental investment sale'},
-  {value:'SPEC BUILD', label: 'Spec build'},
-  {value:'SUBDIVISION', label: 'Subdivision'},
-  {value:'TOO MANAGEMENT INTENSIVE', label: 'Too management intensive'},
-  {value:'EXIT - CASHING OUT', label: 'Exit - Cashing out'},
-  {value:'RELEASE EQUITY FOR OTHER INVESTMENTS', label: 'Release equity for other investments'},
-  {value:'LIQUIDATION', label: 'Liquidation'},
-  {value:'SURPLUS TO REQUIREMENTS', label: 'Surplus to requirements'},
-  {value:'OTHER', label: 'Other'},
-]
+const BUSINESS_BASE = [
+  { value: 'DECEASED ESTATE', label: 'Deceased estate' },
+  { value: 'DEBT REDUCTION', label: 'Debt reduction' },
+  { value: 'RELATIONSHIP SPLIT', label: 'Relationship split' },
+  { value: 'PARTNERSHIP SPLIT', label: 'Partnership split' },
+  { value: 'RETIREMENT', label: 'Retirement' },
+  { value: 'RELOCATING', label: 'Relocating' },
+  { value: 'LOST INTEREST-EXIT', label: 'Lost interest-exit' },
+  { value: 'RENTAL INVESTMENT SALE', label: 'Rental investment sale' },
+  { value: 'SPEC BUILD', label: 'Spec build' },
+  { value: 'SUBDIVISION', label: 'Subdivision' },
+  { value: 'TOO MANAGEMENT INTENSIVE', label: 'Too management intensive' },
+  { value: 'EXIT - CASHING OUT', label: 'Exit - Cashing out' },
+  { value: 'RELEASE EQUITY FOR OTHER INVESTMENTS', label: 'Release equity for other investments' },
+  { value: 'LIQUIDATION', label: 'Liquidation' },
+  { value: 'SURPLUS TO REQUIREMENTS', label: 'Surplus to requirements' },
+  { value: 'OTHER', label: 'Other' },
+];
 
-/** Reason options keyed by property type. */
+// What is being built, which is what a development is sold as. Its own list rather than the
+// residential one: nobody sells a subdivision because they are downsizing.
+const DEVELOPMENT_BASE = [
+  { value: 'RESIDENTIAL BUILDING', label: 'Residential building' },
+  { value: 'TOWNHOUSES', label: 'Townhouses' },
+  { value: 'COMMERCIAL BUILDING', label: 'Commercial building' },
+  { value: 'INTEGRATED RESIDENTIAL PROJECT', label: 'Integrated residential project' },
+  { value: 'MIXED USE DEVELOPMENT', label: 'Mixed use development' },
+  { value: 'SUBDIVISION', label: 'Subdivision' },
+  { value: 'STANDALONE HOME', label: 'Standalone home' },
+];
+
+/**
+ * Reason options keyed by property type.
+ *
+ * <p>Keys are the `value` codes in PROPERTY_TYPES, and have to stay that way — a key that matches
+ * no type is a list nothing can reach.
+ */
 export const REASONS_FOR_SELLING = {
-  RESIDENTIAL_HOUSE: RESIDENTIAL,
-  LIFESTYLE: LIFESTYLE,
-  RURAL: RURAL,
-  COMMERCIAL_SALE: COMMERCIAL_SALE,
-  COMMERCIAL_LEASE: COMMERCIAL_LEASE,
-  BUSINESS: BUSINESS,
+  RESIDENTIAL: withDistress(RESIDENTIAL_BASE),
+  LIFESTYLE: withDistress(LIFESTYLE_BASE),
+  RURAL: withDistress(RURAL_BASE),
+  // Its MORTGAGEE_SALE/LIQUIDATION already covers the forced sale, so the plain code stays out.
+  COMMERCIAL_SALE: withDistress(COMMERCIAL_SALE_BASE, ['MORTGAGEE_SALE']),
+  COMMERCIAL_LEASE: withDistress(COMMERCIAL_LEASE_BASE),
+  BUSINESS: withDistress(BUSINESS_BASE),
+  DEVELOPMENT: withDistress(DEVELOPMENT_BASE),
 };
 
 /** Reason options for a property type; falls back to the residential list. */
-export const reasonsForPropertyType = (type) => REASONS_FOR_SELLING[type] ?? RESIDENTIAL;
+export const reasonsForPropertyType = (type) =>
+  REASONS_FOR_SELLING[type] ?? REASONS_FOR_SELLING.RESIDENTIAL;
 
 /** Display label for a stored property-type code; falls back to the raw value. */
 export const propertyTypeLabel = (value) =>

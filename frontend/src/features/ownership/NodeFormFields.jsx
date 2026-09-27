@@ -1,16 +1,14 @@
 import {
-  Box, Checkbox, Chip, FormControl, FormHelperText, FormLabel, InputLabel, ListItemText,
-  MenuItem, Select, Stack, TextField, Typography,
+  Box, Checkbox, Chip, FormControl, InputLabel, ListItemText,
+  MenuItem, Select, Stack, TextField,
 } from '@mui/material';
 import {
   NODE_TYPES, NOMINEE_OPTIONS, PERSON_ROLES, TRUST_HOLDING_COMPLEXITY, TRUST_TYPES, nameLabelFor,
   personRoleLabel,
 } from '../../api/ownership.js';
 import { CountrySelect } from '../../components/CountrySelect.jsx';
+import { SegmentedField } from '../../components/SegmentedField.jsx';
 import { PhoneField } from '../../components/PhoneField.jsx';
-import { tokens, motion } from '../../theme/theme.js';
-
-const YES_NO = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
 
 /**
  * Types whose only extra field is where they are governed from.
@@ -29,91 +27,6 @@ const WITH_REFERENCE = ['INDIVIDUAL', 'PARTNERSHIP'];
  * renders for everyone except them, and nobody is asked twice.
  */
 const SOURCE_OF_WEALTH_ON_NODE = (nodeType) => Boolean(nodeType) && nodeType !== 'INDIVIDUAL';
-
-/**
- * One yes/no question as a segmented control.
- *
- * <p>Two or three buttons in a track rather than radios: the answer stays legible at arm's
- * length, which matters on the phone a reviewer is often holding, and the whole control is a
- * single tap target per option rather than a dot to hit.
- *
- * <p>Takes `options` for the one question that has three answers — nominee director/shareholder,
- * where "Not asked" is the default because a YES carries a risk consequence and a defaulted NO
- * would be a negative answer nobody gave.
- *
- * <p>`nullable` is the two-option form of that same point: neither segment is selected while the
- * answer is null, so a question nobody has put reads as unanswered rather than as No. Used on
- * every question that feeds the risk score — the Risk tab lists the unanswered ones and will not
- * let the risk be approved until they are gone, which only works if "not stated" is reachable.
- */
-function YesNoField({ label, value, onChange, options = YES_NO, helper, nullable = false }) {
-  const isTriState = options !== YES_NO;
-  const unset = value === undefined || value === null;
-  const current = unset
-    ? (isTriState ? options[0].value : (nullable ? null : false))
-    : value;
-
-  return (
-    <Box>
-      <FormLabel
-        component="legend"
-        sx={{ fontSize: '0.8rem', color: tokens.ink, display: 'block', mb: 0.75 }}
-      >
-        {label}
-      </FormLabel>
-      <Box
-        role="radiogroup"
-        aria-label={label}
-        sx={{
-          display: 'inline-flex',
-          p: 0.375,
-          gap: 0.375,
-          borderRadius: 2,
-          border: `1px solid ${tokens.hairline}`,
-          backgroundColor: tokens.tileRaised,
-          maxWidth: '100%',
-        }}
-      >
-        {options.map((o) => {
-          const selected = current !== null && String(o.value) === String(current);
-          return (
-            <Box
-              key={String(o.value)}
-              role="radio"
-              aria-checked={selected}
-              tabIndex={0}
-              onClick={() => onChange(o.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(o.value); }
-              }}
-              sx={motion.respectful({
-                px: 2.5,
-                py: 0.75,
-                borderRadius: 1.5,
-                cursor: 'pointer',
-                userSelect: 'none',
-                fontSize: '0.85rem',
-                fontWeight: selected ? 600 : 400,
-                color: selected ? '#fff' : tokens.muted,
-                backgroundColor: selected ? tokens.blue : 'transparent',
-                transition: `background-color ${motion.swift} ease, color ${motion.swift} ease`,
-                '&:hover': { backgroundColor: selected ? tokens.blue : tokens.hover },
-                '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
-              })}
-            >
-              {o.label}
-            </Box>
-          );
-        })}
-      </Box>
-      {helper && (
-        <Typography variant="caption" sx={{ color: tokens.muted, display: 'block', mt: 0.5 }}>
-          {helper}
-        </Typography>
-      )}
-    </Box>
-  );
-}
 
 /**
  * The per-type fields of an ownership node. `value` is the form-state object and `onChange`
@@ -287,34 +200,34 @@ export function NodeFormFields({
                      value={value.businessNumber ?? ''}
                      onChange={(e) => set({ businessNumber: e.target.value })} />
 
-          <YesNoField
+          <SegmentedField
             label="Does the company have a constitution?"
             value={value.companyHasConstitution}
             onChange={(v) => set({ companyHasConstitution: v })}
           />
 
-          <YesNoField
+          <SegmentedField
             label="Nominee director / shareholder?"
             value={value.nomineeStatus ?? 'NOT_ASKED'}
             onChange={(v) => set({ nomineeStatus: v })}
             options={NOMINEE_OPTIONS}
           />
 
-          <YesNoField
+          <SegmentedField
             label="Complex ownership structure?"
             value={value.companyComplexOwnership}
             onChange={(v) => set({ companyComplexOwnership: v })}
             nullable
           />
 
-          <YesNoField
+          <SegmentedField
             label="Used for personal assets?"
             value={value.companyPersonalAssets}
             onChange={(v) => set({ companyPersonalAssets: v })}
             nullable
           />
 
-          <YesNoField
+          <SegmentedField
             label="Is a new developer?"
             value={value.companyNewDeveloper}
             onChange={(v) => set({ companyNewDeveloper: v })}
@@ -344,7 +257,7 @@ export function NodeFormFields({
             onChange={(code) => set({ jurisdictionCountry: code })}
           />
 
-          <YesNoField
+          <SegmentedField
             label="Is the trust a discretionary trust?"
             value={value.trustDiscretionary}
             onChange={(v) => set({ trustDiscretionary: v })}
@@ -385,7 +298,7 @@ export function NodeFormFields({
           />
           {/* The same stored answer a company gives about a nominee director or shareholder:
               one question about whether an intermediary stands in for the real party. */}
-          <YesNoField
+          <SegmentedField
             label="Nominee limited partner?"
             value={value.nomineeStatus ?? 'NOT_ASKED'}
             onChange={(v) => set({ nomineeStatus: v })}

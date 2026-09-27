@@ -260,6 +260,22 @@ class DealServiceRiskAndPatchTest {
         assertThat(p.getReasonForSelling()).isEqualTo("DOWNSIZING");
     }
 
+    @Test
+    void theDevelopmentTypeRoundTripsWithItsOwnReasonCode() {
+        draftInRepo();
+        Property p = new Property();
+        when(properties.findById(any())).thenReturn(Optional.of(p));
+
+        // DEVELOPMENT and its reasons arrived together; the reason set is owned by the frontend
+        // (propertyTypes.js), so what the server owes is to store whatever code it is handed
+        // without a CHECK constraint or an enum for reasons getting in the way.
+        service.updateProperty(1L, new PropertyInput("7 Vector Lane", null, null, null, null,
+                null, null, null, null, PropertyType.DEVELOPMENT, "MIXED USE DEVELOPMENT"));
+
+        assertThat(p.getPropertyType()).isEqualTo(PropertyType.DEVELOPMENT);
+        assertThat(p.getReasonForSelling()).isEqualTo("MIXED USE DEVELOPMENT");
+    }
+
     /* ---------- valuation range ---------- */
 
     @Test

@@ -21,7 +21,7 @@ import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
 import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
 import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
-  BENEFICIAL_OWNERS_PATH, OVERSEAS_RESIDENTS_PATH,
+  BENEFICIAL_OWNERS_PATH, OVERSEAS_RESIDENTS_PATH, CDD_EXCEPTIONS_PATH,
   SUSPICIOUS_ACTIVITIES_PATH, STAFF_TRAINING_PATH, MY_TRAINING_PATH, SECTION_LANDING_GROUPS,
   FINANCE_PATHS, AUDIT_LOG_PATH,
 } from '../navigation/moduleRegistry.jsx';
@@ -38,6 +38,7 @@ import { AuditAdminPage } from '../pages/admin/AuditAdminPage.jsx';
 import { DealsPage } from '../pages/DealsPage.jsx';
 import { BeneficialOwnersPage } from '../pages/cdd/BeneficialOwnersPage.jsx';
 import { OverseasResidentsPage } from '../pages/cdd/OverseasResidentsPage.jsx';
+import { CddExceptionsPage } from '../pages/cdd/CddExceptionsPage.jsx';
 import { FirmDealsPage } from '../pages/FirmDealsPage.jsx';
 import { NewDealPage } from '../pages/NewDealPage.jsx';
 import { DealReviewScreen } from '../pages/DealReviewScreen.jsx';
@@ -69,11 +70,12 @@ export function AppRoutes() {
 
         {/* Deals — the full deal list with filters (formerly the /queue compliance queue) */}
         <Route path={DEALS_PATH} element={<DealsPage />} />
-        {/* The two people-registers. Unguarded like the rest of the CDD section: who may see
+        {/* The three CDD registers. Unguarded like the rest of the CDD section: who may see
             which individuals is decided by the server narrowing the deals behind them, not by
             which roles can open the page. */}
         <Route path={BENEFICIAL_OWNERS_PATH} element={<BeneficialOwnersPage />} />
         <Route path={OVERSEAS_RESIDENTS_PATH} element={<OverseasResidentsPage />} />
+        <Route path={CDD_EXCEPTIONS_PATH} element={<CddExceptionsPage />} />
 
         {/* Section landings — clicking a menu section header shows a card per module in it,
             each with its review status. The CDD landing is the stats dashboard instead, so

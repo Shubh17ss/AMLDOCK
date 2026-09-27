@@ -204,6 +204,23 @@ export async function updateNode(dealId, nodeId, payload) {
   return data;
 }
 
+/**
+ * Grant a verification on one owner, or replace the one it already has.
+ *
+ * <p>Its own route rather than a field on updateNode: the byline the Verification tab renders is
+ * only worth anything because the server writes it, so the decision cannot ride a patch.
+ *
+ * @param payload {{ outcome: 'VERIFIED' | 'VERIFIED_WITH_EXCEPTION', notes?: string }}
+ *   `notes` is the reason, required by the server when the outcome is an exception and ignored
+ *   otherwise - a plain verification clears any note an earlier exception left behind.
+ */
+export async function verifyNode(dealId, nodeId, payload) {
+  const { data } = await apiClient.post(
+    `/deals/${dealId}/ownership/nodes/${nodeId}/verification`, payload,
+  );
+  return data;
+}
+
 export async function deleteNode(dealId, nodeId, { force = false } = {}) {
   await apiClient.delete(`/deals/${dealId}/ownership/nodes/${nodeId}`, {
     params: force ? { force: true } : undefined,

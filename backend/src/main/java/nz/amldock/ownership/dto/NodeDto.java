@@ -67,16 +67,30 @@ public record NodeDto(
         NodeVerificationStatus verificationStatus,
         String notes,
         String verificationNotes,
+        /**
+         * Who granted the verification, and when. Both null until an owner is verified, and the
+         * name is null too when the account behind the decision has since gone - a byline that
+         * cannot be resolved is simply not shown.
+         *
+         * <p>A name rather than an email, matching the risk bylines: "amlco@firm.com" identifies
+         * an account, and the question a reviewer is asking is who decided it.
+         */
+        String verifiedByName,
+        Instant verifiedAt,
     /** Where this node sits among the top-level owners. Ignored once it has one. */
         Integer sortOrder,
         Instant createdAt,
         Instant updatedAt
 ) {
     public static NodeDto from(OwnershipNodeFields n) {
-        return from(n, null);
+        return from(n, null, null);
     }
 
     public static NodeDto from(OwnershipNodeFields n, PersonDto person) {
+        return from(n, person, null);
+    }
+
+    public static NodeDto from(OwnershipNodeFields n, PersonDto person, String verifiedByName) {
         return new NodeDto(
                 n.getNodeId(), n.getOwnershipStructureId(), n.getNodeType(), n.getDisplayName(),
                 n.getDateOfBirth(), n.getIdDocumentType(), n.getIdDocumentNumber(), n.getIdDocumentCountry(),
@@ -88,7 +102,8 @@ public record NodeDto(
                 n.getSourceOfFunds(), n.getPropertyPercentage(),
                 n.getExtraJson(), n.getBeneficialOwnerId(), person,
                 n.getPersonRoles(), n.getReference(), n.getVerificationStatus(),
-                n.getNotes(), n.getVerificationNotes(), n.getSortOrder(),
+                n.getNotes(), n.getVerificationNotes(),
+                verifiedByName, n.getVerifiedAt(), n.getSortOrder(),
                 n.getCreatedAt(), n.getUpdatedAt());
     }
 }
