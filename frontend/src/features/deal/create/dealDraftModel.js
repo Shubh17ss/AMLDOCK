@@ -216,7 +216,7 @@ export function dtoToForm(dto) {
     contactPhone: dto.pocPhone ?? '',
     redFlagPresent: dto.redFlagPresent ?? null,
     redFlag: dto.redFlag ?? '',
-    // ValuationField stores digits only and formats for display, so a number from the API
+    // MoneyField stores digits only and formats for display, so a number from the API
     // has to arrive as its digit string rather than as a number.
     valuationMin: dto.valuationMin == null ? '' : String(dto.valuationMin),
     valuationMax: dto.valuationMax == null ? '' : String(dto.valuationMax),

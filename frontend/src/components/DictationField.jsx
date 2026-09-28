@@ -14,7 +14,7 @@ import { motion, palette, tokens } from '../theme/theme.js';
  * both are offered.
  *
  * `onChange` is handed an event-shaped object, the contract every other field in the wizard uses
- * (see ValuationField), so `setField('notes')` can be passed straight in.
+ * (see MoneyField), so `setField('notes')` can be passed straight in.
  *
  * Browser support is Chrome/Edge/Safari via the Web Speech API. Firefox has none, and there the
  * mic is not rendered at all rather than offered and dead. It also needs a secure context —

@@ -121,6 +121,19 @@ class DealVersionServiceTest {
         verify(versions, never()).save(any());
     }
 
+    /**
+     * Reopening a closed deal lands on VERIFIED without being a verification.
+     *
+     * <p>The deal was signed off before it was closed and nothing about it has changed on the way
+     * back, so a snapshot here would file a second copy of the same evidence under a version
+     * number no sign-off points at.
+     */
+    @Test
+    void comingBackFromClosedIsNotAVerification() {
+        service.snapshotIfVerified(dealIn(DealStatus.VERIFIED), amlco, "Wrong sale price", DealStatus.CLOSED);
+        verify(versions, never()).save(any());
+    }
+
     @Test
     void theFirstVerificationWritesVersionOne() {
         stubEmptyGraph();

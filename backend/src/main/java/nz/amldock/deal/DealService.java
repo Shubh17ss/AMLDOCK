@@ -27,7 +27,12 @@ import nz.amldock.firm.RealEstateFirm;
 import nz.amldock.firm.RealEstateFirmRepository;
 import nz.amldock.notification.DealNotificationEnqueuer;
 import nz.amldock.property.Property;
+import nz.amldock.deal.dto.CloseDealRequest;
+import nz.amldock.deal.dto.SaleDto;
+import nz.amldock.deal.sale.DealSaleUnit;
+import nz.amldock.deal.sale.DealSaleUnitRepository;
 import nz.amldock.property.PropertyRepository;
+import nz.amldock.property.PropertyType;
 import nz.amldock.property.dto.PropertyDto;
 import nz.amldock.property.dto.PropertyInput;
 import nz.amldock.user.Role;
@@ -42,6 +47,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +69,7 @@ public class DealService {
     private final AuditService audit;
     private final DealNotificationEnqueuer notifier;
     private final DealVersionService versions;
+    private final DealSaleUnitRepository saleUnits;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -77,7 +84,8 @@ public class DealService {
                        OwnershipService ownership,
                        AuditService audit,
                        DealNotificationEnqueuer notifier,
-                       DealVersionService versions) {
+                       DealVersionService versions,
+                       DealSaleUnitRepository saleUnits) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -92,6 +100,7 @@ public class DealService {
         this.audit = audit;
         this.notifier = notifier;
         this.versions = versions;
+        this.saleUnits = saleUnits;
     }
 
     /* ---------- queries ---------- */
@@ -164,6 +173,7 @@ public class DealService {
                     b == null ? null : b.getName(),
                     c == null ? null : c.getDisplayName(),
                     p == null ? null : formatAddress(p),
+                    p == null ? null : p.getPropertyType(),
                     u == null ? null : u.getEmail(),
                     u == null ? null : u.getFullName());
         }).toList();
@@ -409,7 +419,11 @@ public class DealService {
                 && d.getStatus() == DealStatus.NEW) {
             return;
         }
-        if (actor.role() == Role.SENIOR_MANAGER) {
+        // The two firm-level deciders, together: the rule is the same for both, and writing it
+        // twice is how the compliance officer's copy would later drift from the manager's.
+        // Scoped to their own firm because that is exactly what readableDeals shows them — this
+        // lets them delete what they can see, and nothing else.
+        if (actor.role() == Role.SENIOR_MANAGER || actor.role() == Role.AML_COMPLIANCE_OFFICER) {
             FirmBranch branch = branches.findById(d.getFirmBranchId()).orElse(null);
             Long dealFirmId = branch == null ? null : branch.getRealEstateFirmId();
             if (dealFirmId == null || !dealFirmId.equals(actor.realEstateFirmId())) {
@@ -417,7 +431,8 @@ public class DealService {
             }
             return;
         }
-        throw new ForbiddenException("Only ROOT or a senior manager may delete a deal");
+        throw new ForbiddenException(
+                "Only ROOT, a compliance officer or a senior manager may delete a deal");
     }
 
     /**
@@ -441,6 +456,126 @@ public class DealService {
         dealNotes.appendTransition(d, actor, note, previous, d.getStatus());
         notifier.enqueueStatusChanged(d, actor, previous);
         return new TransitionResult(d, previous);
+    }
+
+    /**
+     * Closes a deal and records what it finished as.
+     *
+     * <p>One transaction for both halves on purpose. A deal that reached CLOSED without its sale
+     * detail is the gap this feature exists to close, and a sale recorded against a deal that
+     * failed to move would be an outcome for something still running.
+     *
+     * <p>The answers are validated <em>before</em> the transition, so a rejected payload leaves
+     * the deal exactly where it was rather than closing it and then refusing the figures.
+     *
+     * <p>Re-closing overwrites: the scalar answers are reassigned and the unit rows are replaced
+     * wholesale. That is what makes {@code UNCLOSE} worth having — it is the way back to correct
+     * a closure, and a correction that appended to the old figures would be neither.
+     */
+    @Transactional
+    public TransitionResult closeWithSale(Long id, CloseDealRequest req) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        // The deal's own property type decides which shape of answer is legal, never the request.
+        // A caller that could choose its own rules could send one figure for a development and
+        // skip the per-unit breakdown that is the whole reason developments are asked differently.
+        boolean development = propertyTypeOf(d) == PropertyType.DEVELOPMENT;
+        List<CloseDealRequest.SaleUnitInput> units = validateSale(req, development);
+
+        TransitionResult result = act(id, DealAction.CLOSE, null);
+
+        d.setPropertySold(req.propertySold());
+        d.setSalePrice(development || !req.propertySold() ? null : req.salePrice());
+
+        saleUnits.deleteAllByDealId(id);
+        // Flushed before the inserts: delete-then-insert in one transaction otherwise leaves
+        // Hibernate free to order the statements the other way round.
+        saleUnits.flush();
+        if (!units.isEmpty()) {
+            List<DealSaleUnit> rows = new ArrayList<>();
+            for (int i = 0; i < units.size(); i++) {
+                rows.add(new DealSaleUnit(id, units.get(i).unitName().trim(),
+                        units.get(i).salePrice(), i));
+            }
+            saleUnits.saveAll(rows);
+        }
+        return result;
+    }
+
+    /**
+     * The sale answers, or an empty one for a deal that has never been closed.
+     *
+     * <p>Readable by anyone who may read the deal — this says what happened to the file, not who
+     * decided it, and the tab showing it sits beside the rest of the deal.
+     */
+    @Transactional(readOnly = true)
+    public SaleDto sale(Long id) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
+
+        List<SaleDto.SaleUnitDto> units = saleUnits.findAllByDealIdOrderBySortOrderAsc(id).stream()
+                .map((u) -> new SaleDto.SaleUnitDto(u.getId(), u.getUnitName(), u.getSalePrice()))
+                .toList();
+
+        // Summed here rather than stored, so a total can never disagree with the rows under it.
+        BigDecimal total = units.isEmpty()
+                ? d.getSalePrice()
+                : units.stream().map(SaleDto.SaleUnitDto::salePrice)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new SaleDto(d.getPropertySold(), d.getSalePrice(), total, units);
+    }
+
+    /**
+     * Checks the answers against the property they are about, and hands back the units to write.
+     *
+     * <p>Every rule here is one the close dialog also enforces by disabling its button. That is
+     * deliberate duplication: the dialog makes the rule visible before it is broken, and this
+     * makes it true for every caller, including one that never opened the dialog.
+     */
+    private List<CloseDealRequest.SaleUnitInput> validateSale(CloseDealRequest req, boolean development) {
+        List<CloseDealRequest.SaleUnitInput> units = req.units() == null ? List.of() : req.units();
+
+        if (!req.propertySold()) {
+            if (req.salePrice() != null || !units.isEmpty()) {
+                throw new BadRequestException(
+                        "A property that did not sell cannot carry a sale price");
+            }
+            return List.of();
+        }
+
+        if (development) {
+            if (req.salePrice() != null) {
+                throw new BadRequestException(
+                        "A development records a price per unit, not a single sale price");
+            }
+            if (units.isEmpty()) {
+                throw new BadRequestException("Add at least one unit and what it sold for");
+            }
+            for (CloseDealRequest.SaleUnitInput u : units) {
+                if (u.unitName() == null || u.unitName().isBlank()) {
+                    throw new BadRequestException("Every unit needs a name");
+                }
+                if (u.salePrice() == null) {
+                    throw new BadRequestException(
+                            "Every unit needs the price it sold for: " + u.unitName().trim());
+                }
+            }
+            return units;
+        }
+
+        if (!units.isEmpty()) {
+            throw new BadRequestException("Only a development is sold as units");
+        }
+        if (req.salePrice() == null) {
+            throw new BadRequestException("Enter what the property sold for");
+        }
+        return List.of();
+    }
+
+    /** The deal's property type, or null when it has no property or none was chosen. */
+    private PropertyType propertyTypeOf(Deal d) {
+        if (d.getPropertyId() == null) return null;
+        return properties.findById(d.getPropertyId()).map(Property::getPropertyType).orElse(null);
     }
 
     /** Adds a free comment to the deal's timeline. Readable deal, writable comment. */

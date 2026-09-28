@@ -27,5 +27,17 @@ public enum DealAction {
      * Without that copy this verb would be the edit-the-evidence problem the lock exists to
      * prevent.
      */
-    REOPEN
+    REOPEN,
+    /**
+     * CLOSED → VERIFIED, undoing a closure. Note required.
+     *
+     * <p>Its own verb rather than a wider {@link #REOPEN}: that one lands in REVIEW, because a
+     * reopened sign-off is compliance's to redo. This lands back on VERIFIED, because nothing
+     * about the verification is in question - the sale details recorded on the way out are, and
+     * correcting them means closing again.
+     *
+     * <p>Unlike REOPEN it writes no version and re-stamps no decision. The deal was already
+     * verified before it was closed; coming back is not a second sign-off.
+     */
+    UNCLOSE
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Collapse, FormControl, InputLabel, MenuItem, Select, Stack, TextField,
@@ -15,11 +15,11 @@ import { useFirmCountry } from '../../../hooks/useFirmCountry.js';
 import { PROPERTY_TYPES, reasonsForPropertyType } from '../../../data/propertyTypes.js';
 import { RED_FLAGS } from '../../../data/redFlags.js';
 import {
-  buildDealDetailsPatch, buildPropertyPatch, dtoToForm, sectionGaps,
+  buildDealDetailsPatch, buildPropertyPatch, dtoToForm,
 } from '../create/dealDraftModel.js';
 import { FieldGroup } from '../create/SectionShell.jsx';
 import { TenureField } from '../create/TenureField.jsx';
-import { ValuationField } from '../create/ValuationField.jsx';
+import { MoneyField } from '../../../components/MoneyField.jsx';
 import { YesNoField } from '../create/YesNoField.jsx';
 import { tokens } from '../../../theme/theme.js';
 
@@ -50,7 +50,6 @@ export function DealDetailsForm({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [showGaps, setShowGaps] = useState(false);
 
   // `form` is owned by the drawer, not by this component. The drawer's body is keyed on the tab
   // so each panel gets its entrance animation, which means this remounts every time the reviewer
@@ -83,15 +82,34 @@ export function DealDetailsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyType]);
 
-  // Sections 2, 3 and 5 are exactly this form's field set. Section 4 is excluded by not asking
-  // for it, rather than by filtering its answers back out.
-  const gaps = useMemo(
-    () => [...sectionGaps(2, form), ...sectionGaps(3, form), ...sectionGaps(5, form)],
-    [form],
-  );
+  /*
+   * A deal record is filled in over time, so Update saves whatever has been typed.
+   *
+   * This used to refuse the save until every question the create wizard asks had an answer,
+   * which meant a reviewer could not correct the address on a deal without first completing the
+   * whole form. What is still missing is the Risk tab's business - it lists the unanswered
+   * questions and will not let the rating be approved while any remain.
+   *
+   * The three below are different in kind. They are not blanks but contradictions, and the API
+   * rejects each one: validateValuationRange throws on an inverted range, and UpdateDealRequest
+   * caps months at 11 and years at 200. Letting the click through would trade an inline message
+   * for a red banner from the server, so they still stop the save. Each is already shown where
+   * it happens, by TenureField and by the range alert below.
+   */
+  const min = form.valuationMin === '' ? null : Number(form.valuationMin);
+  const max = form.valuationMax === '' ? null : Number(form.valuationMax);
+  const rangeInverted = min != null && max != null && max < min;
+  const monthsOutOfRange = form.ownershipTenureMonths !== ''
+    && Number(form.ownershipTenureMonths) > 11;
+  const yearsOutOfRange = form.ownershipTenureYears !== ''
+    && Number(form.ownershipTenureYears) > 200;
+  const hasImpossibleValue = rangeInverted || monthsOutOfRange || yearsOutOfRange;
 
   const handleSave = async () => {
-    if (gaps.length > 0) { setShowGaps(true); return; }
+    if (hasImpossibleValue) {
+      setError('Correct the highlighted values first — the server will not accept them.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -121,10 +139,6 @@ export function DealDetailsForm({
       setSaving(false);
     }
   };
-
-  const min = form.valuationMin === '' ? null : Number(form.valuationMin);
-  const max = form.valuationMax === '' ? null : Number(form.valuationMax);
-  const rangeInverted = min != null && max != null && max < min;
 
   return (
     <Stack spacing={3}>
@@ -282,13 +296,13 @@ export function DealDetailsForm({
 
         <FieldGroup title="Property value">
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <ValuationField
+            <MoneyField
               label="Minimum value"
               value={form.valuationMin}
               onChange={setField('valuationMin')}
               currencyLabel={money.label}
             />
-            <ValuationField
+            <MoneyField
               label="Maximum value"
               value={form.valuationMax}
               onChange={setField('valuationMax')}
@@ -306,15 +320,6 @@ export function DealDetailsForm({
         <RiskRatingChip rating={deal.riskRating} />
       </Stack>
 
-      {showGaps && gaps.length > 0 && (
-        <Alert severity="warning" onClose={() => setShowGaps(false)}>
-          Still needed before this can be saved:
-          <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
-            {gaps.map((g) => <li key={g}>{g}</li>)}
-          </Box>
-        </Alert>
-      )}
-
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
       {/* Right-aligned, alone on its row: it is the one thing on this tab that commits, and the
@@ -325,8 +330,8 @@ export function DealDetailsForm({
             variant="contained"
             // startIcon={<SaveIcon />}
             onClick={handleSave}
-            // Not gated on `gaps`: pressing it says what is missing, which beats a dead button
-            // the reviewer has to reverse-engineer.
+            // Not gated on the value checks above: a dead button the reviewer has to
+            // reverse-engineer is worse than one that presses and says what is wrong.
             disabled={saving || !dirty}
             // Wider than its text needs. It is the only commit on the tab and it sits alone at the
             // end of a long form, so it has to read as the destination rather than as one more

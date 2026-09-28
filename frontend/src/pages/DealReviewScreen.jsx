@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import {
-  closeDeal, getDeal, holdDeal, overrideDeal, reopenDeal, revertDeal, submitDealForReview, verifyDeal,
-} from '../api/deals.js';
+import { getDeal } from '../api/deals.js';
 import { getDealVersion, listDealVersions } from '../api/dealVersions.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canOverride, canWrite, isDealAuthor, isDealReviewer } from '../auth/roles.js';
@@ -23,10 +21,12 @@ import { DealDrawer } from '../features/deal/review/DealDrawer.jsx';
 import { ReviewTabPanel } from '../features/deal/review/ReviewTabPanel.jsx';
 import { ParkedPanel } from '../features/deal/review/ParkedPanel.jsx';
 import { RiskPanel } from '../features/deal/review/RiskPanel.jsx';
+import { TransactionMonitoringPanel } from '../features/deal/review/TransactionMonitoringPanel.jsx';
 import { DealStatusDialog } from '../features/deal/DealStatusDialog.jsx';
+import { CloseDealDialog } from '../features/deal/CloseDealDialog.jsx';
+import { useDealStatusAction } from '../features/deal/useDealStatusAction.js';
 import { DealVersionsMenu, VersionsIcon } from '../features/deal/DealVersionsMenu.jsx';
 import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
-import { useToast } from '../components/ToastProvider.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { canEditContent, dealStatusLabel, isEditable, transitionsFrom } from '../data/dealStatus.js';
@@ -42,6 +42,9 @@ const TABS = [
   { value: 'structure', label: 'Structure' },
   { value: 'echecks', label: 'eChecks' },
   { value: 'risk', label: 'Risk' },
+  // What the deal finished as. Beside Risk because both are read after the structure is settled,
+  // and this one only has an answer once the file is closed.
+  { value: 'transaction-monitoring', label: 'Transaction Monitoring' },
 ];
 
 const TAB_VALUES = TABS.map((t) => t.value);
@@ -49,7 +52,6 @@ const TAB_VALUES = TABS.map((t) => t.value);
 export function DealReviewScreen() {
   const { id } = useParams();
   const dealId = Number(id);
-  const qc = useQueryClient();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { user } = useAuth();
@@ -57,7 +59,6 @@ export function DealReviewScreen() {
   // This screen answers to two addresses. Sending a firm-level viewer back to the CDD register
   // would drop them into a list they did not come from.
   const listPath = pathname.startsWith('/firm/') ? '/firm/deals' : '/cdd/deals';
-  const { showToast } = useToast();
   const money = useCurrency();
 
   // The tab lives in the URL so a reload keeps your place and a link can point at one. An
@@ -80,6 +81,9 @@ export function DealReviewScreen() {
   const [changeOwner, setChangeOwner]       = useState(null);   // { nodeId, edge }
   const [deleteNodeId, setDeleteNodeId]     = useState(null);
   const [statusOpen, setStatusOpen]         = useState(false);
+  // Closing asks a second set of questions, so the status list hands over to its own dialog
+  // rather than growing a branch for the one verb that records an outcome as well as a position.
+  const [closeOpen, setCloseOpen]           = useState(false);
   const [actionError, setActionError]       = useState(null);
   const [versionsAnchor, setVersionsAnchor] = useState(null);
 
@@ -114,62 +118,28 @@ export function DealReviewScreen() {
     enabled: Boolean(dealId) && viewingVersion != null,
   });
 
-  // One prefix, every deals query. This used to name four keys and still missed ['deals','list'] —
-  // the register's — so acting on a deal here left the list you came from showing the old status.
-  // That list is now the only one an agent has, and TanStack matches key prefixes, so naming the
-  // root covers the detail, the queues and the register at once. Same call NewDealPage makes.
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['deals'] });
-
-  /** What each move is called once it has happened, and how loudly to say it. */
-  const SAID = {
-    submit:   { message: 'Sent to compliance for review', severity: 'success' },
-    verify:   { message: 'Deal verified', severity: 'success' },
-    hold:     { message: 'Deal put on hold', severity: 'warning' },
-    revert:   { message: 'Sent back to the broker', severity: 'warning' },
-    close:    { message: 'Deal closed', severity: 'success' },
-    reopen:   { message: 'Reopened for changes — the signed-off version is saved', severity: 'warning' },
-  };
-
-  /**
-   * Every status change, through one mutation.
+  /*
+   * Every status change, through the shared hook.
    *
-   * <p>There were four, and between them they were the six buttons this screen used to carry.
-   * They only ever differed in which endpoint they hit, so the dialog picks the row and this
-   * reads the row's `action`.
+   * The switch, the toasts and the invalidations moved to useDealStatusAction when the deals
+   * register grew a row menu offering the same dialog — one copy, so the two cannot drift.
+   * What stays here is the part that is only true of this screen: closing the dialogs, and
+   * leaving for the list afterwards.
    */
-  const statusMut = useMutation({
-    mutationFn: ({ transition, reason }) => {
-      switch (transition.action) {
-        case 'submit': return submitDealForReview(dealId);
-        case 'hold':   return holdDeal(dealId, reason);
-        case 'verify': return verifyDeal(dealId, reason);
-        case 'revert': return revertDeal(dealId, reason);
-        case 'close':  return closeDeal(dealId);
-        case 'reopen': return reopenDeal(dealId, reason);
-        default:       return overrideDeal(dealId, transition.to, reason);
-      }
-    },
-    onSuccess: (_, vars) => {
-      invalidate();
-      qc.invalidateQueries({ queryKey: ['dealNotes', dealId] });
-      // Verifying writes a version and reopening stamps one, so the menu is stale after either.
-      // Named unconditionally rather than per action: an override can do both too, and working
-      // out which is exactly the sort of thing that goes wrong later.
-      qc.invalidateQueries({ queryKey: ['dealVersions', dealId] });
+  const statusMut = useDealStatusAction(dealId, {
+    onDone: (transition) => {
       setStatusOpen(false);
+      setCloseOpen(false);
       setActionError(null);
-      const said = SAID[vars.transition.action]
-        ?? { message: `Status overridden to ${dealStatusLabel(vars.transition.to)}`, severity: 'warning' };
-      showToast(said);
       // Verifying and sending back both end this reviewer's involvement for now; a hold does not,
       // so it stays on the deal. Neither does a reopen, and emphatically so — it was asked for in
       // order to change something, and dropping the reviewer back on the queue would put the deal
       // they just unlocked one navigation away from where they meant to be.
-      if (vars.transition.action === 'verify' || vars.transition.action === 'revert') {
+      if (transition.action === 'verify' || transition.action === 'revert') {
         navigate(listPath);
       }
     },
-    onError: (e) => setActionError(e.response?.data?.message || 'Could not update the status'),
+    onFailed: setActionError,
   });
 
   if (dealQ.isLoading) {
@@ -442,6 +412,19 @@ export function DealReviewScreen() {
         )}
       </ReviewTabPanel>
 
+      <ReviewTabPanel value="transaction-monitoring" current={tab}>
+        {snapshot ? (
+          // A version is what the deal said when it was signed off; the sale is recorded after
+          // that, on the way out of verified, so no snapshot has one to show.
+          <ParkedPanel title="Transaction monitoring">
+            Switch back to the live deal. A sale is recorded when the deal is closed, which is
+            after the moment this version froze.
+          </ParkedPanel>
+        ) : (
+          <TransactionMonitoringPanel dealId={dealId} />
+        )}
+      </ReviewTabPanel>
+
       {/* ── The deal itself ─────────────────────────────────────────────── */}
       <DealDrawer
         open={dealDrawerOpen}
@@ -493,7 +476,28 @@ export function DealReviewScreen() {
         canOverride={showOverride}
         onClose={() => setStatusOpen(false)}
         submitting={statusMut.isPending}
-        onSubmit={(transition, reason) => statusMut.mutateAsync({ transition, reason })}
+        onSubmit={(transition, reason) => {
+          // Closing records an outcome as well as a position, so it hands over to the dialog
+          // that asks for it. Every other verb goes straight through as before.
+          if (transition.action === 'close') {
+            setStatusOpen(false);
+            setCloseOpen(true);
+            return Promise.resolve();
+          }
+          return statusMut.mutateAsync({ transition, reason });
+        }}
+      />
+
+      <CloseDealDialog
+        open={closeOpen}
+        dealId={dealId}
+        isDevelopment={deal?.property?.propertyType === 'DEVELOPMENT'}
+        onClose={() => setCloseOpen(false)}
+        submitting={statusMut.isPending}
+        onSubmit={(sale) => statusMut.mutateAsync({
+          transition: { action: 'close', to: 'CLOSED', sale },
+          reason: null,
+        })}
       />
 
       {/* One dialog, two jobs: attaching a node that has no owner, and moving one that has.

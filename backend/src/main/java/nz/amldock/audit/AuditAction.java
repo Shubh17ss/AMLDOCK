@@ -34,6 +34,8 @@ public enum AuditAction {
     DEAL_CLOSED,
     DEAL_REVERTED,
     DEAL_REOPENED,
+    /** A closed deal was taken back to verified so its sale detail could be corrected. */
+    DEAL_UNCLOSED,
     DEAL_NOTE_ADDED,
     DEAL_OVERRIDDEN,
     /**

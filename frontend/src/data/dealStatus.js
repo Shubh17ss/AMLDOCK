@@ -7,6 +7,8 @@
 //                 ┌──────────reopen──────────┐
 //                 ▼                          │
 //   NEW ──submit──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
+//                                          ▲                │
+//                                          └─────unclose────┘
 //    ▲                │
 //    │                └──hold──▶ ON_HOLD
 //    └──────revert────┴──────────────┘
@@ -117,7 +119,15 @@ export const STATUS_TRANSITIONS = [
   },
   {
     to: 'CLOSED', from: ['VERIFIED'], action: 'close', noteRequired: false,
-    blurb: 'The file is finished. Nothing further happens to this deal.',
+    blurb: 'Finishes the file. You will be asked whether the property sold and for how much; '
+      + 'those answers can be corrected later by reopening it.',
+  },
+  {
+    // Lands on VERIFIED rather than REVIEW: nothing about the sign-off is in question, only the
+    // sale detail recorded on the way out, and correcting that means closing again.
+    to: 'VERIFIED', from: ['CLOSED'], action: 'unclose', noteRequired: true,
+    blurb: 'Reopens a closed file so its sale details can be corrected. The verification stands '
+      + 'and no new version is written — close it again to record the new figures.',
   },
 ];
 

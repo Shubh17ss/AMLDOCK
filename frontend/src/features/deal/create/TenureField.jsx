@@ -10,7 +10,7 @@ import { tokens } from '../../../theme/theme.js';
  *
  * <p>Months is the remainder, not a second way of saying the same thing: 18 months is 1 and 6.
  * Clamped to 0-11 here and by a CHECK constraint, so the two boxes cannot describe two different
- * durations.
+ * durations. Years is capped at 200 for the duller reason that the server caps it there.
  *
  * <p>Either box alone is an answer. Someone who has held it four years leaves months blank, and
  * treating that as unfinished would hold up a save over nothing.
@@ -23,6 +23,9 @@ export function TenureField({ years, months, onYearsChange, onMonthsChange, requ
   // than silently becoming something else, and an empty box stays empty.
   const digits = (v) => v.replace(/[^\d]/g, '');
   const monthsOutOfRange = months !== '' && Number(months) > 11;
+  // 200 is the server's cap (@Max(200) on the request). Shown here for the same reason months
+  // is: the field that is wrong should be the field that says so, rather than the save button.
+  const yearsOutOfRange = years !== '' && Number(years) > 200;
 
   return (
     <Box>
@@ -45,6 +48,8 @@ export function TenureField({ years, months, onYearsChange, onMonthsChange, requ
           value={years}
           onChange={(e) => onYearsChange(digits(e.target.value))}
           inputProps={{ inputMode: 'numeric', maxLength: 3 }}
+          error={yearsOutOfRange}
+          helperText={yearsOutOfRange ? '200 years at most' : undefined}
           sx={{ maxWidth: 140 }}
         />
         <TextField

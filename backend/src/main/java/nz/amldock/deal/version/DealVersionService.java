@@ -97,16 +97,24 @@ public class DealVersionService {
      * override — should not each have to remember the rule, and a third one added later gets it
      * without being told.
      *
-     * <p>The test is <em>entering</em> VERIFIED, not being in it. A deal already verified cannot
-     * reach here (no rule leaves VERIFIED for VERIFIED, and {@code override} rejects a no-op
-     * target), but stating it means a version is one verification, never a re-save of the same one.
+     * <p>The test is <em>entering</em> VERIFIED, not being in it, so a version is one
+     * verification and never a re-save of the same one.
+     *
+     * <p>Two ways in are excluded. VERIFIED to VERIFIED cannot happen anyway (no rule leaves
+     * VERIFIED for VERIFIED, and {@code override} rejects a no-op target), but stating it makes
+     * the rule the method's own rather than the caller's. CLOSED to VERIFIED can happen, from
+     * {@code UNCLOSE} or a senior manager's override, and it is not a verification at all: the
+     * deal was signed off before it was closed, nothing about it has changed on the way back, and
+     * snapshotting here would file a second copy of the same evidence under a second version
+     * number — one that no sign-off points at.
      *
      * @param previous the status the deal came from
      * @param note     the verification note; it is the version's own record of why it passed
      */
     @Transactional
     public void snapshotIfVerified(Deal deal, UserPrincipal actor, String note, DealStatus previous) {
-        if (deal.getStatus() != DealStatus.VERIFIED || previous == DealStatus.VERIFIED) return;
+        if (deal.getStatus() != DealStatus.VERIFIED) return;
+        if (previous == DealStatus.VERIFIED || previous == DealStatus.CLOSED) return;
         snapshot(deal, actor, note);
     }
 

@@ -57,8 +57,8 @@ public class DealLifecycleService {
      *                  ┌──────────reopen──────────┐
      *                  ▼                          │
      * NEW ──submit──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
-     *  ▲                │
-     *  │                └──hold──▶ ON_HOLD
+     *  ▲                │                    ▲                │
+     *  │                └──hold──▶ ON_HOLD   └─────unclose────┘
      *  └──────revert────┴──────────────┘
      * </pre>
      *
@@ -68,6 +68,12 @@ public class DealLifecycleService {
      * <p>ON_HOLD is the only negative outcome and its only exit is back to NEW — a parked deal
      * always returns through the broker, so there is a fresh submission on the record before
      * verification.
+     *
+     * <p>UNCLOSE is the way back from CLOSED, and it lands on VERIFIED rather than REVIEW because
+     * nothing about the verification is in question — what a reviewer comes back for is the sale
+     * detail recorded on the way out, and correcting that means closing again. It is the one edge
+     * that reaches VERIFIED without being a sign-off, which is why {@code stampDecision} and
+     * {@code DealVersionService.snapshotIfVerified} both have to know where it came from.
      *
      * <p>REOPEN is the one edge that was long absent, and it is here now only because verifying
      * writes a {@link nz.amldock.deal.version.DealVersion} first. The objection to it was never
@@ -82,6 +88,7 @@ public class DealLifecycleService {
         DealAction.VERIFY, new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.VERIFIED, Who.REVIEWER, true),
         DealAction.CLOSE,  new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.CLOSED,   Who.REVIEWER, false),
         DealAction.REOPEN, new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.REVIEW,   Who.REVIEWER, true),
+        DealAction.UNCLOSE, new Rule(EnumSet.of(DealStatus.CLOSED), DealStatus.VERIFIED, Who.REVIEWER, true),
         DealAction.REVERT, new Rule(EnumSet.of(DealStatus.REVIEW,
                                                DealStatus.ON_HOLD),  DealStatus.NEW,      Who.REVIEWER, true));
 
@@ -138,7 +145,7 @@ public class DealLifecycleService {
         }
 
         deal.setStatus(rule.to());
-        stampDecision(deal, actor, rule.to());
+        stampDecision(deal, actor, previous, rule.to());
         return previous;
     }
 
@@ -188,7 +195,9 @@ public class DealLifecycleService {
             throw new BadRequestException("Deal is already in status " + target);
         }
         deal.setStatus(target);
-        stampDecision(deal, actor, target);
+        // A senior manager forcing CLOSED back to VERIFIED is the same move as UNCLOSE, so it
+        // keeps the original sign-off for the same reason.
+        stampDecision(deal, actor, previous, target);
         return previous;
     }
 
@@ -301,9 +310,15 @@ public class DealLifecycleService {
      * decided_by / decided_at record the compliance sign-off, so only VERIFIED sets them.
      * CLOSED follows verification and keeps the stamp; anything else has left the verified line,
      * where a stamp would claim a sign-off that no longer stands.
+     *
+     * <p>Coming back from CLOSED is the exception, and it needs {@code previous} to see it. That
+     * edge lands on VERIFIED without being a verification — the deal was signed off before it was
+     * closed — so re-stamping would credit whoever undid the closure with the original sign-off
+     * and lose the person who actually made it.
      */
-    private void stampDecision(Deal deal, UserPrincipal actor, DealStatus target) {
+    private void stampDecision(Deal deal, UserPrincipal actor, DealStatus previous, DealStatus target) {
         if (target == DealStatus.VERIFIED) {
+            if (previous == DealStatus.CLOSED) return;   // the stamp it already carries is the true one
             deal.setDecidedByUserId(actor.id());
             deal.setDecidedAt(Instant.now());
         } else if (target != DealStatus.CLOSED) {
@@ -326,6 +341,7 @@ public class DealLifecycleService {
             case CLOSE  -> "closed";
             case REVERT -> "reverted";
             case REOPEN -> "reopened";
+            case UNCLOSE -> "reopened from closed";
         };
     }
 }

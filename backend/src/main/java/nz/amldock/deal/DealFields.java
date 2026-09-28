@@ -206,6 +206,33 @@ public abstract class DealFields extends BaseEntity {
     @Column(name = "decided_at")
     private Instant decidedAt;
 
+    /**
+     * Whether the property actually sold, answered when the deal is closed.
+     *
+     * <p>Null until it is. Three states, not two: a deal still running has not been asked, and
+     * defaulting that to "no" would record an outcome nobody stated.
+     */
+    @Column(name = "property_sold")
+    private Boolean propertySold;
+
+    /**
+     * What it sold for, in the reporting entity's own currency.
+     *
+     * <p>Deliberately <em>not</em> {@link #transactionValue}, which is the broker's estimate from
+     * before the valuation range existed and is still read as a fallback on deal cards and in
+     * dashboard totals. Putting a sale price there would rewrite old deals' estimates and mix
+     * actuals into sums built from estimates.
+     *
+     * <p>Null for a development, whose units carry their own prices - see {@code DealSaleUnit}.
+     * The total is summed on read rather than stored, so it cannot drift from the rows under it.
+     */
+    @Column(name = "sale_price")
+    private BigDecimal salePrice;
+
+    public Boolean getPropertySold() { return propertySold; }
+    public void setPropertySold(Boolean v) { this.propertySold = v; }
+    public BigDecimal getSalePrice() { return salePrice; }
+    public void setSalePrice(BigDecimal v) { this.salePrice = v; }
     public String getReference() { return reference; }
     public void setReference(String v) { this.reference = v; }
     public Long getFirmBranchId() { return firmBranchId; }
