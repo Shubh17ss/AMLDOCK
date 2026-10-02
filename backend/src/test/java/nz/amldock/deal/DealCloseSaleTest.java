@@ -82,7 +82,8 @@ class DealCloseSaleTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)),
                 new DealNoteService(dealNotes, documents, users),
-                beneficialOwners, risk, ownership, audit, notifier, versions, saleUnits);
+                beneficialOwners, risk, ownership, audit, notifier, versions, saleUnits,
+                org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class));
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(amlco, null, amlco.getAuthorities()));

@@ -472,7 +472,9 @@ export function DealReviewScreen() {
 
       <DealStatusDialog
         open={statusOpen}
-        deal={deal}
+        // The live deal, never a version on screen: its status picks the moves and its id is
+        // what the readiness check asks about.
+        deal={liveDeal}
         canOverride={showOverride}
         onClose={() => setStatusOpen(false)}
         submitting={statusMut.isPending}

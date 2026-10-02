@@ -275,7 +275,6 @@ export function DealDetailsForm({
             value={form.redFlagPresent}
             onChange={setField('redFlagPresent')}
             required
-            warnOnYes="Say which one below — compliance reads it first."
           />
           <Collapse in={form.redFlagPresent === true} unmountOnExit>
             <FormControl fullWidth>

@@ -12,6 +12,8 @@ import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.RiskAssessmentDto;
 import nz.amldock.deal.version.DealVersionService;
+import nz.amldock.deal.readiness.Readiness;
+import nz.amldock.deal.readiness.VerificationReadinessService;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
 import nz.amldock.deal.DealRiskService.RiskAssessment;
@@ -70,6 +72,7 @@ public class DealService {
     private final DealNotificationEnqueuer notifier;
     private final DealVersionService versions;
     private final DealSaleUnitRepository saleUnits;
+    private final VerificationReadinessService readiness;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -85,7 +88,8 @@ public class DealService {
                        AuditService audit,
                        DealNotificationEnqueuer notifier,
                        DealVersionService versions,
-                       DealSaleUnitRepository saleUnits) {
+                       DealSaleUnitRepository saleUnits,
+                       VerificationReadinessService readiness) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -101,6 +105,7 @@ public class DealService {
         this.notifier = notifier;
         this.versions = versions;
         this.saleUnits = saleUnits;
+        this.readiness = readiness;
     }
 
     /* ---------- queries ---------- */
@@ -451,6 +456,9 @@ public class DealService {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
         DealStatus previous = lifecycle.transition(d, actor, action, firmIdOf(d), note);
+        // After the transition's own checks, so a caller who may not verify at all is told that
+        // rather than handed the deal's gaps. Throwing here rolls the status change back.
+        if (action == DealAction.VERIFY) readiness.assertReady(d);
         if (action == DealAction.REOPEN) versions.recordReopen(d, actor, note);
         versions.snapshotIfVerified(d, actor, note, previous);
         dealNotes.appendTransition(d, actor, note, previous, d.getStatus());
@@ -596,6 +604,14 @@ public class DealService {
         return dealNotes.timeline(d);
     }
 
+    /** Whether the deal could be verified now, and what is still missing if not. */
+    @Transactional(readOnly = true)
+    public Readiness verificationReadiness(Long id) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
+        return readiness.assess(d);
+    }
+
     /* ---------- the risk position ---------- */
 
     /**
@@ -735,6 +751,9 @@ public class DealService {
     public OverrideResult override(Long id, DealStatus target, String reason) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         DealStatus previous = lifecycle.override(d, currentPrincipal(), target, firmIdOf(d), reason);
+        // An override chooses where the deal goes, not what counts as a complete file: forcing it
+        // into VERIFIED still needs everything verifying it the ordinary way would.
+        if (target == DealStatus.VERIFIED) readiness.assertReady(d);
         // An override is still a way into VERIFIED, so it still owes a version. Leaving it out
         // would make the sign-off's completeness depend on which door compliance came through.
         if (previous == DealStatus.VERIFIED) versions.recordReopen(d, currentPrincipal(), reason);

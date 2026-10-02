@@ -76,7 +76,8 @@ class DealDeleteAuthorizationTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)),
                 new DealNoteService(dealNotes, documents, users),
-                beneficialOwners, risk, ownership, audit, notifier, versions, saleUnits);
+                beneficialOwners, risk, ownership, audit, notifier, versions, saleUnits,
+                org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class));
 
         lenient().when(branches.findById(OWN_BRANCH)).thenReturn(Optional.of(branch(OWN_BRANCH, 1L)));
         lenient().when(branches.findById(OTHER_FIRM_BRANCH))

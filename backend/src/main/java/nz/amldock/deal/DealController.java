@@ -14,6 +14,7 @@ import nz.amldock.deal.dto.SaleDto;
 import nz.amldock.deal.dto.RiskAssessmentDto;
 import nz.amldock.deal.dto.RiskOverrideRequest;
 import nz.amldock.deal.dto.UpdateDealRequest;
+import nz.amldock.deal.readiness.Readiness;
 import nz.amldock.dealnote.dto.DealNoteDto;
 import nz.amldock.property.dto.PropertyInput;
 import org.springframework.http.ResponseEntity;
@@ -278,6 +279,16 @@ public class DealController {
     @GetMapping("/{id}/notes")
     public List<DealNoteDto> notes(@PathVariable Long id) {
         return deals.notes(id);
+    }
+
+    /**
+     * Whether the deal could be verified right now, and what is missing if not. Read-only and
+     * unannotated for the same reason as the notes: DealService runs assertCanRead. The verify
+     * and override endpoints enforce the same answer, so this only lets the dialog say it first.
+     */
+    @GetMapping("/{id}/verification-readiness")
+    public Readiness verificationReadiness(@PathVariable Long id) {
+        return deals.verificationReadiness(id);
     }
 
     @PostMapping("/{id}/notes")

@@ -84,7 +84,8 @@ class DealServiceRiskAndPatchTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, people, audit),
-                ownership, audit, notifier, versions, saleUnits);
+                ownership, audit, notifier, versions, saleUnits,
+                org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 
