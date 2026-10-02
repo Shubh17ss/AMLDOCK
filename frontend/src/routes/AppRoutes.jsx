@@ -12,7 +12,7 @@ import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
 import {
   DEAL_AUTHOR_ROLES, DEAL_CREATOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
   NOTIFICATION_ADMIN_ROLES,
-  FINANCE_SECTION_ROLES, AUDIT_LOG_ROLES,
+  FINANCE_SECTION_ROLES, AUDIT_LOG_ROLES, ASSURANCE_ROLES,
   TRAINING_ASSIGNABLE_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
@@ -21,7 +21,7 @@ import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
 import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
 import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
-  BENEFICIAL_OWNERS_PATH, OVERSEAS_RESIDENTS_PATH, CDD_EXCEPTIONS_PATH,
+  BENEFICIAL_OWNERS_PATH, OVERSEAS_RESIDENTS_PATH, CDD_EXCEPTIONS_PATH, CDD_ASSURANCE_PATH,
   SUSPICIOUS_ACTIVITIES_PATH, STAFF_TRAINING_PATH, MY_TRAINING_PATH, SECTION_LANDING_GROUPS,
   FINANCE_PATHS, AUDIT_LOG_PATH,
 } from '../navigation/moduleRegistry.jsx';
@@ -39,6 +39,7 @@ import { DealsPage } from '../pages/DealsPage.jsx';
 import { BeneficialOwnersPage } from '../pages/cdd/BeneficialOwnersPage.jsx';
 import { OverseasResidentsPage } from '../pages/cdd/OverseasResidentsPage.jsx';
 import { CddExceptionsPage } from '../pages/cdd/CddExceptionsPage.jsx';
+import { CddAssurancePage } from '../pages/cdd/CddAssurancePage.jsx';
 import { FirmDealsPage } from '../pages/FirmDealsPage.jsx';
 import { NewDealPage } from '../pages/NewDealPage.jsx';
 import { DealReviewScreen } from '../pages/DealReviewScreen.jsx';
@@ -76,6 +77,13 @@ export function AppRoutes() {
         <Route path={BENEFICIAL_OWNERS_PATH} element={<BeneficialOwnersPage />} />
         <Route path={OVERSEAS_RESIDENTS_PATH} element={<OverseasResidentsPage />} />
         <Route path={CDD_EXCEPTIONS_PATH} element={<CddExceptionsPage />} />
+        {/* Guarded, unlike its neighbours: it is compliance's own workspace, and the server
+            refuses the list to every other role (AssuranceController). */}
+        <Route path={CDD_ASSURANCE_PATH} element={
+          <ProtectedRoute roles={ASSURANCE_ROLES}>
+            <CddAssurancePage />
+          </ProtectedRoute>
+        } />
 
         {/* Section landings — clicking a menu section header shows a card per module in it,
             each with its review status. The CDD landing is the stats dashboard instead, so

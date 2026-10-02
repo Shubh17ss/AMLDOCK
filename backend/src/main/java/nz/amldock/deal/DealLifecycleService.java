@@ -229,7 +229,7 @@ public class DealLifecycleService {
     }
 
     /** Firm-level reviewers. A deal is no longer tied to one of them — any will do. */
-    static boolean isDecider(Role role) {
+    public static boolean isDecider(Role role) {
         return role == Role.AML_COMPLIANCE_OFFICER || role == Role.SENIOR_MANAGER;
     }
 

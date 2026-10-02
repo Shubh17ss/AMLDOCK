@@ -116,6 +116,10 @@ export const SCOPE_SETUP_ROLES = SETTINGS_ROLES.filter((r) => canWrite(r));
 // Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior manager
 // sees their own entity's, scoped server-side by actor in AuditService.search.
 export const AUDIT_LOG_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+// CDD › Assurance. Compliance's second look at its own sign-offs, so it is theirs to work; ROOT and
+// AUDIT read it, because checking that assurance is being done is what they are there for. Who may
+// actually mark a version is narrower again — isDealReviewer — and the server holds that line.
+export const ASSURANCE_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
 // Settings › Notifications. Who may open the firm-wide matrix and change someone else's toggles.
 // AUDIT reads it like every other section; the switches inside are gated by canWrite, and the
 // server refuses its writes at AuditReadOnlyFilter regardless.

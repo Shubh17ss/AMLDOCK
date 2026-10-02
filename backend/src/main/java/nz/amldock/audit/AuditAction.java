@@ -60,8 +60,12 @@ public enum AuditAction {
      * an approval that disappears silently is the kind of change an auditor asks about.
      */
     DEAL_RISK_APPROVAL_WITHDRAWN,
-    /** A reviewer set the risk band by hand, whether overruling the engine or agreeing with it. */
+    /** A reviewer manually overrode the risk band, whether overruling the engine or agreeing with it. */
     DEAL_RISK_OVERRIDDEN,
+    /** A reviewer assured a signed-off version of a deal: they looked again and it holds up. */
+    DEAL_VERSION_ASSURED,
+    /** A reviewer withdrew assurance from a signed-off version, with a note saying why. */
+    DEAL_VERSION_UNASSURED,
     NODE_CREATED,
     NODE_UPDATED,
     NODE_DELETED,

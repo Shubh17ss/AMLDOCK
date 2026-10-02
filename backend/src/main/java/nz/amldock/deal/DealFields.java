@@ -179,7 +179,7 @@ public abstract class DealFields extends BaseEntity {
     @Column(name = "risk_approved", nullable = false)
     private boolean riskApproved = false;
 
-    /** Why a reviewer pinned the rating by hand. Only meaningful while the source is OVERRIDE. */
+    /** Why a reviewer manually overrode the rating. Only meaningful while the source is OVERRIDE. */
     @Column(name = "risk_override_comment", columnDefinition = "text")
     private String riskOverrideComment;
 

@@ -45,7 +45,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Approving a risk, and pinning one by hand.
+ * Approving a risk, and manually overriding one.
  *
  * <p>Three rules are worth holding here because each of them is a thing the UI merely asks for
  * politely and the server has to actually enforce: approval is refused while a contributing

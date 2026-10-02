@@ -645,7 +645,7 @@ public class DealService {
     }
 
     /**
-     * Pins the deal's risk band by hand.
+     * Manually overrides the deal's risk band.
      *
      * <p>An override is an override whatever band it names, <em>including the one the engine
      * already arrived at</em>. A reviewer who pins a deal to the calculated band is agreeing with
@@ -688,7 +688,7 @@ public class DealService {
         // Names both bands, so the line shows whether the reviewer was overruling the engine or
         // agreeing with it — the two look identical afterwards and only this says which it was.
         audit.record(AuditAction.DEAL_RISK_OVERRIDDEN, "Deal", d.getId(),
-                "Risk " + previous + " -> " + rating + " set by hand on deal "
+                "Risk manually overridden to " + rating + " (was " + previous + ") on deal "
                         + d.getReference() + ", against a calculated " + assessment.rating()
                         + " (score " + assessment.value() + "): " + comment);
         return riskDto(d);

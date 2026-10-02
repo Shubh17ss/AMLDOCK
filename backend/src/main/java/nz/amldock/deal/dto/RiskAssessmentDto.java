@@ -31,7 +31,7 @@ public record RiskAssessmentDto(
         RiskRatingSource source,
         String overrideComment,
         /**
-         * Who pinned the rating by hand, and when. Both null unless the source is OVERRIDE.
+         * Who manually overrode the rating, and when. Both null unless the source is OVERRIDE.
          *
          * <p>A name rather than a login: a byline reading "amlco@firm.com" identifies an account,
          * and the question a reviewer is asking of an override is who decided it.

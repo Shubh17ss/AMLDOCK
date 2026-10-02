@@ -7,7 +7,7 @@ import { tokens, fonts } from '../../../theme/theme.js';
 import { bandOf } from './riskBands.js';
 
 /**
- * Setting the deal's risk band by hand.
+ * Manually overriding the deal's risk band.
  *
  * <p>All three ratings are on screen at once, which is the point of the dialog rather than a
  * detail of it: a reviewer needs to see what they are overruling and what the file says on its
@@ -18,7 +18,7 @@ import { bandOf } from './riskBands.js';
  * nobody having looked — and the comment and byline are how that difference is kept.
  *
  * <p>The comment is required, with the same three-character floor the server enforces. A rating
- * set by hand is defensible only if the record says why, and that holds whether it disagrees
+ * manually overridden is defensible only if the record says why, and that holds whether it disagrees
  * with the workings or matches them.
  */
 export function RiskOverrideDialog({

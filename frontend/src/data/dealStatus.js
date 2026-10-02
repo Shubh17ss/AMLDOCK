@@ -90,44 +90,18 @@ export const canEditContent = (status, role) =>
  * whole dialog on `isDealReviewer`, and the broker's own Submit is section 5 of their form. Drop
  * that role gate on the grounds that "the table already knows" and a broker gets a second submit
  * path beside the wizard's — one that skips the section validation the wizard runs first.
- *
- * <p>`blurb` is what the reviewer reads beside each status. It says what the status means and who
- * the deal lands on, because "Verified" alone is exactly the button this table replaced.
  */
 export const STATUS_TRANSITIONS = [
-  {
-    to: 'REVIEW', from: ['NEW'], action: 'submit', noteRequired: false,
-    blurb: 'Hands the deal to compliance. The broker does this from their form; a reviewer '
-      + 'working the deal here does it from this list.',
-  },
-  {
-    to: 'VERIFIED', from: ['REVIEW'], action: 'verify', noteRequired: true,
-    blurb: 'Compliance sign-off. Record what you checked — it is kept against the deal.',
-  },
-  {
-    to: 'ON_HOLD', from: ['REVIEW'], action: 'hold', noteRequired: true,
-    blurb: "Parked with compliance. Say what you're waiting on; the broker sees it on the timeline.",
-  },
-  {
-    to: 'NEW', from: ['REVIEW', 'ON_HOLD'], action: 'revert', noteRequired: true,
-    blurb: 'Back to the broker for changes. Say what needs doing — they see it on the timeline.',
-  },
-  {
-    to: 'REVIEW', from: ['VERIFIED'], action: 'reopen', noteRequired: true,
-    blurb: 'Back to compliance for changes. The current version is saved first and stays exactly '
-      + 'as it was signed off — this reopens only the live deal.',
-  },
-  {
-    to: 'CLOSED', from: ['VERIFIED'], action: 'close', noteRequired: false,
-    blurb: 'Finishes the file. You will be asked whether the property sold and for how much; '
-      + 'those answers can be corrected later by reopening it.',
-  },
+  { to: 'REVIEW', from: ['NEW'], action: 'submit', noteRequired: false },
+  { to: 'VERIFIED', from: ['REVIEW'], action: 'verify', noteRequired: true },
+  { to: 'ON_HOLD', from: ['REVIEW'], action: 'hold', noteRequired: true },
+  { to: 'NEW', from: ['REVIEW', 'ON_HOLD'], action: 'revert', noteRequired: true },
+  { to: 'REVIEW', from: ['VERIFIED'], action: 'reopen', noteRequired: true },
+  { to: 'CLOSED', from: ['VERIFIED'], action: 'close', noteRequired: false },
   {
     // Lands on VERIFIED rather than REVIEW: nothing about the sign-off is in question, only the
     // sale detail recorded on the way out, and correcting that means closing again.
     to: 'VERIFIED', from: ['CLOSED'], action: 'unclose', noteRequired: true,
-    blurb: 'Reopens a closed file so its sale details can be corrected. The verification stands '
-      + 'and no new version is written — close it again to record the new figures.',
   },
 ];
 

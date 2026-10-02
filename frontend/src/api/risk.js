@@ -39,7 +39,7 @@ export async function approveDealRisk(id) {
 }
 
 /**
- * Sets the band by hand. Passing the calculated band is an override like any other - it records
+ * Manually overrides the band. Passing the calculated band is an override like any other - it records
  * that a reviewer agreed with the engine deliberately, and keeps the comment and byline saying
  * so. There is no way back to a derived rating: once overridden, the band stops tracking the
  * score until somebody sets it again.

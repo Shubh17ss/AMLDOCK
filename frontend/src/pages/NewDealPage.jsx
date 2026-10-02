@@ -27,6 +27,9 @@ import { tokens } from '../theme/theme.js';
 
 const SECTIONS = ['Your client', 'The property', 'Property details', 'Client identity', 'Risk & valuation'];
 
+/** The form's column width on a desktop. Phones and tablets are narrower than this anyway. */
+const FORM_MAX_WIDTH = 880;
+
 // Where leaving this form lands you — creating, discarding or deleting alike: the register, for
 // everyone. This used to fork, sending deal authors to a separate /my-deals and everyone else here,
 // because that route was guarded by DEAL_AUTHOR_ROLES while creation is open to the wider
@@ -286,7 +289,9 @@ export function NewDealPage() {
   const isCreateStep = section === 1 && !dealId;
 
   return (
-    <Stack spacing={3}>
+    // Capped and centred: a form stretched across a wide monitor puts its labels a long way from
+    // their fields and turns every section into a scan from one edge of the screen to the other.
+    <Stack spacing={3} sx={{ width: '100%', maxWidth: FORM_MAX_WIDTH, mx: 'auto' }}>
       <LoadingOverlay open={Boolean(overlay)} title={overlay?.title} subText={overlay?.subText} />
 
       <PageHeader
@@ -394,9 +399,9 @@ export function NewDealPage() {
 
         {/* Back and the primary action, and nothing else. On the last section the two share a
             two-column grid so "Submit for review" carries the same weight as Back rather than
-            reading as the longer of two options. `inline-grid` rather than `grid`: the main
-            column has no maxWidth, so a stretching grid would make both buttons half a screen
-            wide on a desktop. */}
+            reading as the longer of two options. `inline-grid` rather than `grid`: even capped,
+            the column is wide enough that a stretching grid would make both buttons hundreds of
+            pixels wide on a desktop. */}
         <Box
           sx={{
             display: { xs: 'grid', sm: isLast ? 'inline-grid' : 'flex' },

@@ -8,6 +8,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import { approveDealRisk, getDealRisk, overrideDealRisk } from '../../../api/risk.js';
+import { OptionPill } from '../../../components/OptionPill.jsx';
 import { useToast } from '../../../components/ToastProvider.jsx';
 import { countryName, flagClass } from '../../../data/countries.js';
 import { visualFor } from '../../ownership/nodeTypeVisual.js';
@@ -124,7 +125,7 @@ export function RiskPanel({ dealId, canDecide = false, onSelectNode }) {
       setOverride(null);
       // No "released" case: every override is an override, including one that picks the band
       // the engine already reached, so dto.source is always OVERRIDE here.
-      showToast({ severity: 'warning', message: `Risk set to ${dto.rating} by hand` });
+      showToast({ severity: 'warning', message: `Risk manually overridden to ${dto.rating}` });
     },
     // Left to the dialog, which shows it inline beside the comment box rather than in a toast
     // that disappears while the reviewer is still reading the form.
@@ -339,63 +340,20 @@ export function RiskPanel({ dealId, canDecide = false, onSelectNode }) {
 
 /** One band in the segmented control, with a marker on the one the score produced. */
 function BandButton({ band, selected, calculated, disabled, onClick }) {
+  // All three carry their colour all the time, so High reads as red and Low as green without
+  // having to be selected first. The current one is the one with a border, a full-strength wash
+  // and bold text.
   return (
-    <Box
-      role="radio"
-      aria-checked={selected}
-      aria-label={`${band.label} risk${calculated ? ', calculated' : ''}`}
-      tabIndex={disabled ? -1 : 0}
-      onClick={disabled ? undefined : onClick}
-      onKeyDown={(e) => {
-        if (disabled) return;
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
-      }}
-      sx={motion.respectful({
-        display: 'inline-flex', alignItems: 'center', gap: 0.75,
-        px: 1.75, py: 0.75, borderRadius: '10px',
-        cursor: disabled ? 'default' : 'pointer',
-        userSelect: 'none',
-        // All three carry their colour all the time, so High reads as red and Low as green
-        // without having to be selected first. The current one is the one with a border, a
-        // full-strength wash and bold text.
-        //
-        // The unselected border is transparent rather than absent: removing it outright would
-        // shrink the box by 2px and make the row jump every time the selection moves.
-        border: `1px solid ${selected ? band.fg : 'transparent'}`,
-        backgroundColor: selected
-          ? band.bg
-          : `color-mix(in srgb, ${band.bg} 50%, transparent)`,
-        color: band.fg,
-        fontSize: '0.82rem',
-        fontWeight: selected ? 700 : 400,
-        // Kept now that every button is coloured: without it a read-only viewer would be looking
-        // at three live-seeming buttons, none of which they may press.
-        opacity: disabled && !selected ? 0.65 : 1,
-        transition: `background-color ${motion.swift} ease, border-color ${motion.swift} ease`,
-        '&:hover': disabled ? {} : { backgroundColor: band.bg },
-        '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
-      })}
-    >
-      <Box
-        component="span"
-        sx={{
-          width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-          backgroundColor: band.fg,
-        }}
-      />
-      {band.label}
-      {calculated && (
-        <Typography
-          component="span"
-          sx={{
-            fontFamily: fonts.mono, fontSize: '0.58rem', letterSpacing: '0.06em',
-            color: tokens.muted,
-          }}
-        >
-          CALCULATED
-        </Typography>
-      )}
-    </Box>
+    <OptionPill
+      label={band.label}
+      fg={band.fg}
+      bg={band.bg}
+      selected={selected}
+      disabled={disabled}
+      onSelect={onClick}
+      tag={calculated ? 'CALCULATED' : null}
+      ariaLabel={`${band.label} risk${calculated ? ', calculated' : ''}`}
+    />
   );
 }
 

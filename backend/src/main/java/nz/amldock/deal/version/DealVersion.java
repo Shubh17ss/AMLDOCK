@@ -2,12 +2,15 @@ package nz.amldock.deal.version;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealFields;
+import nz.amldock.deal.assurance.AssuranceStatus;
 import org.springframework.beans.BeanUtils;
 
 import java.time.Instant;
@@ -57,6 +60,22 @@ public class DealVersion extends DealFields {
 
     @Column(name = "reopen_note", columnDefinition = "text")
     private String reopenNote;
+
+    /* ---------- assurance: compliance's second look at the sign-off (V50) ---------- */
+
+    /** Null until somebody has looked: not reviewed is its own position, not UNASSURED. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assurance_status", length = 16)
+    private AssuranceStatus assuranceStatus;
+
+    @Column(name = "assurance_note", columnDefinition = "text")
+    private String assuranceNote;
+
+    @Column(name = "assurance_by_user_id")
+    private Long assuranceByUserId;
+
+    @Column(name = "assurance_at")
+    private Instant assuranceAt;
 
     /* ---------- the ownership structure's own two columns ---------- */
 
@@ -108,6 +127,19 @@ public class DealVersion extends DealFields {
     public void setReopenedAt(Instant v) { this.reopenedAt = v; }
     public String getReopenNote() { return reopenNote; }
     public void setReopenNote(String v) { this.reopenNote = v; }
+    public AssuranceStatus getAssuranceStatus() { return assuranceStatus; }
+    public String getAssuranceNote() { return assuranceNote; }
+    public Long getAssuranceByUserId() { return assuranceByUserId; }
+    public Instant getAssuranceAt() { return assuranceAt; }
+
+    /** The status, note, author and time are one record, so they are only ever set together. */
+    public void markAssurance(AssuranceStatus status, String note, Long byUserId, Instant at) {
+        this.assuranceStatus = status;
+        this.assuranceNote = note;
+        this.assuranceByUserId = byUserId;
+        this.assuranceAt = at;
+    }
+
     public Long getRootNodeId() { return rootNodeId; }
     public void setRootNodeId(Long v) { this.rootNodeId = v; }
     public String getStructureNotes() { return structureNotes; }

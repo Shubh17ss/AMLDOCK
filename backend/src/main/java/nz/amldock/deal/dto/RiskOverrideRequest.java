@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 import nz.amldock.deal.RiskRating;
 
 /**
- * A reviewer setting the deal's risk band by hand.
+ * A reviewer manually overriding the deal's risk band.
  *
  * <p>The comment is required, and the same 3-4000 bound {@code OverrideRequest} uses for a status
  * override. A rating that disagrees with its own workings is only defensible if the record says
