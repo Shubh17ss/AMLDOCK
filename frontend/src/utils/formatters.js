@@ -120,6 +120,30 @@ export function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/**
+ * Short date and time, e.g. "21 Jun 2026, 14:05". Always en-NZ: a browser left on its default
+ * locale renders month-first ("6/21/2026, 2:05 PM"), which reads as a different date here.
+ * Returns null for a missing or unparseable value, so a caller can leave the stamp out.
+ */
+export function formatDateTime(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString('en-NZ', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
+
+/** Numeric date and time, e.g. "21/06/2026 14:05" — for dense table columns. Null when missing. */
+export function formatDateTimeNumeric(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} `
+    + `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Relative time: "just now", "5m ago", "3h ago", "2d ago", then a short date. */
 export function timeAgo(iso) {
   if (!iso) return '—';

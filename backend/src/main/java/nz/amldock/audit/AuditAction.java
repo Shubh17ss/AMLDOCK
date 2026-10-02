@@ -64,8 +64,8 @@ public enum AuditAction {
     DEAL_RISK_OVERRIDDEN,
     /** A reviewer assured a signed-off version of a deal: they looked again and it holds up. */
     DEAL_VERSION_ASSURED,
-    /** A reviewer withdrew assurance from a signed-off version, with a note saying why. */
-    DEAL_VERSION_UNASSURED,
+    /** A reviewer found a signed-off version needs action, and recorded the issues and remediation. */
+    DEAL_VERSION_ACTION_REQUIRED,
     NODE_CREATED,
     NODE_UPDATED,
     NODE_DELETED,

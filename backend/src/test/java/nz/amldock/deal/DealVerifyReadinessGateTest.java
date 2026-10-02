@@ -72,7 +72,8 @@ class DealVerifyReadinessGateTest {
                 new DealLifecycleService(mock(DealUserRepository.class)), dealNotes,
                 mock(BeneficialOwnerService.class), mock(DealRiskService.class),
                 mock(nz.amldock.ownership.OwnershipService.class), audit, notifier, versions,
-                mock(nz.amldock.deal.sale.DealSaleUnitRepository.class), readiness);
+                mock(nz.amldock.deal.sale.DealSaleUnitRepository.class), readiness,
+                mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
 
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);

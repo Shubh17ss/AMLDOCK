@@ -15,6 +15,7 @@ import nz.amldock.deal.dto.RiskAssessmentDto;
 import nz.amldock.deal.dto.RiskOverrideRequest;
 import nz.amldock.deal.dto.UpdateDealRequest;
 import nz.amldock.deal.readiness.Readiness;
+import nz.amldock.deal.monitoring.dto.StatusMoveDto;
 import nz.amldock.dealnote.dto.DealNoteDto;
 import nz.amldock.property.dto.PropertyInput;
 import org.springframework.http.ResponseEntity;
@@ -286,6 +287,15 @@ public class DealController {
      * unannotated for the same reason as the notes: DealService runs assertCanRead. The verify
      * and override endpoints enforce the same answer, so this only lets the dialog say it first.
      */
+    /**
+     * Every move between Verified and Closed, newest first, with the figures each was made at.
+     * Unannotated like the notes: DealService runs assertCanRead.
+     */
+    @GetMapping("/{id}/transaction-monitoring")
+    public List<StatusMoveDto> transactionMonitoring(@PathVariable Long id) {
+        return deals.transactionMonitoring(id);
+    }
+
     @GetMapping("/{id}/verification-readiness")
     public Readiness verificationReadiness(@PathVariable Long id) {
         return deals.verificationReadiness(id);

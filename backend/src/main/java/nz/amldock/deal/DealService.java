@@ -13,6 +13,8 @@ import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.RiskAssessmentDto;
 import nz.amldock.deal.version.DealVersionService;
 import nz.amldock.deal.readiness.Readiness;
+import nz.amldock.deal.monitoring.TransactionMonitoringService;
+import nz.amldock.deal.monitoring.dto.StatusMoveDto;
 import nz.amldock.deal.readiness.VerificationReadinessService;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
@@ -73,6 +75,7 @@ public class DealService {
     private final DealVersionService versions;
     private final DealSaleUnitRepository saleUnits;
     private final VerificationReadinessService readiness;
+    private final TransactionMonitoringService monitoring;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -89,7 +92,8 @@ public class DealService {
                        DealNotificationEnqueuer notifier,
                        DealVersionService versions,
                        DealSaleUnitRepository saleUnits,
-                       VerificationReadinessService readiness) {
+                       VerificationReadinessService readiness,
+                       TransactionMonitoringService monitoring) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -106,6 +110,7 @@ public class DealService {
         this.versions = versions;
         this.saleUnits = saleUnits;
         this.readiness = readiness;
+        this.monitoring = monitoring;
     }
 
     /* ---------- queries ---------- */
@@ -266,8 +271,7 @@ public class DealService {
         d.setNotes(req.notes());
         d.setTransactionPurpose(blankToNull(req.transactionPurpose()));
         d.setTrustInvolved(req.trustInvolved());
-        d.setOwnershipTenureYears(req.ownershipTenureYears());
-        d.setOwnershipTenureMonths(req.ownershipTenureMonths());
+        applyTenure(d, req.ownershipTenureTbc(), req.ownershipTenureYears(), req.ownershipTenureMonths());
         d.setFaceToFaceIdVerified(req.faceToFaceIdVerified());
         d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         d.setClientRemote(req.clientRemote());
@@ -321,8 +325,7 @@ public class DealService {
         boolean trustJustAdded = Boolean.TRUE.equals(req.trustInvolved())
                 && !Boolean.TRUE.equals(d.getTrustInvolved());
         if (req.trustInvolved() != null) d.setTrustInvolved(req.trustInvolved());
-        if (req.ownershipTenureYears() != null) d.setOwnershipTenureYears(req.ownershipTenureYears());
-        if (req.ownershipTenureMonths() != null) d.setOwnershipTenureMonths(req.ownershipTenureMonths());
+        applyTenure(d, req.ownershipTenureTbc(), req.ownershipTenureYears(), req.ownershipTenureMonths());
         if (req.faceToFaceIdVerified() != null) d.setFaceToFaceIdVerified(req.faceToFaceIdVerified());
         if (req.keyContactNodeId() != null) d.setKeyContactNodeId(req.keyContactNodeId());
         if (req.foreignExposureCountry() != null) {
@@ -460,6 +463,8 @@ public class DealService {
         // rather than handed the deal's gaps. Throwing here rolls the status change back.
         if (action == DealAction.VERIFY) readiness.assertReady(d);
         if (action == DealAction.REOPEN) versions.recordReopen(d, actor, note);
+        // Close is recorded by closeWithSale, once the sale it closed at is known.
+        if (action == DealAction.UNCLOSE) monitoring.recordUnclose(d, actor.id(), note);
         versions.snapshotIfVerified(d, actor, note, previous);
         dealNotes.appendTransition(d, actor, note, previous, d.getStatus());
         notifier.enqueueStatusChanged(d, actor, previous);
@@ -506,6 +511,13 @@ public class DealService {
             }
             saleUnits.saveAll(rows);
         }
+
+        // The figure the variance rule reads: the sale price, or a development's unit total.
+        BigDecimal total = units.isEmpty() ? d.getSalePrice()
+                : units.stream().map(CloseDealRequest.SaleUnitInput::salePrice)
+                        .filter(java.util.Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+        monitoring.recordClose(d, currentPrincipal().id(), req.note(), req.propertySold(), total);
         return result;
     }
 
@@ -602,6 +614,14 @@ public class DealService {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
         return dealNotes.timeline(d);
+    }
+
+    /** The deal's moves between VERIFIED and CLOSED, newest first, for a deal the caller may read. */
+    @Transactional(readOnly = true)
+    public List<StatusMoveDto> transactionMonitoring(Long id) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
+        return monitoring.history(id);
     }
 
     /** Whether the deal could be verified now, and what is still missing if not. */
@@ -758,6 +778,13 @@ public class DealService {
         // would make the sign-off's completeness depend on which door compliance came through.
         if (previous == DealStatus.VERIFIED) versions.recordReopen(d, currentPrincipal(), reason);
         versions.snapshotIfVerified(d, currentPrincipal(), reason, previous);
+        // Forced moves are moves too. A close by override records no sale outcome, because none
+        // was asked; leaving CLOSED by any route is an unclose.
+        if (previous == DealStatus.VERIFIED && target == DealStatus.CLOSED) {
+            monitoring.recordClose(d, currentPrincipal().id(), reason, null, null);
+        } else if (previous == DealStatus.CLOSED) {
+            monitoring.recordUnclose(d, currentPrincipal().id(), reason);
+        }
         dealNotes.appendTransition(d, currentPrincipal(), reason, previous, d.getStatus());
         notifier.enqueueStatusChanged(d, currentPrincipal(), previous);
         return new OverrideResult(d, previous);
@@ -781,6 +808,29 @@ public class DealService {
      * <p>Every lifecycle check needs it. The version this replaces checked only the actor's role
      * on the decision paths, which let a compliance officer of one firm act on another's deals.
      */
+    /**
+     * Writes the tenure answer: either "to be confirmed" or a figure, never both (V51's
+     * chk_deal_tenure_tbc). TBC clears the figure; a figure turns TBC off. Nulls leave the
+     * stored answer alone, as everywhere else in the PATCH.
+     */
+    static void applyTenure(DealFields d, Boolean tbc, Integer years, Integer months) {
+        if (Boolean.TRUE.equals(tbc)) {
+            d.setOwnershipTenureTbc(true);
+            d.setOwnershipTenureYears(null);
+            d.setOwnershipTenureMonths(null);
+            return;
+        }
+        if (years != null || months != null) {
+            d.setOwnershipTenureTbc(false);
+            // One box is a whole answer ("4 years"), so the other is cleared rather than kept
+            // from an earlier figure.
+            d.setOwnershipTenureYears(years);
+            d.setOwnershipTenureMonths(months);
+        } else if (Boolean.FALSE.equals(tbc)) {
+            d.setOwnershipTenureTbc(false);
+        }
+    }
+
     private Long firmIdOf(Deal d) {
         FirmBranch b = branches.findById(d.getFirmBranchId()).orElse(null);
         return b == null ? null : b.getRealEstateFirmId();

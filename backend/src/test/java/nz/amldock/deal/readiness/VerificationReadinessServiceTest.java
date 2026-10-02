@@ -104,13 +104,21 @@ class VerificationReadinessServiceTest {
                 "Property address", "Property type", "Reason for selling",
                 "Whether a trust is involved", "Ownership tenure", "Face-to-face ID check",
                 "Foreign exposure", "Whether there is a red flag",
-                "Minimum property value", "Maximum property value");
+                "Minimum appraised value", "Maximum appraised value");
     }
 
     @Test
     void transactionPurposeAndKeyContactAreNotRequired() {
         deal.setTransactionPurpose(null);
         deal.setKeyContactNodeId(null);
+
+        assertThat(service.assess(deal).ready()).isTrue();
+    }
+
+    @Test
+    void toBeConfirmedAnswersTenure() {
+        deal.setOwnershipTenureYears(null);
+        deal.setOwnershipTenureTbc(true);
 
         assertThat(service.assess(deal).ready()).isTrue();
     }
@@ -156,10 +164,10 @@ class VerificationReadinessServiceTest {
     }
 
     @Test
-    void aDealWithNoStructureIsNotReady() {
+    void aDealWithNoOwnersIsReady() {
         lenient().when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.empty());
 
-        assertThat(service.assess(deal).missing()).containsExactly("Ownership structure");
+        assertThat(service.assess(deal).ready()).isTrue();
     }
 
     @Test

@@ -51,6 +51,16 @@ export async function holdDeal(id, note) {
 }
 
 /**
+ * Every move between Verified and Closed, newest first: `[{ kind, fromStatus, toStatus, fromAt,
+ * occurredAt, versionNo, valuationMin, valuationMax, propertySold, saleTotal, variance, note,
+ * actorName }]`. `variance` is 'WITHIN', 'BEYOND' or null.
+ */
+export async function getTransactionMonitoring(id) {
+  const { data } = await apiClient.get(`/deals/${id}/transaction-monitoring`);
+  return data;
+}
+
+/**
  * Whether the deal could be verified now: `{ ready, missing: [label, ...] }`. The verify and
  * override endpoints enforce the same answer; this only lets the dialog say it first.
  */

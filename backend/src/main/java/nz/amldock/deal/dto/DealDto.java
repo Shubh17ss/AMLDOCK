@@ -53,7 +53,9 @@ public record DealDto(
         Long keyContactNodeId,
         int riskValue,
         boolean riskApproved,
-        String riskOverrideComment
+        String riskOverrideComment,
+        // V51 — tenure asked and not known yet.
+        boolean ownershipTenureTbc
 ) {
     public static DealDto from(DealFields d, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
@@ -73,6 +75,7 @@ public record DealDto(
                 d.getClientRemote(),
                 d.getOwnershipTenureYears(), d.getOwnershipTenureMonths(),
                 d.getFaceToFaceIdVerified(), d.getKeyContactNodeId(),
-                d.getRiskValue(), d.isRiskApproved(), d.getRiskOverrideComment());
+                d.getRiskValue(), d.isRiskApproved(), d.getRiskOverrideComment(),
+                d.isOwnershipTenureTbc());
     }
 }

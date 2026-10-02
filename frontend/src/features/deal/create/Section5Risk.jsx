@@ -59,7 +59,7 @@ export function Section5Risk({
         </Collapse>
       </FieldGroup>
 
-      <FieldGroup title="Property value">
+      <FieldGroup title="Appraised value">
         <Typography variant="caption" sx={{ color: tokens.muted }}>
           The range you'd expect this property to sell within.
         </Typography>

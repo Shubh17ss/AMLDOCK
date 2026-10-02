@@ -33,7 +33,9 @@ public class DealDetailsCheck implements VerificationCheck {
 
         if (d.getTrustInvolved() == null) out.add("Whether a trust is involved");
         // Either box is enough, as on the form: "3 years" and "7 months" are both whole answers.
-        if (d.getOwnershipTenureYears() == null && d.getOwnershipTenureMonths() == null) {
+        // "To be confirmed" is an answer too.
+        if (!d.isOwnershipTenureTbc()
+                && d.getOwnershipTenureYears() == null && d.getOwnershipTenureMonths() == null) {
             out.add("Ownership tenure");
         }
         if (d.getFaceToFaceIdVerified() == null) out.add("Face-to-face ID check");
@@ -46,8 +48,8 @@ public class DealDetailsCheck implements VerificationCheck {
             out.add("Which red flag");
         }
 
-        if (d.getValuationMin() == null) out.add("Minimum property value");
-        if (d.getValuationMax() == null) out.add("Maximum property value");
+        if (d.getValuationMin() == null) out.add("Minimum appraised value");
+        if (d.getValuationMax() == null) out.add("Maximum appraised value");
         return out;
     }
 

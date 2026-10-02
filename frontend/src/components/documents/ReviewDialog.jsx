@@ -9,6 +9,7 @@ import { setDocumentReviewDate, completeDocumentReview } from '../../api/documen
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
+import { DateField } from '../DateField.jsx';
 
 const dateFmt = (iso) =>
   iso ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -72,12 +73,10 @@ export function ReviewDialog({ open, onClose, moduleKey, title, review }) {
           <Typography sx={{ fontSize: '0.85rem', color: tokens.muted }}>
             Set when this module is next due for review. The status shows on its card.
           </Typography>
-          <TextField
+          <DateField
             label="Next review date"
-            type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
+            onChange={setDate}
             fullWidth
           />
           <Box sx={{

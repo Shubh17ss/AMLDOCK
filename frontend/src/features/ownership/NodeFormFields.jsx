@@ -9,6 +9,7 @@ import {
 import { CountrySelect } from '../../components/CountrySelect.jsx';
 import { SegmentedField } from '../../components/SegmentedField.jsx';
 import { PhoneField } from '../../components/PhoneField.jsx';
+import { DateField } from '../../components/DateField.jsx';
 
 /**
  * Types whose only extra field is where they are governed from.
@@ -103,9 +104,9 @@ export function NodeFormFields({
               The ID document’s own type, number and country used to be asked for here. They are
               facts about a document, and the document is one tab across — asking twice invites two
               answers. */}
-          <TextField label="Date of birth" type="date" InputLabelProps={{ shrink: true }}
+          <DateField label="Date of birth"
                      value={value.dateOfBirth ?? ''}
-                     onChange={(e) => set({ dateOfBirth: e.target.value })} />
+                     onChange={(v) => set({ dateOfBirth: v })} />
 
           {/* Not defaulted to the reporting entity’s country, unlike the dial code below it.
               A dial code is a convenience the user overtypes; where someone lives is a CDD answer,

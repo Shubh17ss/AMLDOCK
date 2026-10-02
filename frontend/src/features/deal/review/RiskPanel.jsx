@@ -15,6 +15,7 @@ import { visualFor } from '../../ownership/nodeTypeVisual.js';
 import { tokens, fonts, motion } from '../../../theme/theme.js';
 import { RiskOverrideDialog } from './RiskOverrideDialog.jsx';
 import { BANDS, bandOf } from './riskBands.js';
+import { formatDate, formatDateTime } from '../../../utils/formatters.js';
 
 /**
  * A tint at some strength of the deal's red, over whatever is behind it.
@@ -101,7 +102,6 @@ export function RiskPanel({ dealId, canDecide = false, onSelectNode }) {
   // deal list read, so the deal goes stale alongside the assessment.
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['deals'] });
-    qc.invalidateQueries({ queryKey: ['audit', 'deal', dealId] });
   };
 
   const approveMut = useMutation({
@@ -272,7 +272,7 @@ export function RiskPanel({ dealId, canDecide = false, onSelectNode }) {
             <CheckCircleIcon sx={{ fontSize: '1.05rem', color: tokens.approved }} />
             <Typography variant="caption" sx={{ color: tokens.muted }}>
               Approved{risk.approvedByName ? ` by ${risk.approvedByName}` : ''}
-              {risk.approvedAt ? ` on ${new Date(risk.approvedAt).toLocaleDateString()}` : ''}.
+              {risk.approvedAt ? ` on ${formatDate(risk.approvedAt)}` : ''}.
               Changing any answer that affects the score withdraws this.
             </Typography>
           </Stack>
@@ -505,10 +505,5 @@ function ownerOf(entry) {
 
 /** "26 Sep 2026, 12:04" — the local rendering of an override timestamp. */
 function formatStamp(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString(undefined, {
-    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  return formatDateTime(iso);
 }

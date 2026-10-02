@@ -132,6 +132,22 @@ class DealRiskServiceTest {
     }
 
     @Test
+    void tenureToBeConfirmedScoresThreeAndIsAnAnswer() {
+        deal.setOwnershipTenureYears(null);
+        deal.setOwnershipTenureMonths(null);
+        deal.setOwnershipTenureTbc(true);
+
+        RiskAssessment a = service.assess(deal);
+
+        assertThat(a.factors()).anySatisfy(f -> {
+            assertThat(f.code()).isEqualTo("TENURE");
+            assertThat(f.value()).isEqualTo("To be confirmed");
+            assertThat(f.points()).isEqualTo(3);
+        });
+        assertThat(a.unanswered()).noneMatch(g -> g.code().equals("TENURE"));
+    }
+
+    @Test
     void oneTenureBoxFilledInIsStillAnAnswer() {
         // A client who has owned it four years leaves months blank. Demanding a zero there would
         // turn a complete answer into a gap and hold up the approval over nothing.

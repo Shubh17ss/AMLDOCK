@@ -93,6 +93,13 @@ public abstract class DealFields extends BaseEntity {
     private Integer ownershipTenureMonths;
 
     /**
+     * Tenure asked and not known yet (V51). Excludes a figure: when true, years and months are
+     * both null. Scores +3, so the uncertainty is priced into the rating rather than ignored.
+     */
+    @Column(name = "ownership_tenure_tbc", nullable = false)
+    private boolean ownershipTenureTbc;
+
+    /**
      * Whether the broker met the client in person <em>and</em> sighted their original IDs.
      * Null until answered; answering No adds to the risk score.
      *
@@ -271,6 +278,8 @@ public abstract class DealFields extends BaseEntity {
     public void setOwnershipTenureYears(Integer v) { this.ownershipTenureYears = v; }
     public Integer getOwnershipTenureMonths() { return ownershipTenureMonths; }
     public void setOwnershipTenureMonths(Integer v) { this.ownershipTenureMonths = v; }
+    public boolean isOwnershipTenureTbc() { return ownershipTenureTbc; }
+    public void setOwnershipTenureTbc(boolean v) { this.ownershipTenureTbc = v; }
     public Boolean getFaceToFaceIdVerified() { return faceToFaceIdVerified; }
     public void setFaceToFaceIdVerified(Boolean v) { this.faceToFaceIdVerified = v; }
     public Long getKeyContactNodeId() { return keyContactNodeId; }

@@ -25,11 +25,13 @@ import java.util.List;
  *                     absent when the property did not sell, and when units carry the figures.
  * @param units        the units of a development and their prices. Must be empty for every other
  *                     property type, and for a property that did not sell.
+ * @param note         optional; kept with this close on the Transaction monitoring history.
  */
 public record CloseDealRequest(
         @NotNull Boolean propertySold,
         @PositiveOrZero BigDecimal salePrice,
-        @Valid List<SaleUnitInput> units
+        @Valid List<SaleUnitInput> units,
+        @Size(max = 4000) String note
 ) {
     /**
      * One unit of a development.

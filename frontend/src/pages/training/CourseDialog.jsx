@@ -13,6 +13,7 @@ import { AssigneePicker } from '../../components/AssigneePicker.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
+import { DateField } from '../../components/DateField.jsx';
 
 const emptyForm = () => ({
   name: '',
@@ -170,12 +171,10 @@ export function CourseDialog({ mode, open: openProp, target, onClose }) {
               <TextField label="Description" value={form.description} onChange={ch('description')}
                          multiline minRows={3} fullWidth />
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
+                <DateField
                   label="Due"
-                  type="date"
                   value={form.dueDate}
-                  onChange={ch('dueDate')}
-                  InputLabelProps={{ shrink: true }}
+                  onChange={(v) => setForm((f) => ({ ...f, dueDate: v }))}
                   helperText="Optional"
                   fullWidth
                 />

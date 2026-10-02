@@ -21,11 +21,11 @@ import { DealDrawer } from '../features/deal/review/DealDrawer.jsx';
 import { ReviewTabPanel } from '../features/deal/review/ReviewTabPanel.jsx';
 import { ParkedPanel } from '../features/deal/review/ParkedPanel.jsx';
 import { RiskPanel } from '../features/deal/review/RiskPanel.jsx';
-import { TransactionMonitoringPanel } from '../features/deal/review/TransactionMonitoringPanel.jsx';
 import { DealStatusDialog } from '../features/deal/DealStatusDialog.jsx';
 import { CloseDealDialog } from '../features/deal/CloseDealDialog.jsx';
 import { useDealStatusAction } from '../features/deal/useDealStatusAction.js';
-import { DealVersionsMenu, VersionsIcon } from '../features/deal/DealVersionsMenu.jsx';
+import { TransactionMonitoringView } from '../features/deal/TransactionMonitoringView.jsx';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -42,9 +42,6 @@ const TABS = [
   { value: 'structure', label: 'Structure' },
   { value: 'echecks', label: 'eChecks' },
   { value: 'risk', label: 'Risk' },
-  // What the deal finished as. Beside Risk because both are read after the structure is settled,
-  // and this one only has an answer once the file is closed.
-  { value: 'transaction-monitoring', label: 'Transaction Monitoring' },
 ];
 
 const TAB_VALUES = TABS.map((t) => t.value);
@@ -53,7 +50,8 @@ export function DealReviewScreen() {
   const { id } = useParams();
   const dealId = Number(id);
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const { user } = useAuth();
 
   // This screen answers to two addresses. Sending a firm-level viewer back to the CDD register
@@ -85,7 +83,6 @@ export function DealReviewScreen() {
   // rather than growing a branch for the one verb that records an outcome as well as a position.
   const [closeOpen, setCloseOpen]           = useState(false);
   const [actionError, setActionError]       = useState(null);
-  const [versionsAnchor, setVersionsAnchor] = useState(null);
 
   /*
    * Which version is on screen, or null for the live deal.
@@ -101,6 +98,43 @@ export function DealReviewScreen() {
     if (next == null) merged.delete('version');
     else merged.set('version', String(next));
     setParams(merged, { replace: true });
+  };
+
+  /*
+   * Transaction monitoring, shown in place of the tabs at ?view=transactions.
+   *
+   * Pushed rather than replaced, unlike ?tab= and ?version=: it is a different view of the deal,
+   * and the browser's Back should return to the details it was opened from. The state flag says
+   * so, letting the Deal details button go back to that same entry rather than stacking another
+   * copy of the details on top of it — and fall back to a replace when the view was reached by a
+   * reload or a pasted link, where there is no such entry behind it.
+   */
+  const showingTransactions = params.get('view') === 'transactions';
+  const openTransactions = () => {
+    const merged = new URLSearchParams(params);
+    merged.set('view', 'transactions');
+    merged.delete('version');
+    setSelectedNodeId(null);
+    setDealDrawerOpen(false);
+    setParams(merged, { state: { fromDetails: true } });
+  };
+  const backToDetails = () => {
+    if (location.state?.fromDetails) {
+      navigate(-1);
+      return;
+    }
+    const merged = new URLSearchParams(params);
+    merged.delete('view');
+    setParams(merged, { replace: true });
+  };
+  /** From a row of the history to the version it names — pushed, so Back returns to the table. */
+  const openVersionFromHistory = (versionNo) => {
+    const merged = new URLSearchParams(params);
+    merged.delete('view');
+    merged.set('version', String(versionNo));
+    setSelectedNodeId(null);
+    setDealDrawerOpen(false);
+    setParams(merged);
   };
 
   const dealQ = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
@@ -238,9 +272,15 @@ export function DealReviewScreen() {
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <Stack spacing={1.5}>
         <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(listPath)} size="small">
-            Back to queue
-          </Button>
+          {showingTransactions ? (
+            <Button startIcon={<ArrowBackIcon />} onClick={backToDetails} size="small">
+              Deal details
+            </Button>
+          ) : (
+            <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(listPath)} size="small">
+              Back to queue
+            </Button>
+          )}
           <Box sx={{ flexGrow: 1 }} />
           {/* The reference used to lead this row. It is not how anyone identifies a deal — the
               property is, and that now sits in the app bar above, where it stays visible
@@ -256,19 +296,18 @@ export function DealReviewScreen() {
         {/* One button. It used to be up to six verbs, and "Verify" beside an ownership tree read
             as an action on the tree rather than on the deal.
 
-            Versions sits beside it because the two are halves of the same idea: this is where the
-            deal goes next, and that is where it has been. Absent until the deal has been verified
-            once — an empty history is not worth a control. */}
-        {(canUpdateStatus || versions.length > 0) && (
+            Transaction monitoring sits beside it because the two are halves of the same idea: this
+            is where the deal goes next, and that is where it has been. Absent until the deal has
+            been verified once — an empty history is not worth a control. */}
+        {(canUpdateStatus || (versions.length > 0 && !showingTransactions)) && (
           <Stack direction="row" justifyContent="flex-end" spacing={1}>
-            {versions.length > 0 && (
+            {versions.length > 0 && !showingTransactions && (
               <Button
                 size="small"
-                startIcon={<VersionsIcon />}
-                onClick={(e) => setVersionsAnchor(e.currentTarget)}
-                aria-haspopup="menu"
+                startIcon={<ReceiptLongOutlinedIcon />}
+                onClick={openTransactions}
               >
-                {viewingVersion != null ? `Viewing v${viewingVersion}` : 'Versions'}
+                Transaction monitoring
               </Button>
             )}
             {canUpdateStatus && (
@@ -280,25 +319,14 @@ export function DealReviewScreen() {
         )}
       </Stack>
 
-      <DealVersionsMenu
-        anchorEl={versionsAnchor}
-        open={Boolean(versionsAnchor)}
-        onClose={() => setVersionsAnchor(null)}
-        versions={versions}
-        selected={viewingVersion}
-        onSelect={(v) => {
-          // Any drawer open over the live deal is showing a row that may not exist in the version
-          // being opened, so both close on the way across.
-          setSelectedNodeId(null);
-          setDealDrawerOpen(false);
-          setViewingVersion(v);
-        }}
-      />
-
       {actionError && (
         <Alert severity="error" onClose={() => setActionError(null)}>{actionError}</Alert>
       )}
 
+      {showingTransactions ? (
+        <TransactionMonitoringView dealId={dealId} onOpenVersion={openVersionFromHistory} />
+      ) : (
+      <>
       {versionFailed && (
         <Alert severity="error" onClose={() => setViewingVersion(null)}>
           Couldn’t load version {viewingVersion} of this deal.
@@ -411,19 +439,8 @@ export function DealReviewScreen() {
           />
         )}
       </ReviewTabPanel>
-
-      <ReviewTabPanel value="transaction-monitoring" current={tab}>
-        {snapshot ? (
-          // A version is what the deal said when it was signed off; the sale is recorded after
-          // that, on the way out of verified, so no snapshot has one to show.
-          <ParkedPanel title="Transaction monitoring">
-            Switch back to the live deal. A sale is recorded when the deal is closed, which is
-            after the moment this version froze.
-          </ParkedPanel>
-        ) : (
-          <TransactionMonitoringPanel dealId={dealId} />
-        )}
-      </ReviewTabPanel>
+      </>
+      )}
 
       {/* ── The deal itself ─────────────────────────────────────────────── */}
       <DealDrawer

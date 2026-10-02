@@ -62,5 +62,8 @@ public record CreateDealRequest(
         @PositiveOrZero BigDecimal valuationMax,
 
         @Valid PropertyInput property,
-        @Valid ClientInput client
+        @Valid ClientInput client,
+
+        /** Tenure asked and not known yet. True clears any years/months sent beside it. */
+        Boolean ownershipTenureTbc
 ) {}
