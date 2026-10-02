@@ -1,5 +1,6 @@
 package nz.amldock.deal.dto;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import nz.amldock.deal.TransactionType;
@@ -25,7 +26,14 @@ public record UpdateDealRequest(
         String notes,
         String transactionPurpose,
         Boolean trustInvolved,
-        Boolean onSoldQuickly,
+        @PositiveOrZero @Max(200) Integer ownershipTenureYears,
+        @PositiveOrZero @Max(11) Integer ownershipTenureMonths,
+        Boolean faceToFaceIdVerified,
+        /**
+         * The individual on the ownership structure who is the point of contact. Only offered
+         * once a structure exists, so it never arrives on a create.
+         */
+        Long keyContactNodeId,
         @Pattern(regexp = "(NONE|[A-Z]{2})?", message = "Must be 'NONE' or an ISO alpha-2 country code")
         String foreignExposureCountry,
         Boolean clientRemote,

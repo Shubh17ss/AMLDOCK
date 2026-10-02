@@ -10,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -133,8 +134,72 @@ class DealLifecycleServiceTest {
             case SUBMIT        -> EnumSet.of(DealStatus.NEW);
             case HOLD, VERIFY  -> EnumSet.of(DealStatus.REVIEW);
             case CLOSE, REOPEN -> EnumSet.of(DealStatus.VERIFIED);
+            case UNCLOSE       -> EnumSet.of(DealStatus.CLOSED);
             case REVERT        -> EnumSet.of(DealStatus.REVIEW, DealStatus.ON_HOLD);
         };
+    }
+
+    /* ---------- coming back from closed ---------- */
+
+    @Test
+    void aClosedDealGoesBackToVerified() {
+        Deal d = dealIn(DealStatus.CLOSED);
+
+        DealStatus previous = lifecycle.transition(d, amlco, DealAction.UNCLOSE, FIRM_A, "Wrong sale price");
+
+        assertThat(previous).isEqualTo(DealStatus.CLOSED);
+        assertThat(d.getStatus()).isEqualTo(DealStatus.VERIFIED);
+    }
+
+    @Test
+    void unclosingDemandsAReason() {
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.CLOSED), amlco, DealAction.UNCLOSE, FIRM_A, null))
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("note is required");
+    }
+
+    @Test
+    void unclosingKeepsTheOriginalSignOff() {
+        Deal d = dealIn(DealStatus.CLOSED);
+        // Verified by one officer, a week ago; reopened by a different one today.
+        Instant signedOffAt = Instant.parse("2026-09-20T02:00:00Z");
+        d.setDecidedByUserId(amlco.id());
+        d.setDecidedAt(signedOffAt);
+
+        lifecycle.transition(d, amlco2, DealAction.UNCLOSE, FIRM_A, "Wrong sale price");
+
+        // Landing on VERIFIED is not a verification. Re-stamping here would credit the person who
+        // undid the closure with a sign-off they never made, and lose the one who did.
+        assertThat(d.getDecidedByUserId()).isEqualTo(amlco.id());
+        assertThat(d.getDecidedAt()).isEqualTo(signedOffAt);
+    }
+
+    @Test
+    void verifyingNormallyStillStampsTheDecider() {
+        Deal d = dealIn(DealStatus.REVIEW);
+
+        lifecycle.transition(d, amlco, DealAction.VERIFY, FIRM_A, "Checked the structure");
+
+        assertThat(d.getDecidedByUserId()).isEqualTo(amlco.id());
+        assertThat(d.getDecidedAt()).isNotNull();
+    }
+
+    @Test
+    void aSeniorManagerForcingClosedBackToVerifiedAlsoKeepsTheSignOff() {
+        Deal d = dealIn(DealStatus.CLOSED);
+        d.setDecidedByUserId(amlco.id());
+        d.setDecidedAt(Instant.parse("2026-09-20T02:00:00Z"));
+
+        lifecycle.override(d, seniorManager, DealStatus.VERIFIED, FIRM_A, "Reopening to fix the figures");
+
+        assertThat(d.getDecidedByUserId()).isEqualTo(amlco.id());
+    }
+
+    @Test
+    void anAgentMayNotUncloseADeal() {
+        assertThatThrownBy(() -> lifecycle.transition(
+                dealIn(DealStatus.CLOSED), broker, DealAction.UNCLOSE, FIRM_A, "let me back in"))
+                .isInstanceOf(ForbiddenException.class);
     }
 
     /* ---------- notes ---------- */

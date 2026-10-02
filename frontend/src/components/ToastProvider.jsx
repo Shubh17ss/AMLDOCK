@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext } from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Typography, keyframes } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import WarningRoundedIcon from '@mui/icons-material/WarningRounded';
@@ -35,13 +35,39 @@ const TONE = {
   info:    { color: tokens.blue,           wash: tokens.blueWash,       border: tokens.blue,             Icon: InfoRoundedIcon },
 };
 
+/*
+ * Enter and leave, as keyframes rather than as a CSS transition.
+ *
+ * This has to be an animation, and the reason is not stylistic. react-hot-toast creates every
+ * toast with `visible: true` already set, so the element mounts at its final opacity — a
+ * transition has no starting value to move from and the toast simply appears. (Leaving worked,
+ * because `visible` flips to false on an element that is already on screen.) An animation runs
+ * on mount, which is how the library's own ToastBar does it; `toast.custom` bypasses ToastBar,
+ * so the animation has to be supplied here.
+ *
+ * A fade with a token of lift, not a slide: these appear over the top of the page the user is
+ * reading, and something that travels draws the eye harder than something that resolves.
+ */
+const enter = keyframes`
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+`;
+
+const leave = keyframes`
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-6px) scale(0.98); }
+`;
+
+/** The same two, for anyone who has asked not to be moved. */
+const enterPlain = keyframes`from { opacity: 0; } to { opacity: 1; }`;
+const leavePlain = keyframes`from { opacity: 1; } to { opacity: 0; }`;
+
 /**
  * One toast.
  *
- * A fade, not a slide: these appear over the top of the page the user is reading, and something
- * that travels draws the eye harder than something that simply resolves. `t.visible` is
- * react-hot-toast's own enter/leave flag, so the same transition runs in both directions and the
- * element is only unmounted once it has finished.
+ * `t.visible` is react-hot-toast's own enter/leave flag, so the same element plays both
+ * directions and is unmounted only once the leave has finished — the library waits 1s before
+ * removing a dismissed toast, comfortably longer than the 200ms below.
  */
 function ToastBody({ t, message, severity, action, onActionDone }) {
   const tone = TONE[severity] ?? TONE.info;
@@ -62,12 +88,16 @@ function ToastBody({ t, message, severity, action, onActionDone }) {
         backgroundColor: tone.wash,
         border: `1px solid ${tone.border}`,
         boxShadow: shadows.md,
-        // The whole animation, in one property. `transform` carries a token of lift so the fade
-        // has somewhere to come from without reading as motion.
-        opacity: t.visible ? 1 : 0,
-        transform: t.visible ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(0.98)',
-        transition: 'opacity 0.28s ease, transform 0.28s cubic-bezier(0.22,1,0.36,1)',
-        '@media (prefers-reduced-motion: reduce)': { transition: 'opacity 0.28s ease' },
+        // `forwards` so the leave holds at zero until react-hot-toast unmounts it; without it
+        // the toast would snap back to full opacity for the last stretch of its life.
+        animation: t.visible
+          ? `${enter} 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards`
+          : `${leave} 200ms cubic-bezier(0.4, 0, 1, 1) forwards`,
+        '@media (prefers-reduced-motion: reduce)': {
+          animation: t.visible
+            ? `${enterPlain} 200ms ease forwards`
+            : `${leavePlain} 160ms ease forwards`,
+        },
       }}
     >
       <Icon sx={{ fontSize: 20, color: tone.color, flexShrink: 0 }} />

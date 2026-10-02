@@ -1,16 +1,14 @@
 import {
-  Box, Checkbox, Chip, FormControl, FormHelperText, FormLabel, InputLabel, ListItemText,
-  MenuItem, Select, Stack, TextField, Typography,
+  Box, Checkbox, Chip, FormControl, InputLabel, ListItemText,
+  MenuItem, Select, Stack, TextField,
 } from '@mui/material';
 import {
   NODE_TYPES, NOMINEE_OPTIONS, PERSON_ROLES, TRUST_HOLDING_COMPLEXITY, TRUST_TYPES, nameLabelFor,
   personRoleLabel,
 } from '../../api/ownership.js';
 import { CountrySelect } from '../../components/CountrySelect.jsx';
+import { SegmentedField } from '../../components/SegmentedField.jsx';
 import { PhoneField } from '../../components/PhoneField.jsx';
-import { tokens, motion } from '../../theme/theme.js';
-
-const YES_NO = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
 
 /**
  * Types whose only extra field is where they are governed from.
@@ -29,85 +27,6 @@ const WITH_REFERENCE = ['INDIVIDUAL', 'PARTNERSHIP'];
  * renders for everyone except them, and nobody is asked twice.
  */
 const SOURCE_OF_WEALTH_ON_NODE = (nodeType) => Boolean(nodeType) && nodeType !== 'INDIVIDUAL';
-
-/**
- * One yes/no question as a segmented control.
- *
- * <p>Two or three buttons in a track rather than radios: the answer stays legible at arm's
- * length, which matters on the phone a reviewer is often holding, and the whole control is a
- * single tap target per option rather than a dot to hit.
- *
- * <p>Takes `options` for the one question that has three answers — nominee director/shareholder,
- * where "Not asked" is the default because a YES carries a risk consequence and a defaulted NO
- * would be a negative answer nobody gave.
- */
-function YesNoField({ label, value, onChange, options = YES_NO, helper }) {
-  const isTriState = options !== YES_NO;
-  const current = value === undefined || value === null
-    ? (isTriState ? options[0].value : false)
-    : value;
-
-  return (
-    <Box>
-      <FormLabel
-        component="legend"
-        sx={{ fontSize: '0.8rem', color: tokens.ink, display: 'block', mb: 0.75 }}
-      >
-        {label}
-      </FormLabel>
-      <Box
-        role="radiogroup"
-        aria-label={label}
-        sx={{
-          display: 'inline-flex',
-          p: 0.375,
-          gap: 0.375,
-          borderRadius: 2,
-          border: `1px solid ${tokens.hairline}`,
-          backgroundColor: tokens.tileRaised,
-          maxWidth: '100%',
-        }}
-      >
-        {options.map((o) => {
-          const selected = String(o.value) === String(current);
-          return (
-            <Box
-              key={String(o.value)}
-              role="radio"
-              aria-checked={selected}
-              tabIndex={0}
-              onClick={() => onChange(o.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(o.value); }
-              }}
-              sx={motion.respectful({
-                px: 2.5,
-                py: 0.75,
-                borderRadius: 1.5,
-                cursor: 'pointer',
-                userSelect: 'none',
-                fontSize: '0.85rem',
-                fontWeight: selected ? 600 : 400,
-                color: selected ? '#fff' : tokens.muted,
-                backgroundColor: selected ? tokens.blue : 'transparent',
-                transition: `background-color ${motion.swift} ease, color ${motion.swift} ease`,
-                '&:hover': { backgroundColor: selected ? tokens.blue : tokens.hover },
-                '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
-              })}
-            >
-              {o.label}
-            </Box>
-          );
-        })}
-      </Box>
-      {helper && (
-        <Typography variant="caption" sx={{ color: tokens.muted, display: 'block', mt: 0.5 }}>
-          {helper}
-        </Typography>
-      )}
-    </Box>
-  );
-}
 
 /**
  * The per-type fields of an ownership node. `value` is the form-state object and `onChange`
@@ -164,7 +83,6 @@ export function NodeFormFields({
           value={value.propertyPercentage ?? ''}
           onChange={(e) => set({ propertyPercentage: e.target.value })}
           sx={{ width: 220 }}
-          helperText="Percentage of the property this owner beneficially holds."
         />
       )}
 
@@ -177,11 +95,6 @@ export function NodeFormFields({
               fields; the two kinds now alternate, so a heading in the middle would be pointing at
               the wrong things and it sits over the whole form instead. An officer who does not
               know which is which will eventually edit a closed deal’s evidence by accident. */}
-          <Typography variant="caption" sx={{ color: tokens.muted }}>
-            Country, address, email, phone, occupation and source of funds belong to this person
-            and are shared with every deal they appear on — editing them here changes what those
-            deals show. Date of birth and type are what this deal says about them.
-          </Typography>
 
           {/* The node’s own column, not the person’s. Extraction keeps the two in step through
               refreshExtractedIndividual, and reading one while writing the other would make an
@@ -211,7 +124,7 @@ export function NodeFormFields({
           <TextField label="Physical address" value={person.physicalAddress ?? ''}
                      onChange={(e) => setPerson({ physicalAddress: e.target.value })}
                      multiline minRows={2}
-                     helperText="Where this person lives. Typed as given — not looked up." />
+                      />
 
           {/* Multi-select, because one capacity was never enough: the same person is routinely
               settlor, trustee and appointer of the same family trust, and the two nobody could
@@ -247,9 +160,6 @@ export function NodeFormFields({
                 </MenuItem>
               ))}
             </Select>
-            <FormHelperText>
-              Every capacity this person holds on this deal. Leave empty if nobody has said.
-            </FormHelperText>
           </FormControl>
 
           <TextField label="Email address" type="email" value={person.email ?? ''}
@@ -290,37 +200,38 @@ export function NodeFormFields({
                      value={value.businessNumber ?? ''}
                      onChange={(e) => set({ businessNumber: e.target.value })} />
 
-          <YesNoField
+          <SegmentedField
             label="Does the company have a constitution?"
             value={value.companyHasConstitution}
             onChange={(v) => set({ companyHasConstitution: v })}
           />
 
-          <YesNoField
+          <SegmentedField
             label="Nominee director / shareholder?"
             value={value.nomineeStatus ?? 'NOT_ASKED'}
             onChange={(v) => set({ nomineeStatus: v })}
             options={NOMINEE_OPTIONS}
-            helper="Answering yes sets this deal's risk to High."
           />
 
-          <YesNoField
+          <SegmentedField
             label="Complex ownership structure?"
             value={value.companyComplexOwnership}
             onChange={(v) => set({ companyComplexOwnership: v })}
-            helper="Answering yes sets this deal's risk to High."
+            nullable
           />
 
-          <YesNoField
+          <SegmentedField
             label="Used for personal assets?"
             value={value.companyPersonalAssets}
             onChange={(v) => set({ companyPersonalAssets: v })}
+            nullable
           />
 
-          <YesNoField
+          <SegmentedField
             label="Is a new developer?"
             value={value.companyNewDeveloper}
             onChange={(v) => set({ companyNewDeveloper: v })}
+            nullable
           />
         </>
       )}
@@ -346,10 +257,12 @@ export function NodeFormFields({
             onChange={(code) => set({ jurisdictionCountry: code })}
           />
 
-          <YesNoField
+          <SegmentedField
             label="Is the trust a discretionary trust?"
             value={value.trustDiscretionary}
             onChange={(v) => set({ trustDiscretionary: v })}
+            helper="Answering No adds to the risk score."
+            nullable
           />
 
           <FormControl>
@@ -362,9 +275,6 @@ export function NodeFormFields({
                 <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
               ))}
             </Select>
-            <Typography variant="caption" sx={{ color: tokens.muted, mt: 0.5 }}>
-              An extensive / diverse asset portfolio sets this deal's risk to High.
-            </Typography>
           </FormControl>
         </>
       )}
@@ -388,12 +298,11 @@ export function NodeFormFields({
           />
           {/* The same stored answer a company gives about a nominee director or shareholder:
               one question about whether an intermediary stands in for the real party. */}
-          <YesNoField
+          <SegmentedField
             label="Nominee limited partner?"
             value={value.nomineeStatus ?? 'NOT_ASKED'}
             onChange={(v) => set({ nomineeStatus: v })}
             options={NOMINEE_OPTIONS}
-            helper="Answering yes sets this deal's risk to High."
           />
         </>
       )}
@@ -436,7 +345,6 @@ export function NodeFormFields({
         multiline
         minRows={3}
         placeholder="Anything worth knowing about this node — context, exceptions, follow-ups."
-        helperText="Kept on this node. Not posted to the deal's timeline."
       />
 
       {WITH_REFERENCE.includes(value.nodeType) && (
@@ -492,10 +400,13 @@ export function buildNodePayload(form) {
     payload.jurisdictionCountry = norm(form.jurisdictionCountry);
     payload.businessNumber = norm(form.businessNumber);
     payload.companyHasConstitution = form.companyHasConstitution ?? false;
+    // null rather than false for the three that feed the risk score. The API reads null as
+    // "leave alone", so an untouched question stays unanswered instead of being stamped No by a
+    // save that was about something else.
+    payload.companyComplexOwnership = form.companyComplexOwnership ?? null;
+    payload.companyPersonalAssets = form.companyPersonalAssets ?? null;
+    payload.companyNewDeveloper = form.companyNewDeveloper ?? null;
     payload.nomineeStatus = form.nomineeStatus || 'NOT_ASKED';
-    payload.companyComplexOwnership = form.companyComplexOwnership ?? false;
-    payload.companyPersonalAssets = form.companyPersonalAssets ?? false;
-    payload.companyNewDeveloper = form.companyNewDeveloper ?? false;
   }
 
   if (form.nodeType === 'TRUSTEE_COMPANY') {
@@ -522,7 +433,7 @@ export function buildNodePayload(form) {
   if (form.nodeType === 'TRUST') {
     payload.trustType = norm(form.trustType);
     payload.jurisdictionCountry = norm(form.jurisdictionCountry);
-    payload.trustDiscretionary = form.trustDiscretionary ?? false;
+    payload.trustDiscretionary = form.trustDiscretionary ?? null;
     payload.trustHoldingComplexity = norm(form.trustHoldingComplexity);
   }
 

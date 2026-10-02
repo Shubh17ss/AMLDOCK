@@ -182,9 +182,21 @@ public class DealVersionReadService {
         Map<Long, PersonDto> byOwner = persons.stream().collect(Collectors.toMap(
                 DealVersionPerson::getBeneficialOwnerId, PersonDto::from, (a, b) -> a));
 
+        // A frozen node keeps the verification it was signed off with, byline included - the
+        // snapshot is the record of what compliance actually saw. One query for the names.
+        Map<Long, String> verifierNames = users.findAllById(
+                        nodes.stream()
+                                .map(DealVersionNode::getVerifiedByUserId)
+                                .filter(java.util.Objects::nonNull)
+                                .distinct()
+                                .toList())
+                .stream()
+                .collect(Collectors.toMap(User::getId, User::getFullName));
+
         List<NodeDto> nodeDtos = nodes.stream()
                 .sorted(java.util.Comparator.comparing(DealVersionNode::getNodeId))
-                .map(n -> NodeDto.from(n, byOwner.get(n.getBeneficialOwnerId())))
+                .map(n -> NodeDto.from(n, byOwner.get(n.getBeneficialOwnerId()),
+                        verifierNames.get(n.getVerifiedByUserId())))
                 .toList();
 
         return new TreeDto(

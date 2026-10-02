@@ -4,6 +4,7 @@ import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.PersonRole;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 
@@ -33,5 +34,14 @@ public record IndividualRowDto(
         /** ISO 3166-1 alpha-2, or null when nobody has been asked. */
         String countryOfResidence,
         Set<PersonRole> personRoles,
-        NodeVerificationStatus verificationStatus
+        NodeVerificationStatus verificationStatus,
+        /**
+         * When the owner was verified, by either route. Null until somebody verifies them, and
+         * the column the CDD Exceptions register dates each exception by.
+         *
+         * <p>Who granted it is deliberately not here. The registers are lists, and a byline is a
+         * fact about one decision - it lives on the owner's Verification tab, where the reason
+         * sits beside it.
+         */
+        Instant verifiedAt
 ) {}

@@ -10,9 +10,11 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
+import nz.amldock.deal.dto.RiskAssessmentDto;
 import nz.amldock.deal.version.DealVersionService;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
+import nz.amldock.deal.DealRiskService.RiskAssessment;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.dealnote.DealNoteService;
@@ -25,7 +27,12 @@ import nz.amldock.firm.RealEstateFirm;
 import nz.amldock.firm.RealEstateFirmRepository;
 import nz.amldock.notification.DealNotificationEnqueuer;
 import nz.amldock.property.Property;
+import nz.amldock.deal.dto.CloseDealRequest;
+import nz.amldock.deal.dto.SaleDto;
+import nz.amldock.deal.sale.DealSaleUnit;
+import nz.amldock.deal.sale.DealSaleUnitRepository;
 import nz.amldock.property.PropertyRepository;
+import nz.amldock.property.PropertyType;
 import nz.amldock.property.dto.PropertyDto;
 import nz.amldock.property.dto.PropertyInput;
 import nz.amldock.user.Role;
@@ -37,8 +44,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +69,7 @@ public class DealService {
     private final AuditService audit;
     private final DealNotificationEnqueuer notifier;
     private final DealVersionService versions;
+    private final DealSaleUnitRepository saleUnits;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -74,7 +84,8 @@ public class DealService {
                        OwnershipService ownership,
                        AuditService audit,
                        DealNotificationEnqueuer notifier,
-                       DealVersionService versions) {
+                       DealVersionService versions,
+                       DealSaleUnitRepository saleUnits) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -89,6 +100,7 @@ public class DealService {
         this.audit = audit;
         this.notifier = notifier;
         this.versions = versions;
+        this.saleUnits = saleUnits;
     }
 
     /* ---------- queries ---------- */
@@ -161,6 +173,7 @@ public class DealService {
                     b == null ? null : b.getName(),
                     c == null ? null : c.getDisplayName(),
                     p == null ? null : formatAddress(p),
+                    p == null ? null : p.getPropertyType(),
                     u == null ? null : u.getEmail(),
                     u == null ? null : u.getFullName());
         }).toList();
@@ -248,7 +261,9 @@ public class DealService {
         d.setNotes(req.notes());
         d.setTransactionPurpose(blankToNull(req.transactionPurpose()));
         d.setTrustInvolved(req.trustInvolved());
-        d.setOnSoldQuickly(req.onSoldQuickly());
+        d.setOwnershipTenureYears(req.ownershipTenureYears());
+        d.setOwnershipTenureMonths(req.ownershipTenureMonths());
+        d.setFaceToFaceIdVerified(req.faceToFaceIdVerified());
         d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         d.setClientRemote(req.clientRemote());
         d.setRedFlagPresent(req.redFlagPresent());
@@ -301,7 +316,10 @@ public class DealService {
         boolean trustJustAdded = Boolean.TRUE.equals(req.trustInvolved())
                 && !Boolean.TRUE.equals(d.getTrustInvolved());
         if (req.trustInvolved() != null) d.setTrustInvolved(req.trustInvolved());
-        if (req.onSoldQuickly() != null) d.setOnSoldQuickly(req.onSoldQuickly());
+        if (req.ownershipTenureYears() != null) d.setOwnershipTenureYears(req.ownershipTenureYears());
+        if (req.ownershipTenureMonths() != null) d.setOwnershipTenureMonths(req.ownershipTenureMonths());
+        if (req.faceToFaceIdVerified() != null) d.setFaceToFaceIdVerified(req.faceToFaceIdVerified());
+        if (req.keyContactNodeId() != null) d.setKeyContactNodeId(req.keyContactNodeId());
         if (req.foreignExposureCountry() != null) {
             d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         }
@@ -401,7 +419,11 @@ public class DealService {
                 && d.getStatus() == DealStatus.NEW) {
             return;
         }
-        if (actor.role() == Role.SENIOR_MANAGER) {
+        // The two firm-level deciders, together: the rule is the same for both, and writing it
+        // twice is how the compliance officer's copy would later drift from the manager's.
+        // Scoped to their own firm because that is exactly what readableDeals shows them — this
+        // lets them delete what they can see, and nothing else.
+        if (actor.role() == Role.SENIOR_MANAGER || actor.role() == Role.AML_COMPLIANCE_OFFICER) {
             FirmBranch branch = branches.findById(d.getFirmBranchId()).orElse(null);
             Long dealFirmId = branch == null ? null : branch.getRealEstateFirmId();
             if (dealFirmId == null || !dealFirmId.equals(actor.realEstateFirmId())) {
@@ -409,7 +431,8 @@ public class DealService {
             }
             return;
         }
-        throw new ForbiddenException("Only ROOT or a senior manager may delete a deal");
+        throw new ForbiddenException(
+                "Only ROOT, a compliance officer or a senior manager may delete a deal");
     }
 
     /**
@@ -435,6 +458,126 @@ public class DealService {
         return new TransitionResult(d, previous);
     }
 
+    /**
+     * Closes a deal and records what it finished as.
+     *
+     * <p>One transaction for both halves on purpose. A deal that reached CLOSED without its sale
+     * detail is the gap this feature exists to close, and a sale recorded against a deal that
+     * failed to move would be an outcome for something still running.
+     *
+     * <p>The answers are validated <em>before</em> the transition, so a rejected payload leaves
+     * the deal exactly where it was rather than closing it and then refusing the figures.
+     *
+     * <p>Re-closing overwrites: the scalar answers are reassigned and the unit rows are replaced
+     * wholesale. That is what makes {@code UNCLOSE} worth having — it is the way back to correct
+     * a closure, and a correction that appended to the old figures would be neither.
+     */
+    @Transactional
+    public TransitionResult closeWithSale(Long id, CloseDealRequest req) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        // The deal's own property type decides which shape of answer is legal, never the request.
+        // A caller that could choose its own rules could send one figure for a development and
+        // skip the per-unit breakdown that is the whole reason developments are asked differently.
+        boolean development = propertyTypeOf(d) == PropertyType.DEVELOPMENT;
+        List<CloseDealRequest.SaleUnitInput> units = validateSale(req, development);
+
+        TransitionResult result = act(id, DealAction.CLOSE, null);
+
+        d.setPropertySold(req.propertySold());
+        d.setSalePrice(development || !req.propertySold() ? null : req.salePrice());
+
+        saleUnits.deleteAllByDealId(id);
+        // Flushed before the inserts: delete-then-insert in one transaction otherwise leaves
+        // Hibernate free to order the statements the other way round.
+        saleUnits.flush();
+        if (!units.isEmpty()) {
+            List<DealSaleUnit> rows = new ArrayList<>();
+            for (int i = 0; i < units.size(); i++) {
+                rows.add(new DealSaleUnit(id, units.get(i).unitName().trim(),
+                        units.get(i).salePrice(), i));
+            }
+            saleUnits.saveAll(rows);
+        }
+        return result;
+    }
+
+    /**
+     * The sale answers, or an empty one for a deal that has never been closed.
+     *
+     * <p>Readable by anyone who may read the deal — this says what happened to the file, not who
+     * decided it, and the tab showing it sits beside the rest of the deal.
+     */
+    @Transactional(readOnly = true)
+    public SaleDto sale(Long id) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
+
+        List<SaleDto.SaleUnitDto> units = saleUnits.findAllByDealIdOrderBySortOrderAsc(id).stream()
+                .map((u) -> new SaleDto.SaleUnitDto(u.getId(), u.getUnitName(), u.getSalePrice()))
+                .toList();
+
+        // Summed here rather than stored, so a total can never disagree with the rows under it.
+        BigDecimal total = units.isEmpty()
+                ? d.getSalePrice()
+                : units.stream().map(SaleDto.SaleUnitDto::salePrice)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new SaleDto(d.getPropertySold(), d.getSalePrice(), total, units);
+    }
+
+    /**
+     * Checks the answers against the property they are about, and hands back the units to write.
+     *
+     * <p>Every rule here is one the close dialog also enforces by disabling its button. That is
+     * deliberate duplication: the dialog makes the rule visible before it is broken, and this
+     * makes it true for every caller, including one that never opened the dialog.
+     */
+    private List<CloseDealRequest.SaleUnitInput> validateSale(CloseDealRequest req, boolean development) {
+        List<CloseDealRequest.SaleUnitInput> units = req.units() == null ? List.of() : req.units();
+
+        if (!req.propertySold()) {
+            if (req.salePrice() != null || !units.isEmpty()) {
+                throw new BadRequestException(
+                        "A property that did not sell cannot carry a sale price");
+            }
+            return List.of();
+        }
+
+        if (development) {
+            if (req.salePrice() != null) {
+                throw new BadRequestException(
+                        "A development records a price per unit, not a single sale price");
+            }
+            if (units.isEmpty()) {
+                throw new BadRequestException("Add at least one unit and what it sold for");
+            }
+            for (CloseDealRequest.SaleUnitInput u : units) {
+                if (u.unitName() == null || u.unitName().isBlank()) {
+                    throw new BadRequestException("Every unit needs a name");
+                }
+                if (u.salePrice() == null) {
+                    throw new BadRequestException(
+                            "Every unit needs the price it sold for: " + u.unitName().trim());
+                }
+            }
+            return units;
+        }
+
+        if (!units.isEmpty()) {
+            throw new BadRequestException("Only a development is sold as units");
+        }
+        if (req.salePrice() == null) {
+            throw new BadRequestException("Enter what the property sold for");
+        }
+        return List.of();
+    }
+
+    /** The deal's property type, or null when it has no property or none was chosen. */
+    private PropertyType propertyTypeOf(Deal d) {
+        if (d.getPropertyId() == null) return null;
+        return properties.findById(d.getPropertyId()).map(Property::getPropertyType).orElse(null);
+    }
+
     /** Adds a free comment to the deal's timeline. Readable deal, writable comment. */
     @Transactional
     public Deal comment(Long id, String body) {
@@ -451,6 +594,140 @@ public class DealService {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
         return dealNotes.timeline(d);
+    }
+
+    /* ---------- the risk position ---------- */
+
+    /**
+     * The deal's risk score, its band, and the workings behind both.
+     *
+     * <p>Readable by anyone who may read the deal, including the auditor. The workings are the
+     * part worth showing widely: a rating nobody outside compliance can account for is the
+     * problem this replaced.
+     */
+    @Transactional(readOnly = true)
+    public RiskAssessmentDto risk(Long id) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        lifecycle.assertCanRead(d, currentPrincipal(), firmIdOf(d));
+        return riskDto(d);
+    }
+
+    /**
+     * Signs off the deal's current risk position.
+     *
+     * <p>Refused while anything that feeds the score is unanswered. An approval given over a
+     * half-answered file is a sign-off on a number that was never computed from a complete set of
+     * facts, and nothing downstream could tell the two apart afterwards.
+     *
+     * <p>Not gated on the deal being editable. Approving a risk is a compliance act on a deal
+     * under review, which is precisely when the deal itself is closed to content changes.
+     */
+    @Transactional
+    public RiskAssessmentDto approveRisk(Long id) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        UserPrincipal actor = mustBeDecider(d);
+
+        RiskAssessment assessment = risk.assess(d);
+        if (!assessment.complete()) {
+            throw new BadRequestException("Answer every question that affects the risk first — "
+                    + assessment.unanswered().size() + " still outstanding");
+        }
+        if (d.isRiskApproved()) return riskDto(d);
+
+        d.setRiskApproved(true);
+        d.setRiskApprovedByUserId(actor.id());
+        d.setRiskApprovedAt(Instant.now());
+
+        audit.record(AuditAction.DEAL_RISK_APPROVED, "Deal", d.getId(),
+                "Risk " + d.getRiskRating() + " (score " + d.getRiskValue() + ") approved on deal "
+                        + d.getReference());
+        return riskDto(d);
+    }
+
+    /**
+     * Manually overrides the deal's risk band.
+     *
+     * <p>An override is an override whatever band it names, <em>including the one the engine
+     * already arrived at</em>. A reviewer who pins a deal to the calculated band is agreeing with
+     * it deliberately, on the record, with a reason; treating that as a withdrawal — flipping
+     * back to DERIVED and deleting the comment, the author and the timestamp — would leave the
+     * file saying nobody ever made a decision. The intent is identical either way and only the
+     * value differs, which is not what makes something an override.
+     *
+     * <p>The consequence is that DERIVED is a one-way door: once a deal has been overridden its
+     * band stops tracking the score, which keeps moving underneath and is still shown beside it.
+     * A reviewer can set any band they like, so nothing is unreachable; what is gone is going
+     * back to following the rules automatically. That is deliberate — a human determination
+     * stands until a human revisits it.
+     *
+     * <p>The approval is withdrawn either way. The reviewer approving a rating and the reviewer
+     * changing it are not necessarily the same person, and a sign-off does not carry across to a
+     * band nobody signed off.
+     */
+    @Transactional
+    public RiskAssessmentDto overrideRisk(Long id, RiskRating rating, String comment) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        UserPrincipal actor = mustBeDecider(d);
+
+        RiskAssessment assessment = risk.assess(d);
+        RiskRating previous = d.getRiskRating();
+
+        d.setRiskValue(assessment.value());
+        d.setRiskRating(rating);
+        d.setRiskRatingSource(RiskRatingSource.OVERRIDE);
+        // The comment and its byline stand or fall together, and here they always stand: they
+        // are the record of a decision somebody took, and the decision happened whichever band
+        // came out of it.
+        d.setRiskOverrideComment(comment);
+        d.setRiskOverriddenByUserId(actor.id());
+        d.setRiskOverriddenAt(Instant.now());
+        d.setRiskApproved(false);
+        d.setRiskApprovedByUserId(null);
+        d.setRiskApprovedAt(null);
+
+        // Names both bands, so the line shows whether the reviewer was overruling the engine or
+        // agreeing with it — the two look identical afterwards and only this says which it was.
+        audit.record(AuditAction.DEAL_RISK_OVERRIDDEN, "Deal", d.getId(),
+                "Risk manually overridden to " + rating + " (was " + previous + ") on deal "
+                        + d.getReference() + ", against a calculated " + assessment.rating()
+                        + " (score " + assessment.value() + "): " + comment);
+        return riskDto(d);
+    }
+
+    /**
+     * Whoever is asking has to be one of the two roles that decide a deal.
+     *
+     * <p>The controller's {@code @PreAuthorize} says the same thing, and this says it again
+     * scoped to <em>this</em> deal's firm — the annotation cannot see which firm a deal belongs
+     * to, so on its own it would let a compliance officer of one firm rate another's deals.
+     */
+    private UserPrincipal mustBeDecider(Deal d) {
+        UserPrincipal actor = currentPrincipal();
+        lifecycle.assertCanRead(d, actor, firmIdOf(d));
+        if (!DealLifecycleService.isDecider(actor.role())) {
+            throw new ForbiddenException("Only compliance may set a deal's risk level");
+        }
+        return actor;
+    }
+
+    private RiskAssessmentDto riskDto(Deal d) {
+        return RiskAssessmentDto.of(d, risk.assess(d),
+                nameOf(d.getRiskApprovedByUserId()), nameOf(d.getRiskOverriddenByUserId()));
+    }
+
+    /**
+     * A user's name for a byline, or null.
+     *
+     * <p>The name rather than the email: a byline is read by a person asking who decided this,
+     * and an address answers which account did it. The id travels on the DTO beside it for
+     * anything that needs to identify the user rather than name them.
+     *
+     * <p>Null for a user who has since been deleted rather than an error: the record of who took
+     * a decision outlives their account, and a deal must not fail to load because somebody left.
+     */
+    private String nameOf(Long userId) {
+        return userId == null ? null
+                : users.findById(userId).map(User::getFullName).orElse(null);
     }
 
     /** Returns a pair of (deal, previousStatus) so the controller can audit the transition. */

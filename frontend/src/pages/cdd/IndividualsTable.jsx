@@ -8,8 +8,13 @@ import { tokens, fonts } from '../../theme/theme.js';
 
 const dateFmt = new Intl.DateTimeFormat('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
 
-/** A date of birth nobody has recorded, said as a gap rather than rendered as a blank. */
-export function formatDob(iso) {
+/**
+ * A date in a register column: "27 Sep 2026", or an em dash for one nobody has recorded.
+ *
+ * <p>Takes a date or an instant — every register renders both the same way, and a second
+ * Intl.DateTimeFormat elsewhere would be the same format written twice.
+ */
+export function formatListDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '—' : dateFmt.format(d);
@@ -56,7 +61,8 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
                   for an entity — a company has an incorporation date, not a birthday. */}
               <TableCell sx={{ color: tokens.muted }}>{nodeTypeLabel(r.nodeType)}</TableCell>
               <TableCell sx={{ fontFamily: fonts.mono, fontSize: '0.8rem' }}>
-                {formatDob(r.dateOfBirth)}
+                {/* A birthday nobody recorded reads as a gap, not as a blank cell. */}
+                {formatListDate(r.dateOfBirth)}
               </TableCell>
               <TableCell><CountryCell code={r.countryOfResidence} /></TableCell>
               <TableCell>

@@ -8,7 +8,11 @@ import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.NoteRequest;
+import nz.amldock.deal.dto.CloseDealRequest;
 import nz.amldock.deal.dto.OverrideRequest;
+import nz.amldock.deal.dto.SaleDto;
+import nz.amldock.deal.dto.RiskAssessmentDto;
+import nz.amldock.deal.dto.RiskOverrideRequest;
 import nz.amldock.deal.dto.UpdateDealRequest;
 import nz.amldock.dealnote.dto.DealNoteDto;
 import nz.amldock.property.dto.PropertyInput;
@@ -103,12 +107,13 @@ public class DealController {
     }
 
     /**
-     * ROOT and SENIOR_MANAGER may delete any deal in scope; the deal's author may delete only
-     * their own, and only while it is NEW. {@code DealService.assertCanDelete} draws that second
-     * line — this annotation only decides who gets as far as asking.
+     * ROOT deletes anything; a firm's compliance officer or senior manager deletes within their
+     * own firm; the deal's author deletes only their own, and only while it is NEW.
+     * {@code DealService.assertCanDelete} draws those lines — this annotation only decides who
+     * gets as far as asking.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AGENT','AGENT_PA','ADMIN')")
+    @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER','AGENT','AGENT_PA','ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         deals.delete(id);
         return ResponseEntity.noContent().build();
@@ -148,13 +153,43 @@ public class DealController {
         return deals.toDtoAfterMutation(r.deal());
     }
 
+    /**
+     * Closes a deal, recording what it finished as.
+     *
+     * <p>The one status route that carries something other than a note. Closing used to take no
+     * body, which recorded that a file ended without recording what it ended as — and whether the
+     * property sold, and for how much, is the fact transaction monitoring is built on.
+     */
     @PostMapping("/{id}/close")
     @PreAuthorize(REVIEWER_ROLES)
-    public DealDto close(@PathVariable Long id) {
-        var r = deals.act(id, DealAction.CLOSE, null);
+    public DealDto close(@PathVariable Long id, @Valid @RequestBody CloseDealRequest req) {
+        var r = deals.closeWithSale(id, req);
         audit.record(AuditAction.DEAL_CLOSED, "Deal", r.deal().getId(),
-                "Deal " + r.deal().getReference() + " closed");
+                "Deal " + r.deal().getReference() + " closed — "
+                        + (Boolean.TRUE.equals(r.deal().getPropertySold()) ? "property sold" : "property not sold"));
         return deals.toDtoAfterMutation(r.deal());
+    }
+
+    /**
+     * Takes a closed deal back to verified so its sale detail can be corrected.
+     *
+     * <p>Not {@code reopen}, which lands in REVIEW because a reopened sign-off is compliance's to
+     * redo. Nothing about the verification is in question here; the answers recorded on the way
+     * out are, and correcting them means closing again.
+     */
+    @PostMapping("/{id}/unclose")
+    @PreAuthorize(REVIEWER_ROLES)
+    public DealDto unclose(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+        var r = deals.act(id, DealAction.UNCLOSE, req.note());
+        audit.record(AuditAction.DEAL_UNCLOSED, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " reopened from closed");
+        return deals.toDtoAfterMutation(r.deal());
+    }
+
+    /** What the deal finished as. Readable by anyone who may read the deal. */
+    @GetMapping("/{id}/sale")
+    public SaleDto sale(@PathVariable Long id) {
+        return deals.sale(id);
     }
 
     /**
@@ -200,6 +235,39 @@ public class DealController {
                 "Deal " + result.deal().getReference()
                         + " overridden: " + result.previousStatus() + " → " + req.targetStatus());
         return deals.toDtoAfterMutation(result.deal());
+    }
+
+    /* ---------- the risk position ---------- */
+    // Read is open to anyone who may read the deal — the workings are the part worth showing
+    // widely, since a rating nobody outside compliance can account for is what this replaced.
+    // Both writes are REVIEWER_ROLES, and DealService re-checks against the deal's own firm:
+    // @PreAuthorize cannot see which firm a deal belongs to, so on its own it would let a
+    // compliance officer of one firm rate another's deals.
+
+    @GetMapping("/{id}/risk")
+    public RiskAssessmentDto risk(@PathVariable Long id) {
+        return deals.risk(id);
+    }
+
+    @PostMapping("/{id}/risk/approve")
+    @PreAuthorize(REVIEWER_ROLES)
+    public RiskAssessmentDto approveRisk(@PathVariable Long id) {
+        return deals.approveRisk(id);
+    }
+
+    /**
+     * Manually overrides the risk band.
+     *
+     * <p>Not SENIOR_MANAGER-only, unlike {@code /override}. That one overrules the lifecycle —
+     * it can put a deal into any status from any other — whereas this is a compliance judgement
+     * about a compliance figure, and rating a deal is what an AML compliance officer is for. The
+     * audit line records both ratings either way.
+     */
+    @PostMapping("/{id}/risk/override")
+    @PreAuthorize(REVIEWER_ROLES)
+    public RiskAssessmentDto overrideRisk(@PathVariable Long id,
+                                          @Valid @RequestBody RiskOverrideRequest req) {
+        return deals.overrideRisk(id, req.rating(), req.comment());
     }
 
     /* ---------- notes timeline ---------- */

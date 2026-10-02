@@ -2,6 +2,7 @@ package nz.amldock.deal.version;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,4 +17,7 @@ public interface DealVersionRepository extends JpaRepository<DealVersion, Long> 
     Optional<DealVersion> findTopByDealIdOrderByVersionNoDesc(Long dealId);
 
     long countByDealId(Long dealId);
+
+    /** Every version of every deal in a list, in one query — the assurance register's rows. */
+    List<DealVersion> findAllByDealIdInOrderByVersionNoDesc(Collection<Long> dealIds);
 }

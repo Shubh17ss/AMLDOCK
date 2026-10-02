@@ -3,12 +3,11 @@ import {
   Alert, Box, Button, Dialog, DialogActions, DialogContent, Divider, Stack, TextField, Typography,
 } from '@mui/material';
 import { DealStatusChip } from '../../components/DealStatusChip.jsx';
+import { OptionPill } from '../../components/OptionPill.jsx';
 import {
   DEAL_STATUSES, dealStatusDot, dealStatusLabel, transitionsFrom,
 } from '../../data/dealStatus.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
-
-const OVERRIDE_BLURB = 'Outside the normal order. The reason goes to the timeline and the audit log.';
 
 /**
  * Changes a deal's status: pick where it goes, say why, confirm.
@@ -48,7 +47,7 @@ export function DealStatusDialog({ open, deal, canOverride, onClose, onSubmit, s
     const reachable = new Set(normal.map((t) => t.to));
     return DEAL_STATUSES
       .filter((s) => s !== deal?.status && !reachable.has(s))
-      .map((s) => ({ to: s, action: 'override', noteRequired: true, blurb: OVERRIDE_BLURB }));
+      .map((s) => ({ to: s, action: 'override', noteRequired: true }));
   }, [canOverride, normal, deal?.status]);
 
   const needsReason = choice?.noteRequired ?? false;
@@ -86,15 +85,19 @@ export function DealStatusDialog({ open, deal, canOverride, onClose, onSubmit, s
               A {dealStatusLabel(deal?.status).toLowerCase()} deal has nowhere further to go.
             </Alert>
           ) : (
-            <Stack spacing={1}>
-              {normal.map((t) => (
-                <StatusRow
-                  key={t.to}
-                  transition={t}
-                  selected={choice?.to === t.to && choice?.action === t.action}
-                  onSelect={() => { setChoice(t); setError(null); }}
-                />
-              ))}
+            <Stack spacing={1.5}>
+              {normal.length > 0 && (
+                <PillRow>
+                  {normal.map((t) => (
+                    <StatusPill
+                      key={`${t.action}-${t.to}`}
+                      transition={t}
+                      selected={choice?.to === t.to && choice?.action === t.action}
+                      onSelect={() => { setChoice(t); setError(null); }}
+                    />
+                  ))}
+                </PillRow>
+              )}
 
               {forced.length > 0 && (
                 <>
@@ -108,15 +111,17 @@ export function DealStatusDialog({ open, deal, canOverride, onClose, onSubmit, s
                       Outside the normal order
                     </Typography>
                   </Divider>
-                  {forced.map((t) => (
-                    <StatusRow
-                      key={`override-${t.to}`}
-                      transition={t}
-                      isOverride
-                      selected={choice?.to === t.to && choice?.action === 'override'}
-                      onSelect={() => { setChoice(t); setError(null); }}
-                    />
-                  ))}
+                  <PillRow>
+                    {forced.map((t) => (
+                      <StatusPill
+                        key={`override-${t.to}`}
+                        transition={t}
+                        isOverride
+                        selected={choice?.to === t.to && choice?.action === 'override'}
+                        onSelect={() => { setChoice(t); setError(null); }}
+                      />
+                    ))}
+                  </PillRow>
                 </>
               )}
             </Stack>
@@ -172,58 +177,40 @@ export function DealStatusDialog({ open, deal, canOverride, onClose, onSubmit, s
   );
 }
 
-/** One status the deal could move to, and what that means. */
-function StatusRow({ transition, selected, isOverride = false, onSelect }) {
+/**
+ * The pills side by side on anything wider than a phone, stacked full-width below that so each
+ * label stays a comfortable tap target.
+ */
+function PillRow({ children }) {
   return (
-    <Box
-      component="button"
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      sx={motion.respectful({
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 1.5,
-        width: '100%',
-        px: 2,
-        py: 1.5,
-        textAlign: 'left',
-        cursor: 'pointer',
-        borderRadius: 3,
-        backgroundColor: selected ? tokens.blueWash : tokens.tile,
-        border: `1.5px solid ${selected ? tokens.blue : tokens.hairline}`,
-        font: 'inherit',
-        transition: `background-color ${motion.swift} ease, border-color ${motion.swift} ease`,
-        '&:hover': { backgroundColor: selected ? tokens.blueWash : tokens.hover },
-        '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
-      })}
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={1}
+      useFlexGap
+      flexWrap="wrap"
+      justifyContent="center"
     >
-      <Box
-        sx={{
-          width: 10, height: 10, borderRadius: '50%', flexShrink: 0, mt: 0.75,
-          backgroundColor: dealStatusDot(transition.to),
-        }}
-      />
-      <Box sx={{ minWidth: 0 }}>
-        <Stack direction="row" spacing={0.75} alignItems="center">
-          <Typography sx={{ fontFamily: fonts.display, fontSize: '0.95rem', color: tokens.ink }}>
-            {dealStatusLabel(transition.to)}
-          </Typography>
-          {isOverride && (
-            <Typography
-              sx={{
-                fontFamily: fonts.mono, fontSize: '0.58rem', letterSpacing: '0.12em',
-                textTransform: 'uppercase', color: 'warning.main',
-              }}
-            >
-              Override
-            </Typography>
-          )}
-        </Stack>
-        <Typography variant="caption" sx={{ color: tokens.muted, display: 'block', mt: 0.25 }}>
-          {transition.blurb}
-        </Typography>
-      </Box>
-    </Box>
+      {children}
+    </Stack>
+  );
+}
+
+/**
+ * One status the deal could move to, drawn like the risk panel's bands: the status's own colour
+ * on a wash of itself, so the choice reads the same way across the two decisions a reviewer makes.
+ */
+function StatusPill({ transition, selected, isOverride = false, onSelect }) {
+  const fg = dealStatusDot(transition.to);
+  return (
+    <OptionPill
+      label={dealStatusLabel(transition.to)}
+      fg={fg}
+      bg={`color-mix(in srgb, ${fg} 14%, transparent)`}
+      selected={selected}
+      onSelect={onSelect}
+      tag={isOverride ? 'OVERRIDE' : null}
+      tagColor="warning.main"
+      sx={{ width: { xs: '100%', sm: 'auto' }, justifyContent: 'center' }}
+    />
   );
 }

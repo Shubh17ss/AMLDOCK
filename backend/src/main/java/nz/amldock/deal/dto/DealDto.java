@@ -37,7 +37,6 @@ public record DealDto(
         // stay the only diff.
         String transactionPurpose,
         Boolean trustInvolved,
-        Boolean onSoldQuickly,
         String foreignExposureCountry,
         Boolean redFlagPresent,
         String redFlag,
@@ -46,7 +45,15 @@ public record DealDto(
         RiskRating riskRating,
         RiskRatingSource riskRatingSource,
         // V29
-        Boolean clientRemote
+        Boolean clientRemote,
+        // V46 — the risk rework. onSoldQuickly left this record with its column.
+        Integer ownershipTenureYears,
+        Integer ownershipTenureMonths,
+        Boolean faceToFaceIdVerified,
+        Long keyContactNodeId,
+        int riskValue,
+        boolean riskApproved,
+        String riskOverrideComment
 ) {
     public static DealDto from(DealFields d, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
@@ -59,10 +66,13 @@ public record DealDto(
                 d.getCreatedByUserId(), createdByEmail,
                 d.getDecidedByUserId(), d.getDecidedAt(),
                 d.getCreatedAt(), d.getUpdatedAt(),
-                d.getTransactionPurpose(), d.getTrustInvolved(), d.getOnSoldQuickly(),
+                d.getTransactionPurpose(), d.getTrustInvolved(),
                 d.getForeignExposureCountry(), d.getRedFlagPresent(), d.getRedFlag(),
                 d.getValuationMin(), d.getValuationMax(),
                 d.getRiskRating(), d.getRiskRatingSource(),
-                d.getClientRemote());
+                d.getClientRemote(),
+                d.getOwnershipTenureYears(), d.getOwnershipTenureMonths(),
+                d.getFaceToFaceIdVerified(), d.getKeyContactNodeId(),
+                d.getRiskValue(), d.isRiskApproved(), d.getRiskOverrideComment());
     }
 }

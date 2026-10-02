@@ -67,9 +67,34 @@ export async function reopenDeal(id, note) {
   return data;
 }
 
-/** VERIFIED → CLOSED. */
-export async function closeDeal(id) {
-  const { data } = await apiClient.post(`/deals/${id}/close`);
+/**
+ * VERIFIED → CLOSED, recording what the deal finished as.
+ *
+ * The one status verb that carries something other than a note. `payload` is
+ * `{ propertySold, salePrice?, units? }`: a single price for most properties, or a row per unit
+ * for a development. Which of the two the server will accept is decided by the deal's own
+ * property type, not by what is sent.
+ */
+export async function closeDeal(id, payload) {
+  const { data } = await apiClient.post(`/deals/${id}/close`, payload);
+  return data;
+}
+
+/**
+ * CLOSED → VERIFIED. Takes a closed deal back so its sale detail can be corrected.
+ *
+ * Not `reopenDeal`, which lands in REVIEW because a reopened sign-off is compliance's to redo.
+ * Nothing here questions the verification, so it writes no version and leaves the original
+ * sign-off stamp alone — closing again is how the figures get replaced.
+ */
+export async function uncloseDeal(id, note) {
+  const { data } = await apiClient.post(`/deals/${id}/unclose`, { note });
+  return data;
+}
+
+/** What the deal finished as — whether it sold, for how much, and per unit for a development. */
+export async function getDealSale(id) {
+  const { data } = await apiClient.get(`/deals/${id}/sale`);
   return data;
 }
 

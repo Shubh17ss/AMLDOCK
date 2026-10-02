@@ -38,5 +38,12 @@ public enum PersonRole {
     EXECUTOR,
     PARTNER,
     PROTECTOR,
-    GUARANTOR
+    GUARANTOR,
+    /**
+     * Stands to benefit from a trust without holding or controlling it. Not an owner and not a
+     * controller, which is why it took until now to be offered — but a discretionary trust's
+     * beneficiaries are who the money is ultimately for, and a file that cannot name them has
+     * not identified the beneficial ownership it claims to have checked.
+     */
+    BENEFICIARY
 }

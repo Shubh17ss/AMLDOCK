@@ -30,12 +30,16 @@ import nz.amldock.ownership.dto.ReorderRequest;
 import nz.amldock.ownership.dto.TreeDto;
 import nz.amldock.ownership.dto.UpdateEdgeRequest;
 import nz.amldock.ownership.dto.UpdateNodeRequest;
+import nz.amldock.ownership.dto.VerifyNodeRequest;
+import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
+import nz.amldock.user.UserRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -72,6 +76,9 @@ public class OwnershipService {
     private final DocumentRepository documents;
     private final FileStorageService storage;
     private final AuditService audit;
+    // Only to put a name on a verification byline. Read-only, and tolerant of the account having
+    // gone since - see nameOf.
+    private final UserRepository users;
 
     public OwnershipService(OwnershipStructureRepository structures,
                             OwnershipNodeRepository nodes,
@@ -84,7 +91,8 @@ public class OwnershipService {
                             DealRiskService risk,
                             DocumentRepository documents,
                             FileStorageService storage,
-                            AuditService audit) {
+                            AuditService audit,
+                            UserRepository users) {
         this.structures = structures;
         this.nodes = nodes;
         this.edges = edges;
@@ -97,6 +105,7 @@ public class OwnershipService {
         this.documents = documents;
         this.storage = storage;
         this.audit = audit;
+        this.users = users;
     }
 
     /* ---------- queries ---------- */
@@ -194,18 +203,17 @@ public class OwnershipService {
         // clears them — the same distinction applyPersonPatch draws between null and "".
         if (req.personRoles() != null) n.setPersonRoles(req.personRoles());
         if (req.reference() != null) n.setReference(req.reference());
-        if (req.verificationStatus() != null) n.setVerificationStatus(req.verificationStatus());
         if (req.notes() != null) n.setNotes(req.notes());
-        if (req.verificationNotes() != null) n.setVerificationNotes(req.verificationNotes());
+        // Verification is not patchable from here. It carries a byline, and a byline the client
+        // could write is no byline at all - see verifyNode.
         // Written unconditionally, and the one field here that breaks the leave-alone rule. A
         // percentage has to be clearable back to "not stated", and null is the only way a number
         // can say that — so an absent value has to mean erase, or emptying the field would report
         // success and change nothing, which is the silent no-op just fixed on the edge.
         //
         // The cost is that every caller must send it, including partial patches that care about
-        // something else entirely. Both in-tree callers do: the details form through
-        // buildNodePayload, and the verification save by carrying the node's stored value back
-        // unchanged. A new partial caller that forgets will clear it.
+        // something else entirely. The one in-tree caller does, through buildNodePayload. A new
+        // partial caller that forgets will clear it.
         n.setPropertyPercentage(normalisePercentage(req.propertyPercentage()));
         applyEntityFields(n, req.jurisdictionCountry(), req.companyHasConstitution(),
                 req.nomineeStatus(), req.companyComplexOwnership(),
@@ -228,7 +236,66 @@ public class OwnershipService {
         // ways it can move. Runs unconditionally: working out whether this particular patch
         // touched a risk-bearing field would be a second copy of the rule.
         risk.recomputeFor(dealId);
-        return NodeDto.from(n, person == null ? null : PersonDto.from(person));
+        return NodeDto.from(n, person == null ? null : PersonDto.from(person),
+                nameOf(n.getVerifiedByUserId()));
+    }
+
+    /**
+     * Grants a verification on one owner, or replaces the one it already has.
+     *
+     * <p>Its own verb rather than a field on the patch above, because the whole value of the
+     * record is the byline, and the byline has to be written here: a caller that could name its
+     * own verifier could name anyone. The client sends the decision; the server says who took it
+     * and when.
+     *
+     * <p>Re-verifying overwrites all four columns. An owner cleared by exception and later
+     * cleared outright is not two records - it is one owner whose latest decision stands, and the
+     * superseded one lives in the audit trail where a history belongs.
+     *
+     * <p>No risk recompute. Nothing the score reads changes here; verification is evidence that
+     * the answers are true, not one of the answers.
+     */
+    @Transactional
+    public NodeDto verifyNode(Long dealId, Long nodeId, VerifyNodeRequest req) {
+        Deal deal = assertReadable(dealId);
+        OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
+
+        NodeVerificationStatus outcome = req.outcome();
+        if (!outcome.isVerified()) {
+            // NOT_STARTED, IN_PROGRESS and FAILED are creation states. Letting this route write
+            // one would give a reviewer a way to walk an owner backwards with a byline attached,
+            // which reads as somebody having decided the owner is unverified.
+            throw new BadRequestException("Verification outcome must be VERIFIED or VERIFIED_WITH_EXCEPTION");
+        }
+
+        boolean exception = outcome == NodeVerificationStatus.VERIFIED_WITH_EXCEPTION;
+        String notes = req.notes() == null ? null : req.notes().trim();
+        if (exception && (notes == null || notes.isEmpty())) {
+            throw new BadRequestException("A reason is required when granting a verification exception");
+        }
+
+        n.setVerificationStatus(outcome);
+        // Cleared on a plain verification. A note left over from a previous exception would sit
+        // under a clean verification looking like its justification.
+        n.setVerificationNotes(exception ? notes : null);
+        n.setVerifiedByUserId(currentPrincipal().id());
+        n.setVerifiedAt(Instant.now());
+
+        BeneficialOwner person = personFor(n);
+        return NodeDto.from(n, person == null ? null : PersonDto.from(person),
+                nameOf(n.getVerifiedByUserId()));
+    }
+
+    /**
+     * The display name behind a user id, or null.
+     *
+     * <p>Null for a user who has since gone: the columns carry no FK precisely so that a decision
+     * outlives the account that took it, and the tab renders a missing name as no byline rather
+     * than as an error.
+     */
+    private String nameOf(Long userId) {
+        return userId == null ? null
+                : users.findById(userId).map(User::getFullName).orElse(null);
     }
 
     /**
@@ -685,12 +752,27 @@ public class OwnershipService {
             owners.findAllById(ownerIds).forEach(o -> people.put(o.getId(), PersonDto.from(o)));
         }
 
+        // And one query for every verifier on the tree. Resolving a name per node would be an
+        // N+1 across the whole structure to render a caption.
+        List<Long> verifierIds = nodeList.stream()
+                .map(OwnershipNode::getVerifiedByUserId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> verifierNames = new HashMap<>();
+        if (!verifierIds.isEmpty()) {
+            users.findAllById(verifierIds).forEach(u -> verifierNames.put(u.getId(), u.getFullName()));
+        }
+
         return new TreeDto(
                 structure.getId(),
                 structure.getDealId(),
                 structure.getRootNodeId(),
                 structure.getNotes(),
-                nodeList.stream().map(n -> NodeDto.from(n, people.get(n.getBeneficialOwnerId()))).toList(),
+                nodeList.stream()
+                        .map(n -> NodeDto.from(n, people.get(n.getBeneficialOwnerId()),
+                                verifierNames.get(n.getVerifiedByUserId())))
+                        .toList(),
                 edgeList.stream().map(EdgeDto::from).toList());
     }
 

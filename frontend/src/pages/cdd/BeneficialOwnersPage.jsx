@@ -10,7 +10,7 @@ import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { countryName } from '../../data/countries.js';
 import { buildCsv } from '../../utils/csv.js';
-import { IndividualsTable, formatDob } from './IndividualsTable.jsx';
+import { IndividualsTable } from './IndividualsTable.jsx';
 import { nodeTypeLabel } from '../../api/ownership.js';
 
 const slug = (s) => String(s ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -26,16 +26,22 @@ export const csvRowFor = (r) => [
 ];
 
 /**
- * Downloads `rows` as a CSV named for the scope and today. Shared with the overseas register.
+ * Downloads `rows` as a CSV named for the scope and today. Shared by all three CDD registers.
  *
- * <p>`noun` because the two registers count different things: this one lists every kind of owner,
- * that one only natural persons, and "Exported 12 people" would be wrong on exactly one of them.
- * Given as a [singular, plural] pair rather than suffixed, so an irregular plural stays possible.
+ * <p>`noun` because the registers count different things: this one lists every kind of owner,
+ * the overseas one only natural persons, and "Exported 12 people" would be wrong on exactly one
+ * of them. Given as a [singular, plural] pair rather than suffixed, so an irregular plural stays
+ * possible.
+ *
+ * <p>`headers`/`rowFor` default to this register's columns, which the overseas one shares. The
+ * exceptions register shows a different four, and its own copy of the blob-download plumbing
+ * would be the third.
  */
 export function exportIndividualsCsv({
   rows, prefix, firm, branch, showToast, noun = ['owner', 'owners'],
+  headers = csvHeaders, rowFor = csvRowFor,
 }) {
-  const csv = buildCsv(csvHeaders, rows.map(csvRowFor));
+  const csv = buildCsv(headers, rows.map(rowFor));
   const name = [prefix, slug(firm?.name), slug(branch?.name), new Date().toISOString().slice(0, 10)]
     .filter(Boolean).join('-');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));

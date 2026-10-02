@@ -34,6 +34,8 @@ public enum AuditAction {
     DEAL_CLOSED,
     DEAL_REVERTED,
     DEAL_REOPENED,
+    /** A closed deal was taken back to verified so its sale detail could be corrected. */
+    DEAL_UNCLOSED,
     DEAL_NOTE_ADDED,
     DEAL_OVERRIDDEN,
     /**
@@ -50,9 +52,29 @@ public enum AuditAction {
      * the record.
      */
     DEAL_RISK_CHANGED,
+    /** A reviewer signed off the deal's risk position. */
+    DEAL_RISK_APPROVED,
+    /**
+     * A sign-off fell away on its own, because the score moved or because the deal gained a
+     * question nobody has answered. Nothing a person did, which is exactly why it needs a line:
+     * an approval that disappears silently is the kind of change an auditor asks about.
+     */
+    DEAL_RISK_APPROVAL_WITHDRAWN,
+    /** A reviewer manually overrode the risk band, whether overruling the engine or agreeing with it. */
+    DEAL_RISK_OVERRIDDEN,
+    /** A reviewer assured a signed-off version of a deal: they looked again and it holds up. */
+    DEAL_VERSION_ASSURED,
+    /** A reviewer withdrew assurance from a signed-off version, with a note saying why. */
+    DEAL_VERSION_UNASSURED,
     NODE_CREATED,
     NODE_UPDATED,
     NODE_DELETED,
+    /**
+     * An owner was cleared, outright or by exception. Its own action rather than a NODE_UPDATED:
+     * a verification is the one node write somebody is personally accountable for, and it should
+     * be findable in the trail without reading every field edit on the deal.
+     */
+    NODE_VERIFIED,
     EDGE_CREATED,
     EDGE_UPDATED,
     EDGE_DELETED,

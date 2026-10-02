@@ -21,6 +21,7 @@ import nz.amldock.ownership.dto.CreateNodeRequest;
 import nz.amldock.ownership.dto.NodeDto;
 import nz.amldock.ownership.dto.PersonPatch;
 import nz.amldock.ownership.dto.UpdateNodeRequest;
+import nz.amldock.ownership.dto.VerifyNodeRequest;
 import nz.amldock.user.Role;
 import nz.amldock.user.UserPrincipal;
 import org.junit.jupiter.api.AfterEach;
@@ -79,6 +80,7 @@ class OwnershipServiceTest {
     @Mock nz.amldock.document.DocumentRepository documents;
     @Mock nz.amldock.document.storage.FileStorageService storage;
     @Mock nz.amldock.audit.AuditService audit;
+    @Mock nz.amldock.user.UserRepository users;
 
     OwnershipService service;
     Deal deal;
@@ -88,7 +90,7 @@ class OwnershipServiceTest {
     @BeforeEach
     void setUp() {
         service = new OwnershipService(structures, nodes, edges, deals, branches, lifecycle,
-                owners, ownerLinks, risk, documents, storage, audit);
+                owners, ownerLinks, risk, documents, storage, audit, users);
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
@@ -791,5 +793,127 @@ class OwnershipServiceTest {
         service.deleteNode(DEAL_ID, 2L, true);
 
         verify(risk, times(1)).recomputeFor(DEAL_ID);
+    }
+
+    /* ---------- granting a verification ---------- */
+
+    @Test
+    void verifyingStampsTheOutcomeAndTheCallerAgainstTheNode() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+        when(users.findById(7L)).thenReturn(Optional.of(user(7L, "Olivia Officer")));
+
+        NodeDto dto = service.verifyNode(DEAL_ID, 4L,
+                new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null));
+
+        assertThat(jane.getVerificationStatus()).isEqualTo(NodeVerificationStatus.VERIFIED);
+        assertThat(jane.getVerifiedByUserId()).isEqualTo(7L);
+        assertThat(jane.getVerifiedAt()).isNotNull();
+        // The byline is a name. An email identifies an account; the reviewer is asking who.
+        assertThat(dto.verifiedByName()).isEqualTo("Olivia Officer");
+        assertThat(dto.verifiedAt()).isEqualTo(jane.getVerifiedAt());
+    }
+
+    @Test
+    void anExceptionKeepsTheReasonItWasGrantedFor() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+        lenient().when(users.findById(7L)).thenReturn(Optional.of(user(7L, "Olivia Officer")));
+
+        service.verifyNode(DEAL_ID, 4L, new VerifyNodeRequest(
+                NodeVerificationStatus.VERIFIED_WITH_EXCEPTION, "  Passport expired, deed sighted  "));
+
+        assertThat(jane.getVerificationStatus())
+                .isEqualTo(NodeVerificationStatus.VERIFIED_WITH_EXCEPTION);
+        assertThat(jane.getVerificationNotes()).isEqualTo("Passport expired, deed sighted");
+    }
+
+    @Test
+    void anExceptionWithNoReasonIsRefused() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+
+        assertThatThrownBy(() -> service.verifyNode(DEAL_ID, 4L,
+                new VerifyNodeRequest(NodeVerificationStatus.VERIFIED_WITH_EXCEPTION, null)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("reason is required");
+
+        assertThat(jane.getVerifiedAt()).isNull();
+    }
+
+    @Test
+    void anExceptionWhoseReasonIsOnlyWhitespaceIsRefused() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+
+        assertThatThrownBy(() -> service.verifyNode(DEAL_ID, 4L,
+                new VerifyNodeRequest(NodeVerificationStatus.VERIFIED_WITH_EXCEPTION, "   ")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("reason is required");
+    }
+
+    @Test
+    void verifyingOutrightClearsTheReasonAnEarlierExceptionLeftBehind() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        jane.setVerificationStatus(NodeVerificationStatus.VERIFIED_WITH_EXCEPTION);
+        jane.setVerificationNotes("Passport expired, deed sighted");
+        stubNodes(jane);
+        lenient().when(users.findById(7L)).thenReturn(Optional.of(user(7L, "Olivia Officer")));
+
+        service.verifyNode(DEAL_ID, 4L,
+                new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null));
+
+        assertThat(jane.getVerificationStatus()).isEqualTo(NodeVerificationStatus.VERIFIED);
+        // Left behind, this would sit under a clean verification looking like its justification.
+        assertThat(jane.getVerificationNotes()).isNull();
+    }
+
+    @Test
+    void theUnverifiedStatesCannotBeGrantedThroughTheVerifyVerb() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+
+        for (NodeVerificationStatus bad : List.of(NodeVerificationStatus.NOT_STARTED,
+                NodeVerificationStatus.IN_PROGRESS, NodeVerificationStatus.FAILED)) {
+            assertThatThrownBy(() -> service.verifyNode(DEAL_ID, 4L,
+                    new VerifyNodeRequest(bad, null)))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("VERIFIED");
+        }
+    }
+
+    @Test
+    void aVerificationLeavesTheDealsRiskAlone() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+        lenient().when(users.findById(7L)).thenReturn(Optional.of(user(7L, "Olivia Officer")));
+
+        service.verifyNode(DEAL_ID, 4L,
+                new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null));
+
+        // Verification is evidence that the answers are true, not one of the answers.
+        verify(risk, never()).recomputeFor(any());
+    }
+
+    @Test
+    void aVerificationSurvivesTheAccountThatGrantedItGoingAway() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+        when(users.findById(7L)).thenReturn(Optional.empty());
+
+        NodeDto dto = service.verifyNode(DEAL_ID, 4L,
+                new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null));
+
+        // No FK, so the decision outlives the account. A byline that cannot be resolved is
+        // simply not shown - it is not an error.
+        assertThat(jane.getVerifiedByUserId()).isEqualTo(7L);
+        assertThat(dto.verifiedByName()).isNull();
+    }
+
+    private nz.amldock.user.User user(Long id, String fullName) {
+        nz.amldock.user.User u = new nz.amldock.user.User();
+        ReflectionTestUtils.setField(u, "id", id);
+        u.setFullName(fullName);
+        return u;
     }
 }

@@ -4,7 +4,7 @@ import { VoiceRecorderField } from '../../../components/VoiceRecorderField.jsx';
 import { useCurrency } from '../../../dashboard/useCurrency.js';
 import { RED_FLAGS } from '../../../data/redFlags.js';
 import { SectionCard, FieldGroup } from './SectionShell.jsx';
-import { ValuationField } from './ValuationField.jsx';
+import { MoneyField } from '../../../components/MoneyField.jsx';
 import { YesNoField } from './YesNoField.jsx';
 import { tokens } from '../../../theme/theme.js';
 
@@ -65,13 +65,13 @@ export function Section5Risk({
         </Typography>
 
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-          <ValuationField
+          <MoneyField
             label="Minimum value"
             value={form.valuationMin}
             onChange={setField('valuationMin')}
             currencyLabel={money.label}
           />
-          <ValuationField
+          <MoneyField
             label="Maximum value"
             value={form.valuationMax}
             onChange={setField('valuationMax')}

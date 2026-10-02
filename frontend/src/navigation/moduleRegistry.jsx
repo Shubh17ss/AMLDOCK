@@ -5,6 +5,7 @@ import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import RuleIcon from '@mui/icons-material/Rule';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 import GavelIcon from '@mui/icons-material/Gavel';
 import SchoolIcon from '@mui/icons-material/School';
 import FlagIcon from '@mui/icons-material/Flag';
@@ -20,7 +21,9 @@ import LeaderboardRoundedIcon from '@mui/icons-material/LeaderboardRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import HistoryIcon from '@mui/icons-material/History';
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
-import { canAccessAllModules, FINANCE_MODULE_IDS, AUDIT_LOG_ROLES, NOTIFICATION_ADMIN_ROLES } from '../auth/roles.js';
+import {
+  canAccessAllModules, FINANCE_MODULE_IDS, AUDIT_LOG_ROLES, NOTIFICATION_ADMIN_ROLES, ASSURANCE_ROLES,
+} from '../auth/roles.js';
 
 // ── Compliance module registry ──────────────────────────────────────────────
 // Single source of truth for the workspace surface: the sidebar, the dashboard
@@ -36,6 +39,8 @@ export const CDD_REGISTER_PATH = '/cdd';
 export const DEALS_PATH = '/cdd/deals';
 export const BENEFICIAL_OWNERS_PATH = '/cdd/beneficial-owners';
 export const OVERSEAS_RESIDENTS_PATH = '/cdd/overseas-residents';
+export const CDD_EXCEPTIONS_PATH = '/cdd/cdd-exceptions';
+export const CDD_ASSURANCE_PATH = '/cdd/assurance';
 export const INTL_FUND_TRANSACTIONS_PATH = '/reporting/international-fund-transaction-register';
 export const SUSPICIOUS_ACTIVITIES_PATH = '/reporting/suspicious-activities';
 export const STAFF_TRAINING_PATH = '/aml-training/staff-training';
@@ -65,8 +70,11 @@ export const MODULE_GROUPS = [
         blurb: 'Every listing and its customer due diligence, from capture through approval.' },
       { id: 'beneficial-owners', label: 'Beneficial Owners', to: BENEFICIAL_OWNERS_PATH, icon: <AccountTreeIcon />,
         blurb: 'Map ownership structures and identify who ultimately controls each customer.' },
-      { id: 'cdd-exceptions',    label: 'CDD Exceptions',    to: '/cdd/cdd-exceptions',    icon: <RuleIcon />,
-        blurb: 'Track listings cleared with incomplete due diligence and their remediation.' },
+      { id: 'cdd-exceptions',    label: 'CDD Exceptions',    to: CDD_EXCEPTIONS_PATH,      icon: <RuleIcon />,
+        blurb: 'Every owner cleared despite a gap in the evidence, and the file it was on.' },
+      { id: 'assurance',         label: 'Assurance',         to: CDD_ASSURANCE_PATH,       icon: <FactCheckIcon />,
+        roles: ASSURANCE_ROLES,
+        blurb: 'A second look at every signed-off deal, version by version.' },
       { id: 'peps',              label: 'PEPs',              to: '/cdd/peps',              icon: <GavelIcon />,
         blurb: 'Screen and record politically exposed persons found across your customers.' },
       { id: 'overseas-residents', label: 'Overseas Residents Register', to: OVERSEAS_RESIDENTS_PATH, icon: <PublicIcon />,
@@ -187,6 +195,8 @@ export const IMPLEMENTED_PATHS = [
   DEALS_PATH,
   BENEFICIAL_OWNERS_PATH,
   OVERSEAS_RESIDENTS_PATH,
+  CDD_EXCEPTIONS_PATH,
+  CDD_ASSURANCE_PATH,
   '/documents/risk-assessment',
   '/documents/compliance-programme',
   '/reporting/annual-report',

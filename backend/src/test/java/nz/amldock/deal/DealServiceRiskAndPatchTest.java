@@ -68,6 +68,8 @@ class DealServiceRiskAndPatchTest {
     @Mock nz.amldock.ownership.OwnershipService ownership;
     @Mock nz.amldock.notification.DealNotificationEnqueuer notifier;
     @Mock nz.amldock.deal.version.DealVersionService versions;
+    @Mock nz.amldock.deal.sale.DealSaleUnitRepository saleUnits;
+    @Mock nz.amldock.beneficialowner.BeneficialOwnerRepository people;
 
     DealService service;
 
@@ -81,8 +83,8 @@ class DealServiceRiskAndPatchTest {
         // mocked one would assert only that DealService calls something.
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
-                beneficialOwners, new DealRiskService(deals, structures, nodes, audit),
-                ownership, audit, notifier, versions);
+                beneficialOwners, new DealRiskService(deals, structures, nodes, people, audit),
+                ownership, audit, notifier, versions, saleUnits);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 
@@ -109,30 +111,44 @@ class DealServiceRiskAndPatchTest {
     /* ---------- risk rating ---------- */
 
     @Test
-    void newDealDefaultsToLowRisk() {
-        Deal d = service.create(request(null));
+    void aDealWithNothingAgainstItIsLowRisk() {
+        // Ten years of tenure, no foreign exposure, IDs sighted: nothing scores.
+        Deal d = service.create(request(120));
 
+        assertThat(d.getRiskValue()).isZero();
         assertThat(d.getRiskRating()).isEqualTo(RiskRating.LOW);
         assertThat(d.getRiskRatingSource()).isEqualTo(RiskRatingSource.DERIVED);
     }
 
     @Test
-    void onSoldQuicklyMakesTheDealHighRisk() {
-        Deal d = service.create(request(true));
+    void aShortOwnershipTenureMakesTheDealHighRisk() {
+        Deal d = service.create(request(6));
 
+        assertThat(d.getRiskValue()).isEqualTo(6);
         assertThat(d.getRiskRating()).isEqualTo(RiskRating.HIGH);
     }
 
     @Test
-    void patchingOnSoldQuicklyRederivesTheRating() {
+    void theMiddleTenureBandScoresTwo() {
+        // Two years exactly, inside the 19-35 month band.
+        Deal d = service.create(request(24));
+
+        assertThat(d.getRiskValue()).isEqualTo(2);
+        assertThat(d.getRiskRating()).isEqualTo(RiskRating.LOW);
+    }
+
+    @Test
+    void patchingTheTenureRederivesTheRating() {
         Deal d = draftInRepo();
-        d.setOnSoldQuickly(false);
+        d.setOwnershipTenureYears(10);
+        d.setFaceToFaceIdVerified(true);
+        d.setForeignExposureCountry("NONE");
         d.setRiskRating(RiskRating.LOW);
 
-        service.update(1L, update(u -> u.onSoldQuickly(true)));
+        service.update(1L, update(u -> u.ownershipTenureYears(0).ownershipTenureMonths(6)));
         assertThat(d.getRiskRating()).isEqualTo(RiskRating.HIGH);
 
-        service.update(1L, update(u -> u.onSoldQuickly(false)));
+        service.update(1L, update(u -> u.ownershipTenureYears(10).ownershipTenureMonths(0)));
         assertThat(d.getRiskRating()).isEqualTo(RiskRating.LOW);
     }
 
@@ -142,9 +158,39 @@ class DealServiceRiskAndPatchTest {
         d.setRiskRatingSource(RiskRatingSource.OVERRIDE);
         d.setRiskRating(RiskRating.MEDIUM);
 
-        service.update(1L, update(u -> u.onSoldQuickly(true)));
+        service.update(1L, update(u -> u.ownershipTenureMonths(6)));
 
         assertThat(d.getRiskRating()).isEqualTo(RiskRating.MEDIUM);
+    }
+
+    @Test
+    void theScoreKeepsMovingUnderneathAnOverride() {
+        // The Risk tab shows the calculated position beside the pinned one, so a reviewer
+        // deciding whether to lift an override can see what the file says on its own.
+        Deal d = draftInRepo();
+        d.setRiskRatingSource(RiskRatingSource.OVERRIDE);
+        d.setRiskRating(RiskRating.LOW);
+
+        service.update(1L, update(u -> u.ownershipTenureMonths(6)));
+
+        assertThat(d.getRiskRating()).isEqualTo(RiskRating.LOW);
+        assertThat(d.getRiskValue()).isEqualTo(6);
+    }
+
+    @Test
+    void anEditThatMovesTheScoreWithdrawsAnApproval() {
+        Deal d = draftInRepo();
+        d.setOwnershipTenureYears(10);
+        d.setFaceToFaceIdVerified(true);
+        d.setForeignExposureCountry("NONE");
+        d.setRiskValue(0);
+        d.setRiskApproved(true);
+        d.setRiskApprovedByUserId(99L);
+
+        service.update(1L, update(u -> u.ownershipTenureYears(0).ownershipTenureMonths(6)));
+
+        assertThat(d.isRiskApproved()).isFalse();
+        assertThat(d.getRiskApprovedByUserId()).isNull();
     }
 
     /* ---------- partial patches ---------- */
@@ -213,6 +259,22 @@ class DealServiceRiskAndPatchTest {
         assertThat(p.getAddressLine1()).isEqualTo("12 Queen St");
         assertThat(p.getPropertyType()).isEqualTo(PropertyType.LIFESTYLE);
         assertThat(p.getReasonForSelling()).isEqualTo("DOWNSIZING");
+    }
+
+    @Test
+    void theDevelopmentTypeRoundTripsWithItsOwnReasonCode() {
+        draftInRepo();
+        Property p = new Property();
+        when(properties.findById(any())).thenReturn(Optional.of(p));
+
+        // DEVELOPMENT and its reasons arrived together; the reason set is owned by the frontend
+        // (propertyTypes.js), so what the server owes is to store whatever code it is handed
+        // without a CHECK constraint or an enum for reasons getting in the way.
+        service.updateProperty(1L, new PropertyInput("7 Vector Lane", null, null, null, null,
+                null, null, null, null, PropertyType.DEVELOPMENT, "MIXED USE DEVELOPMENT"));
+
+        assertThat(p.getPropertyType()).isEqualTo(PropertyType.DEVELOPMENT);
+        assertThat(p.getReasonForSelling()).isEqualTo("MIXED USE DEVELOPMENT");
     }
 
     /* ---------- valuation range ---------- */
@@ -338,7 +400,7 @@ class DealServiceRiskAndPatchTest {
     void aClientWithNoTypeIsAccepted() {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null, null, null, null),
                 new ClientInput("Jane Marsh", null, null, null));
 
@@ -352,7 +414,7 @@ class DealServiceRiskAndPatchTest {
     void aClientTypeIsStillStoredWhenOneIsGiven() {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null,
                 new ClientInput("Marsh Family Trust", ClientType.ENTITY, null, null));
 
         service.create(req);
@@ -362,14 +424,17 @@ class DealServiceRiskAndPatchTest {
 
     /* ---------- helpers ---------- */
 
-    private CreateDealRequest request(Boolean onSoldQuickly) {
-        return request(onSoldQuickly, false);
+    /** A create request whose only risk input is the tenure, given here as a month count. */
+    private CreateDealRequest request(Integer tenureMonths) {
+        return request(tenureMonths, false);
     }
 
-    private CreateDealRequest request(Boolean onSoldQuickly, Boolean trustInvolved) {
+    private CreateDealRequest request(Integer tenureMonths, Boolean trustInvolved) {
+        Integer years = tenureMonths == null ? null : tenureMonths / 12;
+        Integer months = tenureMonths == null ? null : tenureMonths % 12;
         return new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
-                "Retiring overseas", trustInvolved, onSoldQuickly, "NONE", false, false, null, null, null,
+                "Retiring overseas", trustInvolved, years, months, "NONE", false, true, false, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
                         null, PropertyType.RESIDENTIAL, "RETIREMENT"),
                 new ClientInput("Jane Marsh", null, null, null));
@@ -396,7 +461,7 @@ class DealServiceRiskAndPatchTest {
     }
 
     /**
-     * UpdateDealRequest is a 17-field positional record, so tests build one through a small
+     * UpdateDealRequest is a 20-field positional record, so tests build one through a small
      * builder rather than counting nulls at every call site.
      */
     private UpdateDealRequest update(java.util.function.UnaryOperator<Patch> fn) {
@@ -405,14 +470,17 @@ class DealServiceRiskAndPatchTest {
 
     static final class Patch {
         String notes, transactionPurpose, foreignExposureCountry, redFlag;
-        Boolean trustInvolved, onSoldQuickly, redFlagPresent;
+        Boolean trustInvolved, faceToFaceIdVerified, redFlagPresent;
+        Integer ownershipTenureYears, ownershipTenureMonths;
         BigDecimal valuationMin, valuationMax;
 
         Patch notes(String v) { this.notes = v; return this; }
         Patch transactionPurpose(String v) { this.transactionPurpose = v; return this; }
         Patch foreignExposureCountry(String v) { this.foreignExposureCountry = v; return this; }
         Patch trustInvolved(Boolean v) { this.trustInvolved = v; return this; }
-        Patch onSoldQuickly(Boolean v) { this.onSoldQuickly = v; return this; }
+        Patch ownershipTenureYears(Integer v) { this.ownershipTenureYears = v; return this; }
+        Patch ownershipTenureMonths(Integer v) { this.ownershipTenureMonths = v; return this; }
+        Patch faceToFaceIdVerified(Boolean v) { this.faceToFaceIdVerified = v; return this; }
         Patch redFlagPresent(Boolean v) { this.redFlagPresent = v; return this; }
         Patch redFlag(String v) { this.redFlag = v; return this; }
         Patch valuationMin(BigDecimal v) { this.valuationMin = v; return this; }
@@ -420,8 +488,10 @@ class DealServiceRiskAndPatchTest {
 
         UpdateDealRequest build() {
             return new UpdateDealRequest(null, null, null, null, null, null, null, notes,
-                    transactionPurpose, trustInvolved, onSoldQuickly, foreignExposureCountry,
-                    null, redFlagPresent, redFlag, valuationMin, valuationMax);
+                    transactionPurpose, trustInvolved,
+                    ownershipTenureYears, ownershipTenureMonths, faceToFaceIdVerified, null,
+                    foreignExposureCountry, null, redFlagPresent, redFlag,
+                    valuationMin, valuationMax);
         }
     }
 

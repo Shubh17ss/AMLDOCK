@@ -2,6 +2,9 @@ import {
   AppBar, Box, CircularProgress, Drawer, Stack, Toolbar, Typography,
 } from '@mui/material';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { getDeal } from '../api/deals.js';
+import { formatPropertyAddressShort } from '../data/addressFinderMeta.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { isBroker, isDealAuthor } from '../auth/roles.js';
 import { SidebarNav } from './SidebarNav.jsx';
@@ -42,10 +45,45 @@ function titleFor(pathname, role) {
   return moduleTitleFor(pathname) ?? 'AML·DOCK';
 }
 
+/**
+ * The deal a path is about, or null.
+ *
+ * <p>Matches the review screen at /deals/:id and /firm/deals/:id, and the broker's form at
+ * /deals/:id/edit — all three are a page about one deal. Requiring digits is what keeps
+ * /deals/new and the two list routes out.
+ */
+function dealIdFromPath(pathname) {
+  const match = /^\/(?:firm\/)?deals\/(\d+)/.exec(pathname);
+  return match ? Number(match[1]) : null;
+}
+
 export function AppShell() {
   const { user } = useAuth();
   const { pathname } = useLocation();
   const pageTitle = titleFor(pathname, user?.role);
+
+  /*
+   * The property the open deal concerns, for the centre of the bar.
+   *
+   * titleFor knows only the URL, so the shell reads the deal itself — and this costs no extra
+   * request. DealReviewScreen already runs exactly this query, key and all, and AppShell sits
+   * inside the same QueryClientProvider, so react-query dedupes the in-flight call on a cold
+   * load and serves the cache afterwards.
+   *
+   * The key has to be ['deals', <Number>] to match. ['deals', '5'] is a different key from
+   * ['deals', 5], and getting that wrong fetches the deal twice with nothing visibly broken.
+   *
+   * retry: false — the honest failure here is a 403 on somebody else's deal, and retrying that
+   * achieves nothing. An error simply leaves the centre empty.
+   */
+  const dealId = dealIdFromPath(pathname);
+  const dealQ = useQuery({
+    queryKey: ['deals', dealId],
+    queryFn: () => getDeal(dealId),
+    enabled: dealId != null,
+    retry: false,
+  });
+  const dealAddress = formatPropertyAddressShort(dealQ.data?.property);
 
   // A broker's phone home swaps the page-title bar for a greeting — but only there. Everywhere else
   // a title is what the screen owes you, and on a deep page like /deals/123 a greeting would be
@@ -138,7 +176,12 @@ export function AppShell() {
           // desktop shell is unchanged, so the bar has to come back at md.
           sx={brokerHome ? { display: { xs: 'none', md: 'flex' } } : undefined}
         >
-          <Toolbar sx={{gap: 2, minHeight: { xs: '56px !important', md: '64px !important'} }}>
+          {/* position: relative so the address below can centre itself against the bar
+              rather than against whatever happens to sit beside it. */}
+          <Toolbar sx={{
+            gap: 2, position: 'relative',
+            minHeight: { xs: '56px !important', md: '64px !important' },
+          }}>
             {/* Mobile: shield logo */}
             <Box
               component={RouterLink}
@@ -164,6 +207,38 @@ export function AppShell() {
                 {pageTitle}
               </Typography>
             </Stack>
+            {/*
+              * The property, while a deal is open.
+              *
+              * Absolutely centred rather than a flex child between the two: the title group on
+              * the left and the avatar on the right are different widths, so a middle item
+              * would sit visibly off-centre.
+              *
+              * pointerEvents: none because it overlays the bar — it must never swallow a click
+              * meant for the avatar or the logo behind it.
+              *
+              * Hidden below md: a phone toolbar already carries a logo, a title and an avatar,
+              * and a fourth element there would collide rather than centre.
+              */}
+            {dealAddress && (
+              <Typography
+                noWrap
+                title={dealAddress}
+                sx={{
+                  position: 'absolute',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  display: { xs: 'none', md: 'block' },
+                  maxWidth: '38%',
+                  fontWeight: 700,
+                  color: tokens.ink,
+                  pointerEvents: 'none',
+                }}
+              >
+                {dealAddress}
+              </Typography>
+            )}
+
             <UserMenu compact />
           </Toolbar>
         </AppBar>

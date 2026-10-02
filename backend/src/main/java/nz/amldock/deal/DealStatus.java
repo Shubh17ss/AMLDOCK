@@ -19,6 +19,13 @@ public enum DealStatus {
     ON_HOLD,
     /** Compliance has verified it. */
     VERIFIED,
-    /** Finished. Terminal. */
+    /**
+     * Finished, and carrying what the deal finished as - whether the property sold and for how
+     * much.
+     *
+     * <p>No longer terminal. It exits back to VERIFIED, with a reason, so those answers can be
+     * corrected; re-closing overwrites them. That is the only way out, and it is deliberately not
+     * a way back into editing the deal itself, which still requires reopening from VERIFIED.
+     */
     CLOSED
 }

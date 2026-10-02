@@ -8,7 +8,7 @@ import { useCurrency } from '../../dashboard/useCurrency.js';
 import { propertyTypeLabel, reasonForSellingLabel } from '../../data/propertyTypes.js';
 import { countryName } from '../../data/countries.js';
 import { IndividualsFromIds } from './IndividualsFromIds.jsx';
-import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
+import { formatPropertyAddress, formatPropertyAddressShort } from '../../data/addressFinderMeta.js';
 
 const TXN_LABEL = { PURCHASE: 'Purchase', SALE: 'Sale' };
 const CLIENT_TYPE_LABEL = { INDIVIDUAL: 'Individual', ENTITY: 'Entity' };
@@ -40,7 +40,7 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
   const p = deal.property ?? {};
   const c = deal.client ?? {};
 
-  const glance = [c.displayName, [p.addressLine1, p.suburb, p.district].filter(Boolean).join(', '), deal.firmName]
+  const glance = [c.displayName, formatPropertyAddressShort(p), deal.firmName]
     .filter(Boolean)
     .join('  ·  ');
 
@@ -119,13 +119,20 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
             </Group>
 
             <Group title="Transaction & risk">
+              {/* The band and what was decided about it. The numeric score is deliberately
+                  absent here as well as on the Risk tab — it is what the band is computed from,
+                  not something a reviewer acts on, and showing it in one place while hiding it
+                  in the other would be the worst of both. */}
               <Row label="Risk rating" value={deal.riskRating
-                ? `${deal.riskRating}${deal.riskRatingSource === 'OVERRIDE' ? ' (set by compliance)' : ''}`
+                ? `${deal.riskRating}`
+                  + `${deal.riskRatingSource === 'OVERRIDE' ? ', set by compliance' : ''}`
+                  + `${deal.riskApproved ? ' — approved' : ''}`
                 : 'Not assessed'} />
               <Row label="Red flag"    value={yesNo(deal.redFlagPresent)} />
               <Row label="Purpose"     value={deal.transactionPurpose} />
               <Row label="Trust in ownership" value={yesNo(deal.trustInvolved)} />
-              <Row label="On-sold quickly"    value={yesNo(deal.onSoldQuickly)} />
+              <Row label="Ownership tenure"   value={tenureLabel(deal)} />
+              <Row label="Met face to face, IDs verified" value={yesNo(deal.faceToFaceIdVerified)} />
               <Row label="Foreign exposure"   value={foreignExposureLabel(deal.foreignExposureCountry)} />
               <Row label="Min value"   value={deal.valuationMin != null ? money.formatWithCode(deal.valuationMin) : null} />
               <Row label="Max value"   value={deal.valuationMax != null ? money.formatWithCode(deal.valuationMax) : null} />
@@ -135,6 +142,19 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * "1y 6m", or just the half that was answered. Null when neither box was, which the Row
+ * treats the same as any other unanswered field rather than printing a misleading "0m".
+ */
+function tenureLabel(deal) {
+  const years = deal.ownershipTenureYears;
+  const months = deal.ownershipTenureMonths;
+  if (years == null && months == null) return null;
+  return [years ? `${years}y` : null, months ? `${months}m` : null]
+    .filter(Boolean)
+    .join(' ') || '0m';
 }
 
 function Group({ title, children }) {

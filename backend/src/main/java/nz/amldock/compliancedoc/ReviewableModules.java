@@ -24,6 +24,7 @@ public final class ReviewableModules {
             "deals",
             "beneficial-owners",
             "cdd-exceptions",
+            "assurance",
             "peps",
             "overseas-residents",
             // AML Training

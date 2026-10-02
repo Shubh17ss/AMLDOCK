@@ -131,6 +131,51 @@ public enum NodeType {
             DocumentType.PROBATE_OR_WILL,
             DocumentType.OTHER);
 
+    /**
+     * What a natural person's file is allowed to hold.
+     *
+     * <p>The one list on this class that is not about an entity's registry paperwork: identity
+     * documents, the evidence that backs an address or a source of funds, and the results of the
+     * checks run against them. Until now INDIVIDUAL was unrestricted, which meant a person's file
+     * would accept a trust deed — not a document any person produces, and one that belongs on the
+     * trust it came from.
+     *
+     * <p>Only reached when a document is filed against a node. The deal form's ID scans are
+     * deal-scoped and have no node behind them, so nothing here narrows what a broker can
+     * photograph — see {@code DocumentService.presignUpload}.
+     */
+    private static final Set<DocumentType> INDIVIDUAL_DOCUMENTS = Set.of(
+            DocumentType.NZ_PASSPORT,
+            DocumentType.AU_PASSPORT,
+            DocumentType.OVERSEAS_PASSPORT,
+            DocumentType.NZ_DRIVER_LICENCE,
+            DocumentType.AU_DRIVER_LICENCE,
+            DocumentType.PROOF_OF_ADDRESS,
+            DocumentType.BANK_CARD,
+            DocumentType.BANK_STATEMENT,
+            DocumentType.CERTIFICATE_OF_CITIZENSHIP,
+            DocumentType.FOREIGN_CITIZENSHIP_CERTIFICATE,
+            DocumentType.BIRTH_CERTIFICATE,
+            DocumentType.MARRIAGE_CERTIFICATE,
+            DocumentType.DEATH_CERTIFICATE,
+            DocumentType.INTERNATIONAL_DRIVING_PERMIT,
+            DocumentType.NATIONAL_IDENTITY_CARD,
+            DocumentType.FOREIGN_IDENTITY_CARD,
+            DocumentType.KIWI_ACCESS_CARD,
+            DocumentType.GOVERNMENT_CARD,
+            DocumentType.GOVERNMENT_STATEMENT,
+            DocumentType.SOURCE_OF_FUNDS_WEALTH,
+            DocumentType.TAX_RETURN,
+            DocumentType.WAGE_SLIP,
+            DocumentType.ELECTRONIC_ID_VERIFICATION_RESULT,
+            DocumentType.BIOMETRIC_VERIFICATION_RESULT,
+            DocumentType.ENDURING_POWER_OF_ATTORNEY,
+            DocumentType.CERTIFICATE_OF_NON_REVOCATION,
+            DocumentType.WEB_SEARCH_RESULT,
+            DocumentType.LETTER_FROM_TRUSTED_REFEREE,
+            DocumentType.REFUGEE_TRAVEL_DOCUMENT,
+            DocumentType.OTHER);
+
     /** What a trust file is allowed to hold. */
     private static final Set<DocumentType> TRUST_DOCUMENTS = Set.of(
             DocumentType.TRUST_DEED,
@@ -160,10 +205,10 @@ public enum NodeType {
             case CHARITY -> CHARITY_DOCUMENTS;
             case GOVERNMENT_AGENCY -> GOVERNMENT_AGENCY_DOCUMENTS;
             case DECEASED_ESTATE -> DECEASED_ESTATE_DOCUMENTS;
-            // INDIVIDUAL and OTHER stay unrestricted: a person carries whatever identity and
-            // supporting evidence they were asked for, and OTHER exists precisely because
-            // nobody could say in advance what it holds.
-            case INDIVIDUAL, OTHER -> null;
+            case INDIVIDUAL -> INDIVIDUAL_DOCUMENTS;
+            // OTHER stays unrestricted: it exists precisely because nobody could say in advance
+            // what it holds, so an allowlist for it would be a guess with teeth.
+            case OTHER -> null;
         };
     }
 

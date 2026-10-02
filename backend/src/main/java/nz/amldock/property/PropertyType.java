@@ -13,5 +13,10 @@ public enum PropertyType {
     COMMERCIAL_SALE,
     COMMERCIAL_LEASE,
     RURAL,
-    BUSINESS
+    BUSINESS,
+    /**
+     * Land or a project being sold to be built on, rather than lived in or traded as it stands.
+     * Its reason-for-selling list is its own - see REASONS_FOR_SELLING.DEVELOPMENT.
+     */
+    DEVELOPMENT
 }

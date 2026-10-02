@@ -98,7 +98,7 @@ export const DEAL_CREATOR_ROLES = [
 //
 // Mirrors Role.canDeleteRecords(); the server is the authority and enforces it twice, at the
 // controller and again in each service. Deleting a *deal* is a separate rule — its author may
-// delete their own — and does not read this.
+// delete their own — and does not read this: see canDeleteDeal below.
 export const DELETE_ROLES = ['ROOT', 'SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER'];
 // Who may set a document register's review date / mark it complete.
 export const REVIEW_MANAGER_ROLES = ['ROOT', 'SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER'];
@@ -116,6 +116,10 @@ export const SCOPE_SETUP_ROLES = SETTINGS_ROLES.filter((r) => canWrite(r));
 // Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior manager
 // sees their own entity's, scoped server-side by actor in AuditService.search.
 export const AUDIT_LOG_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+// CDD › Assurance. Compliance's second look at its own sign-offs, so it is theirs to work; ROOT and
+// AUDIT read it, because checking that assurance is being done is what they are there for. Who may
+// actually mark a version is narrower again — isDealReviewer — and the server holds that line.
+export const ASSURANCE_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
 // Settings › Notifications. Who may open the firm-wide matrix and change someone else's toggles.
 // AUDIT reads it like every other section; the switches inside are gated by canWrite, and the
 // server refuses its writes at AuditReadOnlyFilter regardless.
@@ -179,6 +183,30 @@ export const canDelete = (role) => DELETE_ROLES.includes(role);
 export const canManageReview = (role) => REVIEW_MANAGER_ROLES.includes(role);
 export const canManageUsers = (role) => USER_MANAGER_ROLES.includes(role);
 export const canOverride = (role) => role === 'SENIOR_MANAGER';
+
+/**
+ * Whether this user may delete this deal, as far as the browser can tell.
+ *
+ * Mirrors `DealService.assertCanDelete`: ROOT deletes anything, the two firm-level deciders
+ * delete within their own firm, and the broker who filed it may discard it while it is still
+ * theirs to finish.
+ *
+ * One half of the server's rule cannot be repeated here — a list row carries `firmBranchId`,
+ * not the firm behind it, so the client cannot check "same firm". It does not need to: every
+ * row in a list the server returned is already inside the caller's scope. This decides what to
+ * offer; the server decides what happens, and a disagreement surfaces as the 403 the delete
+ * dialog shows.
+ */
+export const canDeleteDeal = (user, deal) => {
+  if (!user || !deal) return false;
+  if (user.role === 'ROOT') return true;
+  if (isDealReviewer(user.role)) return true;
+  // A broker discarding their own unfinished deal. Submitting is the handover, so after it the
+  // file is compliance's to judge and no longer the author's to withdraw.
+  return isDealAuthor(user.role)
+    && user.userId === deal.createdByUserId
+    && deal.status === 'NEW';
+};
 
 // The phone-first roles. An agent's whole mobile job is: start a deal, check my deals, do my
 // training — so on a phone they get a home screen built around those three and nothing else.

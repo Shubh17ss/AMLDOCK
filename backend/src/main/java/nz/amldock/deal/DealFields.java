@@ -78,9 +78,43 @@ public abstract class DealFields extends BaseEntity {
     @Column(name = "trust_involved")
     private Boolean trustInvolved;
 
-    /** Drives the risk rating — see {@link DealService}. */
-    @Column(name = "on_sold_quickly")
-    private Boolean onSoldQuickly;
+    /**
+     * How long the client has held the property, as the two boxes the form asks for. Both null
+     * until answered; months is the remainder beside years, so 18 months is stored as 1 and 6.
+     *
+     * <p>Replaced {@code on_sold_quickly} in V46. That question asked the broker to judge a
+     * threshold nobody had written down; this one asks for a fact, and scores it in bands —
+     * see {@link DealRiskService}.
+     */
+    @Column(name = "ownership_tenure_years")
+    private Integer ownershipTenureYears;
+
+    @Column(name = "ownership_tenure_months")
+    private Integer ownershipTenureMonths;
+
+    /**
+     * Whether the broker met the client in person <em>and</em> sighted their original IDs.
+     * Null until answered; answering No adds to the risk score.
+     *
+     * <p>Not the same question as {@link #clientRemote}, which asks only whether they met. A
+     * broker can meet someone and see nothing, and only one of those two facts is evidence that
+     * an identity was checked.
+     */
+    @Column(name = "face_to_face_id_verified")
+    private Boolean faceToFaceIdVerified;
+
+    /**
+     * Which individual on the ownership structure is the deal's point of contact.
+     *
+     * <p>The counterpart to {@link #pocName}, not a replacement for it: that one is free text a
+     * broker types at creation, before any structure exists to choose from. This is what
+     * compliance nominates once it does, and it names a row rather than a spelling.
+     *
+     * <p>{@code ON DELETE SET NULL} — removing an owner is a legitimate edit, and must neither be
+     * blocked by a nomination nor silently repoint it at somebody else.
+     */
+    @Column(name = "key_contact_node_id")
+    private Long keyContactNodeId;
 
     /**
      * ISO 3166-1 alpha-2, or the literal {@code "NONE"} for "asked, and there is none".
@@ -115,6 +149,17 @@ public abstract class DealFields extends BaseEntity {
     @Column(name = "valuation_max")
     private BigDecimal valuationMax;
 
+    /**
+     * The score behind {@link #riskRating}, accumulated by {@link DealRiskService} from every
+     * answer that bears on risk. Derived server-side; never accepted from the client.
+     *
+     * <p>Kept even while the rating is pinned by an override, because the Risk tab shows the
+     * calculated position beside the pinned one and a reviewer deciding whether to lift an
+     * override needs to see what the file would say on its own.
+     */
+    @Column(name = "risk_value", nullable = false)
+    private int riskValue = 0;
+
     /** Derived server-side; never accepted from the client. Null on pre-V28 deals. */
     @Enumerated(EnumType.STRING)
     @Column(name = "risk_rating", length = 16)
@@ -124,12 +169,70 @@ public abstract class DealFields extends BaseEntity {
     @Column(name = "risk_rating_source", nullable = false, length = 16)
     private RiskRatingSource riskRatingSource = RiskRatingSource.DERIVED;
 
+    /**
+     * Whether a reviewer has signed off the rating.
+     *
+     * <p>A sign-off on a specific score, so it falls back to false whenever {@link #riskValue}
+     * moves — see {@link DealRiskService#apply}. An approval that survived the answers it was
+     * given about would be a claim nobody made.
+     */
+    @Column(name = "risk_approved", nullable = false)
+    private boolean riskApproved = false;
+
+    /** Why a reviewer manually overrode the rating. Only meaningful while the source is OVERRIDE. */
+    @Column(name = "risk_override_comment", columnDefinition = "text")
+    private String riskOverrideComment;
+
+    /**
+     * Who pinned it, and when. Written on every override and never cleared: they are the record
+     * of a decision somebody took, and the decision happened whichever band came out of it -
+     * including the band the engine had already arrived at.
+     */
+    @Column(name = "risk_overridden_by_user_id")
+    private Long riskOverriddenByUserId;
+
+    @Column(name = "risk_overridden_at")
+    private Instant riskOverriddenAt;
+
+    @Column(name = "risk_approved_by_user_id")
+    private Long riskApprovedByUserId;
+
+    @Column(name = "risk_approved_at")
+    private Instant riskApprovedAt;
+
     @Column(name = "decided_by_user_id")
     private Long decidedByUserId;
 
     @Column(name = "decided_at")
     private Instant decidedAt;
 
+    /**
+     * Whether the property actually sold, answered when the deal is closed.
+     *
+     * <p>Null until it is. Three states, not two: a deal still running has not been asked, and
+     * defaulting that to "no" would record an outcome nobody stated.
+     */
+    @Column(name = "property_sold")
+    private Boolean propertySold;
+
+    /**
+     * What it sold for, in the reporting entity's own currency.
+     *
+     * <p>Deliberately <em>not</em> {@link #transactionValue}, which is the broker's estimate from
+     * before the valuation range existed and is still read as a fallback on deal cards and in
+     * dashboard totals. Putting a sale price there would rewrite old deals' estimates and mix
+     * actuals into sums built from estimates.
+     *
+     * <p>Null for a development, whose units carry their own prices - see {@code DealSaleUnit}.
+     * The total is summed on read rather than stored, so it cannot drift from the rows under it.
+     */
+    @Column(name = "sale_price")
+    private BigDecimal salePrice;
+
+    public Boolean getPropertySold() { return propertySold; }
+    public void setPropertySold(Boolean v) { this.propertySold = v; }
+    public BigDecimal getSalePrice() { return salePrice; }
+    public void setSalePrice(BigDecimal v) { this.salePrice = v; }
     public String getReference() { return reference; }
     public void setReference(String v) { this.reference = v; }
     public Long getFirmBranchId() { return firmBranchId; }
@@ -164,8 +267,14 @@ public abstract class DealFields extends BaseEntity {
     public void setTransactionPurpose(String v) { this.transactionPurpose = v; }
     public Boolean getTrustInvolved() { return trustInvolved; }
     public void setTrustInvolved(Boolean v) { this.trustInvolved = v; }
-    public Boolean getOnSoldQuickly() { return onSoldQuickly; }
-    public void setOnSoldQuickly(Boolean v) { this.onSoldQuickly = v; }
+    public Integer getOwnershipTenureYears() { return ownershipTenureYears; }
+    public void setOwnershipTenureYears(Integer v) { this.ownershipTenureYears = v; }
+    public Integer getOwnershipTenureMonths() { return ownershipTenureMonths; }
+    public void setOwnershipTenureMonths(Integer v) { this.ownershipTenureMonths = v; }
+    public Boolean getFaceToFaceIdVerified() { return faceToFaceIdVerified; }
+    public void setFaceToFaceIdVerified(Boolean v) { this.faceToFaceIdVerified = v; }
+    public Long getKeyContactNodeId() { return keyContactNodeId; }
+    public void setKeyContactNodeId(Long v) { this.keyContactNodeId = v; }
     public String getForeignExposureCountry() { return foreignExposureCountry; }
     public void setForeignExposureCountry(String v) { this.foreignExposureCountry = v; }
     public Boolean getRedFlagPresent() { return redFlagPresent; }
@@ -183,6 +292,20 @@ public abstract class DealFields extends BaseEntity {
     public void setRiskRating(RiskRating v) { this.riskRating = v; }
     public RiskRatingSource getRiskRatingSource() { return riskRatingSource; }
     public void setRiskRatingSource(RiskRatingSource v) { this.riskRatingSource = v; }
+    public int getRiskValue() { return riskValue; }
+    public void setRiskValue(int v) { this.riskValue = v; }
+    public boolean isRiskApproved() { return riskApproved; }
+    public void setRiskApproved(boolean v) { this.riskApproved = v; }
+    public String getRiskOverrideComment() { return riskOverrideComment; }
+    public void setRiskOverrideComment(String v) { this.riskOverrideComment = v; }
+    public Long getRiskOverriddenByUserId() { return riskOverriddenByUserId; }
+    public void setRiskOverriddenByUserId(Long v) { this.riskOverriddenByUserId = v; }
+    public Instant getRiskOverriddenAt() { return riskOverriddenAt; }
+    public void setRiskOverriddenAt(Instant v) { this.riskOverriddenAt = v; }
+    public Long getRiskApprovedByUserId() { return riskApprovedByUserId; }
+    public void setRiskApprovedByUserId(Long v) { this.riskApprovedByUserId = v; }
+    public Instant getRiskApprovedAt() { return riskApprovedAt; }
+    public void setRiskApprovedAt(Instant v) { this.riskApprovedAt = v; }
 
     /**
      * The id of the deal these columns describe.
