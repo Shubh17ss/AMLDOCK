@@ -17,7 +17,8 @@ import nz.amldock.deal.assurance.dto.UpdateAssuranceRequest;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.version.DealVersion;
 import nz.amldock.deal.version.DealVersionRepository;
-import nz.amldock.dealnote.DealNoteRepository;
+import nz.amldock.deal.monitoring.DealStatusMove;
+import nz.amldock.deal.monitoring.DealStatusMoveRepository;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.User;
@@ -59,21 +60,21 @@ public class AssuranceService {
     private final DealRepository deals;
     private final DealVersionRepository versions;
     private final AssuranceIssueRepository issues;
-    private final DealNoteRepository notes;
+    private final DealStatusMoveRepository moves;
     private final DealLifecycleService lifecycle;
     private final FirmBranchRepository branches;
     private final UserRepository users;
     private final AuditService audit;
 
     public AssuranceService(DealService dealService, DealRepository deals, DealVersionRepository versions,
-                            AssuranceIssueRepository issues, DealNoteRepository notes,
+                            AssuranceIssueRepository issues, DealStatusMoveRepository moves,
                             DealLifecycleService lifecycle, FirmBranchRepository branches,
                             UserRepository users, AuditService audit) {
         this.dealService = dealService;
         this.deals = deals;
         this.versions = versions;
         this.issues = issues;
-        this.notes = notes;
+        this.moves = moves;
         this.lifecycle = lifecycle;
         this.branches = branches;
         this.users = users;
@@ -106,7 +107,9 @@ public class AssuranceService {
         boolean ranged = from != null || to != null;
         Map<Long, Instant> closedAt = new HashMap<>();
         if (ranged) {
-            for (Object[] r : notes.latestTransitionAt(dealIds, DealStatus.CLOSED)) {
+            // The transaction monitoring record, which every close writes — the timeline does not:
+            // a close carries no note, so it leaves no entry there.
+            for (Object[] r : moves.latestAt(dealIds, DealStatusMove.Kind.CLOSE)) {
                 closedAt.put((Long) r[0], (Instant) r[1]);
             }
         }

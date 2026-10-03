@@ -150,6 +150,29 @@ class DealVerifyReadinessGateTest {
         verify(readiness, never()).assertReady(any());
     }
 
+    /* ---------- notes ---------- */
+
+    @Test
+    void aNoteCanBeAddedWhileTheDealIsInReview() {
+        asUser(complianceOfficer);
+
+        service.comment(DEAL_ID, "Asked the broker for the trust deed");
+
+        verify(dealNotes).appendComment(deal, complianceOfficer, "Asked the broker for the trust deed");
+    }
+
+    @Test
+    void aVerifiedOrClosedDealTakesNoMoreNotes() {
+        asUser(complianceOfficer);
+        for (DealStatus finished : new DealStatus[] {DealStatus.VERIFIED, DealStatus.CLOSED}) {
+            deal.setStatus(finished);
+
+            assertThatThrownBy(() -> service.comment(DEAL_ID, "One more thing"))
+                    .isInstanceOf(BadRequestException.class);
+        }
+        verify(dealNotes, never()).appendComment(any(), any(), any());
+    }
+
     private void asUser(UserPrincipal who) {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(who, null, who.getAuthorities()));

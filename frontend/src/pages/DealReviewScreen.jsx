@@ -342,8 +342,8 @@ export function DealReviewScreen() {
           second answer to a question the reader has stopped asking. */}
       {!mayEdit && !snapshot && (
         <Alert severity="info" sx={{ py: 0.5 }}>
-          This deal is <strong>{dealStatusLabel(deal.status)}</strong> and is read-only for you.
-          You can see everything on it; changing it is not yours to do from here.
+          This deal is <strong>{dealStatusLabel(deal.status)}</strong>.
+          Move it back to in review to make changes.
         </Alert>
       )}
 

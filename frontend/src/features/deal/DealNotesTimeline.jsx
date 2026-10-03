@@ -4,19 +4,26 @@ import {
   Alert, Box, Button, Card, CardContent, CircularProgress, Divider, Stack, TextField, Typography,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import ArrowRightAltIcon from '@mui/icons-material/ArrowRightAlt';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { addDealNote, listDealNotes } from '../../api/deals.js';
 import { fetchDownloadUrl } from '../../api/documents.js';
 import { DealStatusChip } from '../../components/DealStatusChip.jsx';
-import { timeAgo } from '../../utils/formatters.js';
+import { dealStatusLabel } from '../../data/dealStatus.js';
+import { formatDateTime } from '../../utils/formatters.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
+/** A finished file takes no more notes — the server refuses them too (DealService.comment). */
+const CLOSED_TO_NOTES = ['VERIFIED', 'CLOSED'];
+
 /**
- * The deal's conversation: the broker's opening note, every comment, and one entry per state
- * change, oldest first.
+ * The deal's notes: the broker's opening note, then every note added here, oldest first.
  *
- * <p>This is the human record, and it sits alongside — not instead of — the audit log. The audit
- * log says what the system did; this says what people meant by it.
+ * <p>Status changes are left out, notes and all. Where the deal has moved, and why, is the
+ * Transaction monitoring view's story and the audit log's; this one is the conversation people
+ * had about the file.
+ *
+ * @param dealStatus the live deal's status. Verified and closed deals show the thread but no
+ *                 composer.
  *
  * @param embedded true when this owns a whole tab, which makes the card and the "Notes" heading
  *                 around it redundant — the tab already said so.
@@ -25,7 +32,9 @@ import { tokens, fonts } from '../../theme/theme.js';
  *                 a record of a moment, and a comment added to it now would not be part of that
  *                 moment.
  */
-export function DealNotesTimeline({ dealId, status, canComment = true, embedded = false, frozenEntries = null }) {
+export function DealNotesTimeline({
+  dealId, status, dealStatus, canComment = true, embedded = false, frozenEntries = null,
+}) {
   const qc = useQueryClient();
   const [body, setBody] = useState('');
   const [error, setError] = useState(null);
@@ -49,11 +58,12 @@ export function DealNotesTimeline({ dealId, status, canComment = true, embedded 
     onError: (e) => setError(e.response?.data?.message || 'Your note didn’t save. Try again.'),
   });
 
-  const entries = frozenEntries ?? q.data ?? [];
+  const entries = (frozenEntries ?? q.data ?? []).filter((e) => e.kind !== 'TRANSITION');
   // A frozen thread is already in hand: nothing to load, nothing to fail, and nothing to add to.
   const loading = !frozenEntries && q.isLoading;
   const failed = !frozenEntries && q.isError;
-  const mayComment = canComment && !frozenEntries;
+  const closedToNotes = CLOSED_TO_NOTES.includes(dealStatus);
+  const mayComment = canComment && !frozenEntries && !closedToNotes;
 
   // One body, two frames. Built as an element rather than a wrapper component: a component
   // declared here would be a new type on every render, and React would remount the whole subtree
@@ -67,7 +77,7 @@ export function DealNotesTimeline({ dealId, status, canComment = true, embedded 
           {status && <DealStatusChip status={status} />}
         </Stack>
         <Typography variant="caption" sx={{ color: tokens.muted }}>
-          Everything said about this deal, in order. Notes can’t be edited or deleted.
+          Notes added to this deal, oldest first. Notes can’t be edited or deleted.
         </Typography>
 
         <Divider sx={{ my: 2 }} />
@@ -88,6 +98,15 @@ export function DealNotesTimeline({ dealId, status, canComment = true, embedded 
             <TimelineEntry key={e.id ?? `creation-${i}`} entry={e} last={i === entries.length - 1} />
           ))}
         </Stack>
+
+        {canComment && !frozenEntries && closedToNotes && (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2.5, color: tokens.muted }}>
+            <LockOutlinedIcon sx={{ fontSize: '1rem' }} />
+            <Typography variant="body2">
+              Notes are closed — this deal is {dealStatusLabel(dealStatus)}.
+            </Typography>
+          </Stack>
+        )}
 
         {mayComment && (
           <Box sx={{ mt: 2.5 }}>
@@ -124,7 +143,6 @@ export function DealNotesTimeline({ dealId, status, canComment = true, embedded 
 }
 
 function TimelineEntry({ entry, last }) {
-  const isTransition = entry.kind === 'TRANSITION';
   const isCreation = entry.kind === 'CREATION';
 
   return (
@@ -133,7 +151,7 @@ function TimelineEntry({ entry, last }) {
       <Stack alignItems="center" sx={{ width: 12, flexShrink: 0 }}>
         <Box sx={{
           width: 9, height: 9, borderRadius: '50%', mt: '6px', flexShrink: 0,
-          backgroundColor: isTransition ? tokens.blue : tokens.hairline2,
+          backgroundColor: isCreation ? tokens.blue : tokens.hairline2,
         }} />
         {!last && <Box sx={{ flex: 1, width: '1px', backgroundColor: tokens.hairline, my: 0.5 }} />}
       </Stack>
@@ -144,15 +162,8 @@ function TimelineEntry({ entry, last }) {
             {entry.authorName || entry.authorEmail || 'Unknown user'}
           </Typography>
           {isCreation && <Label>created the deal</Label>}
-          {isTransition && (
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              <DealStatusChip status={entry.statusFrom} />
-              <ArrowRightAltIcon sx={{ fontSize: '1rem', color: tokens.muted }} />
-              <DealStatusChip status={entry.statusTo} />
-            </Stack>
-          )}
           <Typography sx={{ fontSize: '0.72rem', color: tokens.muted, ml: 'auto' }}>
-            {timeAgo(entry.createdAt)}
+            {formatDateTime(entry.createdAt)}
           </Typography>
         </Stack>
 

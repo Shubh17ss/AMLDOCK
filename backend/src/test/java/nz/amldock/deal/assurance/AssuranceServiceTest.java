@@ -16,7 +16,8 @@ import nz.amldock.deal.assurance.dto.UpdateAssuranceRequest;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.version.DealVersion;
 import nz.amldock.deal.version.DealVersionRepository;
-import nz.amldock.dealnote.DealNoteRepository;
+import nz.amldock.deal.monitoring.DealStatusMove;
+import nz.amldock.deal.monitoring.DealStatusMoveRepository;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.Role;
@@ -71,7 +72,7 @@ class AssuranceServiceTest {
     @Mock DealRepository deals;
     @Mock DealVersionRepository versions;
     @Mock AssuranceIssueRepository issues;
-    @Mock DealNoteRepository notes;
+    @Mock DealStatusMoveRepository moves;
     @Mock FirmBranchRepository branches;
     @Mock UserRepository users;
     @Mock AuditService audit;
@@ -89,7 +90,7 @@ class AssuranceServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AssuranceService(dealService, deals, versions, issues, notes,
+        service = new AssuranceService(dealService, deals, versions, issues, moves,
                 new DealLifecycleService(mock(DealUserRepository.class)), branches, users, audit);
 
         FirmBranch branch = new FirmBranch();
@@ -270,7 +271,7 @@ class AssuranceServiceTest {
         DealVersion v2 = version(2, 101L, Instant.parse("2026-09-05T00:00:00Z"));
         v1 = version(1, VERSION_ROW_ID, Instant.parse("2026-08-01T00:00:00Z"));
         stubRegister(DealStatus.CLOSED, v2, v1);
-        when(notes.latestTransitionAt(List.of(DEAL_ID), DealStatus.CLOSED))
+        when(moves.latestAt(List.of(DEAL_ID), DealStatusMove.Kind.CLOSE))
                 .thenReturn(List.<Object[]>of(new Object[] {DEAL_ID, Instant.parse("2026-09-18T00:00:00Z")}));
 
         List<AssuranceDealDto> out = service.list(FIRM_ID, BRANCH_ID,

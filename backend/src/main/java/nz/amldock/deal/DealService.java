@@ -598,12 +598,19 @@ public class DealService {
         return properties.findById(d.getPropertyId()).map(Property::getPropertyType).orElse(null);
     }
 
-    /** Adds a free comment to the deal's timeline. Readable deal, writable comment. */
+    /**
+     * Adds a free comment to the deal's timeline. Readable deal, writable comment — while the deal
+     * is still being worked. A verified or closed deal is a finished file, and a note added to it
+     * afterwards would read as part of what was signed off.
+     */
     @Transactional
     public Deal comment(Long id, String body) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
         lifecycle.assertCanRead(d, actor, firmIdOf(d));
+        if (d.getStatus() == DealStatus.VERIFIED || d.getStatus() == DealStatus.CLOSED) {
+            throw new BadRequestException("Notes can't be added to a verified or closed deal");
+        }
         dealNotes.appendComment(d, actor, body);
         return d;
     }

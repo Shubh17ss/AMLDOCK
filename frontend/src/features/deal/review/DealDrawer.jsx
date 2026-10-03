@@ -229,6 +229,7 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
           // No status chip: the page header already carries one a couple of inches away.
           <DealNotesTimeline
             dealId={dealId}
+            dealStatus={deal.status}
             canComment={canComment}
             frozenEntries={frozenNotes}
             embedded
