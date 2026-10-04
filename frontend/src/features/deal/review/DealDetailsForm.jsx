@@ -165,7 +165,9 @@ export function DealDetailsForm({
 
         <FieldGroup title="Classification">
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <FormControl fullWidth required>
+            {/* disabled on each control below as well as on the fieldset: a fieldset only reaches
+                native inputs, and MUI's Select and the pill fields are not native. */}
+            <FormControl fullWidth required disabled={readOnly}>
               <InputLabel id="deal-property-type-label">Property type</InputLabel>
               <Select
                 labelId="deal-property-type-label"
@@ -217,6 +219,7 @@ export function DealDetailsForm({
             value={form.trustInvolved}
             onChange={setField('trustInvolved')}
             required
+            disabled={readOnly}
           />
           <TenureField
             years={form.ownershipTenureYears}
@@ -226,6 +229,7 @@ export function DealDetailsForm({
             tbc={form.ownershipTenureTbc}
             onTbcChange={setField('ownershipTenureTbc')}
             required
+            disabled={readOnly}
           />
           <YesNoField
             label="Did you meet the client face to face and verify their original IDs?"
@@ -233,6 +237,7 @@ export function DealDetailsForm({
             value={form.faceToFaceIdVerified}
             onChange={setField('faceToFaceIdVerified')}
             required
+            disabled={readOnly}
           />
           <CountrySelect
             label="Foreign exposure"
@@ -240,6 +245,7 @@ export function DealDetailsForm({
             onChange={(code) => setField('foreignExposureCountry')(code ?? '')}
             noneOption
             required
+            disabled={readOnly}
           />
         </FieldGroup>
 
@@ -276,9 +282,10 @@ export function DealDetailsForm({
             value={form.redFlagPresent}
             onChange={setField('redFlagPresent')}
             required
+            disabled={readOnly}
           />
           <Collapse in={form.redFlagPresent === true} unmountOnExit>
-            <FormControl fullWidth>
+            <FormControl fullWidth disabled={readOnly}>
               <InputLabel id="deal-red-flag-label">Which red flag</InputLabel>
               <Select
                 labelId="deal-red-flag-label"

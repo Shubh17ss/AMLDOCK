@@ -8,6 +8,7 @@ import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.NoteRequest;
+import nz.amldock.deal.dto.OptionalNoteRequest;
 import nz.amldock.deal.dto.CloseDealRequest;
 import nz.amldock.deal.dto.OverrideRequest;
 import nz.amldock.deal.dto.SaleDto;
@@ -148,8 +149,11 @@ public class DealController {
 
     @PostMapping("/{id}/verify")
     @PreAuthorize(REVIEWER_ROLES)
-    public DealDto verify(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
-        var r = deals.act(id, DealAction.VERIFY, req.note());
+    public DealDto verify(@PathVariable Long id,
+                          @Valid @RequestBody(required = false) OptionalNoteRequest req) {
+        // The note is optional: no body, a null note and a blank one all verify without one.
+        String note = req == null || req.note() == null || req.note().isBlank() ? null : req.note().trim();
+        var r = deals.act(id, DealAction.VERIFY, note);
         audit.record(AuditAction.DEAL_VERIFIED, "Deal", r.deal().getId(),
                 "Deal " + r.deal().getReference() + " verified");
         return deals.toDtoAfterMutation(r.deal());

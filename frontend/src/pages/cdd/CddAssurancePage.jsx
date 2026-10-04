@@ -108,10 +108,10 @@ export function CddAssurancePage() {
           sx={{ maxWidth: { xs: '100%', md: 320 }, width: '100%' }}
         />
         <Stack direction="row" spacing={1.5} sx={{ flexShrink: 0 }}>
-          <Box sx={{ width: { xs: '50%', md: 180 } }}>
+          <Box sx={{ width: { xs: '50%', md: 200 } }}>
             <DateField label="From" value={from} onChange={setFrom} size="small" fullWidth maxDate={to || undefined} />
           </Box>
-          <Box sx={{ width: { xs: '50%', md: 180 } }}>
+          <Box sx={{ width: { xs: '50%', md: 200 } }}>
             <DateField label="To" value={to} onChange={setTo} size="small" fullWidth minDate={from || undefined} />
           </Box>
         </Stack>

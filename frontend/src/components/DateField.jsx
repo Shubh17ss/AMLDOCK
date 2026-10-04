@@ -45,7 +45,7 @@ export function DateField({
       maxDate={maxDate ? dayjs(maxDate) : undefined}
       slotProps={{
         textField: { required, helperText, fullWidth, size },
-        field: { clearable: !required },
+        field: { clearable: !required }
       }}
     />
   );

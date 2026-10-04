@@ -93,7 +93,8 @@ export const canEditContent = (status, role) =>
  */
 export const STATUS_TRANSITIONS = [
   { to: 'REVIEW', from: ['NEW'], action: 'submit', noteRequired: false },
-  { to: 'VERIFIED', from: ['REVIEW'], action: 'verify', noteRequired: true },
+  // A note is optional when verifying: the readiness check covers what it used to vouch for.
+  { to: 'VERIFIED', from: ['REVIEW'], action: 'verify', noteRequired: false, noteOptional: true },
   { to: 'ON_HOLD', from: ['REVIEW'], action: 'hold', noteRequired: true },
   { to: 'NEW', from: ['REVIEW', 'ON_HOLD'], action: 'revert', noteRequired: true },
   { to: 'REVIEW', from: ['VERIFIED'], action: 'reopen', noteRequired: true },

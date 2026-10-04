@@ -78,10 +78,12 @@ export function ContactPage() {
   });
 
   return (
-    <div className="relative min-h-screen font-body" style={{ backgroundColor: '#FFFFFF', color: CLR.ink }}>
+    <div className="relative min-h-screen font-body flex flex-col" style={{ backgroundColor: '#FFFFFF', color: CLR.ink }}>
       <Navbar isAuthed={isAuthed} dashboardHref="/app" />
 
-      <main style={{height:'100vh'}}>
+      {/* flex-1, not a fixed height: the content pushes the footer down on a short screen instead
+          of overflowing under it, and on a tall one the footer still sits at the bottom. */}
+      <main className="flex-1">
         {/* Header */}
         <section className="relative overflow-hidden py-20 px-6 text-center">
           <div className="clr-grid pointer-events-none absolute inset-0" aria-hidden="true" />
