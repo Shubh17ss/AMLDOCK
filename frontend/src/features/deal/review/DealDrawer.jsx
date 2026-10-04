@@ -8,21 +8,24 @@ import { DealDetailsForm } from './DealDetailsForm.jsx';
 import { DealDocumentsPanel } from './DealDocumentsPanel.jsx';
 import { DealUsersPanel } from './DealUsersPanel.jsx';
 import { DealNotesTimeline } from '../DealNotesTimeline.jsx';
-import { DealAuditPanel } from '../DealAuditPanel.jsx';
 import { dtoToForm } from '../create/dealDraftModel.js';
 import { formatPropertyAddress } from '../../../data/addressFinderMeta.js';
 import { tokens, fonts, motion } from '../../../theme/theme.js';
 
-/** The five faces of the deal record itself, as opposed to the chain of owners behind it. */
+/**
+ * The faces of the deal record itself, as opposed to the chain of owners behind it.
+ *
+ * <p>No audit trail: the per-deal log was a developer's view more than a reviewer's, and the
+ * Notes timeline already tells the deal's story. The firm-wide trail stays in Settings.
+ */
 const TABS = [
   { value: 'details', label: 'Details' },
   // Second, next to Details, because it is the same kind of answer: what this deal is, and what
-  // there is on the file to show it. Notes and the audit trail are about what people did.
+  // there is on the file to show it. Notes are about what people did.
   { value: 'documents', label: 'Documents' },
   // Third: who can get at any of the above.
   { value: 'users', label: 'Users' },
   { value: 'notes', label: 'Notes' },
-  { value: 'audit', label: 'Audit trail' },
 ];
 
 /**
@@ -41,13 +44,10 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
                             frozenNotes = null, version = null, individuals = [] }) {
   const [tab, setTab] = useState('details');
 
-  // Neither the audit trail nor the user list is part of a snapshot: one is a live event log, the
-  // other is who can reach the deal today. Both would contradict a banner reading "as it was
-  // signed off", so a version offers neither.
-  const tabs = frozenNotes
-    ? TABS.filter((t) => t.value !== 'audit' && t.value !== 'users')
-    : TABS;
-  // Switching to a version while the audit tab is open would leave Tabs pointing at a tab that is
+  // The user list is not part of a snapshot: it is who can reach the deal today, which would
+  // contradict a banner reading "as it was signed off", so a version does not offer it.
+  const tabs = frozenNotes ? TABS.filter((t) => t.value !== 'users') : TABS;
+  // Switching to a version while the users tab is open would leave Tabs pointing at a tab that is
   // no longer there, which MUI renders as no selection at all.
   const current = tabs.some((t) => t.value === tab) ? tab : 'details';
 
@@ -229,12 +229,12 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
           // No status chip: the page header already carries one a couple of inches away.
           <DealNotesTimeline
             dealId={dealId}
+            dealStatus={deal.status}
             canComment={canComment}
             frozenEntries={frozenNotes}
             embedded
           />
         )}
-        {current === 'audit' && !frozenNotes && <DealAuditPanel dealId={dealId} embedded />}
       </Box>
 
       {/* ── Footer ─────────────────────────────────────────────────────── */}

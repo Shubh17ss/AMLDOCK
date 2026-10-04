@@ -38,6 +38,7 @@ export function CloseDealDialog({ open, dealId, isDevelopment, onClose, onSubmit
   const [sold, setSold] = useState(null);
   const [salePrice, setSalePrice] = useState('');
   const [units, setUnits] = useState([emptyUnit()]);
+  const [note, setNote] = useState('');
   const [error, setError] = useState(null);
 
   // Only while the dialog is open, and only for a deal that could already have been closed.
@@ -51,6 +52,8 @@ export function CloseDealDialog({ open, dealId, isDevelopment, onClose, onSubmit
   useEffect(() => {
     if (!open) return;
     setError(null);
+    // Each close has its own note on the transaction history, so it never carries over.
+    setNote('');
     // Null, not false: an unanswered question shows neither pill lit, so nobody closes a deal
     // having accidentally agreed the property did not sell.
     setSold(recorded?.propertySold ?? null);
@@ -96,6 +99,7 @@ export function CloseDealDialog({ open, dealId, isDevelopment, onClose, onSubmit
       units: sold && isDevelopment
         ? filledUnits.map((u) => ({ unitName: u.unitName.trim(), salePrice: amount(u.salePrice) }))
         : [],
+      note: note.trim() || null,
     }).catch((err) => setError(err.response?.data?.message || 'Could not close the deal'));
   };
 
@@ -193,6 +197,19 @@ export function CloseDealDialog({ open, dealId, isDevelopment, onClose, onSubmit
                 </Stack>
               </Box>
             )}
+
+            {/* Optional, and kept with this close on the Transaction monitoring history — not on the
+                deal's notes timeline, which is the conversation that got it here. */}
+            <TextField
+              label="Notes"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              multiline
+              minRows={2}
+              fullWidth
+              helperText="Optional. Shown against this close in Transaction monitoring."
+              inputProps={{ maxLength: 4000 }}
+            />
 
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>

@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
  *
  * <pre>
  * THE DEAL
- *   ownership tenure     0-18 months +6, 19-35 +2, 36 and over nothing
+ *   ownership tenure     0-18 months +6, 19-35 +2, 36 and over nothing, to be confirmed +3
  *   met face to face and sighted original IDs?   No +2
  *   foreign exposure     the country scale (CountryRisk)
  *
@@ -284,7 +284,11 @@ public class DealRiskService {
 
     private static void scoreDeal(Deal deal, List<RiskFactor> factors, List<RiskGap> gaps) {
         Integer months = tenureMonths(deal);
-        if (months == null) {
+        if (deal.isOwnershipTenureTbc()) {
+            // Answered, just not known: priced in rather than held up as a gap, so a deal can
+            // still be approved and verified while the broker chases the figure.
+            factors.add(RiskFactor.deal("TENURE", TENURE, "To be confirmed", 3));
+        } else if (months == null) {
             gaps.add(RiskGap.deal("TENURE", TENURE));
         } else if (months <= 18) {
             factors.add(RiskFactor.deal("TENURE", TENURE, months + " months", 6));

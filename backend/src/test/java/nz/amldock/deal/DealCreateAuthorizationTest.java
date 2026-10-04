@@ -78,7 +78,9 @@ class DealCreateAuthorizationTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, people, audit),
-                ownership, audit, notifier, versions, saleUnits);
+                ownership, audit, notifier, versions, saleUnits,
+                org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
+                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
 
         lenient().when(branches.findById(OWN_BRANCH)).thenReturn(Optional.of(branch(OWN_BRANCH, 1L)));
         lenient().when(branches.findById(OTHER_FIRM_BRANCH))
@@ -201,7 +203,7 @@ class DealCreateAuthorizationTest {
                 null, null, null, null, null, null, null, null, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
                         null, PropertyType.RESIDENTIAL, "RETIREMENT"),
-                new ClientInput("Jane Marsh", null, null, null));
+                new ClientInput("Jane Marsh", null, null, null), null);
     }
 
     private static void setId(Object entity, Long id) {

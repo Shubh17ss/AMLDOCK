@@ -63,13 +63,10 @@ public class DealVersion extends DealFields {
 
     /* ---------- assurance: compliance's second look at the sign-off (V50) ---------- */
 
-    /** Null until somebody has looked: not reviewed is its own position, not UNASSURED. */
+    /** Null until somebody has looked: not reviewed is its own position, not ACTION_REQUIRED. */
     @Enumerated(EnumType.STRING)
     @Column(name = "assurance_status", length = 16)
     private AssuranceStatus assuranceStatus;
-
-    @Column(name = "assurance_note", columnDefinition = "text")
-    private String assuranceNote;
 
     @Column(name = "assurance_by_user_id")
     private Long assuranceByUserId;
@@ -128,14 +125,12 @@ public class DealVersion extends DealFields {
     public String getReopenNote() { return reopenNote; }
     public void setReopenNote(String v) { this.reopenNote = v; }
     public AssuranceStatus getAssuranceStatus() { return assuranceStatus; }
-    public String getAssuranceNote() { return assuranceNote; }
     public Long getAssuranceByUserId() { return assuranceByUserId; }
     public Instant getAssuranceAt() { return assuranceAt; }
 
-    /** The status, note, author and time are one record, so they are only ever set together. */
-    public void markAssurance(AssuranceStatus status, String note, Long byUserId, Instant at) {
+    /** The status, author and time are one record, so they are only ever set together. */
+    public void markAssurance(AssuranceStatus status, Long byUserId, Instant at) {
         this.assuranceStatus = status;
-        this.assuranceNote = note;
         this.assuranceByUserId = byUserId;
         this.assuranceAt = at;
     }

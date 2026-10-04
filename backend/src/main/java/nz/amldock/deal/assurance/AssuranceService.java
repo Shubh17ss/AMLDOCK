@@ -12,9 +12,13 @@ import nz.amldock.deal.DealService;
 import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.assurance.dto.AssuranceDealDto;
 import nz.amldock.deal.assurance.dto.AssuranceVersionDto;
+import nz.amldock.deal.assurance.dto.AssuranceVersionDto.IssueDto;
+import nz.amldock.deal.assurance.dto.UpdateAssuranceRequest;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.version.DealVersion;
 import nz.amldock.deal.version.DealVersionRepository;
+import nz.amldock.deal.monitoring.DealStatusMove;
+import nz.amldock.deal.monitoring.DealStatusMoveRepository;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.User;
@@ -27,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,8 +46,9 @@ import java.util.stream.Stream;
  * being worked past, and assuring it mid-change would be assuring something about to stop being
  * true.
  *
- * <p>The mark lives on the version, not the deal, because a sign-off is per version. Only the
- * current position is kept; each change also goes to the audit log.
+ * <p>The verdict lives on the version, not the deal, because a sign-off is per version. It is
+ * ASSURED (passed), ACTION_REQUIRED with the issues found and their planned remediation, or null
+ * while nobody has reviewed it. Only the current verdict is kept; each change goes to the audit log.
  */
 @Service
 public class AssuranceService {
@@ -53,17 +59,22 @@ public class AssuranceService {
     private final DealService dealService;
     private final DealRepository deals;
     private final DealVersionRepository versions;
+    private final AssuranceIssueRepository issues;
+    private final DealStatusMoveRepository moves;
     private final DealLifecycleService lifecycle;
     private final FirmBranchRepository branches;
     private final UserRepository users;
     private final AuditService audit;
 
     public AssuranceService(DealService dealService, DealRepository deals, DealVersionRepository versions,
+                            AssuranceIssueRepository issues, DealStatusMoveRepository moves,
                             DealLifecycleService lifecycle, FirmBranchRepository branches,
                             UserRepository users, AuditService audit) {
         this.dealService = dealService;
         this.deals = deals;
         this.versions = versions;
+        this.issues = issues;
+        this.moves = moves;
         this.lifecycle = lifecycle;
         this.branches = branches;
         this.users = users;
@@ -73,31 +84,76 @@ public class AssuranceService {
     /**
      * Every verified or closed deal the caller may read, each with its versions newest first.
      *
-     * <p>Scoped by {@link DealService#list}, so the firm and branch rules are the deals list's own
-     * rather than a second copy of them. Deals are ordered by their latest sign-off, newest first.
+     * <p>Scoped by {@link DealService#list}, so the firm and branch rules are the deals list's own.
+     *
+     * <p>{@code from}/{@code to} narrow it by when things happened, at version level: a version is
+     * kept if it was verified in the range, or if it is the deal's latest version and the deal was
+     * closed in the range — closing is something that happens to the version the deal stands on,
+     * not to the ones it was worked past. A deal left with no versions is dropped. Either bound may
+     * be null for an open-ended range.
      */
     @Transactional(readOnly = true)
-    public List<AssuranceDealDto> list(Long firmId, Long branchId) {
+    public List<AssuranceDealDto> list(Long firmId, Long branchId, Instant from, Instant to) {
         List<DealListItemDto> rows = ASSURABLE.stream()
                 .flatMap(s -> dealService.list(s, firmId, branchId).stream())
                 .toList();
         if (rows.isEmpty()) return List.of();
+        List<Long> dealIds = rows.stream().map(DealListItemDto::id).toList();
 
-        Map<Long, List<DealVersion>> byDeal = versions
-                .findAllByDealIdInOrderByVersionNoDesc(rows.stream().map(DealListItemDto::id).toList())
+        Map<Long, List<DealVersion>> byDeal = versions.findAllByDealIdInOrderByVersionNoDesc(dealIds)
                 .stream()
                 .collect(Collectors.groupingBy(DealVersion::getDealId));
 
-        Map<Long, User> people = usersById(byDeal.values().stream()
-                .flatMap(List::stream)
+        boolean ranged = from != null || to != null;
+        Map<Long, Instant> closedAt = new HashMap<>();
+        if (ranged) {
+            // The transaction monitoring record, which every close writes — the timeline does not:
+            // a close carries no note, so it leaves no entry there.
+            for (Object[] r : moves.latestAt(dealIds, DealStatusMove.Kind.CLOSE)) {
+                closedAt.put((Long) r[0], (Instant) r[1]);
+            }
+        }
+
+        // Filter first, so issues and names are only loaded for rows that will be shown.
+        Map<Long, List<DealVersion>> kept = new HashMap<>();
+        for (DealListItemDto d : rows) {
+            List<DealVersion> vs = byDeal.getOrDefault(d.id(), List.of());
+            if (ranged) {
+                Instant closed = d.status() == DealStatus.CLOSED ? closedAt.get(d.id()) : null;
+                List<DealVersion> in = new ArrayList<>();
+                for (int i = 0; i < vs.size(); i++) {
+                    DealVersion v = vs.get(i);
+                    boolean latest = i == 0;
+                    if (within(v.getVerifiedAt(), from, to) || (latest && within(closed, from, to))) {
+                        in.add(v);
+                    }
+                }
+                vs = in;
+                if (vs.isEmpty()) continue;
+            }
+            kept.put(d.id(), vs);
+        }
+        if (kept.isEmpty()) return List.of();
+
+        List<DealVersion> shown = kept.values().stream().flatMap(List::stream).toList();
+        Map<Long, List<IssueDto>> issuesByVersion = shown.isEmpty() ? Map.of()
+                : issues.findAllByDealVersionIdInOrderBySortOrderAsc(shown.stream().map(DealVersion::getId).toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(AssuranceIssue::getDealVersionId,
+                                Collectors.mapping(i -> new IssueDto(i.getIssue(), i.getRemediation()),
+                                        Collectors.toList())));
+        Map<Long, User> people = usersById(shown.stream()
                 .flatMap(v -> Stream.of(v.getVerifiedByUserId(), v.getAssuranceByUserId())));
 
         List<AssuranceDealDto> out = new ArrayList<>();
         for (DealListItemDto d : rows) {
-            List<AssuranceVersionDto> vs = byDeal.getOrDefault(d.id(), List.of()).stream()
-                    .map(v -> toDto(v, people))
-                    .toList();
-            out.add(new AssuranceDealDto(d, vs));
+            List<DealVersion> vs = kept.get(d.id());
+            if (vs == null) continue;
+            Instant lastAssured = vs.stream().map(DealVersion::getAssuranceAt)
+                    .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
+            out.add(new AssuranceDealDto(d, lastAssured, vs.stream()
+                    .map(v -> toDto(v, people, issuesByVersion.getOrDefault(v.getId(), List.of())))
+                    .toList()));
         }
         // Latest sign-off first. A deal with no versions (verified before versions existed) has
         // nothing to assure, and sorts last rather than disappearing without explanation.
@@ -108,14 +164,15 @@ public class AssuranceService {
     }
 
     /**
-     * Marks one version ASSURED or UNASSURED.
+     * Records the result of an assurance on one version.
      *
-     * <p>Only as a real change of position: assuring needs a version that is not reviewed or
-     * unassured, and unassuring needs one that is assured. Marking the same thing twice would
-     * replace the note and the byline with no change in the verdict behind them.
+     * <p>ASSURED takes no issues and removes any recorded — passing a version is what clears its
+     * findings. ACTION_REQUIRED needs at least one issue, and the list sent replaces the one
+     * stored. Either verdict can follow either, so a version assured earlier can be marked as
+     * needing action when something is found later.
      */
     @Transactional
-    public AssuranceVersionDto mark(Long dealId, Integer versionNo, AssuranceStatus target, String note) {
+    public AssuranceVersionDto update(Long dealId, Integer versionNo, UpdateAssuranceRequest req) {
         Deal d = deals.findById(dealId)
                 .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
         UserPrincipal actor = currentPrincipal();
@@ -132,29 +189,53 @@ public class AssuranceService {
                 .orElseThrow(() -> new NotFoundException(
                         "Version " + versionNo + " of deal " + dealId + " not found"));
 
-        AssuranceStatus current = v.getAssuranceStatus();
-        if (target == AssuranceStatus.ASSURED && current == AssuranceStatus.ASSURED) {
-            throw new BadRequestException("This version is already assured");
+        List<UpdateAssuranceRequest.Issue> sent = req.issues() == null ? List.of() : req.issues();
+        List<IssueDto> cleaned = sent.stream()
+                .map(i -> new IssueDto(trim(i.issue()), trim(i.remediation())))
+                .toList();
+        if (req.status() == AssuranceStatus.ASSURED && !cleaned.isEmpty()) {
+            throw new BadRequestException("A passed assurance carries no issues");
         }
-        if (target == AssuranceStatus.UNASSURED && current != AssuranceStatus.ASSURED) {
-            throw new BadRequestException("Only an assured version can be marked unassured");
+        if (req.status() == AssuranceStatus.ACTION_REQUIRED) {
+            if (cleaned.isEmpty()) {
+                throw new BadRequestException("Add at least one identified issue");
+            }
+            for (IssueDto i : cleaned) {
+                if (i.issue().length() < 3 || i.remediation().length() < 3) {
+                    throw new BadRequestException(
+                            "Each issue and its remediation need at least 3 characters");
+                }
+            }
         }
 
-        String body = note == null ? "" : note.trim();
-        if (body.length() < 3) {
-            throw new BadRequestException("A note of at least 3 characters is required");
+        issues.deleteAllForVersion(v.getId());
+        for (int i = 0; i < cleaned.size(); i++) {
+            issues.save(new AssuranceIssue(v.getId(), cleaned.get(i).issue(), cleaned.get(i).remediation(), i));
         }
-
-        v.markAssurance(target, body, actor.id(), Instant.now());
+        v.markAssurance(req.status(), actor.id(), Instant.now());
         versions.save(v);
 
-        boolean assured = target == AssuranceStatus.ASSURED;
-        audit.record(assured ? AuditAction.DEAL_VERSION_ASSURED : AuditAction.DEAL_VERSION_UNASSURED,
+        boolean assured = req.status() == AssuranceStatus.ASSURED;
+        audit.record(assured ? AuditAction.DEAL_VERSION_ASSURED : AuditAction.DEAL_VERSION_ACTION_REQUIRED,
                 "Deal", d.getId(),
-                "Version " + versionNo + " of deal " + d.getReference() + " marked "
-                        + (assured ? "assured" : "unassured") + ": " + body);
+                "Version " + versionNo + " of deal " + d.getReference()
+                        + (assured
+                            ? " assured"
+                            : " marked action required: " + cleaned.size()
+                              + (cleaned.size() == 1 ? " issue — " : " issues — ")
+                              + cleaned.stream().map(IssueDto::issue).collect(Collectors.joining("; "))));
 
-        return toDto(v, usersById(Stream.of(v.getVerifiedByUserId(), actor.id())));
+        return toDto(v, usersById(Stream.of(v.getVerifiedByUserId(), actor.id())), cleaned);
+    }
+
+    private static boolean within(Instant at, Instant from, Instant to) {
+        if (at == null) return false;
+        if (from != null && at.isBefore(from)) return false;
+        return to == null || !at.isAfter(to);
+    }
+
+    private static String trim(String s) {
+        return s == null ? "" : s.trim();
     }
 
     private Map<Long, User> usersById(Stream<Long> ids) {
@@ -162,7 +243,7 @@ public class AssuranceService {
                 .stream().collect(Collectors.toMap(User::getId, Function.identity()));
     }
 
-    private static AssuranceVersionDto toDto(DealVersion v, Map<Long, User> people) {
+    private static AssuranceVersionDto toDto(DealVersion v, Map<Long, User> people, List<IssueDto> issues) {
         return new AssuranceVersionDto(
                 v.getVersionNo(),
                 nameOf(people.get(v.getVerifiedByUserId())),
@@ -170,9 +251,9 @@ public class AssuranceService {
                 v.getVerifyNote(),
                 v.getReopenedAt(),
                 v.getAssuranceStatus(),
-                v.getAssuranceNote(),
                 nameOf(people.get(v.getAssuranceByUserId())),
-                v.getAssuranceAt());
+                v.getAssuranceAt(),
+                issues);
     }
 
     /** Null for a user who has since been deleted: a byline outlives the account behind it. */

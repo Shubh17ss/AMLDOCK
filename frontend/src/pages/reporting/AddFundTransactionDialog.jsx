@@ -12,6 +12,7 @@ import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
+import { DateField } from '../../components/DateField.jsx';
 
 // The supporting document is PDF-only, matching the server-side content-type guard.
 const PDF_MIME = 'application/pdf';
@@ -137,12 +138,10 @@ export function AddFundTransactionDialog({ open, onClose }) {
                   <MenuItem value="OUTWARDS">Outwards</MenuItem>
                 </Select>
               </FormControl>
-              <TextField
+              <DateField
                 label="Date"
-                type="date"
                 value={form.transactionDate}
-                onChange={ch('transactionDate')}
-                InputLabelProps={{ shrink: true }}
+                onChange={(v) => setForm((f) => ({ ...f, transactionDate: v }))}
                 required
                 fullWidth
               />

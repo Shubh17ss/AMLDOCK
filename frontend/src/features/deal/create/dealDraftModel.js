@@ -41,6 +41,8 @@ export const EMPTY_FORM = {
   // months is the remainder beside years, so 18 months is 1 and 6. Either alone is an answer.
   ownershipTenureYears: '',
   ownershipTenureMonths: '',
+  // Asked, and not known yet. Excludes a figure — TenureField keeps the two apart.
+  ownershipTenureTbc: false,
   faceToFaceIdVerified: null,
   foreignExposureCountry: '', // '' = unanswered, 'NONE' = asked and there is none
   // Which individual on the ownership structure is the point of contact. Only the review
@@ -71,6 +73,7 @@ export function buildDealPatch(form) {
     trustInvolved: form.trustInvolved,
     ownershipTenureYears: num(form.ownershipTenureYears),
     ownershipTenureMonths: num(form.ownershipTenureMonths),
+    ownershipTenureTbc: Boolean(form.ownershipTenureTbc),
     faceToFaceIdVerified: form.faceToFaceIdVerified,
     foreignExposureCountry: form.foreignExposureCountry,
     clientRemote: form.clientRemote,
@@ -114,6 +117,7 @@ export function buildDealDetailsPatch(form) {
     trustInvolved: form.trustInvolved,
     ownershipTenureYears: num(form.ownershipTenureYears),
     ownershipTenureMonths: num(form.ownershipTenureMonths),
+    ownershipTenureTbc: Boolean(form.ownershipTenureTbc),
     faceToFaceIdVerified: form.faceToFaceIdVerified,
     // '' means "nobody chosen" and the API reads null as "leave alone", so clearing the
     // nomination is deliberately not expressible — removing the owner is what clears it, and
@@ -207,6 +211,7 @@ export function dtoToForm(dto) {
     trustInvolved: dto.trustInvolved ?? null,
     ownershipTenureYears: dto.ownershipTenureYears == null ? '' : String(dto.ownershipTenureYears),
     ownershipTenureMonths: dto.ownershipTenureMonths == null ? '' : String(dto.ownershipTenureMonths),
+    ownershipTenureTbc: Boolean(dto.ownershipTenureTbc),
     faceToFaceIdVerified: dto.faceToFaceIdVerified ?? null,
     keyContactNodeId: dto.keyContactNodeId == null ? '' : String(dto.keyContactNodeId),
     foreignExposureCountry: dto.foreignExposureCountry ?? '',
@@ -248,7 +253,9 @@ export function sectionGaps(section, form) {
     if (form.trustInvolved == null) gaps.push('Whether a trust is involved in beneficial ownership');
     // One box is enough: four years is answered by leaving months blank, and demanding a zero
     // there would hold up a save over a complete answer.
-    if (form.ownershipTenureYears === '' && form.ownershipTenureMonths === '') {
+    // "To be confirmed" is an answer too.
+    if (!form.ownershipTenureTbc
+        && form.ownershipTenureYears === '' && form.ownershipTenureMonths === '') {
       gaps.push('How long the client has owned the property');
     }
     if (form.ownershipTenureMonths !== '' && Number(form.ownershipTenureMonths) > 11) {

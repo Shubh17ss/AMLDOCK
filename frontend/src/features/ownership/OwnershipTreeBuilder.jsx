@@ -162,8 +162,7 @@ export function OwnershipTreeBuilder({
       <Box sx={{ px: { xs: 1, sm: 2 }, py: 2 }}>
         {tree.nodes.length === 0 ? (
           <Alert severity="info" sx={{ m: 0 }}>
-            Nothing here yet. Add the entity or person that owns this property — everyone else
-            hangs off them.
+             No owners added to this property yet.
           </Alert>
         ) : (
           <>

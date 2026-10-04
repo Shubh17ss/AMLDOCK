@@ -13,6 +13,7 @@ import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
+import { DateField } from '../../components/DateField.jsx';
 
 // The supporting document is PDF-only, matching the server-side content-type guard.
 const PDF_MIME = 'application/pdf';
@@ -201,12 +202,10 @@ export function AddSuspiciousActivityDialog({ open, onClose }) {
                     fullWidth
                   />
 
-                  <TextField
+                  <DateField
                     label="Date of suspicion"
-                    type="date"
                     value={form.dateOfSuspicion}
-                    onChange={ch('dateOfSuspicion')}
-                    InputLabelProps={{ shrink: true }}
+                    onChange={(v) => setForm((f) => ({ ...f, dateOfSuspicion: v }))}
                     required
                     fullWidth
                   />

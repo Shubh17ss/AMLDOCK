@@ -99,9 +99,9 @@ export function DealDetailsForm({
   const min = form.valuationMin === '' ? null : Number(form.valuationMin);
   const max = form.valuationMax === '' ? null : Number(form.valuationMax);
   const rangeInverted = min != null && max != null && max < min;
-  const monthsOutOfRange = form.ownershipTenureMonths !== ''
+  const monthsOutOfRange = !form.ownershipTenureTbc && form.ownershipTenureMonths !== ''
     && Number(form.ownershipTenureMonths) > 11;
-  const yearsOutOfRange = form.ownershipTenureYears !== ''
+  const yearsOutOfRange = !form.ownershipTenureTbc && form.ownershipTenureYears !== ''
     && Number(form.ownershipTenureYears) > 200;
   const hasImpossibleValue = rangeInverted || monthsOutOfRange || yearsOutOfRange;
 
@@ -120,9 +120,8 @@ export function DealDetailsForm({
       // Seeded rather than refetched: the response is the same DealDto shape getDeal returns, so
       // the header chips and the property band update without a flash.
       qc.setQueryData(['deals', dealId], dto);
-      // A save is auditable. The notes thread is not touched from here: this form no longer
-      // carries the deal's opening note, precisely so that saving these fields cannot rewrite it.
-      qc.invalidateQueries({ queryKey: ['audit', 'deal', dealId] });
+      // The notes thread is not touched from here: this form no longer carries the deal's
+      // opening note, precisely so that saving these fields cannot rewrite it.
       // The prefix, not ['deals','list']: the dashboards keep their own deals queries and were
       // left stale by naming only the register's key.
       qc.invalidateQueries({ queryKey: ['deals'] });
@@ -224,6 +223,8 @@ export function DealDetailsForm({
             months={form.ownershipTenureMonths}
             onYearsChange={setField('ownershipTenureYears')}
             onMonthsChange={setField('ownershipTenureMonths')}
+            tbc={form.ownershipTenureTbc}
+            onTbcChange={setField('ownershipTenureTbc')}
             required
           />
           <YesNoField
@@ -275,7 +276,6 @@ export function DealDetailsForm({
             value={form.redFlagPresent}
             onChange={setField('redFlagPresent')}
             required
-            warnOnYes="Say which one below — compliance reads it first."
           />
           <Collapse in={form.redFlagPresent === true} unmountOnExit>
             <FormControl fullWidth>
@@ -294,7 +294,7 @@ export function DealDetailsForm({
           </Collapse>
         </FieldGroup>
 
-        <FieldGroup title="Property value">
+        <FieldGroup title="Appraised value">
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <MoneyField
               label="Minimum value"

@@ -111,6 +111,8 @@ export function Section3Details({ form, setNested, setField, voiceBlob, onVoiceC
           months={form.ownershipTenureMonths}
           onYearsChange={setField('ownershipTenureYears')}
           onMonthsChange={setField('ownershipTenureMonths')}
+          tbc={form.ownershipTenureTbc}
+          onTbcChange={setField('ownershipTenureTbc')}
           required
         />
 

@@ -13,6 +13,7 @@ import { AssigneePicker } from '../../components/AssigneePicker.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
+import { DateField } from '../../components/DateField.jsx';
 
 const emptyForm = () => ({
   name: '',
@@ -199,12 +200,10 @@ export function SessionDialog({ mode, open: openProp, target, onClose }) {
               </FormControl>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
+                <DateField
                   label="Date"
-                  type="date"
                   value={form.sessionDate}
-                  onChange={ch('sessionDate')}
-                  InputLabelProps={{ shrink: true }}
+                  onChange={(v) => setForm((f) => ({ ...f, sessionDate: v }))}
                   helperText="The day the session runs"
                   required
                   fullWidth

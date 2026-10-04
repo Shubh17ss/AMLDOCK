@@ -84,7 +84,9 @@ class DealServiceRiskAndPatchTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, people, audit),
-                ownership, audit, notifier, versions, saleUnits);
+                ownership, audit, notifier, versions, saleUnits,
+                org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
+                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 
@@ -135,6 +137,22 @@ class DealServiceRiskAndPatchTest {
 
         assertThat(d.getRiskValue()).isEqualTo(2);
         assertThat(d.getRiskRating()).isEqualTo(RiskRating.LOW);
+    }
+
+    @Test
+    void toBeConfirmedClearsTheFigureAndAFigureClearsIt() {
+        Deal d = draftInRepo();
+        d.setOwnershipTenureYears(10);
+        d.setOwnershipTenureMonths(2);
+
+        service.update(1L, update(u -> u.ownershipTenureTbc(true)));
+        assertThat(d.isOwnershipTenureTbc()).isTrue();
+        assertThat(d.getOwnershipTenureYears()).isNull();
+        assertThat(d.getOwnershipTenureMonths()).isNull();
+
+        service.update(1L, update(u -> u.ownershipTenureYears(3)));
+        assertThat(d.isOwnershipTenureTbc()).isFalse();
+        assertThat(d.getOwnershipTenureYears()).isEqualTo(3);
     }
 
     @Test
@@ -402,7 +420,7 @@ class DealServiceRiskAndPatchTest {
                 null, TransactionType.SALE, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null, null, null, null),
-                new ClientInput("Jane Marsh", null, null, null));
+                new ClientInput("Jane Marsh", null, null, null), null);
 
         service.create(req);
 
@@ -415,7 +433,7 @@ class DealServiceRiskAndPatchTest {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                new ClientInput("Marsh Family Trust", ClientType.ENTITY, null, null));
+                new ClientInput("Marsh Family Trust", ClientType.ENTITY, null, null), null);
 
         service.create(req);
 
@@ -437,7 +455,7 @@ class DealServiceRiskAndPatchTest {
                 "Retiring overseas", trustInvolved, years, months, "NONE", false, true, false, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
                         null, PropertyType.RESIDENTIAL, "RETIREMENT"),
-                new ClientInput("Jane Marsh", null, null, null));
+                new ClientInput("Jane Marsh", null, null, null), null);
     }
 
     /** A NEW deal owned by {@link #agent}, findable at id 1, that update() can load. */
@@ -472,6 +490,7 @@ class DealServiceRiskAndPatchTest {
         String notes, transactionPurpose, foreignExposureCountry, redFlag;
         Boolean trustInvolved, faceToFaceIdVerified, redFlagPresent;
         Integer ownershipTenureYears, ownershipTenureMonths;
+        Boolean ownershipTenureTbc;
         BigDecimal valuationMin, valuationMax;
 
         Patch notes(String v) { this.notes = v; return this; }
@@ -480,6 +499,7 @@ class DealServiceRiskAndPatchTest {
         Patch trustInvolved(Boolean v) { this.trustInvolved = v; return this; }
         Patch ownershipTenureYears(Integer v) { this.ownershipTenureYears = v; return this; }
         Patch ownershipTenureMonths(Integer v) { this.ownershipTenureMonths = v; return this; }
+        Patch ownershipTenureTbc(Boolean v) { this.ownershipTenureTbc = v; return this; }
         Patch faceToFaceIdVerified(Boolean v) { this.faceToFaceIdVerified = v; return this; }
         Patch redFlagPresent(Boolean v) { this.redFlagPresent = v; return this; }
         Patch redFlag(String v) { this.redFlag = v; return this; }
@@ -491,7 +511,7 @@ class DealServiceRiskAndPatchTest {
                     transactionPurpose, trustInvolved,
                     ownershipTenureYears, ownershipTenureMonths, faceToFaceIdVerified, null,
                     foreignExposureCountry, null, redFlagPresent, redFlag,
-                    valuationMin, valuationMax);
+                    valuationMin, valuationMax, ownershipTenureTbc);
         }
     }
 

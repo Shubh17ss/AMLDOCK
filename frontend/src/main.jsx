@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+// Day-first everywhere a picker renders a date: en-gb's DD/MM/YYYY rather than dayjs's US default.
+import 'dayjs/locale/en-gb';
 import App from './App.jsx';
 import './styles/fonts.css';
 // Light/dark palette variables — the tokens in theme.js are var() refs into this.
@@ -24,7 +26,7 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="en-gb">
         <CssBaseline />
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>

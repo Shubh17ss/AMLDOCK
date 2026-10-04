@@ -91,7 +91,9 @@ class DealRiskApprovalTest {
                 new DealLifecycleService(mock(DealUserRepository.class)),
                 new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, people, audit),
-                ownership, audit, notifier, versions, saleUnits);
+                ownership, audit, notifier, versions, saleUnits,
+                org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
+                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
 
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);

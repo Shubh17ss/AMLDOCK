@@ -38,6 +38,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -70,6 +72,7 @@ class DealCloseSaleTest {
     @Mock nz.amldock.notification.DealNotificationEnqueuer notifier;
     @Mock nz.amldock.deal.version.DealVersionService versions;
     @Mock DealSaleUnitRepository saleUnits;
+    @Mock nz.amldock.deal.monitoring.TransactionMonitoringService monitoring;
 
     DealService service;
 
@@ -82,7 +85,9 @@ class DealCloseSaleTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)),
                 new DealNoteService(dealNotes, documents, users),
-                beneficialOwners, risk, ownership, audit, notifier, versions, saleUnits);
+                beneficialOwners, risk, ownership, audit, notifier, versions, saleUnits,
+                org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
+                monitoring);
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(amlco, null, amlco.getAuthorities()));
@@ -116,7 +121,7 @@ class DealCloseSaleTest {
     void anUnsoldPropertyStillCloses() {
         Deal d = verifiedDeal(PropertyType.RESIDENTIAL);
 
-        service.closeWithSale(1L, new CloseDealRequest(false, null, null));
+        service.closeWithSale(1L, new CloseDealRequest(false, null, null, null));
 
         assertThat(d.getStatus()).isEqualTo(DealStatus.CLOSED);
         assertThat(d.getPropertySold()).isFalse();
@@ -140,7 +145,7 @@ class DealCloseSaleTest {
         verifiedDeal(PropertyType.RESIDENTIAL);
 
         assertThatThrownBy(() -> service.closeWithSale(1L,
-                new CloseDealRequest(false, new BigDecimal("10"), null)))
+                new CloseDealRequest(false, new BigDecimal("10"), null, null)))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("did not sell");
     }
@@ -153,6 +158,38 @@ class DealCloseSaleTest {
                 sold(null, List.of(unit("Flat 1", "100")))))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Only a development");
+    }
+
+    /* ---------- the transaction monitoring history ---------- */
+
+    @Test
+    void aCloseIsRecordedWithItsNoteAndPrice() {
+        Deal d = verifiedDeal(PropertyType.RESIDENTIAL);
+
+        service.closeWithSale(1L, new CloseDealRequest(true, new BigDecimal("1250000"), null, "Settled early"));
+
+        verify(monitoring).recordClose(eq(d), eq(amlco.id()), eq("Settled early"), eq(true),
+                argThat(t -> t.compareTo(new BigDecimal("1250000")) == 0));
+    }
+
+    @Test
+    void aDevelopmentIsRecordedAtItsUnitTotal() {
+        Deal d = verifiedDeal(PropertyType.DEVELOPMENT);
+
+        service.closeWithSale(1L, sold(null, List.of(unit("Unit 1", "500000"), unit("Unit 2", "650000"))));
+
+        verify(monitoring).recordClose(eq(d), eq(amlco.id()), any(), eq(true),
+                argThat(t -> t.compareTo(new BigDecimal("1150000")) == 0));
+    }
+
+    @Test
+    void anUncloseIsRecordedWithItsReason() {
+        Deal d = verifiedDeal(PropertyType.RESIDENTIAL);
+        d.setStatus(DealStatus.CLOSED);
+
+        service.act(1L, DealAction.UNCLOSE, "Wrong sale price");
+
+        verify(monitoring).recordUnclose(d, amlco.id(), "Wrong sale price");
     }
 
     /* ---------- a development sells as units ---------- */
@@ -236,7 +273,7 @@ class DealCloseSaleTest {
         Deal d = verifiedDeal(PropertyType.DEVELOPMENT);
         d.setSalePrice(new BigDecimal("500000"));
 
-        service.closeWithSale(1L, new CloseDealRequest(false, null, null));
+        service.closeWithSale(1L, new CloseDealRequest(false, null, null, null));
 
         assertThat(d.getSalePrice()).isNull();
         verify(saleUnits).deleteAllByDealId(1L);
@@ -307,7 +344,7 @@ class DealCloseSaleTest {
     }
 
     private static CloseDealRequest sold(BigDecimal price, List<CloseDealRequest.SaleUnitInput> units) {
-        return new CloseDealRequest(true, price, units);
+        return new CloseDealRequest(true, price, units, null);
     }
 
     private static CloseDealRequest.SaleUnitInput unit(String name, String price) {

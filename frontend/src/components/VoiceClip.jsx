@@ -3,6 +3,7 @@ import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import { fetchDownloadUrl } from '../api/documents.js';
 import { tokens } from '../theme/theme.js';
+import { formatDateTime } from '../utils/formatters.js';
 
 /**
  * Renders a single VOICE_NOTE document as an inline audio player. Lazy-fetches the
@@ -31,7 +32,7 @@ export function VoiceClip({ doc }) {
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
         <GraphicEqIcon fontSize="small" color="primary" />
         <Typography variant="caption" sx={{ color: tokens.muted, flexGrow: 1 }}>
-          {doc.originalFilename} · {new Date(doc.createdAt).toLocaleString()}
+          {doc.originalFilename} · {formatDateTime(doc.createdAt)}
           {doc.uploadedByEmail ? ` · ${doc.uploadedByEmail}` : ''}
         </Typography>
       </Stack>

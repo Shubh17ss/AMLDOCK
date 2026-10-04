@@ -40,5 +40,10 @@ public record UpdateDealRequest(
         Boolean redFlagPresent,
         String redFlag,
         @PositiveOrZero BigDecimal valuationMin,
-        @PositiveOrZero BigDecimal valuationMax
+        @PositiveOrZero BigDecimal valuationMax,
+        /**
+         * Tenure asked and not known yet. True clears years and months; false with no figures
+         * leaves them as they are. A figure sent without this turns TBC off.
+         */
+        Boolean ownershipTenureTbc
 ) {}

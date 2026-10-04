@@ -1,4 +1,5 @@
 import { tokens } from '../../theme/theme.js';
+import { formatDateTime } from '../../utils/formatters.js';
 
 /**
  * The three states an owner can be in, to a reviewer.
@@ -61,10 +62,5 @@ export function isVerified(status) {
  * "Invalid Date" beside somebody's name.
  */
 export function formatVerifiedAt(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString(undefined, {
-    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  return formatDateTime(iso);
 }

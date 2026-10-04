@@ -16,7 +16,7 @@ import {
 } from '../api/documents.js';
 import { CameraCaptureDialog } from './CameraCaptureDialog.jsx';
 import { tokens } from '../theme/theme.js';
-import { formatBytes } from '../utils/formatters.js';
+import { formatBytes, formatDateTime } from '../utils/formatters.js';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -269,7 +269,7 @@ export function DocumentUploader({
                 <TableCell><Chip size="small" label={documentTypeLabel(d.documentType)} /></TableCell>
                 <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
                 <TableCell>{d.uploadedByEmail ?? '—'}</TableCell>
-                <TableCell>{new Date(d.createdAt).toLocaleString()}</TableCell>
+                <TableCell>{formatDateTime(d.createdAt) ?? '—'}</TableCell>
                 <TableCell align="right">
                   {onViewDocument && (
                     <Tooltip title="View in PDF pane">
