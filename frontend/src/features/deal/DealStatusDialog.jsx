@@ -72,14 +72,21 @@ export function DealStatusDialog({ open, deal, canOverride, onClose, onSubmit, s
   const blocked = verifying && readinessQ.data?.ready === false;
 
   const needsReason = choice?.noteRequired ?? false;
-  const reasonReady = !checking && !blocked && (!needsReason || reason.trim().length >= 3);
+  // Verify takes a note if there is something to say, and none if not.
+  const optionalReason = !needsReason && (choice?.noteOptional ?? false);
+  const showsReason = needsReason || optionalReason;
+  const trimmed = reason.trim();
+  // Required: at least 3 characters. Optional: empty, or at least 3 — the server's floor for any
+  // note it keeps, so a 2-character note is refused here rather than on the way in.
+  const noteOk = needsReason ? trimmed.length >= 3 : (trimmed.length === 0 || trimmed.length >= 3);
+  const reasonReady = !checking && !blocked && noteOk;
 
   const submit = async (e) => {
     e.preventDefault();
     if (!choice || !reasonReady) return;
     setError(null);
     try {
-      await onSubmit(choice, needsReason ? reason.trim() : null);
+      await onSubmit(choice, showsReason ? (trimmed || null) : null);
     } catch (err) {
       setError(err.response?.data?.message || 'That didn’t go through. Try again.');
     }
@@ -164,17 +171,20 @@ export function DealStatusDialog({ open, deal, canOverride, onClose, onSubmit, s
                 </Stack>
               ) : blocked ? (
                 <MissingInformation missing={readinessQ.data.missing} />
-              ) : needsReason ? (
+              ) : showsReason ? (
                 <TextField
                   autoFocus
                   fullWidth
-                  label="Reason"
+                  label={optionalReason ? 'Note (optional)' : 'Reason'}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   multiline
                   minRows={4}
-                  required
-                  helperText={`${reason.length} characters`}
+                  required={needsReason}
+                  error={!noteOk && trimmed.length > 0}
+                  helperText={!noteOk && trimmed.length > 0
+                    ? 'At least 3 characters, or leave it empty'
+                    : `${reason.length} characters`}
                 />
               ) : (
                 // No field, because the endpoint behind this move takes no body. Saying so beats

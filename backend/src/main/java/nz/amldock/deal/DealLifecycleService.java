@@ -85,7 +85,9 @@ public class DealLifecycleService {
     private static final Map<DealAction, Rule> RULES = Map.of(
         DealAction.SUBMIT, new Rule(EnumSet.of(DealStatus.NEW),      DealStatus.REVIEW,   Who.EDITOR,   false),
         DealAction.HOLD,   new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.ON_HOLD,  Who.REVIEWER, true),
-        DealAction.VERIFY, new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.VERIFIED, Who.REVIEWER, true),
+        // Optional since the readiness check: the system now checks what a verify note used to
+        // be asked to vouch for, so the reviewer adds one only when there is something to say.
+        DealAction.VERIFY, new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.VERIFIED, Who.REVIEWER, false),
         DealAction.CLOSE,  new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.CLOSED,   Who.REVIEWER, false),
         DealAction.REOPEN, new Rule(EnumSet.of(DealStatus.VERIFIED), DealStatus.REVIEW,   Who.REVIEWER, true),
         DealAction.UNCLOSE, new Rule(EnumSet.of(DealStatus.CLOSED), DealStatus.VERIFIED, Who.REVIEWER, true),
@@ -142,6 +144,10 @@ public class DealLifecycleService {
         }
         if (rule.noteRequired()) {
             requireNote(note, "A note is required to " + action.name().toLowerCase().replace('_', ' '));
+        } else if (note != null && !note.isBlank()) {
+            // Optional, but a note that is given is a real one: the timeline's 3-character floor
+            // (chk_deal_note_body) applies to it like any other.
+            requireNote(note, "A note needs at least 3 characters");
         }
 
         deal.setStatus(rule.to());

@@ -47,7 +47,8 @@ public class DealVersion extends DealFields {
     @Column(name = "verified_at", nullable = false, updatable = false)
     private Instant verifiedAt;
 
-    @Column(name = "verify_note", nullable = false, updatable = false, columnDefinition = "text")
+    /** Null when the reviewer verified without a note — optional since V53. */
+    @Column(name = "verify_note", updatable = false, columnDefinition = "text")
     private String verifyNote;
 
     /* ---------- the one thing about a version that is written later ---------- */

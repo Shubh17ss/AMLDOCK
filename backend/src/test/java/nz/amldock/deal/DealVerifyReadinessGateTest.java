@@ -121,6 +121,16 @@ class DealVerifyReadinessGateTest {
     }
 
     @Test
+    void aReadyDealIsVerifiedWithoutANote() {
+        asUser(complianceOfficer);
+
+        service.act(DEAL_ID, DealAction.VERIFY, null);
+
+        assertThat(deal.getStatus()).isEqualTo(DealStatus.VERIFIED);
+        verify(versions).snapshotIfVerified(deal, complianceOfficer, null, DealStatus.REVIEW);
+    }
+
+    @Test
     void otherTransitionsAreNotChecked() {
         asUser(complianceOfficer);
 

@@ -205,7 +205,19 @@ class DealLifecycleServiceTest {
     /* ---------- notes ---------- */
 
     @Test
-    void theVerbsThatChangeAComplianceOutcomeDemandANote() {
+    void verifyingNeedsNoNote() {
+        Deal d = dealIn(DealStatus.REVIEW);
+
+        lifecycle.transition(d, amlco, DealAction.VERIFY, FIRM_A, null);
+        assertThat(d.getStatus()).isEqualTo(DealStatus.VERIFIED);
+
+        Deal blank = dealIn(DealStatus.REVIEW);
+        lifecycle.transition(blank, amlco, DealAction.VERIFY, FIRM_A, "   ");
+        assertThat(blank.getStatus()).isEqualTo(DealStatus.VERIFIED);
+    }
+
+    @Test
+    void theVerbsThatChangeAComplianceOutcomeDemandANoteAndAnOptionalOneMustBeReal() {
         assertThatThrownBy(() -> lifecycle.transition(dealIn(DealStatus.REVIEW), amlco, DealAction.HOLD, FIRM_A, null))
                 .isInstanceOf(BadRequestException.class).hasMessageContaining("note is required");
         assertThatThrownBy(() -> lifecycle.transition(dealIn(DealStatus.REVIEW), amlco, DealAction.VERIFY, FIRM_A, "hm"))

@@ -25,6 +25,7 @@ import { tokens } from '../../../theme/theme.js';
  */
 export function TenureField({
   years, months, tbc = false, onYearsChange, onMonthsChange, onTbcChange, required = false,
+  disabled = false,
 }) {
   // Keeps the field to digits without fighting the user: a paste of "1.5" loses the point rather
   // than silently becoming something else, and an empty box stays empty.
@@ -79,6 +80,7 @@ export function TenureField({
           value={tbc ? '' : years}
           onChange={typeYears}
           inputProps={{ inputMode: 'numeric', maxLength: 3 }}
+          disabled={disabled}
           error={yearsOutOfRange}
           helperText={yearsOutOfRange ? '200 years at most' : undefined}
           sx={{ maxWidth: 140, opacity: tbc ? 0.55 : 1 }}
@@ -88,6 +90,7 @@ export function TenureField({
           value={tbc ? '' : months}
           onChange={typeMonths}
           inputProps={{ inputMode: 'numeric', maxLength: 2 }}
+          disabled={disabled}
           error={monthsOutOfRange}
           helperText={monthsOutOfRange ? '0–11 — whole years go in the Years box' : undefined}
           sx={{ maxWidth: 140, opacity: tbc ? 0.55 : 1 }}
@@ -107,6 +110,7 @@ export function TenureField({
             fg={tokens.blue}
             bg={tokens.blueWash}
             selected={tbc}
+            disabled={disabled}
             onSelect={toggleTbc}
             ariaLabel="Ownership tenure to be confirmed"
             sx={{ py: 1 }}
