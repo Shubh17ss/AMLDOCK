@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Alert, Box, Stack, Typography } from '@mui/material';
 import { listDeals } from '../api/deals.js';
 import { DealsTable } from '../components/DealsTable.jsx';
@@ -9,18 +9,26 @@ import { StatusPills } from '../components/StatusPills.jsx';
 import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
+import { ListPagination } from '../components/ListPagination.jsx';
+import { usePagedList } from '../hooks/usePagedList.js';
 
 
 
 export function FirmDealsPage() {
   const [status, setStatus] = useState('ALL');
-  const params = status === 'ALL' ? {} : { status };
-  const q = useQuery({ queryKey: ['deals', 'firm', status], queryFn: () => listDeals(params) });
-  const deals = q.data ?? [];
+  const paged = usePagedList({ resetOn: [status] });
+  const params = { ...(status === 'ALL' ? {} : { status }), ...paged.params };
+  const q = useQuery({
+    queryKey: ['deals', 'firm', status, paged.params],
+    queryFn: () => listDeals(params),
+    placeholderData: keepPreviousData,
+  });
+  const deals = q.data?.items ?? [];
+  const total = q.data?.totalElements ?? 0;
 
   return (
     <Stack spacing={2.5}>
-      <PageHeader eyebrow={`${deals.length} ${deals.length === 1 ? 'deal' : 'deals'} · in your branch`} title="Firm deals" />
+      <PageHeader eyebrow={`${total} ${total === 1 ? 'deal' : 'deals'} · in your branch`} title="Firm deals" />
 
       {/* Status filter pills */}
       <StatusPills value={status} onChange={setStatus} options={STATUSES} />
@@ -45,6 +53,7 @@ export function FirmDealsPage() {
         {deals.map((d) => (
           <DealCard key={d.id} deal={d} />
         ))}
+        <ListPagination data={q.data} paged={paged} rowsPerPageOptions={[25, 50]} />
       </Box>
 
       {/* Desktop: table */}
@@ -53,6 +62,7 @@ export function FirmDealsPage() {
           ? <SkeletonTable rows={6} columns={6} />
           : <DealsTable deals={deals} emptyMessage={status === 'ALL' ? 'No deals from your firm yet.' : 'No deals match this filter.'} />
         }
+        <ListPagination data={q.data} paged={paged} />
       </Box>
     </Stack>
   );

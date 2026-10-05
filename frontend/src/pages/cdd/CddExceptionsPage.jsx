@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Paper, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Tooltip,
@@ -10,21 +9,14 @@ import { listIndividuals } from '../../api/individuals.js';
 import { nodeTypeLabel } from '../../api/ownership.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
-import { SearchField, matchesSearch } from '../../components/SearchField.jsx';
+import { SearchField } from '../../components/SearchField.jsx';
+import { ListPagination } from '../../components/ListPagination.jsx';
+import { usePagedList } from '../../hooks/usePagedList.js';
 import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens, fonts } from '../../theme/theme.js';
 import { formatListDate } from './IndividualsTable.jsx';
 import { exportIndividualsCsv } from './BeneficialOwnersPage.jsx';
-
-const csvHeaders = ['Name', 'Type', 'Verified', 'Property', 'Deal'];
-const csvRowFor = (r) => [
-  r.displayName,
-  nodeTypeLabel(r.nodeType),
-  r.verifiedAt ?? '',
-  r.propertyAddress ?? '',
-  r.dealReference,
-];
 
 /**
  * Every owner cleared on an exception, across the deals in scope.
@@ -34,11 +26,10 @@ const csvRowFor = (r) => [
  * which is no use to the person who has to answer what the branch has accepted and why. This is
  * that list.
  *
- * <p>The filter is client-side, like the overseas register's: the rows are the Beneficial Owners
- * fetch, under the same query key, so the two screens share one cache entry and moving between
- * them costs nothing. The <em>scope</em> is the server's, as always — `listIndividuals` returns
- * only owners behind deals the caller may read, so an agent sees their own deals here and a
- * compliance officer the whole firm.
+ * <p>The filter runs on the server (`verification=VERIFIED_WITH_EXCEPTION`), as does the scope —
+ * `listIndividuals` returns only owners behind deals the caller may read, so an agent sees their
+ * own deals here and a compliance officer the whole firm. The CSV is built on the server from the
+ * same filter, dated by verification.
  *
  * <p>Every owner type, not just people: an exception can be granted on a company or a trust just
  * as easily, and leaving entities out would make the register quietly incomplete.
@@ -46,32 +37,27 @@ const csvRowFor = (r) => [
 export function CddExceptionsPage() {
   const { firm, branch } = useDashboardScope();
   const { showToast } = useToast();
-  const [query, setQuery] = useState('');
+  const paged = usePagedList({ resetOn: [firm?.id, branch?.id] });
+  const query = paged.search;
+  const filters = {
+    firmId: firm?.id, branchId: branch?.id, allTypes: true,
+    verification: 'VERIFIED_WITH_EXCEPTION', q: paged.params.q,
+  };
 
   const q = useQuery({
-    // Deliberately the Beneficial Owners key. It is the same request, and giving it a key of its
-    // own would fetch the identical rows a second time to show a subset of them.
-    queryKey: ['individuals', 'all-types', firm?.id ?? null, branch?.id ?? null],
-    queryFn: () => listIndividuals({ firmId: firm?.id, branchId: branch?.id, allTypes: true }),
+    queryKey: ['individuals', 'exceptions', firm?.id ?? null, branch?.id ?? null, paged.params],
+    queryFn: () => listIndividuals({ ...filters, page: paged.page, size: paged.size }),
+    placeholderData: keepPreviousData,
   });
 
-  const all = q.data ?? [];
-
-  const exceptions = useMemo(
-    () => all.filter((r) => r.verificationStatus === 'VERIFIED_WITH_EXCEPTION'),
-    [all],
-  );
-
-  const rows = useMemo(
-    () => exceptions.filter((r) => matchesSearch(query, r.displayName, r.propertyAddress, r.dealReference)),
-    [exceptions, query],
-  );
+  const rows = q.data?.items ?? [];
+  const total = q.data?.totalElements ?? 0;
 
   return (
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${rows.length} ${rows.length === 1 ? 'owner' : 'owners'} cleared by exception`,
+          `${total} ${total === 1 ? 'owner' : 'owners'} cleared by exception`,
           firm?.name,
           branch?.name,
         ].filter(Boolean).join(' · ')}
@@ -80,10 +66,9 @@ export function CddExceptionsPage() {
           <Button
             variant="outlined"
             startIcon={<TableViewIcon />}
-            disabled={rows.length === 0}
+            disabled={total === 0}
             onClick={() => exportIndividualsCsv({
-              rows, prefix: 'cdd-exceptions', firm, branch, showToast,
-              headers: csvHeaders, rowFor: csvRowFor,
+              params: filters, total, prefix: 'cdd-exceptions', firm, branch, showToast,
             })}
           >
             Download CSV
@@ -91,7 +76,7 @@ export function CddExceptionsPage() {
         )}
       />
 
-      <SearchField value={query} onChange={setQuery} placeholder="Search name, property or deal…" />
+      <SearchField value={query} onChange={paged.setSearch} placeholder="Search name, property or deal…" />
 
       {q.isError && (
         <Alert severity="error">Failed to load the register. Refresh to try again.</Alert>
@@ -107,6 +92,7 @@ export function CddExceptionsPage() {
               : 'No owner on this branch’s deals has been cleared by exception.'}
           />
         )}
+      <ListPagination data={q.data} paged={paged} />
     </Stack>
   );
 }

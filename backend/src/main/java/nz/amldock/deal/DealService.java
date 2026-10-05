@@ -16,7 +16,6 @@ import nz.amldock.deal.readiness.Readiness;
 import nz.amldock.deal.monitoring.TransactionMonitoringService;
 import nz.amldock.deal.monitoring.dto.StatusMoveDto;
 import nz.amldock.deal.readiness.VerificationReadinessService;
-import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.dto.UpdateDealRequest;
 import nz.amldock.deal.DealRiskService.RiskAssessment;
 import nz.amldock.audit.AuditAction;
@@ -114,80 +113,8 @@ public class DealService {
     }
 
     /* ---------- queries ---------- */
-
-    /**
-     * Every deal the caller may read, narrowed by their role.
-     *
-     * <p>The requested firm and branch are <em>overwritten</em> by whatever the actor's own role
-     * pins, not merely intersected with it — an agent asking for a branch still gets only their own
-     * deals. This is the set-level twin of {@link DealLifecycleService#assertCanRead}: use that one
-     * for a single deal, this one for a list, because asserting per row would throw on the first
-     * deal outside the caller's scope instead of leaving it out.
-     *
-     * <p>Shared with the individuals register, which reaches people through their deals and so
-     * inherits exactly this rule. A second transcription of it would be a second thing to keep
-     * right.
-     *
-     * <p>A switch with no default, so a new role fails to compile here rather than defaulting into
-     * whichever branch happens to be last.
-     */
-    @Transactional(readOnly = true)
-    public List<Deal> readableDeals(DealStatus status, Long firmIdFilter, Long branchIdFilter) {
-        UserPrincipal actor = currentPrincipal();
-
-        Long effectiveCreator = null;
-        Long effectiveFirm = firmIdFilter;
-        Long effectiveBranch = branchIdFilter;
-        switch (actor.role()) {
-            // Their own deals plus any they have been added to — DealRepository.search reads
-            // this id both ways.
-            case AGENT, AGENT_PA -> effectiveCreator = actor.id();
-            case ADMIN, SALES_MANAGER -> effectiveBranch = actor.firmBranchId();
-            case AML_COMPLIANCE_OFFICER, SENIOR_MANAGER -> effectiveFirm = actor.realEstateFirmId();
-            // Both see every firm, so the caller's filters stand as given.
-            case ROOT, AUDIT -> { /* honour passed filters verbatim */ }
-            // Finance works in the fund register, not the CDD workspace. Stated rather than
-            // left to fall through this switch, which would have handed over every deal.
-            case FINANCE -> throw new ForbiddenException("Deals are outside the finance role");
-        }
-
-        return deals.search(status, effectiveCreator, effectiveFirm, effectiveBranch);
-    }
-
-    @Transactional(readOnly = true)
-    public List<DealListItemDto> list(DealStatus status, Long firmIdFilter, Long branchIdFilter) {
-        List<Deal> results = readableDeals(status, firmIdFilter, branchIdFilter);
-        if (results.isEmpty()) return List.of();
-
-        // Bulk-resolve lookups
-        Map<Long, FirmBranch> branchById = branches.findAllById(distinctLongs(results, Deal::getFirmBranchId)).stream()
-                .collect(java.util.stream.Collectors.toMap(FirmBranch::getId, b -> b));
-        Map<Long, RealEstateFirm> firmById = firms.findAllById(branchById.values().stream()
-                .map(FirmBranch::getRealEstateFirmId).distinct().toList())
-                .stream().collect(java.util.stream.Collectors.toMap(RealEstateFirm::getId, f -> f));
-        Map<Long, Property> propertyById = properties.findAllById(distinctLongs(results, Deal::getPropertyId)).stream()
-                .collect(java.util.stream.Collectors.toMap(Property::getId, p -> p));
-        Map<Long, Client> clientById = clients.findAllById(distinctLongs(results, Deal::getClientId)).stream()
-                .collect(java.util.stream.Collectors.toMap(Client::getId, c -> c));
-        Map<Long, User> userById = users.findAllById(distinctLongs(results, Deal::getCreatedByUserId)).stream()
-                .collect(java.util.stream.Collectors.toMap(User::getId, u -> u));
-
-        return results.stream().map(d -> {
-            FirmBranch b = branchById.get(d.getFirmBranchId());
-            RealEstateFirm f = b == null ? null : firmById.get(b.getRealEstateFirmId());
-            Client c = clientById.get(d.getClientId());
-            Property p = propertyById.get(d.getPropertyId());
-            User u = userById.get(d.getCreatedByUserId());
-            return DealListItemDto.from(d,
-                    f == null ? null : f.getName(),
-                    b == null ? null : b.getName(),
-                    c == null ? null : c.getDisplayName(),
-                    p == null ? null : formatAddress(p),
-                    p == null ? null : p.getPropertyType(),
-                    u == null ? null : u.getEmail(),
-                    u == null ? null : u.getFullName());
-        }).toList();
-    }
+    // Lists of deals (and the dashboard summary) live in DealListService, which pages them in SQL.
+    // The role-scoping rule that used to be readableDeals is DealScope.forActor.
 
     @Transactional(readOnly = true)
     public DealDto get(Long id) {
@@ -429,7 +356,7 @@ public class DealService {
         }
         // The two firm-level deciders, together: the rule is the same for both, and writing it
         // twice is how the compliance officer's copy would later drift from the manager's.
-        // Scoped to their own firm because that is exactly what readableDeals shows them — this
+        // Scoped to their own firm because that is exactly what DealScope lists for them — this
         // lets them delete what they can see, and nothing else.
         if (actor.role() == Role.SENIOR_MANAGER || actor.role() == Role.AML_COMPLIANCE_OFFICER) {
             FirmBranch branch = branches.findById(d.getFirmBranchId()).orElse(null);

@@ -20,4 +20,10 @@ public record PageResponse<T>(
                 page.getTotalElements(),
                 page.getTotalPages());
     }
+
+    /** For pages assembled by hand: an id query gave the slice and the total, a mapper the rows. */
+    public static <T> PageResponse<T> of(List<T> items, PageRequests paging, long totalElements) {
+        int totalPages = (int) ((totalElements + paging.size() - 1) / paging.size());
+        return new PageResponse<>(items, paging.page(), paging.size(), totalElements, totalPages);
+    }
 }

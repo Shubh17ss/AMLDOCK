@@ -1,23 +1,45 @@
 import { apiClient } from './client.js';
+import { compact } from './deals.js';
 
 /**
- * The natural people on the scoped firm's or branch's deals.
+ * One page of the owners on the scoped firm's or branch's deals:
+ * `{ items, page, size, totalElements, totalPages }`, newest first.
  *
- * One read behind two registers: Beneficial Owners lists them all, Overseas Residents lists the
- * subset living somewhere other than the reporting entity's own country. The filters here are
- * advisory — the server narrows them further by the caller's role, so an agent gets the people on
- * their own deals whatever is passed.
+ * The firm and branch filters are advisory: the server narrows them by the caller's role, so an
+ * agent gets the people on their own deals whatever is passed.
+ *
+ * - `allTypes`: every kind of owner (trusts, companies...), not only natural persons. Opt-in
+ *   because the owner picker offers people to copy onto a new individual, where a trust means
+ *   nothing.
+ * - `q`: owner name, deal reference or property address contains the text.
+ * - `residence`: 'OVERSEAS' (lives outside the deal's reporting-entity country) or 'UNANSWERED'.
+ * - `verification`: e.g. 'VERIFIED_WITH_EXCEPTION'.
+ * - `page` (0-based), `size` (max 100).
  */
-/**
- * `allTypes` widens the list from natural persons to every kind of owner — trusts, companies, the
- * lot. Opt-in rather than the default because the owner picker shares this call to offer a person
- * to copy onto a new individual, and a trust in that list means nothing.
- */
-export async function listIndividuals({ firmId, branchId, allTypes } = {}) {
+export async function listIndividuals({ allTypes, ...rest } = {}) {
   const { data } = await apiClient.get('/individuals', {
-    params: { firmId, branchId, ...(allTypes ? { allTypes: true } : {}) },
+    params: compact({ ...rest, allTypes: allTypes ? true : undefined }),
   });
   return data;
+}
+
+/**
+ * Downloads every row matching the same filters as `listIndividuals` as a CSV built on the
+ * server, so the file holds the whole register rather than the page on screen.
+ */
+export async function downloadIndividualsCsv({ allTypes, filename = 'owners.csv', ...rest } = {}) {
+  const { data } = await apiClient.get('/individuals/export', {
+    params: compact({ ...rest, allTypes: allTypes ? true : undefined }),
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /**

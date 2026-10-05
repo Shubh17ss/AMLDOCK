@@ -1,16 +1,18 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canCreateDeal, isDealAuthor } from '../auth/roles.js';
-import { useDashboardScope, useScopedDeals } from '../dashboard/DashboardScope.jsx';
+import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
 import { DealsTable } from '../components/DealsTable.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { DealCard } from '../components/DealCard.jsx';
-import { SearchField, matchesSearch } from '../components/SearchField.jsx';
+import { SearchField } from '../components/SearchField.jsx';
+import { ListPagination } from '../components/ListPagination.jsx';
+import { usePagedList } from '../hooks/usePagedList.js';
 import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, opensDealForm } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
@@ -20,12 +22,11 @@ import { tokens } from '../theme/theme.js';
 const DEFAULT_STATUS = 'NEW';
 
 /**
- * Deals — the full deal list, filtered by status tabs and searched by property.
+ * Deals — the deal list, one page at a time, filtered by status tabs and searched by property.
  *
- * The two filters work differently on purpose. Status is a server parameter, because it narrows
- * the set the server would otherwise send in full. The property search is client-side over that
- * result: the address is already on every row, so searching it costs one pass over an array
- * rather than a round trip per keystroke.
+ * Status, search and paging are all server parameters: the list used to arrive whole and be
+ * filtered here, which made every visit cost as much as the firm's entire book of deals
+ * (perf/reports/2026-10-05-baseline-50k.md). The search matches reference, client or address.
  *
  * Firm/branch narrowing comes from the sidebar scope selector, so the list always matches the
  * workspace scope.
@@ -37,7 +38,8 @@ export function DealsPage() {
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
   const [status, setStatus] = useState(DEFAULT_STATUS);
-  const [query, setQuery] = useState('');
+  const paged = usePagedList({ resetOn: [status, firm?.id, branch?.id] });
+  const query = paged.search;
 
   // The backend enforces role scope regardless; ROOT and firm-level reviewers get
   // real firm/branch filtering from these params.
@@ -46,21 +48,19 @@ export function DealsPage() {
   if (firm?.id) params.firmId = firm.id;
   if (branch?.id) params.branchId = branch.id;
   const dealsQ = useQuery({
-    queryKey: ['deals', 'list', status, firm?.id ?? null, branch?.id ?? null],
-    queryFn: () => listDeals(params),
+    queryKey: ['deals', 'list', status, firm?.id ?? null, branch?.id ?? null, paged.params],
+    queryFn: () => listDeals({ ...params, ...paged.params }),
+    // Keep the current page on screen while the next one loads, rather than flashing skeletons.
+    placeholderData: keepPreviousData,
   });
-  // Belt-and-braces: also narrow client-side by the scope's firm/branch names.
-  const scoped = useScopedDeals(dealsQ.data);
-  const deals = useMemo(
-    () => scoped.filter((d) => matchesSearch(query, d.propertyAddress)),
-    [scoped, query],
-  );
+  const deals = dealsQ.data?.items ?? [];
+  const total = dealsQ.data?.totalElements ?? 0;
 
   // "You have no deals" and "nothing matches this filter" are different messages and want different
   // answers — the first is a first-run screen and should invite the one action that fixes it, the
   // second should not, because creating a deal is not how you find an existing one.
   const filtered = status !== 'ALL' || query.trim() !== '';
-  const isEmpty = !dealsQ.isLoading && deals.length === 0 && !filtered;
+  const isEmpty = !dealsQ.isLoading && total === 0 && !filtered;
   const mayCreate = canCreateDeal(user?.role);
 
   /**
@@ -76,7 +76,7 @@ export function DealsPage() {
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${deals.length} ${deals.length === 1 ? 'deal' : 'deals'}`,
+          `${total} ${total === 1 ? 'deal' : 'deals'}`,
           status === 'ALL' ? 'all statuses' : dealStatusLabel(status).toLowerCase(),
           query.trim() ? `matching "${query.trim()}"` : null,
           firm?.name,
@@ -123,8 +123,8 @@ export function DealsPage() {
       >
         <SearchField
           value={query}
-          onChange={setQuery}
-          placeholder="Search by property…"
+          onChange={paged.setSearch}
+          placeholder="Search by property, reference or client…"
           sx={{
             width: { xs: '100%', md: 'auto' },
             maxWidth: { xs: 'none', md: 320 },
@@ -180,6 +180,7 @@ export function DealsPage() {
         {deals.map((d) => (
           <DealCard key={d.id} deal={d} canEdit={opensForm(d)} />
         ))}
+        <ListPagination data={dealsQ.data} paged={paged} rowsPerPageOptions={[25, 50]} />
       </Box>
 
       {/* Desktop: table */}
@@ -212,6 +213,7 @@ export function DealsPage() {
               ) : null}
             />
           )}
+        <ListPagination data={dealsQ.data} paged={paged} />
       </Box>
 
     </Stack>
