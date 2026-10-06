@@ -13,6 +13,16 @@ public record PageRequests(int page, int size) {
     public static final int DEFAULT_SIZE = 25;
     public static final int MAX_SIZE = 100;
 
+    /**
+     * The property address as searched, over table alias {@code p}: the four address parts joined
+     * with ", ". Plain concatenation, not concat_ws, because an index expression must be IMMUTABLE
+     * and concat_ws is only STABLE; perf/sql/gin-indexes.sql indexes exactly this expression, so
+     * the two must stay identical.
+     */
+    public static final String ADDRESS_SEARCH_SQL =
+            "(coalesce(p.address_line1, '') || ', ' || coalesce(p.suburb, '') || ', '"
+                    + " || coalesce(p.district, '') || ', ' || coalesce(p.region, ''))";
+
     /** Appended after {@code ILIKE :param}: backslash is the escape character in the pattern. */
     public static final String LIKE_ESCAPE = " ESCAPE '\\'";
 

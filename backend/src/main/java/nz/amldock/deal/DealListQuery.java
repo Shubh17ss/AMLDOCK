@@ -64,15 +64,21 @@ public class DealListQuery {
     /**
      * Reference, client name or property address contains the text. The same fields the list
      * pages searched client-side before the list was paged.
+     *
+     * <p>Each field is matched in its own sub-select rather than as one OR across the joined
+     * tables. A cross-table OR forces Postgres to join everything and test every row; separate
+     * sub-selects let each use its own trigram index where one exists
+     * (perf/reports/2026-10-06-gin-indexes.md), and are just as correct where none does.
      */
     public static void appendSearch(StringBuilder where, MapSqlParameterSource params, String q) {
         String pattern = PageRequests.containsPattern(q);
         if (pattern == null) return;
-        where.append(" AND (d.reference ILIKE :q").append(PageRequests.LIKE_ESCAPE)
-             .append(" OR EXISTS (SELECT 1 FROM client c WHERE c.id = d.client_id AND c.display_name ILIKE :q")
+        where.append(" AND (d.id IN (SELECT dr.id FROM deal dr WHERE dr.reference ILIKE :q")
              .append(PageRequests.LIKE_ESCAPE).append(")")
-             .append(" OR EXISTS (SELECT 1 FROM property p WHERE p.id = d.property_id")
-             .append("   AND concat_ws(', ', p.address_line1, p.suburb, p.district, p.region) ILIKE :q")
+             .append(" OR d.client_id IN (SELECT c.id FROM client c WHERE c.display_name ILIKE :q")
+             .append(PageRequests.LIKE_ESCAPE).append(")")
+             .append(" OR d.property_id IN (SELECT p.id FROM property p WHERE ")
+             .append(PageRequests.ADDRESS_SEARCH_SQL).append(" ILIKE :q")
              .append(PageRequests.LIKE_ESCAPE).append("))");
         params.addValue("q", pattern);
     }

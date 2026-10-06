@@ -87,6 +87,8 @@ amldock:
     # no-op logger.
     transport: log
     provision-templates: false
+    # Batches one poll may send back to back while the outbox keeps returning full batches.
+    max-batches-per-tick: ${NOTIFICATIONS_MAX_BATCHES_PER_TICK:10}
   mail:
     enabled: false
 

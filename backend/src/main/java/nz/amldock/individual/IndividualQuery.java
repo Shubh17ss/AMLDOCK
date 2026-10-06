@@ -66,10 +66,15 @@ public class IndividualQuery {
         }
         String pattern = PageRequests.containsPattern(f.q());
         if (pattern != null) {
-            where.append(" AND (n.display_name ILIKE :q").append(PageRequests.LIKE_ESCAPE)
-                 .append(" OR d.reference ILIKE :q").append(PageRequests.LIKE_ESCAPE)
-                 .append(" OR EXISTS (SELECT 1 FROM property p WHERE p.id = d.property_id")
-                 .append("   AND concat_ws(', ', p.address_line1, p.suburb, p.district, p.region) ILIKE :q")
+            // One sub-select per field, not a single OR across the joined tables: the OR forces a
+            // join of every owner, structure and deal before any filtering, and no index can serve
+            // it. See DealListQuery.appendSearch.
+            where.append(" AND (n.id IN (SELECT nn.id FROM ownership_node nn WHERE nn.display_name ILIKE :q")
+                 .append(PageRequests.LIKE_ESCAPE).append(")")
+                 .append(" OR d.id IN (SELECT dr.id FROM deal dr WHERE dr.reference ILIKE :q")
+                 .append(PageRequests.LIKE_ESCAPE).append(")")
+                 .append(" OR d.property_id IN (SELECT p.id FROM property p WHERE ")
+                 .append(PageRequests.ADDRESS_SEARCH_SQL).append(" ILIKE :q")
                  .append(PageRequests.LIKE_ESCAPE).append("))");
             params.addValue("q", pattern);
         }
