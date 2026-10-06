@@ -13,6 +13,7 @@ import { countryName } from '../../data/countries.js';
 import { formatBytes, formatDate } from '../../utils/formatters.js';
 import { verificationDisplay } from './verificationDisplay.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
+import { countText } from '../../components/ListPagination.jsx';
 
 /** Past this many matches the list stops being a list and starts being a wall. */
 const MAX_ROWS = 8;
@@ -107,7 +108,7 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
         <Stack spacing={1}>
           <SectionLabel>
             {matchCount > MAX_ROWS
-              ? `Already on file — ${matchCount} matches`
+              ? `Already on file — ${countText(listQ.data)} matches`
               : 'Already on file'}
           </SectionLabel>
           {shown.map((row) => (
@@ -121,7 +122,7 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
           ))}
           {matchCount > shown.length && (
             <Typography variant="caption" sx={{ color: tokens.muted, pl: 0.5 }}>
-              {matchCount - shown.length} more — keep typing to narrow it down.
+              {listQ.data?.totalExact === false ? 'Many' : matchCount - shown.length} more — keep typing to narrow it down.
             </Typography>
           )}
         </Stack>

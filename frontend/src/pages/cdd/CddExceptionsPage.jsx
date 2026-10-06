@@ -10,7 +10,7 @@ import { nodeTypeLabel } from '../../api/ownership.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { SearchField } from '../../components/SearchField.jsx';
-import { ListPagination } from '../../components/ListPagination.jsx';
+import { ListPagination, countText } from '../../components/ListPagination.jsx';
 import { usePagedList } from '../../hooks/usePagedList.js';
 import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
@@ -57,7 +57,7 @@ export function CddExceptionsPage() {
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${total} ${total === 1 ? 'owner' : 'owners'} cleared by exception`,
+          `${countText(q.data)} ${total === 1 ? 'owner' : 'owners'} cleared by exception`,
           firm?.name,
           branch?.name,
         ].filter(Boolean).join(' · ')}
@@ -68,7 +68,7 @@ export function CddExceptionsPage() {
             startIcon={<TableViewIcon />}
             disabled={total === 0}
             onClick={() => exportIndividualsCsv({
-              params: filters, total, prefix: 'cdd-exceptions', firm, branch, showToast,
+              params: filters, total: countText(q.data), prefix: 'cdd-exceptions', firm, branch, showToast,
             })}
           >
             Download CSV

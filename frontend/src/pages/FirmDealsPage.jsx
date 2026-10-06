@@ -9,7 +9,7 @@ import { StatusPills } from '../components/StatusPills.jsx';
 import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
-import { ListPagination } from '../components/ListPagination.jsx';
+import { ListPagination, countText } from '../components/ListPagination.jsx';
 import { usePagedList } from '../hooks/usePagedList.js';
 
 
@@ -28,7 +28,7 @@ export function FirmDealsPage() {
 
   return (
     <Stack spacing={2.5}>
-      <PageHeader eyebrow={`${total} ${total === 1 ? 'deal' : 'deals'} · in your branch`} title="Firm deals" />
+      <PageHeader eyebrow={`${countText(q.data)} ${total === 1 ? 'deal' : 'deals'} · in your branch`} title="Firm deals" />
 
       {/* Status filter pills */}
       <StatusPills value={status} onChange={setStatus} options={STATUSES} />

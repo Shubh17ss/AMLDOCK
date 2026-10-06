@@ -61,8 +61,18 @@ class DealScopeTest {
         StringBuilder sql = new StringBuilder();
         MapSqlParameterSource params = new MapSqlParameterSource();
         new DealScope(7L, null, null).appendWhere(sql, params, "d");
-        assertThat(sql.toString()).contains("d.created_by_user_id = :scopeCreator").contains("deal_user");
+        // A UNION of two indexed lookups, not an OR that defeats both indexes.
+        assertThat(sql.toString()).contains("created_by_user_id = :scopeCreator").contains("UNION").contains("deal_user")
+                .doesNotContain(" OR ");
         assertThat(params.getValue("scopeCreator")).isEqualTo(7L);
+    }
+
+    @Test
+    void onlyAnUnscopedCallerSearchesPlatformWide() {
+        assertThat(new DealScope(null, null, null).isNarrow()).isFalse();
+        assertThat(new DealScope(7L, null, null).isNarrow()).isTrue();
+        assertThat(new DealScope(null, null, BRANCH).isNarrow()).isTrue();
+        assertThat(new DealScope(null, FIRM, null).isNarrow()).isTrue();
     }
 
     @Test

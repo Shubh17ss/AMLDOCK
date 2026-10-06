@@ -21,7 +21,7 @@ import { DealStatusChip } from '../../components/DealStatusChip.jsx';
 import { OptionPill } from '../../components/OptionPill.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { SearchField } from '../../components/SearchField.jsx';
-import { ListPagination } from '../../components/ListPagination.jsx';
+import { ListPagination, countText } from '../../components/ListPagination.jsx';
 import { usePagedList } from '../../hooks/usePagedList.js';
 import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
@@ -92,8 +92,8 @@ export function CddAssurancePage() {
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${total} ${total === 1 ? 'deal' : 'deals'} signed off`,
-          awaiting > 0 ? `${awaiting} awaiting assurance` : null,
+          `${countText(q.data)} ${total === 1 ? 'deal' : 'deals'} signed off`,
+          awaiting > 0 ? `${countText(awaitingQ.data)} awaiting assurance` : null,
           firm?.name,
           branch?.name,
         ].filter(Boolean).join(' · ')}

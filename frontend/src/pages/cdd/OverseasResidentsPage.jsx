@@ -5,7 +5,7 @@ import { listIndividuals } from '../../api/individuals.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { SearchField } from '../../components/SearchField.jsx';
-import { ListPagination } from '../../components/ListPagination.jsx';
+import { ListPagination, countText } from '../../components/ListPagination.jsx';
 import { usePagedList } from '../../hooks/usePagedList.js';
 import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
@@ -62,7 +62,7 @@ export function OverseasResidentsPage() {
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${total} ${total === 1 ? 'person' : 'people'} residing overseas`,
+          `${countText(q.data)} ${total === 1 ? 'person' : 'people'} residing overseas`,
           homeCountry ? `home ${countryName(homeCountry) ?? homeCountry}` : null,
           firm?.name,
           branch?.name,
@@ -74,7 +74,7 @@ export function OverseasResidentsPage() {
             startIcon={<TableViewIcon />}
             disabled={total === 0}
             onClick={() => exportIndividualsCsv({
-              params: filters, total, prefix: 'overseas-residents', firm, branch, showToast, noun: ['person', 'people'],
+              params: filters, total: countText(q.data), prefix: 'overseas-residents', firm, branch, showToast, noun: ['person', 'people'],
             })}
           >
             Download CSV
@@ -91,7 +91,7 @@ export function OverseasResidentsPage() {
       {/* Says what the register cannot see, so an empty table is not mistaken for a clean one. */}
       {!unansweredQ.isLoading && unanswered > 0 && (
         <Alert severity="info">
-          {unanswered} {unanswered === 1 ? 'person has' : 'people have'} no country of residence
+          {countText(unansweredQ.data)} {unanswered === 1 ? 'person has' : 'people have'} no country of residence
           recorded and {unanswered === 1 ? 'is' : 'are'} not counted here. Set it on the owner’s
           Details tab.
         </Alert>

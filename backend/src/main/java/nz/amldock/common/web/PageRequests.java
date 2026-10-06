@@ -14,6 +14,19 @@ public record PageRequests(int page, int size) {
     public static final int MAX_SIZE = 100;
 
     /**
+     * Totals are exact up to this many rows; beyond it a list reports "more than 1,000" instead of
+     * counting every row. An exact count visits every matching row, so it grows with the data
+     * however good the indexes are: the owners count took 109 ms at 25k deals per firm, the capped
+     * one 4 ms (perf/reports/2026-10-06-scale-500k.md).
+     */
+    public static final int COUNT_CAP = 1000;
+
+    /** {@code SELECT count(*)} over at most {@code COUNT_CAP + 1} rows of {@code fromWhere}. */
+    public static String cappedCountSql(String fromWhere) {
+        return "SELECT count(*) FROM (SELECT 1" + fromWhere + " LIMIT " + (COUNT_CAP + 1) + ") capped";
+    }
+
+    /**
      * The property address as searched, over table alias {@code p}: the four address parts joined
      * with ", ". Plain concatenation, not concat_ws, because an index expression must be IMMUTABLE
      * and concat_ws is only STABLE; perf/sql/gin-indexes.sql indexes exactly this expression, so

@@ -11,7 +11,7 @@ import { DealsTable } from '../components/DealsTable.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { DealCard } from '../components/DealCard.jsx';
 import { SearchField } from '../components/SearchField.jsx';
-import { ListPagination } from '../components/ListPagination.jsx';
+import { ListPagination, countText } from '../components/ListPagination.jsx';
 import { usePagedList } from '../hooks/usePagedList.js';
 import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, opensDealForm } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
@@ -76,7 +76,7 @@ export function DealsPage() {
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${total} ${total === 1 ? 'deal' : 'deals'}`,
+          `${countText(dealsQ.data)} ${total === 1 ? 'deal' : 'deals'}`,
           status === 'ALL' ? 'all statuses' : dealStatusLabel(status).toLowerCase(),
           query.trim() ? `matching "${query.trim()}"` : null,
           firm?.name,

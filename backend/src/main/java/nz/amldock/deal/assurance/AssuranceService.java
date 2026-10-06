@@ -95,7 +95,7 @@ public class AssuranceService {
     public PageResponse<AssuranceDealDto> list(AssuranceQuery.Filter filter, PageRequests paging) {
         DealScope scope = dealList.scopeForCurrentUser(filter.firmId(), filter.branchId());
         AssuranceQuery.RowPage page = query.page(scope, filter, paging);
-        if (page.rows().isEmpty()) return PageResponse.of(List.of(), paging, page.total());
+        if (page.rows().isEmpty()) return PageResponse.of(List.of(), paging, page.total(), page.exact());
 
         List<DealListItemDto> dealRows = dealList.toListItems(
                 dealList.loadInOrder(page.rows().stream().map(AssuranceQuery.Row::dealId).toList()));
@@ -122,7 +122,7 @@ public class AssuranceService {
             out.add(new AssuranceDealDto(deal, v == null ? null
                     : toDto(v, people, issuesByVersion.getOrDefault(v.getId(), List.of()))));
         }
-        return PageResponse.of(out, paging, page.total());
+        return PageResponse.of(out, paging, page.total(), page.exact());
     }
 
     /**

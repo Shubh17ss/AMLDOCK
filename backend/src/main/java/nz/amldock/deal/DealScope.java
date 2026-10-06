@@ -46,14 +46,28 @@ public record DealScope(Long creatorId, Long firmId, Long branchId) {
     }
 
     /**
+     * True when the scope narrows to one agent, branch or firm. Searches then test the scoped rows
+     * directly (cost tracks the scope); only an unscoped, platform-wide search uses sub-selects
+     * that let the trigram indexes find matches across the platform.
+     */
+    public boolean isNarrow() {
+        return creatorId != null || branchId != null || firmId != null;
+    }
+
+    /**
      * Appends this scope as {@code AND ...} predicates on the deal table aliased {@code d}.
      * Optional parts are left out entirely rather than written as {@code :x IS NULL OR ...},
      * which keeps the plans index-friendly and sidesteps Postgres' untyped-null parameters.
      */
     public void appendWhere(StringBuilder sql, MapSqlParameterSource params, String d) {
         if (creatorId != null) {
-            sql.append(" AND (").append(d).append(".created_by_user_id = :scopeCreator OR ")
-               .append(d).append(".id IN (SELECT du.deal_id FROM deal_user du WHERE du.user_id = :scopeCreator))");
+            // A UNION of two indexed lookups (idx_deal_created_by, idx_deal_user_user), not
+            // "created_by = :me OR id IN (deal_user ...)": that OR defeats both indexes and scanned
+            // every deal on the platform, 650-800 ms per call at 500k deals
+            // (perf/reports/2026-10-06-scale-500k.md). This costs the agent's own deals, whatever
+            // the size of the platform.
+            sql.append(" AND ").append(d).append(".id IN (SELECT sc.id FROM deal sc WHERE sc.created_by_user_id = :scopeCreator")
+               .append(" UNION SELECT du.deal_id FROM deal_user du WHERE du.user_id = :scopeCreator)");
             params.addValue("scopeCreator", creatorId);
         }
         if (branchId != null) {

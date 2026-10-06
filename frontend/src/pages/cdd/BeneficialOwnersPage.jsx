@@ -5,7 +5,7 @@ import { downloadIndividualsCsv, listIndividuals } from '../../api/individuals.j
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { SearchField } from '../../components/SearchField.jsx';
-import { ListPagination } from '../../components/ListPagination.jsx';
+import { ListPagination, countText } from '../../components/ListPagination.jsx';
 import { usePagedList } from '../../hooks/usePagedList.js';
 import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
@@ -33,7 +33,7 @@ export async function exportIndividualsCsv({
     .filter(Boolean).join('-');
   try {
     await downloadIndividualsCsv({ ...params, filename: `${name}.csv` });
-    showToast({ severity: 'success', message: `Exported ${total} ${total === 1 ? noun[0] : noun[1]}` });
+    showToast({ severity: 'success', message: `Exported ${total} ${total === '1' ? noun[0] : noun[1]}` });
   } catch {
     showToast({ severity: 'error', message: 'The export failed. Try again.' });
   }
@@ -68,7 +68,7 @@ export function BeneficialOwnersPage() {
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${total} ${total === 1 ? 'owner' : 'owners'} on record`,
+          `${countText(q.data)} ${total === 1 ? 'owner' : 'owners'} on record`,
           firm?.name,
           branch?.name,
         ].filter(Boolean).join(' · ')}
@@ -79,7 +79,7 @@ export function BeneficialOwnersPage() {
             startIcon={<TableViewIcon />}
             disabled={total === 0}
             onClick={() => exportIndividualsCsv({
-              params: filters, total, prefix: 'beneficial-owners', firm, branch, showToast,
+              params: filters, total: countText(q.data), prefix: 'beneficial-owners', firm, branch, showToast,
             })}
           >
             Download CSV

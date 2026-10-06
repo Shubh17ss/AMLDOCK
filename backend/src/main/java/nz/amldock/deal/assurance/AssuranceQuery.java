@@ -35,7 +35,8 @@ public class AssuranceQuery {
     /** One register row: the deal and its latest version (null when it has none). */
     public record Row(long dealId, Long versionId) {}
 
-    public record RowPage(List<Row> rows, long total) {}
+    /** @param exact false when {@code total} is the {@link PageRequests#COUNT_CAP} floor */
+    public record RowPage(List<Row> rows, long total, boolean exact) {}
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -51,7 +52,7 @@ public class AssuranceQuery {
                 .append("   WHERE dv.deal_id = d.id ORDER BY dv.version_no DESC LIMIT 1) v ON true")
                 .append(" WHERE d.status IN ('VERIFIED', 'CLOSED')");
         scope.appendWhere(sql, params, "d");
-        nz.amldock.deal.DealListQuery.appendSearch(sql, params, f.q());
+        nz.amldock.deal.DealListQuery.appendSearch(sql, params, f.q(), scope.isNarrow());
 
         boolean ranged = f.from() != null || f.to() != null;
         if (ranged) {
@@ -74,13 +75,14 @@ public class AssuranceQuery {
             }
         }
 
-        long total = jdbc.queryForObject("SELECT count(*)" + sql, params, Long.class);
-        if (total == 0 || paging.offset() >= total) return new RowPage(List.of(), total);
+        long total = jdbc.queryForObject(PageRequests.cappedCountSql(sql.toString()), params, Long.class);
+        boolean exact = total <= PageRequests.COUNT_CAP;
+        if (total == 0 || (exact && paging.offset() >= total)) return new RowPage(List.of(), total, exact);
         params.addValue("limit", paging.size()).addValue("offset", paging.offset());
         List<Row> rows = jdbc.query("SELECT d.id AS deal_id, v.id AS version_id" + sql
                         + " ORDER BY v.verified_at DESC NULLS LAST, d.id DESC LIMIT :limit OFFSET :offset",
                 params, (rs, i) -> new Row(rs.getLong("deal_id"), (Long) rs.getObject("version_id", Long.class)));
-        return new RowPage(rows, total);
+        return new RowPage(rows, total, exact);
     }
 
     /** Inclusive at both ends, either end optional; matches the old in-memory {@code within}. */

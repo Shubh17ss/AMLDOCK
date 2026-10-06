@@ -277,7 +277,7 @@ class AssuranceServiceTest {
 
     @Test
     void theQueryIsScopedToTheCallersFirmWhateverFirmIsAskedFor() {
-        when(query.page(any(), any(), any())).thenReturn(new AssuranceQuery.RowPage(List.of(), 0));
+        when(query.page(any(), any(), any())).thenReturn(new AssuranceQuery.RowPage(List.of(), 0, true));
         AssuranceQuery.Filter askedForAnotherFirm =
                 new AssuranceQuery.Filter(OTHER_FIRM_ID, null, null, null, null, null);
 
@@ -294,7 +294,7 @@ class AssuranceServiceTest {
     }
 
     private void stubPage(AssuranceQuery.Row row, DealVersion... vs) {
-        when(query.page(any(), any(), any())).thenReturn(new AssuranceQuery.RowPage(List.of(row), 1));
+        when(query.page(any(), any(), any())).thenReturn(new AssuranceQuery.RowPage(List.of(row), 1, true));
         DealListItemDto item = mock(DealListItemDto.class);
         lenient().when(item.id()).thenReturn(DEAL_ID);
         when(dealList.loadInOrder(List.of(DEAL_ID))).thenReturn(List.of(deal));

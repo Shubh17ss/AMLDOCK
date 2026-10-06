@@ -87,7 +87,7 @@ public class IndividualService {
     public PageResponse<IndividualRowDto> list(IndividualQuery.Filter filter, PageRequests paging) {
         DealScope scope = dealList.scopeForCurrentUser(filter.firmId(), filter.branchId());
         IdPage ids = query.page(scope, filter, paging.size(), paging.offset());
-        return PageResponse.of(rows(ids.ids()), paging, ids.total());
+        return PageResponse.of(rows(ids.ids()), paging, ids.total(), ids.exact());
     }
 
     /** Rows for the given node ids, in that order. Bulk-loads each table once for the batch. */

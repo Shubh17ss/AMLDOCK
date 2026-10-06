@@ -54,6 +54,13 @@ public class IndividualQuery {
         }
         StringBuilder where = new StringBuilder(" WHERE 1 = 1");
         scope.appendWhere(where, params, "d");
+        // Redundant with the deal scope, and that is the point: the owner's own firm column (V56,
+        // kept by triggers) lets the register page and the name search start from that firm's
+        // index entries instead of joining through every structure and deal on the platform.
+        if (scope.firmId() != null) {
+            where.append(" AND n.real_estate_firm_id = :ownerFirm");
+            params.addValue("ownerFirm", scope.firmId());
+        }
         if (!f.allTypes()) where.append(" AND n.node_type = 'INDIVIDUAL'");
         if (f.verification() != null) {
             where.append(" AND n.verification_status = :verification");
@@ -66,24 +73,35 @@ public class IndividualQuery {
         }
         String pattern = PageRequests.containsPattern(f.q());
         if (pattern != null) {
-            // One sub-select per field, not a single OR across the joined tables: the OR forces a
-            // join of every owner, structure and deal before any filtering, and no index can serve
-            // it. See DealListQuery.appendSearch.
-            where.append(" AND (n.id IN (SELECT nn.id FROM ownership_node nn WHERE nn.display_name ILIKE :q")
-                 .append(PageRequests.LIKE_ESCAPE).append(")")
-                 .append(" OR d.id IN (SELECT dr.id FROM deal dr WHERE dr.reference ILIKE :q")
-                 .append(PageRequests.LIKE_ESCAPE).append(")")
-                 .append(" OR d.property_id IN (SELECT p.id FROM property p WHERE ")
-                 .append(PageRequests.ADDRESS_SEARCH_SQL).append(" ILIKE :q")
-                 .append(PageRequests.LIKE_ESCAPE).append("))");
+            // Same two shapes as DealListQuery.appendSearch. With a narrow scope (an agent, a branch
+            // or a firm; the firm also via idx_ownership_node_firm_id), the fields are tested on the
+            // scoped rows directly, so cost tracks the scope rather than the platform's matches.
+            // Platform-wide (ROOT), one sub-select per field lets each trigram index find matches;
+            // a single OR across the joined tables would force a join of everything first.
+            if (scope.isNarrow()) {
+                where.append(" AND (n.display_name ILIKE :q").append(PageRequests.LIKE_ESCAPE)
+                     .append(" OR d.reference ILIKE :q").append(PageRequests.LIKE_ESCAPE)
+                     .append(" OR EXISTS (SELECT 1 FROM property p WHERE p.id = d.property_id AND ")
+                     .append(PageRequests.ADDRESS_SEARCH_SQL).append(" ILIKE :q")
+                     .append(PageRequests.LIKE_ESCAPE).append("))");
+            } else {
+                where.append(" AND (n.id IN (SELECT nn.id FROM ownership_node nn WHERE nn.display_name ILIKE :q")
+                     .append(PageRequests.LIKE_ESCAPE).append(")")
+                     .append(" OR d.id IN (SELECT dr.id FROM deal dr WHERE dr.reference ILIKE :q")
+                     .append(PageRequests.LIKE_ESCAPE).append(")")
+                     .append(" OR d.property_id IN (SELECT p.id FROM property p WHERE ")
+                     .append(PageRequests.ADDRESS_SEARCH_SQL).append(" ILIKE :q")
+                     .append(PageRequests.LIKE_ESCAPE).append("))");
+            }
             params.addValue("q", pattern);
         }
 
-        long total = jdbc.queryForObject("SELECT count(*)" + from + where, params, Long.class);
-        if (total == 0 || offset >= total) return new IdPage(List.of(), total);
+        long total = jdbc.queryForObject(PageRequests.cappedCountSql(from.toString() + where), params, Long.class);
+        boolean exact = total <= PageRequests.COUNT_CAP;
+        if (total == 0 || (exact && offset >= total)) return new IdPage(List.of(), total, exact);
         params.addValue("limit", limit).addValue("offset", offset);
         List<Long> ids = jdbc.queryForList("SELECT n.id" + from + where
                 + " ORDER BY n.id DESC LIMIT :limit OFFSET :offset", params, Long.class);
-        return new IdPage(ids, total);
+        return new IdPage(ids, total, exact);
     }
 }

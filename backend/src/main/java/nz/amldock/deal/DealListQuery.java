@@ -48,31 +48,48 @@ public class DealListQuery {
             where.append(" AND d.status IN (:statuses)");
             params.addValue("statuses", statuses.stream().map(Enum::name).toList());
         }
-        appendSearch(where, params, q);
+        appendSearch(where, params, q, scope.isNarrow());
 
-        long total = jdbc.queryForObject("SELECT count(*) FROM deal d" + where, params, Long.class);
-        if (total == 0 || paging.offset() >= total) return new IdPage(List.of(), total);
+        long total = jdbc.queryForObject(PageRequests.cappedCountSql(" FROM deal d" + where), params, Long.class);
+        boolean exact = total <= PageRequests.COUNT_CAP;
+        if (total == 0 || (exact && paging.offset() >= total)) return new IdPage(List.of(), total, exact);
 
         params.addValue("limit", paging.size()).addValue("offset", paging.offset());
         List<Long> ids = jdbc.queryForList(
                 "SELECT d.id FROM deal d" + where
                         + " ORDER BY " + sort.column + " DESC, d.id DESC LIMIT :limit OFFSET :offset",
                 params, Long.class);
-        return new IdPage(ids, total);
+        return new IdPage(ids, total, exact);
     }
 
     /**
      * Reference, client name or property address contains the text. The same fields the list
      * pages searched client-side before the list was paged.
      *
-     * <p>Each field is matched in its own sub-select rather than as one OR across the joined
-     * tables. A cross-table OR forces Postgres to join everything and test every row; separate
-     * sub-selects let each use its own trigram index where one exists
-     * (perf/reports/2026-10-06-gin-indexes.md), and are just as correct where none does.
+     * <p>Two shapes, chosen by the scope:
+     * <ul>
+     *   <li><b>Narrow scope</b> (an agent, a branch or a firm): the fields are tested on the scoped
+     *       rows themselves, so the cost tracks the scope. Platform-wide sub-selects here would
+     *       gather every match on the platform first: "DEAL-2026" matched all 503k references and
+     *       took 2-3 s at 500k deals (perf/reports/2026-10-06-scale-500k.md).</li>
+     *   <li><b>No scope</b> (ROOT/AUDIT across the platform): one sub-select per field, so each
+     *       can use its trigram index (perf/reports/2026-10-06-gin-indexes.md). A single OR across
+     *       the joined tables would force a join of everything first.</li>
+     * </ul>
      */
-    public static void appendSearch(StringBuilder where, MapSqlParameterSource params, String q) {
+    public static void appendSearch(StringBuilder where, MapSqlParameterSource params, String q, boolean narrowScope) {
         String pattern = PageRequests.containsPattern(q);
         if (pattern == null) return;
+        params.addValue("q", pattern);
+        if (narrowScope) {
+            where.append(" AND (d.reference ILIKE :q").append(PageRequests.LIKE_ESCAPE)
+                 .append(" OR EXISTS (SELECT 1 FROM client c WHERE c.id = d.client_id AND c.display_name ILIKE :q")
+                 .append(PageRequests.LIKE_ESCAPE).append(")")
+                 .append(" OR EXISTS (SELECT 1 FROM property p WHERE p.id = d.property_id AND ")
+                 .append(PageRequests.ADDRESS_SEARCH_SQL).append(" ILIKE :q")
+                 .append(PageRequests.LIKE_ESCAPE).append("))");
+            return;
+        }
         where.append(" AND (d.id IN (SELECT dr.id FROM deal dr WHERE dr.reference ILIKE :q")
              .append(PageRequests.LIKE_ESCAPE).append(")")
              .append(" OR d.client_id IN (SELECT c.id FROM client c WHERE c.display_name ILIKE :q")
@@ -80,7 +97,6 @@ public class DealListQuery {
              .append(" OR d.property_id IN (SELECT p.id FROM property p WHERE ")
              .append(PageRequests.ADDRESS_SEARCH_SQL).append(" ILIKE :q")
              .append(PageRequests.LIKE_ESCAPE).append("))");
-        params.addValue("q", pattern);
     }
 
     /** Per-status aggregates for the dashboards, over everything in scope. */
