@@ -124,7 +124,7 @@ export function DealsPage() {
         <SearchField
           value={query}
           onChange={paged.setSearch}
-          placeholder="Search by property, reference or client…"
+          placeholder="Search by property address…"
           sx={{
             width: { xs: '100%', md: 'auto' },
             maxWidth: { xs: 'none', md: 320 },

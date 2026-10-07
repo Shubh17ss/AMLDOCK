@@ -1,6 +1,7 @@
 package nz.amldock.deal.assurance;
 
 import nz.amldock.common.web.PageRequests;
+import nz.amldock.deal.DealListQuery;
 import nz.amldock.deal.DealScope;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -16,8 +17,7 @@ import java.util.List;
  * version only. Replaces building the full deals list once per status and loading every version
  * of every deal to show one page.
  *
- * <p>The latest version comes from a LATERAL lookup on {@code idx_deal_version_deal
- * (deal_id, version_no DESC)}: one index probe per row.
+ * <p>The latest version's facts are read off the deal (V57 projections).
  */
 @Repository
 public class AssuranceQuery {
@@ -28,7 +28,7 @@ public class AssuranceQuery {
     /**
      * @param from inclusive; a deal is in range if its latest version was verified, or the deal
      *             was closed, within [from, to]. Either bound may be null for an open range.
-     * @param q    contains-match on reference, client name or property address
+     * @param q    contains-match on the property address
      */
     public record Filter(Long firmId, Long branchId, Instant from, Instant to, String q, Verdict verdict) {}
 
@@ -39,20 +39,25 @@ public class AssuranceQuery {
     public record RowPage(List<Row> rows, long total, boolean exact) {}
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final DealListQuery deals;
 
-    public AssuranceQuery(NamedParameterJdbcTemplate jdbc) {
+    public AssuranceQuery(NamedParameterJdbcTemplate jdbc, DealListQuery deals) {
         this.jdbc = jdbc;
+        this.deals = deals;
     }
 
     public RowPage page(DealScope scope, Filter f, PageRequests paging) {
         MapSqlParameterSource params = new MapSqlParameterSource();
+        // The latest version's facts live on the deal itself (latest_version_id, latest_verified_at,
+        // latest_assurance_status, last_closed_at), kept current by triggers (V57). So the
+        // register reads straight off idx_deal_assurable[_branch] in display order and stops
+        // after the page, instead of looking up the latest version of every assurable deal in the
+        // firm first (~600 ms at 25k deals per firm).
         StringBuilder sql = new StringBuilder()
                 .append(" FROM deal d")
-                .append(" LEFT JOIN LATERAL (SELECT dv.id, dv.verified_at, dv.assurance_status FROM deal_version dv")
-                .append("   WHERE dv.deal_id = d.id ORDER BY dv.version_no DESC LIMIT 1) v ON true")
                 .append(" WHERE d.status IN ('VERIFIED', 'CLOSED')");
         scope.appendWhere(sql, params, "d");
-        nz.amldock.deal.DealListQuery.appendSearch(sql, params, f.q(), scope.isNarrow());
+        deals.appendSearch(sql, params, f.q(), scope);
 
         boolean ranged = f.from() != null || f.to() != null;
         if (ranged) {
@@ -60,16 +65,14 @@ public class AssuranceQuery {
             if (f.to() != null) params.addValue("to", OffsetDateTime.ofInstant(f.to(), ZoneOffset.UTC));
             // Closing happens to the version the deal stands on, so a close in range brings in the
             // latest version; a deal with no version at all has nothing to show for the range.
-            sql.append(" AND v.id IS NOT NULL AND (").append(inRange("v.verified_at", f))
-               .append(" OR (d.status = 'CLOSED' AND ")
-               .append(inRange("(SELECT max(m.occurred_at) FROM deal_status_move m WHERE m.deal_id = d.id AND m.kind = 'CLOSE')", f))
-               .append("))");
+            sql.append(" AND d.latest_version_id IS NOT NULL AND (").append(inRange("d.latest_verified_at", f))
+               .append(" OR (d.status = 'CLOSED' AND ").append(inRange("d.last_closed_at", f)).append("))");
         }
         if (f.verdict() != null) {
             switch (f.verdict()) {
-                case AWAITING -> sql.append(" AND v.id IS NOT NULL AND v.assurance_status IS NULL");
+                case AWAITING -> sql.append(" AND d.latest_version_id IS NOT NULL AND d.latest_assurance_status IS NULL");
                 case ASSURED, ACTION_REQUIRED -> {
-                    sql.append(" AND v.assurance_status = :verdict");
+                    sql.append(" AND d.latest_assurance_status = :verdict");
                     params.addValue("verdict", f.verdict().name());
                 }
             }
@@ -79,8 +82,8 @@ public class AssuranceQuery {
         boolean exact = total <= PageRequests.COUNT_CAP;
         if (total == 0 || (exact && paging.offset() >= total)) return new RowPage(List.of(), total, exact);
         params.addValue("limit", paging.size()).addValue("offset", paging.offset());
-        List<Row> rows = jdbc.query("SELECT d.id AS deal_id, v.id AS version_id" + sql
-                        + " ORDER BY v.verified_at DESC NULLS LAST, d.id DESC LIMIT :limit OFFSET :offset",
+        List<Row> rows = jdbc.query("SELECT d.id AS deal_id, d.latest_version_id AS version_id" + sql
+                        + " ORDER BY d.latest_verified_at DESC NULLS LAST, d.id DESC LIMIT :limit OFFSET :offset",
                 params, (rs, i) -> new Row(rs.getLong("deal_id"), (Long) rs.getObject("version_id", Long.class)));
         return new RowPage(rows, total, exact);
     }

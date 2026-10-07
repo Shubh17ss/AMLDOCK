@@ -14,7 +14,7 @@ import { compact } from './deals.js';
  *
  * - `from` / `to`: ISO instants, either optional. A deal is included if its latest version was
  *   verified in the range, or the deal was closed in the range.
- * - `q`: reference, client name or property address.
+ * - `q`: property address (3+ characters; shorter is ignored).
  * - `assurance`: 'AWAITING' | 'ASSURED' | 'ACTION_REQUIRED', on the latest version's verdict.
  * - `page` (0-based), `size` (max 100).
  */

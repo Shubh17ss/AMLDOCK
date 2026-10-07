@@ -3,7 +3,7 @@ import { apiClient } from './client.js';
 /**
  * One page of the deals the caller may read: `{ items, page, size, totalElements, totalPages }`.
  *
- * Params: `status`, `firmId`, `branchId`, `q` (reference, client name or property address),
+ * Params: `status`, `firmId`, `branchId`, `q` (property address, 3+ characters),
  * `sort` ('createdAt' default | 'updatedAt', newest first), `page` (0-based), `size` (max 100).
  * Filtering and search run on the server, so never filter `items` again in the browser.
  */

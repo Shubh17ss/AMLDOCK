@@ -41,39 +41,46 @@ public class IndividualQuery {
 
     public IdPage page(DealScope scope, Filter f, int limit, long offset) {
         MapSqlParameterSource params = new MapSqlParameterSource();
-        StringBuilder from = new StringBuilder()
-                .append(" FROM ownership_node n")
-                .append(" JOIN ownership_structure s ON s.id = n.ownership_structure_id")
+        String pattern = PageRequests.containsPattern(f.q());
+        // A firm-only scope (compliance staff, or ROOT filtering by firm) is answered from the
+        // owner's own firm column (V56, kept exact by triggers), so the owner table alone is
+        // enough: no join through structure and deal, and the register walks the (firm, id DESC)
+        // indexes and stops after the page. The deal is joined only when it narrows further (an
+        // agent, a branch) or a search reads its reference and address.
+        boolean firmOnly = scope.firmId() != null && scope.branchId() == null && scope.creatorId() == null;
+        boolean joinDeal = !firmOnly || pattern != null;
+        StringBuilder from = new StringBuilder(" FROM ownership_node n");
+        if (joinDeal) {
+            from.append(" JOIN ownership_structure s ON s.id = n.ownership_structure_id")
                 .append(" JOIN deal d ON d.id = s.deal_id");
-        if (f.residence() != null) {
-            from.append(" LEFT JOIN beneficial_owner bo ON bo.id = n.beneficial_owner_id");
-        }
-        if (f.residence() == Residence.OVERSEAS) {
-            from.append(" JOIN firm_branch rfb ON rfb.id = d.firm_branch_id")
-                .append(" JOIN real_estate_firm rf ON rf.id = rfb.real_estate_firm_id");
         }
         StringBuilder where = new StringBuilder(" WHERE 1 = 1");
-        scope.appendWhere(where, params, "d");
-        // Redundant with the deal scope, and that is the point: the owner's own firm column (V56,
-        // kept by triggers) lets the register page and the name search start from that firm's
-        // index entries instead of joining through every structure and deal on the platform.
+        if (joinDeal) scope.appendWhere(where, params, "d");
+        // With a firm in scope the owner's firm column is the index-friendly form of it.
         if (scope.firmId() != null) {
             where.append(" AND n.real_estate_firm_id = :ownerFirm");
             params.addValue("ownerFirm", scope.firmId());
         }
         if (!f.allTypes()) where.append(" AND n.node_type = 'INDIVIDUAL'");
+        // Sparse states are read off the owner row (V57: residence_country / is_overseas kept by
+        // triggers) and each has a partial index, so a filter that matches few owners costs those
+        // few, not every owner in the firm (1.1-1.4 s at 25k deals per firm before).
         if (f.verification() != null) {
-            where.append(" AND n.verification_status = :verification");
-            params.addValue("verification", f.verification());
+            // Inlined, not bound: a partial index (idx_ownership_node_exception) only matches a
+            // literal predicate, and the driver's generic prepared plans would not use it. Safe:
+            // the value is a NodeVerificationStatus name, validated by the controller.
+            String status = nz.amldock.ownership.NodeVerificationStatus.valueOf(f.verification()).name();
+            where.append(" AND n.verification_status = '").append(status).append("'");
         }
         if (f.residence() == Residence.OVERSEAS) {
-            where.append(" AND bo.country_of_residence IS NOT NULL AND bo.country_of_residence <> rf.country");
+            where.append(" AND n.is_overseas");
         } else if (f.residence() == Residence.UNANSWERED) {
-            where.append(" AND bo.country_of_residence IS NULL");
+            where.append(" AND n.residence_country IS NULL");
         }
-        String pattern = PageRequests.containsPattern(f.q());
+        // (pattern computed above: it also decides whether the deal is joined)
         if (pattern != null) {
-            // Same two shapes as DealListQuery.appendSearch. With a narrow scope (an agent, a branch
+            // Two shapes (DealListQuery.appendSearch now picks per request; this one still goes by
+            // scope alone). With a narrow scope (an agent, a branch
             // or a firm; the firm also via idx_ownership_node_firm_id), the fields are tested on the
             // scoped rows directly, so cost tracks the scope rather than the platform's matches.
             // Platform-wide (ROOT), one sub-select per field lets each trigram index find matches;

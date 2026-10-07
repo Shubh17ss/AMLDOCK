@@ -106,7 +106,7 @@ export function CddAssurancePage() {
         <SearchField
           value={query}
           onChange={paged.setSearch}
-          placeholder="Search property, deal or client…"
+          placeholder="Search property address…"
           sx={{ maxWidth: { xs: '100%', md: 320 }, width: '100%' }}
         />
         <Stack direction="row" spacing={1.5} sx={{ flexShrink: 0 }}>

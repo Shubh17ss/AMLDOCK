@@ -36,6 +36,9 @@ public record PageRequests(int page, int size) {
             "(coalesce(p.address_line1, '') || ', ' || coalesce(p.suburb, '') || ', '"
                     + " || coalesce(p.district, '') || ', ' || coalesce(p.region, ''))";
 
+    /** Shorter search text is ignored (no filter), see {@link #containsPattern}. */
+    public static final int MIN_SEARCH_LENGTH = 3;
+
     /** Appended after {@code ILIKE :param}: backslash is the escape character in the pattern. */
     public static final String LIKE_ESCAPE = " ESCAPE '\\'";
 
@@ -51,11 +54,13 @@ public record PageRequests(int page, int size) {
 
     /**
      * {@code %q%} for a case-insensitive contains match, with LIKE's own wildcards escaped so a
-     * search for "50%" means the text, not a pattern. Null when there is nothing to search for.
-     * Pair with {@code ILIKE :q} followed by {@link #LIKE_ESCAPE}.
+     * search for "50%" means the text, not a pattern. Null when there is nothing to search for,
+     * including fewer than {@link #MIN_SEARCH_LENGTH} characters: a trigram index needs three to
+     * match on, and debounced searches fire on partial words. Pair with {@code ILIKE :q} followed
+     * by {@link #LIKE_ESCAPE}.
      */
     public static String containsPattern(String q) {
-        if (q == null || q.isBlank()) return null;
+        if (q == null || q.trim().length() < MIN_SEARCH_LENGTH) return null;
         String escaped = q.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
         return "%" + escaped + "%";
     }
