@@ -18,6 +18,9 @@ import { countText } from '../../components/ListPagination.jsx';
 /** Past this many matches the list stops being a list and starts being a wall. */
 const MAX_ROWS = 8;
 
+/** The server ignores shorter search text (PageRequests.MIN_SEARCH_LENGTH). */
+const MIN_SEARCH = 3;
+
 /**
  * Names an individual, either by finding one the firm has met before or by typing a new one.
  *
@@ -61,9 +64,10 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
 
   // Firm, never branch: an individual is on file for the firm, and a reviewer looking for someone
   // onboarded at another office should still find them. The params are advisory anyway — the
-  // server narrows by role. Nothing until two characters are typed: opening straight into every
+  // server narrows by role. Nothing until three characters are typed (the server ignores shorter
+  // text, and a trigram search needs three): opening straight into every
   // person the firm has ever onboarded would be a list to scroll, not an answer to a question.
-  const searching = Boolean(active) && debounced.length >= 2;
+  const searching = Boolean(active) && debounced.length >= MIN_SEARCH;
   const listQ = useQuery({
     queryKey: ['individuals', 'picker', firm?.id ?? null, debounced],
     queryFn: () => listIndividuals({ firmId: firm?.id, q: debounced, size: MAX_ROWS }),
@@ -73,7 +77,7 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
   const shown = searching ? listQ.data?.items ?? [] : [];
   // How many match in total; only the first MAX_ROWS are fetched.
   const matchCount = searching ? listQ.data?.totalElements ?? 0 : 0;
-  const pending = query.length >= 2 && (query !== debounced || listQ.isLoading);
+  const pending = query.length >= MIN_SEARCH && (query !== debounced || listQ.isLoading);
 
   if (selected) {
     return <ChosenPerson person={selected} onClear={onClear} />;

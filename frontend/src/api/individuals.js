@@ -11,7 +11,7 @@ import { compact } from './deals.js';
  * - `allTypes`: every kind of owner (trusts, companies...), not only natural persons. Opt-in
  *   because the owner picker offers people to copy onto a new individual, where a trust means
  *   nothing.
- * - `q`: owner name, deal reference or property address contains the text.
+ * - `q`: the owner's name contains the text (3+ characters; shorter is ignored).
  * - `residence`: 'OVERSEAS' (lives outside the deal's reporting-entity country) or 'UNANSWERED'.
  * - `verification`: e.g. 'VERIFIED_WITH_EXCEPTION'.
  * - `page` (0-based), `size` (max 100).

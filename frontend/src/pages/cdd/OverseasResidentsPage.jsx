@@ -82,7 +82,7 @@ export function OverseasResidentsPage() {
         )}
       />
 
-      <SearchField value={query} onChange={paged.setSearch} placeholder="Search name, property or deal…" />
+      <SearchField value={query} onChange={paged.setSearch} placeholder="Search owner name…" />
 
       {q.isError && (
         <Alert severity="error">Failed to load the register. Refresh to try again.</Alert>

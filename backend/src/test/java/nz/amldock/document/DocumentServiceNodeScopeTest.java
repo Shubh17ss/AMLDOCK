@@ -192,6 +192,8 @@ class DocumentServiceNodeScopeTest {
 
         assertThat(doc.getBeneficialOwnerId()).isEqualTo(PERSON_ID);
         assertThat(doc.getOcrStatus()).isEqualTo(OcrStatus.PENDING);
+        // Due straight away, and never NULL while claimable: the claim's index orders by it (V60).
+        assertThat(doc.getOcrNextAttemptAt()).isNotNull().isBeforeOrEqualTo(Instant.now());
         assertThat(doc.getIdSide()).isEqualTo(IdSide.FRONT);
     }
 

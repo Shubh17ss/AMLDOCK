@@ -12,7 +12,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -20,9 +19,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * The owner search picks its shape per request from how common each arm's term is: rare arms
- * through their indexes, common ones tested on the scope's rows, and the deal joined only when a
- * common deal arm needs its row.
+ * Owner search matches the owner's name only, in whichever shape is cheap for the term: a rare name
+ * through its index, a common one tested on the scope's rows. Neither needs the deal.
  */
 class IndividualQuerySearchTest {
 
@@ -44,58 +42,50 @@ class IndividualQuerySearchTest {
     }
 
     @Test
-    void allRareArmsAreUnionedThroughTheirIndexesWithoutJoiningTheDeal() {
-        probes(true, true, true);
-        String sql = countSql(FIRM, "217 Queen");
-        assertThat(sql).contains("n.id IN (SELECT nn.id FROM ownership_node nn", " UNION ")
-                       .doesNotContain("JOIN deal d ON");
+    void aRareNameIsLookedUpThroughItsIndexWithoutJoiningTheDeal() {
+        when(probe.fewerThan(anyString(), anyString(), anyLong())).thenReturn(true);
+        assertThat(countSql(FIRM, "Smith Ltd"))
+                .contains("n.id IN (SELECT nn.id FROM ownership_node nn WHERE nn.display_name ILIKE")
+                .doesNotContain("JOIN deal");
     }
 
     @Test
-    void aCommonNameIsTestedOnTheOwnerRowAndRareDealArmsBecomeStructureSets() {
-        probes(false, true, true);
-        String sql = countSql(FIRM, "Smith");
-        assertThat(sql).contains("n.display_name ILIKE", "n.ownership_structure_id IN (SELECT s2.id",
-                                 "n.ownership_structure_id IN (SELECT s3.id")
-                       .doesNotContain("JOIN deal d ON", " UNION ");
+    void aCommonNameIsTestedOnTheOwnerRowWithoutJoiningTheDeal() {
+        when(probe.fewerThan(anyString(), anyString(), anyLong())).thenReturn(false);
+        assertThat(countSql(FIRM, "Smith"))
+                .contains("n.display_name ILIKE")
+                .doesNotContain("JOIN deal", "n.id IN (SELECT nn.id");
     }
 
     @Test
-    void aCommonReferenceIsTestedOnTheDealRowSoTheDealIsJoined() {
-        probes(true, false, true);
-        String sql = countSql(FIRM, "DEAL-2026");
-        assertThat(sql).contains("JOIN deal d ON", "d.reference ILIKE", "n.ownership_structure_id IN (SELECT s3.id");
+    void aBranchScopeJoinsTheDealForTheScopeOnly() {
+        when(probe.fewerThan(anyString(), anyString(), anyLong())).thenReturn(false);
+        assertThat(countSql(BRANCH, "Smith")).contains("JOIN deal d ON", "d.firm_branch_id = :scopeBranch",
+                "n.display_name ILIKE");
     }
 
     @Test
-    void aBranchScopeKeepsTheDealJoinForTheScopeItself() {
-        probes(true, true, true);
-        String sql = countSql(BRANCH, "217 Queen");
-        assertThat(sql).contains("JOIN deal d ON", "d.firm_branch_id = :scopeBranch", " UNION ");
+    void thePlatformIsProbedToo() {
+        when(probe.fewerThan(anyString(), anyString(), anyLong())).thenReturn(true);
+        assertThat(countSql(PLATFORM, "Smith Ltd")).contains("n.id IN (SELECT nn.id");
     }
 
     @Test
     void agentsAreNotProbedTheirFewDealsAreTestedRowByRow() {
-        assertThat(countSql(AGENT, "Smith")).contains("JOIN deal d ON", "n.display_name ILIKE", "d.reference ILIKE");
+        assertThat(countSql(AGENT, "Smith")).contains("JOIN deal d ON", "n.display_name ILIKE");
         verify(probe, never()).fewerThan(anyString(), anyString(), anyLong());
     }
 
     @Test
-    void thePlatformIsNotProbedEachArmUsesItsOwnSubSelect() {
-        assertThat(countSql(PLATFORM, "Smith")).contains("n.id IN (SELECT nn.id", "d.id IN (SELECT dr.id");
-        verify(probe, never()).fewerThan(anyString(), anyString(), anyLong());
+    void searchNeverReadsTheDealReferenceOrTheAddress() {
+        when(probe.fewerThan(anyString(), anyString(), anyLong())).thenReturn(true);
+        assertThat(countSql(BRANCH, "217 Queen")).doesNotContain("reference", "property");
     }
 
     @Test
-    void noSearchMeansNoProbeAndNoDealJoinForAFirm() {
+    void shortTextIsNoSearchSoNoProbe() {
         assertThat(countSql(FIRM, "ab")).doesNotContain("ILIKE", "JOIN deal");
         verify(probe, never()).fewerThan(anyString(), anyString(), anyLong());
-    }
-
-    private void probes(boolean fewNames, boolean fewRefs, boolean fewAddresses) {
-        when(probe.fewerThan(contains("ownership_node nn"), anyString(), anyLong())).thenReturn(fewNames);
-        when(probe.fewerThan(contains("FROM deal dr"), anyString(), anyLong())).thenReturn(fewRefs);
-        when(probe.fewerThan(contains("FROM property p"), anyString(), anyLong())).thenReturn(fewAddresses);
     }
 
     private String countSql(DealScope scope, String q) {

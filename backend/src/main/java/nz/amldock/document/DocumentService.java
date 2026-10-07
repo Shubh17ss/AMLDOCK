@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -181,6 +182,8 @@ public class DocumentService {
 
         if (doc.getDocumentType().isOcrEligible() && !filedAgainstNode) {
             doc.setOcrStatus(OcrStatus.PENDING);
+            // Due now. Never NULL while claimable: the claim's index orders by this (V60).
+            doc.setOcrNextAttemptAt(Instant.now());
 
             // The individual exists from here, not from a successful extraction. A broker who
             // scans an ID sees a person appear straight away, and still does when Textract
