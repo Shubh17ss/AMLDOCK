@@ -2,6 +2,7 @@ package nz.amldock.deal;
 
 import nz.amldock.common.web.IdPage;
 import nz.amldock.common.web.PageRequests;
+import nz.amldock.common.web.SearchProbe;
 import nz.amldock.deal.dto.DealSummaryDto;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -35,9 +36,11 @@ public class DealListQuery {
     }
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final SearchProbe probe;
 
-    public DealListQuery(NamedParameterJdbcTemplate jdbc) {
+    public DealListQuery(NamedParameterJdbcTemplate jdbc, SearchProbe probe) {
         this.jdbc = jdbc;
+        this.probe = probe;
     }
 
     public IdPage page(DealScope scope, List<DealStatus> statuses, String q, Sort sort, PageRequests paging) {
@@ -62,13 +65,6 @@ public class DealListQuery {
         return new IdPage(ids, total, exact);
     }
 
-    /**
-     * At most this many address matches are fetched when deciding how to search; see
-     * {@link #appendSearch}. Fewer matches than this (and than the scope's deals) means looking
-     * them up through the indexes is cheaper than walking the scope.
-     */
-    static final int SEARCH_PROBE_CAP = PageRequests.COUNT_CAP;
-
     private static final String ADDRESS_MATCH =
             PageRequests.ADDRESS_SEARCH_SQL + " ILIKE :q" + PageRequests.LIKE_ESCAPE;
 
@@ -88,7 +84,7 @@ public class DealListQuery {
      *       scope's size.</li>
      * </ul>
      * A platform-wide search always uses the index form. A narrow scope probes the index first:
-     * fewer matches than {@link #SEARCH_PROBE_CAP} and than the scope's deals means the index form,
+     * fewer matches than {@link SearchProbe#CAP} and than the scope's deals means the index form,
      * otherwise the scope form. Cost is then roughly min(matches, scope size)
      * (perf/reports/2026-10-06-scale-500k.md, "big firms").
      */
@@ -107,7 +103,7 @@ public class DealListQuery {
 
     /**
      * True when fewer properties match the term than the scope has deals, up to
-     * {@link #SEARCH_PROBE_CAP}. An agent's own deals are few, so their scope is always walked.
+     * {@link SearchProbe#CAP}. An agent's own deals are few, so their scope is always walked.
      * Other scopes are sized from the per-branch counters in {@code deal_status_summary} (V57).
      */
     private boolean fewMatches(DealScope scope, String pattern) {
@@ -117,12 +113,8 @@ public class DealListQuery {
         scope.appendWhere(sizeWhere, sizeParams, "s");
         Long scopeSize = jdbc.queryForObject(
                 "SELECT coalesce(sum(s.deal_count), 0) FROM deal_status_summary s" + sizeWhere, sizeParams, Long.class);
-        long cap = Math.min(scopeSize == null ? 0 : scopeSize, SEARCH_PROBE_CAP);
-        if (cap == 0) return true;
-        // The limit is our own number, inlined so the plan is made knowing it; the term stays bound.
-        Long matches = jdbc.queryForObject("SELECT count(*) FROM (SELECT 1 FROM property p WHERE " + ADDRESS_MATCH
-                + " LIMIT " + cap + ") probe", new MapSqlParameterSource("q", pattern), Long.class);
-        return matches != null && matches < cap;
+        return probe.fewerThan("FROM property p WHERE " + ADDRESS_MATCH,
+                pattern, Math.min(scopeSize == null ? 0 : scopeSize, SearchProbe.CAP));
     }
 
     /**
