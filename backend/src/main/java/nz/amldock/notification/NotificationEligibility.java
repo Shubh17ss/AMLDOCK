@@ -6,7 +6,7 @@ import nz.amldock.user.Role;
  * Which roles can receive deal notifications at all, and on what scope.
  *
  * <p>This is the send-time twin of {@link nz.amldock.deal.DealLifecycleService#assertCanRead} and
- * {@link nz.amldock.deal.DealService#readableDeals} — a subscriber must never be told about a deal
+ * {@link nz.amldock.deal.DealScope} — a subscriber must never be told about a deal
  * they could not open. Those two, this class, and {@code frontend/src/auth/roles.js} are the four
  * statements of the same rule; changing one means changing all four.
  *

@@ -3,41 +3,39 @@ import { Alert, Box, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import PeopleIcon from '@mui/icons-material/People';
-import { listDeals } from '../../api/deals.js';
 import { listUsers } from '../../api/users.js';
 import {
   Bento, HeroTile, StatTile, ListTile, ActionTile, BentoTile, Eyebrow, SkeletonTiles,
 } from '../../components/bento/Bento.jsx';
 import { dealStatusDot } from '../../data/dealStatus.js';
 import { DealRow } from '../../components/dashboard/DealRow.jsx';
-import { useScopedDeals } from '../../dashboard/DashboardScope.jsx';
+import { countOf, recentOf, useDealSample, useDealSummary, valueOf } from '../../dashboard/dealSummary.js';
 import { roleLabel } from '../../auth/roles.js';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
-const byUpdated = (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt);
 // Deal worth is a min-max range, so totals take the upper bound — the conservative read
-// for AML value thresholds. Pre-V28 deals only have the single transactionValue.
-const sum = (deals) => deals.reduce((t, d) => t + (d.valuationMax ?? d.transactionValue ?? 0), 0);
-const withinDays = (iso, days) => iso && (Date.now() - new Date(iso)) / 86400000 <= days;
+// for AML value thresholds. Pre-V28 deals only have the single transactionValue. The server
+// computes it (valueOf) over every deal in scope.
 
 export function BranchDashboard() {
-  const dealsQ = useQuery({ queryKey: ['deals', 'firm', 'ALL'], queryFn: () => listDeals() });
+  const dealsQ = useDealSummary();
+  const recentQ = useDealSample({ size: 5, sort: 'updatedAt' });
   const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
-  const deals = useScopedDeals(dealsQ.data);
   const money = useCurrency();
 
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load your branch. Refresh to try again.</Alert>;
   if (dealsQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
   const users = usersQ.data ?? [];
-  const underReview = deals.filter((d) => d.status === 'REVIEW');
-  const onHold = deals.filter((d) => d.status === 'ON_HOLD');
-  const verifiedRecent = deals.filter((d) => d.status === 'VERIFIED' && withinDays(d.updatedAt, 30));
+  const summary = dealsQ.data;
+  const underReview = countOf(summary, 'REVIEW');
+  const onHold = countOf(summary, 'ON_HOLD');
+  const verifiedRecent = recentOf(summary, 'VERIFIED');
   // Everything sitting with compliance, decided or not - a parked deal is still in motion,
   // because somebody still has to move it.
-  const inMotion = underReview.length + onHold.length;
+  const inMotion = underReview + onHold;
   const activeUsers = users.filter((u) => u.active);
-  const recent = [...deals].sort(byUpdated).slice(0, 5);
+  const recent = recentQ.data ?? [];
 
   // team headcount by role
   const teamByRole = activeUsers.reduce((acc, u) => { acc[u.role] = (acc[u.role] || 0) + 1; return acc; }, {});
@@ -50,7 +48,7 @@ export function BranchDashboard() {
         eyebrow="BRANCH · LIVE"
         value={inMotion}
         label={inMotion === 1 ? 'deal in motion' : 'deals in motion'}
-        caption={`${money.formatCompact(sum([...underReview, ...onHold]))} moving through review`}
+        caption={`${money.formatCompact(valueOf(summary, 'REVIEW', 'ON_HOLD'))} moving through review`}
         action={
           <Box component={RouterLink} to="/firm/deals"
                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, bgcolor: '#fff', color: tokens.blue,
@@ -60,10 +58,10 @@ export function BranchDashboard() {
         }
       />
 
-      <StatTile index={1} eyebrow="BRANCH DEALS" value={deals.length} label="All-time" to="/firm/deals" />
+      <StatTile index={1} eyebrow="BRANCH DEALS" value={summary.total} label="All-time" to="/firm/deals" />
       <StatTile index={2} eyebrow="TEAM" dot={tokens.blue} value={activeUsers.length} label="Active users" to="/branch-users" />
-      <StatTile index={3} eyebrow="IN REVIEW" cols={2} dot={dealStatusDot('REVIEW')} value={underReview.length}
-                label="With compliance" color={underReview.length ? tokens.review : undefined} to="/firm/deals" />
+      <StatTile index={3} eyebrow="IN REVIEW" cols={2} dot={dealStatusDot('REVIEW')} value={underReview}
+                label="With compliance" color={underReview ? tokens.review : undefined} to="/firm/deals" />
 
       <ListTile
         index={4}
@@ -89,10 +87,10 @@ export function BranchDashboard() {
         </Box>
       </BentoTile>
 
-      <StatTile index={6} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={underReview.length}
-                label="Under compliance" color={underReview.length ? tokens.review : undefined} to="/firm/deals" />
-      <StatTile index={7} eyebrow="VERIFIED · 30D" dot={dealStatusDot('VERIFIED')} value={verifiedRecent.length}
-                label="Cleared this month" color={verifiedRecent.length ? tokens.approved : undefined} to="/firm/deals" />
+      <StatTile index={6} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={underReview}
+                label="Under compliance" color={underReview ? tokens.review : undefined} to="/firm/deals" />
+      <StatTile index={7} eyebrow="VERIFIED · 30D" dot={dealStatusDot('VERIFIED')} value={verifiedRecent}
+                label="Cleared this month" color={verifiedRecent ? tokens.approved : undefined} to="/firm/deals" />
 
       <ActionTile
         index={8}

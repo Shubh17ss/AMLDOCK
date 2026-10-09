@@ -58,6 +58,18 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
+        <!-- Health probes for the load balancer, plus Prometheus metrics: HTTP latency histograms
+             (p95/p99), Hikari pool, JVM/GC, Tomcat threads. See perf/README.md. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -70,7 +82,7 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
+            <!-- compile, not runtime: SearchProbe sets a per-statement prepare threshold (PGStatement) -->
         </dependency>
 
         <dependency>

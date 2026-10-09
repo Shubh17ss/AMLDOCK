@@ -5,6 +5,8 @@ import nz.amldock.beneficialowner.BeneficialOwnerRepository;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
+import nz.amldock.deal.DealListService;
+import nz.amldock.deal.DealRepository;
 import nz.amldock.deal.DealService;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.document.DocumentService;
@@ -59,6 +61,9 @@ class IndividualServiceTest {
     static final Long PROPERTY_ID = 30L;
 
     @Mock DealService dealService;
+    @Mock DealListService dealList;
+    @Mock IndividualQuery query;
+    @Mock DealRepository deals;
     @Mock OwnershipStructureRepository structures;
     @Mock OwnershipNodeRepository nodes;
     @Mock BeneficialOwnerRepository owners;
@@ -69,8 +74,42 @@ class IndividualServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new IndividualService(dealService, structures, nodes, owners, properties,
+        service = new IndividualService(dealService, dealList, query, deals, structures, nodes, owners, properties,
                 documentService);
+    }
+
+    /* ---------- the register page ---------- */
+
+    @Test
+    void aRegisterPageMapsOnlyItsOwnRowsInTheQuerysOrder() {
+        OwnershipNode first = individualNode();
+        OwnershipNode second = individualNode();
+        ReflectionTestUtils.setField(second, "id", 6L);
+        second.setDisplayName("Mei Chen");
+        second.setBeneficialOwnerId(null);
+        Deal deal = new Deal();
+        ReflectionTestUtils.setField(deal, "id", DEAL_ID);
+        deal.setReference(null);
+
+        when(dealList.scopeForCurrentUser(null, null)).thenReturn(new nz.amldock.deal.DealScope(null, 1L, null));
+        when(query.page(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(25), org.mockito.ArgumentMatchers.eq(0L)))
+                .thenReturn(new nz.amldock.common.web.IdPage(List.of(6L, NODE_ID), 40));
+        // findAllById hands rows back in any order; the page must keep the query's.
+        when(nodes.findAllById(List.of(6L, NODE_ID))).thenReturn(List.of(first, second));
+        when(structures.findAllById(List.of(STRUCTURE_ID))).thenReturn(List.of(structure()));
+        when(deals.findAllById(List.of(DEAL_ID))).thenReturn(List.of(deal));
+        when(owners.findAllById(List.of(PERSON_ID))).thenReturn(List.of(person()));
+
+        var page = service.list(new IndividualQuery.Filter(null, null, false, null, null, null),
+                nz.amldock.common.web.PageRequests.of(0, 25));
+
+        assertThat(page.totalElements()).isEqualTo(40);
+        assertThat(page.totalPages()).isEqualTo(2);
+        assertThat(page.items()).extracting(IndividualRowDto::nodeId).containsExactly(6L, NODE_ID);
+        assertThat(page.items().get(0).countryOfResidence()).isNull();
+        assertThat(page.items().get(1).countryOfResidence()).isEqualTo("NZ");
+        assertThat(page.items().get(0).dealReference()).isEqualTo("#" + DEAL_ID);
     }
 
     @Test

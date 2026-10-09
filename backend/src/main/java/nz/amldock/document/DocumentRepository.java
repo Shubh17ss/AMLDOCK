@@ -26,35 +26,50 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     /** The images making up one person's identity document — at most a front and a back. */
     List<Document> findAllByBeneficialOwnerIdAndStatus(Long beneficialOwnerId, DocumentStatus status);
 
+    /*
+     * Claiming the next documents to extract, in two queries.
+     *
+     * {@code FOR UPDATE SKIP LOCKED} is Postgres's work-queue primitive: concurrent workers, in this
+     * process or another instance, each take a disjoint set instead of colliding on the same rows.
+     * That is what removes any need for ShedLock or leader election.
+     *
+     * It used to be one query, "(due PENDING) OR (stale IN_PROGRESS) ORDER BY ocr_next_attempt_at
+     * NULLS FIRST, id". Fresh uploads had a NULL due time, and a B-tree keeps NULLs last, so the
+     * index could not supply that order and every poll sorted the whole backlog. Each query below
+     * matches its own partial index exactly (V60), so it reads about as many index entries as it
+     * returns, whatever the size of the backlog. FOR UPDATE does not allow a UNION, hence two
+     * calls. The same fix V55 made for the notification outbox.
+     *
+     * When reading EXPLAIN on a small database, the planner may choose a sequential scan while
+     * document is tiny. That is correct, not a sign the index is unused, and it switches over on
+     * its own as the table grows.
+     */
+
     /**
-     * Claims the next batch of documents to extract.
-     *
-     * <p>{@code FOR UPDATE SKIP LOCKED} is Postgres's work-queue primitive: concurrent workers,
-     * in this process or another instance, each take a disjoint set instead of colliding on the
-     * same rows. That is what removes any need for ShedLock or leader election.
-     *
-     * <p>Two arms. The first is ordinary waiting work. The second reclaims rows a worker claimed
-     * and never finished — a process killed mid-Textract leaves IN_PROGRESS behind, and without
-     * this it would sit there forever.
-     *
-     * <p>Served by {@code idx_document_ocr_claimable}, which is partial: it indexes only in-flight
-     * rows, so the cost tracks the backlog rather than the size of the table. That is what makes
-     * polling every few seconds cheap enough to run beside request traffic.
-     *
-     * <p>Note when reading EXPLAIN on a small database: the planner will choose a sequential scan
-     * while {@code document} is tiny, which is correct rather than a sign the index is unused —
-     * forcing {@code enable_seqscan = off} shows it picked up. It switches over on its own as the
-     * table grows.
+     * Documents a worker claimed and never finished: a process killed mid-Textract leaves
+     * IN_PROGRESS behind, and without this it would sit there forever. Served by
+     * {@code idx_document_ocr_stale}, which holds only in-flight rows.
      */
     @Query(value = """
             SELECT id FROM document
-             WHERE (ocr_status = 'PENDING'
-                    AND (ocr_next_attempt_at IS NULL OR ocr_next_attempt_at <= now()))
-                OR (ocr_status = 'IN_PROGRESS' AND ocr_claimed_at < :staleBefore)
-             ORDER BY ocr_next_attempt_at NULLS FIRST, id
+             WHERE ocr_status = 'IN_PROGRESS' AND ocr_claimed_at < :staleBefore
+             ORDER BY ocr_claimed_at, id
              FOR UPDATE SKIP LOCKED
-             LIMIT :batchSize
+             LIMIT :limit
             """, nativeQuery = true)
-    List<Long> findClaimableOcrIds(@Param("staleBefore") Instant staleBefore,
-                                   @Param("batchSize") int batchSize);
+    List<Long> findStaleOcrClaimIds(@Param("staleBefore") Instant staleBefore, @Param("limit") int limit);
+
+    /**
+     * Ordinary waiting work: PENDING documents whose due time has come, oldest first. A fresh
+     * upload is due when confirmed; a retry after its backoff. Served by
+     * {@code idx_document_ocr_due (ocr_next_attempt_at, id) WHERE ocr_status = 'PENDING'}.
+     */
+    @Query(value = """
+            SELECT id FROM document
+             WHERE ocr_status = 'PENDING' AND ocr_next_attempt_at <= now()
+             ORDER BY ocr_next_attempt_at, id
+             FOR UPDATE SKIP LOCKED
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findDueOcrIds(@Param("limit") int limit);
 }

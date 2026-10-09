@@ -4,6 +4,12 @@ import nz.amldock.beneficialowner.BeneficialOwner;
 import nz.amldock.beneficialowner.BeneficialOwnerRepository;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
+import nz.amldock.common.web.IdPage;
+import nz.amldock.common.web.PageRequests;
+import nz.amldock.common.web.PageResponse;
+import nz.amldock.deal.DealListService;
+import nz.amldock.deal.DealRepository;
+import nz.amldock.deal.DealScope;
 import nz.amldock.deal.DealService;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.document.DocumentService;
@@ -36,7 +42,7 @@ import java.util.stream.Collectors;
  * hand gets a person record but no link row, so joining through it would quietly drop them. The
  * structure is the complete path.
  *
- * <p>Authorisation is {@link DealService#readableDeals}, so the register can only ever show people
+ * <p>Authorisation is {@link DealScope}, so the register can only ever show people
  * standing on deals the caller could already open. An agent sees the individuals on their own
  * deals, a branch admin their branch's, a compliance officer their firm's.
  */
@@ -44,6 +50,9 @@ import java.util.stream.Collectors;
 public class IndividualService {
 
     private final DealService dealService;
+    private final DealListService dealList;
+    private final IndividualQuery query;
+    private final DealRepository deals;
     private final OwnershipStructureRepository structures;
     private final OwnershipNodeRepository nodes;
     private final BeneficialOwnerRepository owners;
@@ -51,12 +60,18 @@ public class IndividualService {
     private final DocumentService documentService;
 
     public IndividualService(DealService dealService,
+                             DealListService dealList,
+                             IndividualQuery query,
+                             DealRepository deals,
                              OwnershipStructureRepository structures,
                              OwnershipNodeRepository nodes,
                              BeneficialOwnerRepository owners,
                              PropertyRepository properties,
                              DocumentService documentService) {
         this.dealService = dealService;
+        this.dealList = dealList;
+        this.query = query;
+        this.deals = deals;
         this.structures = structures;
         this.nodes = nodes;
         this.owners = owners;
@@ -64,38 +79,37 @@ public class IndividualService {
         this.documentService = documentService;
     }
 
+    /**
+     * One page of the register. {@link IndividualQuery} filters, searches, scopes and orders in
+     * SQL and returns the page's node ids; only those rows are then loaded and mapped.
+     */
     @Transactional(readOnly = true)
-    public List<IndividualRowDto> list(Long firmId, Long branchId, boolean allTypes) {
-        List<Deal> deals = dealService.readableDeals(null, firmId, branchId);
-        if (deals.isEmpty()) return List.of();
+    public PageResponse<IndividualRowDto> list(IndividualQuery.Filter filter, PageRequests paging) {
+        DealScope scope = dealList.scopeForCurrentUser(filter.firmId(), filter.branchId());
+        IdPage ids = query.page(scope, filter, paging.size(), paging.offset());
+        return PageResponse.of(rows(ids.ids()), paging, ids.total(), ids.exact());
+    }
 
-        Map<Long, Deal> dealById = deals.stream().collect(Collectors.toMap(Deal::getId, d -> d));
+    /** Rows for the given node ids, in that order. Bulk-loads each table once for the batch. */
+    List<IndividualRowDto> rows(List<Long> nodeIds) {
+        if (nodeIds.isEmpty()) return List.of();
+        Map<Long, OwnershipNode> nodeById = byId(nodes.findAllById(nodeIds), OwnershipNode::getId);
+        List<OwnershipNode> page = nodeIds.stream().map(nodeById::get).filter(java.util.Objects::nonNull).toList();
 
-        List<OwnershipStructure> structureList = structures.findAllByDealIdIn(dealById.keySet());
-        if (structureList.isEmpty()) return List.of();
-        Map<Long, Long> dealIdByStructureId = structureList.stream()
-                .collect(Collectors.toMap(OwnershipStructure::getId, OwnershipStructure::getDealId));
-
-        // The registers want every owner; the picker wants people it can copy onto a new
-        // individual. One query each rather than fetching the wider set and filtering, so the
-        // narrow caller keeps paying for exactly what it reads.
-        List<OwnershipNode> individuals = allTypes
-                ? nodes.findAllByOwnershipStructureIdInOrderByIdAsc(dealIdByStructureId.keySet())
-                : nodes.findAllByOwnershipStructureIdInAndNodeTypeOrderByIdAsc(
-                        dealIdByStructureId.keySet(), NodeType.INDIVIDUAL);
-        if (individuals.isEmpty()) return List.of();
-
-        // Bulk-resolve, the same idiom DealService.list uses: one query per lookup table rather
+        Map<Long, Long> dealIdByStructureId = structures.findAllById(distinct(page, OwnershipNode::getOwnershipStructureId))
+                .stream().collect(Collectors.toMap(OwnershipStructure::getId, OwnershipStructure::getDealId));
+        Map<Long, Deal> dealById = byId(deals.findAllById(dealIdByStructureId.values().stream().distinct().toList()), Deal::getId);
+        // Bulk-resolve, the same idiom the deals list uses: one query per lookup table rather
         // than one per row.
         Map<Long, BeneficialOwner> ownerById = byId(
-                owners.findAllById(distinct(individuals, OwnershipNode::getBeneficialOwnerId)),
+                owners.findAllById(distinct(page, OwnershipNode::getBeneficialOwnerId)),
                 BeneficialOwner::getId);
         Map<Long, Property> propertyById = byId(
-                properties.findAllById(distinct(deals, Deal::getPropertyId)), Property::getId);
+                properties.findAllById(distinct(List.copyOf(dealById.values()), Deal::getPropertyId)), Property::getId);
 
-        return individuals.stream().map(n -> {
+        return page.stream().map(n -> {
             Deal deal = dealById.get(dealIdByStructureId.get(n.getOwnershipStructureId()));
-            if (deal == null) return null;   // a structure whose deal fell out of scope
+            if (deal == null) return null;   // removed between the id query and this load
             Property property = propertyById.get(deal.getPropertyId());
             // Null when the person record was deleted out from under the node: beneficial_owner_id
             // is ON DELETE SET NULL, and the node is still a row the register owes the reader.
@@ -124,6 +138,35 @@ public class IndividualService {
                     n.getVerificationStatus(),
                     n.getVerifiedAt());
         }).filter(java.util.Objects::nonNull).toList();
+    }
+
+    /** Most rows one export will write. Far above any real register; a guard, not a feature. */
+    static final int EXPORT_MAX_ROWS = 100_000;
+    private static final int EXPORT_CHUNK = 1_000;
+
+    /**
+     * Every row matching the filter as CSV, written in chunks so memory stays flat however large
+     * the register. Columns match what the registers exported when the CSV was built in the
+     * browser; the exceptions register (filtered on a verification outcome) dates its rows by
+     * verification instead of showing birth date and residence.
+     *
+     * @return how many rows were written
+     */
+    @Transactional(readOnly = true)
+    public int export(IndividualQuery.Filter filter, Appendable out) throws java.io.IOException {
+        DealScope scope = dealList.scopeForCurrentUser(filter.firmId(), filter.branchId());
+        boolean exceptions = filter.verification() != null;
+        out.append(exceptions ? IndividualCsv.EXCEPTION_HEADERS : IndividualCsv.REGISTER_HEADERS).append('\n');
+        int written = 0;
+        for (long offset = 0; written < EXPORT_MAX_ROWS; offset += EXPORT_CHUNK) {
+            IdPage ids = query.page(scope, filter, EXPORT_CHUNK, offset);
+            for (IndividualRowDto r : rows(ids.ids())) {
+                out.append(exceptions ? IndividualCsv.exceptionRow(r) : IndividualCsv.registerRow(r)).append('\n');
+                if (++written >= EXPORT_MAX_ROWS) break;
+            }
+            if (ids.ids().size() < EXPORT_CHUNK) break;
+        }
+        return written;
     }
 
     /**
@@ -191,6 +234,6 @@ public class IndividualService {
     }
 
     private static <T> Map<Long, T> byId(List<T> rows, Function<T, Long> id) {
-        return rows.stream().collect(Collectors.toMap(id, r -> r));
+        return rows.stream().collect(Collectors.toMap(id, r -> r, (a, b) -> a));
     }
 }

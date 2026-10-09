@@ -5,7 +5,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import PeopleIcon from '@mui/icons-material/People';
 import HistoryIcon from '@mui/icons-material/History';
 import InboxIcon from '@mui/icons-material/Inbox';
-import { listDeals } from '../../api/deals.js';
+import { countOf, useDealSummary } from '../../dashboard/dealSummary.js';
 import { listFirms } from '../../api/firms.js';
 import { listUsers } from '../../api/users.js';
 import { searchAudit } from '../../api/audit.js';
@@ -17,7 +17,7 @@ import { timeAgo } from '../../utils/formatters.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
 export function RootDashboard() {
-  const dealsQ = useQuery({ queryKey: ['deals', 'all'], queryFn: () => listDeals() });
+  const dealsQ = useDealSummary({ scoped: false });
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const auditQ = useQuery({ queryKey: ['audit', { size: 8 }], queryFn: () => searchAudit({ size: 8 }) });
@@ -26,7 +26,7 @@ export function RootDashboard() {
   // is the platform view: its hero counts "deals on the platform" and captions that with the firm
   // and user totals. Narrowing the numerator to one branch while the caption still spans every
   // entity would not be a filter, it would be a wrong number.
-  const deals = dealsQ.data ?? [];
+  const summary = dealsQ.data;
 
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load platform data. Refresh to try again.</Alert>;
   if (dealsQ.isLoading || firmsQ.isLoading || usersQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
@@ -35,7 +35,8 @@ export function RootDashboard() {
   const users = usersQ.data ?? [];
   const activity = auditQ.data?.items ?? [];
 
-  const count = (s) => deals.filter((d) => d.status === s).length;
+  const count = (s) => countOf(summary, s);
+  const total = summary?.total ?? 0;
   const segments = DEAL_STATUSES.map((s) => ({
     label: dealStatusLabel(s), value: count(s), c: dealStatusDot(s),
   }));
@@ -46,8 +47,8 @@ export function RootDashboard() {
       <HeroTile
         index={0}
         eyebrow="PLATFORM · LIVE"
-        value={deals.length}
-        label={deals.length === 1 ? 'deal on the platform' : 'deals on the platform'}
+        value={total}
+        label={total === 1 ? 'deal on the platform' : 'deals on the platform'}
         caption={`${firms.length} reporting entities · ${users.length} users`}
         action={
           <Button component={RouterLink} to="/cdd/deals" startIcon={<InboxIcon />}
@@ -62,7 +63,7 @@ export function RootDashboard() {
       <DistributionTile
         index={3}
         eyebrow="DEAL STATUS · MIX"
-        total={deals.length}
+        total={total}
         segments={segments}
         cols={2}
       />

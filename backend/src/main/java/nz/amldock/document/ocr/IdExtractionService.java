@@ -30,6 +30,7 @@ import software.amazon.awssdk.services.textract.model.UnsupportedDocumentExcepti
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -97,12 +98,14 @@ public class IdExtractionService {
 
     /**
      * Marks up to {@code batchSize} documents as ours and returns their ids. Short by
-     * construction — no network, no extraction.
+     * construction — no network, no extraction. Abandoned claims first, so a crashed worker's
+     * documents are not starved behind a long backlog, then due work fills the rest.
      */
     @Transactional
     public List<Long> claim(int batchSize) {
         Instant staleBefore = Instant.now().minus(lease);
-        List<Long> ids = documents.findClaimableOcrIds(staleBefore, batchSize);
+        List<Long> ids = new ArrayList<>(documents.findStaleOcrClaimIds(staleBefore, batchSize));
+        if (ids.size() < batchSize) ids.addAll(documents.findDueOcrIds(batchSize - ids.size()));
         if (ids.isEmpty()) return List.of();
 
         Instant now = Instant.now();

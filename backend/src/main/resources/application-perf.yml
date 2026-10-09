@@ -1,0 +1,99 @@
+# Load-testing profile (perf/docker-compose.perf.yml). Production-like settings plus full
+# metrics, with every outbound integration (SES, SMTP, Textract) switched off so the numbers measure
+# this service and its database, not AWS round trips. Also the starting point for a prod profile.
+# Self-contained on purpose: application.yml is gitignored (it carries credentials), so a fresh
+# clone builds an image without it. Everything that changes performance behaviour is set here.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/amldock}
+    username: ${DB_USER:amldock}
+    password: ${DB_PASSWORD:amldock}
+    hikari:
+      # The default of 10 is too small for 200 Tomcat threads and starves under load. Sizing rule:
+      # total connections (pool x instances, workers included) must stay well under the RDS
+      # max_connections. Override with DB_POOL_SIZE to find the knee.
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: ${DB_POOL_SIZE:20}
+      # Fail in 2s rather than the default 30s, so pool exhaustion shows up as errors and a
+      # visible hikaricp_connections_pending, not as a latency cliff that hides the cause.
+      connection-timeout: ${DB_POOL_TIMEOUT_MS:2000}
+      leak-detection-threshold: 10000
+  jpa:
+    # Spring's default is true, which holds a DB connection for the whole request, view rendering
+    # included. Off here as in application.yml.
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        format_sql: false
+        generate_statistics: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  shutdown: graceful
+  tomcat:
+    # Publishes tomcat_threads_busy/current/config_max to Micrometer.
+    mbeanregistry:
+      enabled: true
+    threads:
+      max: ${TOMCAT_MAX_THREADS:200}
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  # A separate port keeps metrics off the public listener. In AWS the ALB only targets 8080, so
+  # 8081 is reachable from inside the VPC (Prometheus / ADOT) and never from the internet.
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    distribution:
+      # Publish histogram buckets so Prometheus can compute p95/p99 across instances
+      # (histogram_quantile). Client-side percentiles cannot be aggregated across instances.
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 50ms,100ms,200ms,300ms,500ms,800ms,1s,2s,5s
+      minimum-expected-value:
+        http.server.requests: 5ms
+      maximum-expected-value:
+        http.server.requests: 10s
+
+amldock:
+  seed:
+    admin-email: ${SEED_ADMIN_EMAIL:root@perf.amldock.test}
+    admin-password: ${SEED_ADMIN_PASSWORD:PerfRoot123!}
+    admin-name: ${SEED_ADMIN_NAME:Perf Root}
+  s3:
+    bucket: ${S3_BUCKET:amldock-perf}
+    region: ${AWS_REGION:ap-southeast-2}
+    endpoint: ${S3_ENDPOINT:}
+  aws:
+    access-key-id: ${AWS_ACCESS_KEY_ID:perf}
+    secret-access-key: ${AWS_SECRET_ACCESS_KEY:perf}
+  ocr:
+    enabled: false
+  notifications:
+    # Rows are still enqueued (so the write cost stays real). Only the dispatch transport is a
+    # no-op logger.
+    transport: log
+    provision-templates: false
+    # Batches one poll may send back to back while the outbox keeps returning full batches.
+    max-batches-per-tick: ${NOTIFICATIONS_MAX_BATCHES_PER_TICK:10}
+  mail:
+    enabled: false
+
+logging:
+  level:
+    root: INFO
+    nz.amldock: INFO
+    org.hibernate.SQL: WARN

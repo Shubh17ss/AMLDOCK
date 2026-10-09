@@ -86,6 +86,19 @@ class DealNotificationEnqueuerTest {
     }
 
     @Test
+    void anEnqueuedRowIsDueNowRatherThanNull() {
+        // The claim walks the partial index on (next_attempt_at, id); a NULL due time would sort at
+        // its far end and force a full sort of the backlog (V55).
+        givenCandidates(candidate(BROKER, "broker@x.test", Role.AGENT, null));
+        java.time.Instant before = java.time.Instant.now();
+
+        enqueuer.enqueueDealCreated(deal(), principal());
+
+        assertThat(saved().get(0).getNextAttemptAt()).isNotNull().isBetween(before, java.time.Instant.now());
+        assertThat(saved().get(0).getStatus()).isEqualTo(DealNotificationStatus.PENDING);
+    }
+
+    @Test
     void anExplicitOffSuppressesTheNotification() {
         givenCandidates(candidate(BROKER, "broker@x.test", Role.AGENT, false));
 
@@ -131,8 +144,9 @@ class DealNotificationEnqueuerTest {
         assertThat(saved()).hasSize(3);
         assertThat(saved()).allSatisfy(n -> {
             assertThat(n.getStatus()).isEqualTo(DealNotificationStatus.PENDING);
-            // NULL means "due immediately" — a fresh row has no backoff to serve.
-            assertThat(n.getNextAttemptAt()).isNull();
+            // Due immediately, as an explicit timestamp: a fresh row has no backoff to serve, and a
+            // NULL due time would defeat the claim index (V55).
+            assertThat(n.getNextAttemptAt()).isNotNull();
             assertThat(n.getAttemptCount()).isZero();
         });
     }

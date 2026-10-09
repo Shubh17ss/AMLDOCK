@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Alert, Button, Stack } from '@mui/material';
 import TableViewIcon from '@mui/icons-material/TableView';
 import { listIndividuals } from '../../api/individuals.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
-import { SearchField, matchesSearch } from '../../components/SearchField.jsx';
+import { SearchField } from '../../components/SearchField.jsx';
+import { ListPagination, countText } from '../../components/ListPagination.jsx';
+import { usePagedList } from '../../hooks/usePagedList.js';
 import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { countryName } from '../../data/countries.js';
@@ -15,10 +16,10 @@ import { exportIndividualsCsv } from './BeneficialOwnersPage.jsx';
 /**
  * The people on this branch's deals who live somewhere other than the reporting entity does.
  *
- * <p>The overseas test itself is client-side — one comparison against a country the client already
- * holds, and a second endpoint returning the same rows would be a second thing to keep in step.
- * The <em>set</em> of rows is narrowed on the server, though: this register asks for natural
- * persons, where the Beneficial Owners one asks for every kind of owner.
+ * <p>The overseas test runs on the server (`residence=OVERSEAS`): residence recorded and different
+ * from the deal's reporting-entity country. It used to run here over the whole register, which a
+ * paged list cannot do. This register asks for natural persons, where the Beneficial Owners one
+ * asks for every kind of owner.
  *
  * <p><strong>Someone with no residence recorded is not listed.</strong> Not being asked is not
  * evidence of living abroad, and a register that treated it as such would accuse people of an
@@ -29,7 +30,9 @@ import { exportIndividualsCsv } from './BeneficialOwnersPage.jsx';
 export function OverseasResidentsPage() {
   const { firm, branch } = useDashboardScope();
   const { showToast } = useToast();
-  const [query, setQuery] = useState('');
+  const paged = usePagedList({ resetOn: [firm?.id, branch?.id] });
+  const query = paged.search;
+  const filters = { firmId: firm?.id, branchId: branch?.id, residence: 'OVERSEAS', q: paged.params.q };
 
   const q = useQuery({
     // Natural persons only — deliberately NOT the Beneficial Owners register's wider fetch, which
@@ -37,32 +40,29 @@ export function OverseasResidentsPage() {
     // entity has no country of residence at all: every one of them would land in the "nobody has
     // been asked" count below and read as unfinished diligence that does not exist. The narrower
     // request keeps that impossible rather than merely filtered, so the two cannot drift.
-    queryKey: ['individuals', firm?.id ?? null, branch?.id ?? null],
-    queryFn: () => listIndividuals({ firmId: firm?.id, branchId: branch?.id }),
+    queryKey: ['individuals', 'overseas', firm?.id ?? null, branch?.id ?? null, paged.params],
+    queryFn: () => listIndividuals({ ...filters, page: paged.page, size: paged.size }),
+    placeholderData: keepPreviousData,
   });
-
-  const all = q.data ?? [];
+  // Only the count is wanted, so one row is enough to read totalElements.
+  const unansweredQ = useQuery({
+    queryKey: ['individuals', 'unanswered', firm?.id ?? null, branch?.id ?? null],
+    queryFn: () => listIndividuals({ firmId: firm?.id, branchId: branch?.id, residence: 'UNANSWERED', size: 1 }),
+  });
 
   // The scope's firm, not useFirmCountry(): scope is guaranteed set, and ROOT can be scoped to a
   // reporting entity that is not their own.
   const homeCountry = firm?.country ?? null;
 
-  const overseas = useMemo(
-    () => all.filter((r) => r.countryOfResidence && r.countryOfResidence !== homeCountry),
-    [all, homeCountry],
-  );
-  const unanswered = all.length - all.filter((r) => r.countryOfResidence).length;
-
-  const rows = useMemo(
-    () => overseas.filter((r) => matchesSearch(query, r.displayName, r.propertyAddress, r.dealReference)),
-    [overseas, query],
-  );
+  const rows = q.data?.items ?? [];
+  const total = q.data?.totalElements ?? 0;
+  const unanswered = unansweredQ.data?.totalElements ?? 0;
 
   return (
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${rows.length} ${rows.length === 1 ? 'person' : 'people'} residing overseas`,
+          `${countText(q.data)} ${total === 1 ? 'person' : 'people'} residing overseas`,
           homeCountry ? `home ${countryName(homeCountry) ?? homeCountry}` : null,
           firm?.name,
           branch?.name,
@@ -72,9 +72,9 @@ export function OverseasResidentsPage() {
           <Button
             variant="outlined"
             startIcon={<TableViewIcon />}
-            disabled={rows.length === 0}
+            disabled={total === 0}
             onClick={() => exportIndividualsCsv({
-              rows, prefix: 'overseas-residents', firm, branch, showToast, noun: ['person', 'people'],
+              params: filters, total: countText(q.data), prefix: 'overseas-residents', firm, branch, showToast, noun: ['person', 'people'],
             })}
           >
             Download CSV
@@ -82,16 +82,16 @@ export function OverseasResidentsPage() {
         )}
       />
 
-      <SearchField value={query} onChange={setQuery} placeholder="Search name, property or deal…" />
+      <SearchField value={query} onChange={paged.setSearch} placeholder="Search owner name…" />
 
       {q.isError && (
         <Alert severity="error">Failed to load the register. Refresh to try again.</Alert>
       )}
 
       {/* Says what the register cannot see, so an empty table is not mistaken for a clean one. */}
-      {!q.isLoading && unanswered > 0 && (
+      {!unansweredQ.isLoading && unanswered > 0 && (
         <Alert severity="info">
-          {unanswered} {unanswered === 1 ? 'person has' : 'people have'} no country of residence
+          {countText(unansweredQ.data)} {unanswered === 1 ? 'person has' : 'people have'} no country of residence
           recorded and {unanswered === 1 ? 'is' : 'are'} not counted here. Set it on the owner’s
           Details tab.
         </Alert>
@@ -109,6 +109,7 @@ export function OverseasResidentsPage() {
                 + `${countryName(homeCountry) ?? 'the reporting entity’s country'}.`}
           />
         )}
+      <ListPagination data={q.data} paged={paged} />
     </Stack>
   );
 }

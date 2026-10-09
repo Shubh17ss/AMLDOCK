@@ -1,8 +1,30 @@
 import { apiClient } from './client.js';
 
+/**
+ * One page of the deals the caller may read: `{ items, page, size, totalElements, totalPages }`.
+ *
+ * Params: `status`, `firmId`, `branchId`, `q` (property address, 3+ characters),
+ * `sort` ('createdAt' default | 'updatedAt', newest first), `page` (0-based), `size` (max 100).
+ * Filtering and search run on the server, so never filter `items` again in the browser.
+ */
 export async function listDeals(params = {}) {
-  const { data } = await apiClient.get('/deals', { params });
+  const { data } = await apiClient.get('/deals', { params: compact(params) });
   return data;
+}
+
+/**
+ * Dashboard figures computed on the server over every deal in scope:
+ * `{ total, byStatus: { [status]: { count, valueSum, oldestCreatedAt, updatedLast30Days } },
+ * firmsAwaitingReview }`. Statuses with no deals are absent from `byStatus`.
+ */
+export async function getDealSummary({ firmId, branchId } = {}) {
+  const { data } = await apiClient.get('/deals/summary', { params: compact({ firmId, branchId }) });
+  return data;
+}
+
+/** Drops empty params so they are not sent as `?q=`. */
+export function compact(params) {
+  return Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''));
 }
 
 export async function getDeal(id) {

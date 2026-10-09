@@ -2,18 +2,14 @@ package nz.amldock.deal.assurance.dto;
 
 import nz.amldock.deal.dto.DealListItemDto;
 
-import java.time.Instant;
-import java.util.List;
 
 /**
- * One deal in the assurance register: the same row the deals list shows, plus its signed-off
- * versions, newest first.
+ * One deal in the assurance register: the same row the deals list shows, plus the version the
+ * deal currently stands on. Older versions are history and are read from the deal's version tab.
  *
- * @param lastAssuredAt the latest assurance change across those versions — the deal row's
- *                      "Last updated". Null while none of them has been reviewed.
+ * @param latestVersion null for a verified or closed deal that has no signed-off version
  */
 public record AssuranceDealDto(
         DealListItemDto deal,
-        Instant lastAssuredAt,
-        List<AssuranceVersionDto> versions
+        AssuranceVersionDto latestVersion
 ) {}
