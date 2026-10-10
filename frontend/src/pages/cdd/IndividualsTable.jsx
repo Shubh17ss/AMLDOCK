@@ -49,7 +49,6 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
             <TableCell>Date of birth</TableCell>
             <TableCell>Country of residence</TableCell>
             <TableCell>Property</TableCell>
-            <TableCell>Deal</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -66,25 +65,29 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
               </TableCell>
               <TableCell><CountryCell code={r.countryOfResidence} /></TableCell>
               <TableCell>
+                {/* Straight to the deal the person stands on — the register is a way in, not a
+                    dead end. The Assurance register's link treatment: ink at rest, blue and
+                    underlined on hover. */}
                 <Tooltip title={r.propertyAddress ?? ''}>
-                  <Box sx={{ maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.propertyAddress ?? '—'}
+                  <Box
+                    component={RouterLink}
+                    to={`/deals/${r.dealId}`}
+                    sx={{
+                      display: 'inline-block', maxWidth: 380, verticalAlign: 'bottom',
+                      fontWeight: 700, color: tokens.ink, textDecoration: 'none',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      '&:hover': { color: tokens.blue, textDecoration: 'underline' },
+                    }}
+                  >
+                    {r.propertyAddress ?? r.dealReference}
                   </Box>
                 </Tooltip>
-              </TableCell>
-              <TableCell>
-                {/* Straight to the deal the person stands on — the register is a way in, not a
-                    dead end. */}
-                <Box component={RouterLink} to={`/deals/${r.dealId}`}
-                     sx={{ fontFamily: fonts.mono, fontSize: '0.8rem', color: tokens.blue }}>
-                  {r.dealReference}
-                </Box>
               </TableCell>
             </TableRow>
           ))}
           {!loading && rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} align="center" sx={{ py: 5, color: tokens.muted }}>
+              <TableCell colSpan={5} align="center" sx={{ py: 5, color: tokens.muted }}>
                 {emptyMessage}
               </TableCell>
             </TableRow>
