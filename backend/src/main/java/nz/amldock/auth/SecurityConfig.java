@@ -48,7 +48,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/otp/request", "/api/auth/otp/verify",
                                 "/api/auth/admin/login", "/api/auth/admin/verify",
                                 "/api/auth/refresh").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
+                        // Load-balancer probes, plus the Prometheus scrape. Prometheus is exposed only
+                        // by profiles that also move actuator to a separate management port, which
+                        // is reachable inside the VPC/compose network only, never via the ALB.
+                        .requestMatchers("/actuator/health", "/actuator/health/**",
+                                "/actuator/prometheus").permitAll()
                         // Documents section (compliance registers + review schedules) lives outside
                         // the CDD workspace — restricted to the full-workspace roles. Stricter
                         // per-endpoint rules (e.g. delete) still apply on top via @PreAuthorize.

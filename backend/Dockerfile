@@ -19,12 +19,10 @@ USER spring
 
 COPY --from=build /app/target/*.jar app.jar
 
-EXPOSE 8080
+EXPOSE 8080 8081
 
-# -Xmx380m keeps RSS under Render's 512 MB free-tier limit.
-# MaxRAMPercentage is a fallback for environments that report more RAM.
-ENTRYPOINT ["java", \
-  "-Xmx380m", \
-  "-XX:+UseContainerSupport", \
-  "-XX:MaxRAMPercentage=75.0", \
-  "-jar", "app.jar"]
+# Container-aware heap: 75% of the task/container memory limit, so the same image fits a 512 MB
+# Render box or a 2 GB Fargate task without a rebuild. JAVA_OPTS adds flags at run time (e.g. a
+# JFR recording during a load test: -XX:StartFlightRecording=duration=10m,filename=/tmp/app.jfr).
+ENV JAVA_OPTS=""
+ENTRYPOINT ["sh", "-c", "exec java -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError $JAVA_OPTS -jar app.jar"]

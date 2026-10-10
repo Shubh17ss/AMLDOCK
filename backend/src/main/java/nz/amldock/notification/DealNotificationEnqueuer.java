@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -119,6 +120,9 @@ public class DealNotificationEnqueuer {
         String actorName = users.findById(actor.id())
                 .map(User::getFullName).orElse(actor.email());
 
+        // "Due now" as a real timestamp, never NULL: the claim query walks the partial index on
+        // (next_attempt_at, id), and NULLs would sort at its far end (V55).
+        Instant dueNow = Instant.now();
         List<DealNotification> rows = new ArrayList<>();
         for (DealNotificationPreferenceRepository.RecipientCandidate c : candidates) {
             if (!wants(c, event)) continue;
@@ -143,6 +147,7 @@ public class DealNotificationEnqueuer {
             n.setRecipientEmail(c.getEmail());
             n.setPayload(serialise(payload));
             n.setStatus(DealNotificationStatus.PENDING);
+            n.setNextAttemptAt(dueNow);
             rows.add(n);
         }
 

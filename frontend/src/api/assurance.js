@@ -1,4 +1,5 @@
 import { apiClient } from './client.js';
+import { compact } from './deals.js';
 
 // The assurance register: compliance's second look at deals it has already signed off.
 //
@@ -7,14 +8,18 @@ import { apiClient } from './client.js';
 // nobody has reviewed it. Only the current verdict is kept; every change lands in the audit log.
 
 /**
- * Every verified or closed deal in scope, each as `{ deal, lastAssuredAt, versions }`. `deal` is
- * the deals list's own row; `versions` are newest first.
+ * One page of the register: every verified or closed deal in scope as `{ deal, latestVersion }`.
+ * `deal` is the deals list's own row; `latestVersion` is the version the deal stands on (null if
+ * it has none). Older versions are read from the deal's version history.
  *
- * `from` / `to` are ISO instants, either optional. A version is included if it was verified in the
- * range, or if it is the deal's latest version and the deal was closed in the range.
+ * - `from` / `to`: ISO instants, either optional. A deal is included if its latest version was
+ *   verified in the range, or the deal was closed in the range.
+ * - `q`: property address (3+ characters; shorter is ignored).
+ * - `assurance`: 'AWAITING' | 'ASSURED' | 'ACTION_REQUIRED', on the latest version's verdict.
+ * - `page` (0-based), `size` (max 100).
  */
-export async function listAssurance({ firmId, branchId, from, to } = {}) {
-  const { data } = await apiClient.get('/assurance', { params: { firmId, branchId, from, to } });
+export async function listAssurance(params = {}) {
+  const { data } = await apiClient.get('/assurance', { params: compact(params) });
   return data;
 }
 

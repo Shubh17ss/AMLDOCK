@@ -7,7 +7,10 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
-import nz.amldock.deal.DealService;
+import nz.amldock.common.web.PageRequests;
+import nz.amldock.common.web.PageResponse;
+import nz.amldock.deal.DealListService;
+import nz.amldock.deal.DealScope;
 import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.access.DealUserRepository;
 import nz.amldock.deal.assurance.dto.AssuranceDealDto;
@@ -16,8 +19,6 @@ import nz.amldock.deal.assurance.dto.UpdateAssuranceRequest;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.version.DealVersion;
 import nz.amldock.deal.version.DealVersionRepository;
-import nz.amldock.deal.monitoring.DealStatusMove;
-import nz.amldock.deal.monitoring.DealStatusMoveRepository;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.Role;
@@ -68,11 +69,11 @@ class AssuranceServiceTest {
     static final Long FIRM_ID = 1L;
     static final Long OTHER_FIRM_ID = 2L;
 
-    @Mock DealService dealService;
+    @Mock DealListService dealList;
+    @Mock AssuranceQuery query;
     @Mock DealRepository deals;
     @Mock DealVersionRepository versions;
     @Mock AssuranceIssueRepository issues;
-    @Mock DealStatusMoveRepository moves;
     @Mock FirmBranchRepository branches;
     @Mock UserRepository users;
     @Mock AuditService audit;
@@ -90,7 +91,10 @@ class AssuranceServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AssuranceService(dealService, deals, versions, issues, moves,
+        // The real scope rule, so the scoping test exercises it rather than a stub of it.
+        lenient().when(dealList.scopeForCurrentUser(any(), any())).thenAnswer(inv ->
+                DealScope.forActor(complianceOfficer, inv.getArgument(0), inv.getArgument(1)));
+        service = new AssuranceService(dealList, query, deals, versions, issues,
                 new DealLifecycleService(mock(DealUserRepository.class)), branches, users, audit);
 
         FirmBranch branch = new FirmBranch();
@@ -227,78 +231,75 @@ class AssuranceServiceTest {
     }
 
     /* ---------- the register ---------- */
+    // Which deals are in range or awaiting a verdict is decided in SQL (AssuranceQuery) and is
+    // checked against a real database by the perf suite. These cover what happens around it.
 
     @Test
-    void theRegisterListsVerifiedAndClosedDealsOnly() {
+    void theRegisterShowsEachDealsLatestVersionOnly() {
         DealVersion v2 = version(2, 101L, Instant.parse("2026-09-20T00:00:00Z"));
-        stubRegister(DealStatus.VERIFIED, v2, v1);
+        stubPage(new AssuranceQuery.Row(DEAL_ID, 101L), v2);
 
-        List<AssuranceDealDto> out = service.list(FIRM_ID, BRANCH_ID, null, null);
+        PageResponse<AssuranceDealDto> out = service.list(filter(), PageRequests.of(0, 25));
 
-        assertThat(out).hasSize(1);
-        assertThat(out.get(0).versions()).extracting(AssuranceVersionDto::versionNo).containsExactly(2, 1);
-        verify(dealService, never()).list(eq(DealStatus.REVIEW), any(), any());
-        verify(dealService, never()).list(eq(DealStatus.NEW), any(), any());
-        verify(dealService, never()).list(eq(DealStatus.ON_HOLD), any(), any());
+        assertThat(out.items()).hasSize(1);
+        assertThat(out.items().get(0).latestVersion().versionNo()).isEqualTo(2);
+        assertThat(out.totalElements()).isEqualTo(1);
     }
 
     @Test
-    void theDealRowCarriesItsLatestAssuranceChange() {
+    void theLatestVersionCarriesItsVerdictAndIssues() {
         DealVersion v2 = version(2, 101L, Instant.parse("2026-09-20T00:00:00Z"));
-        Instant earlier = Instant.parse("2026-09-21T09:00:00Z");
-        Instant later = Instant.parse("2026-09-25T15:30:00Z");
-        v1.markAssurance(AssuranceStatus.ASSURED, 5L, later);
-        v2.markAssurance(AssuranceStatus.ASSURED, 5L, earlier);
-        stubRegister(DealStatus.VERIFIED, v2, v1);
+        Instant at = Instant.parse("2026-09-25T15:30:00Z");
+        v2.markAssurance(AssuranceStatus.ACTION_REQUIRED, 5L, at);
+        stubPage(new AssuranceQuery.Row(DEAL_ID, 101L), v2);
+        AssuranceIssue found = mock(AssuranceIssue.class);
+        when(found.getDealVersionId()).thenReturn(101L);
+        when(found.getIssue()).thenReturn("Trust deed missing");
+        when(found.getRemediation()).thenReturn("Request from solicitor");
+        when(issues.findAllByDealVersionIdInOrderBySortOrderAsc(List.of(101L))).thenReturn(List.of(found));
 
-        assertThat(service.list(FIRM_ID, BRANCH_ID, null, null).get(0).lastAssuredAt()).isEqualTo(later);
+        AssuranceVersionDto latest = service.list(filter(), PageRequests.of(0, 25)).items().get(0).latestVersion();
+
+        assertThat(latest.assuranceStatus()).isEqualTo(AssuranceStatus.ACTION_REQUIRED);
+        assertThat(latest.assuranceAt()).isEqualTo(at);
+        assertThat(latest.issues()).extracting(AssuranceVersionDto.IssueDto::issue).containsExactly("Trust deed missing");
     }
 
     @Test
-    void aRangeKeepsVersionsVerifiedInsideIt() {
-        DealVersion v2 = version(2, 101L, Instant.parse("2026-09-20T00:00:00Z"));
-        stubRegister(DealStatus.VERIFIED, v2, v1);
+    void aDealWithNoSignedOffVersionIsListedWithoutOne() {
+        stubPage(new AssuranceQuery.Row(DEAL_ID, null));
 
-        List<AssuranceDealDto> out = service.list(FIRM_ID, BRANCH_ID,
-                Instant.parse("2026-09-15T00:00:00Z"), Instant.parse("2026-09-30T23:59:59Z"));
+        AssuranceDealDto row = service.list(filter(), PageRequests.of(0, 25)).items().get(0);
 
-        assertThat(out.get(0).versions()).extracting(AssuranceVersionDto::versionNo).containsExactly(2);
+        assertThat(row.latestVersion()).isNull();
+        verify(versions, never()).findAllById(any());
     }
 
     @Test
-    void closingInsideTheRangeBringsInTheLatestVersionOnly() {
-        // Both versions were verified before the range; the deal was closed inside it.
-        DealVersion v2 = version(2, 101L, Instant.parse("2026-09-05T00:00:00Z"));
-        v1 = version(1, VERSION_ROW_ID, Instant.parse("2026-08-01T00:00:00Z"));
-        stubRegister(DealStatus.CLOSED, v2, v1);
-        when(moves.latestAt(List.of(DEAL_ID), DealStatusMove.Kind.CLOSE))
-                .thenReturn(List.<Object[]>of(new Object[] {DEAL_ID, Instant.parse("2026-09-18T00:00:00Z")}));
+    void theQueryIsScopedToTheCallersFirmWhateverFirmIsAskedFor() {
+        when(query.page(any(), any(), any())).thenReturn(new AssuranceQuery.RowPage(List.of(), 0, true));
+        AssuranceQuery.Filter askedForAnotherFirm =
+                new AssuranceQuery.Filter(OTHER_FIRM_ID, null, null, null, null, null);
 
-        List<AssuranceDealDto> out = service.list(FIRM_ID, BRANCH_ID,
-                Instant.parse("2026-09-15T00:00:00Z"), Instant.parse("2026-09-30T23:59:59Z"));
+        PageResponse<AssuranceDealDto> out = service.list(askedForAnotherFirm, PageRequests.of(0, 25));
 
-        assertThat(out.get(0).versions()).extracting(AssuranceVersionDto::versionNo).containsExactly(2);
-    }
-
-    @Test
-    void aDealWithNothingInTheRangeIsLeftOut() {
-        stubRegister(DealStatus.VERIFIED, v1);
-
-        assertThat(service.list(FIRM_ID, BRANCH_ID,
-                Instant.parse("2026-10-01T00:00:00Z"), null)).isEmpty();
+        assertThat(out.items()).isEmpty();
+        verify(query).page(eq(new DealScope(null, FIRM_ID, null)), eq(askedForAnotherFirm), any());
     }
 
     /* ---------- helpers ---------- */
 
-    private void stubRegister(DealStatus status, DealVersion... vs) {
-        DealListItemDto row = mock(DealListItemDto.class);
-        lenient().when(row.id()).thenReturn(DEAL_ID);
-        lenient().when(row.status()).thenReturn(status);
-        when(dealService.list(DealStatus.VERIFIED, FIRM_ID, BRANCH_ID))
-                .thenReturn(status == DealStatus.VERIFIED ? List.of(row) : List.of());
-        when(dealService.list(DealStatus.CLOSED, FIRM_ID, BRANCH_ID))
-                .thenReturn(status == DealStatus.CLOSED ? List.of(row) : List.of());
-        when(versions.findAllByDealIdInOrderByVersionNoDesc(List.of(DEAL_ID))).thenReturn(List.of(vs));
+    private AssuranceQuery.Filter filter() {
+        return new AssuranceQuery.Filter(FIRM_ID, BRANCH_ID, null, null, null, null);
+    }
+
+    private void stubPage(AssuranceQuery.Row row, DealVersion... vs) {
+        when(query.page(any(), any(), any())).thenReturn(new AssuranceQuery.RowPage(List.of(row), 1, true));
+        DealListItemDto item = mock(DealListItemDto.class);
+        lenient().when(item.id()).thenReturn(DEAL_ID);
+        when(dealList.loadInOrder(List.of(DEAL_ID))).thenReturn(List.of(deal));
+        when(dealList.toListItems(List.of(deal))).thenReturn(List.of(item));
+        lenient().when(versions.findAllById(any())).thenReturn(List.of(vs));
     }
 
     private DealVersion version(int no, Long rowId, Instant verifiedAt) {

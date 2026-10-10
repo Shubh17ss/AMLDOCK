@@ -219,26 +219,5 @@ export function useDashboardScope() {
   return ctx;
 }
 
-/**
- * Keep only the deals matching the selected firm/branch. Null = unset, which matches everything.
- *
- * <p>The branch clause matches on `firmBranchId`, not on `branchName`. It used to be the name, which
- * was survivable while `branch` was usually null and the clause rarely ran — but a branch is now
- * always set, so this runs on every dashboard, every time. Any deal whose `branchName` had drifted
- * from the name held in a saved scope (a branch renamed under someone's feet) would silently
- * vanish from every list, which reads as data loss rather than as a filter. The id cannot drift.
- *
- * <p>The firm clause stays on name because the list DTO carries no firm id — and it is redundant
- * anyway, since a branch belongs to exactly one firm.
- */
-export function scopeFilterDeals(deals, { firm, branch }) {
-  return (deals ?? []).filter(
-    (d) => (!firm || d.firmName === firm.name) && (!branch || d.firmBranchId === branch.id),
-  );
-}
-
-/** Hook form for dashboards: returns the deals narrowed to the active scope. */
-export function useScopedDeals(deals) {
-  const { firm, branch } = useDashboardScope();
-  return useMemo(() => scopeFilterDeals(deals, { firm, branch }), [deals, firm, branch]);
-}
+// Deal lists are scoped on the server: pass the scope's firm/branch ids as request params
+// (see dashboard/dealSummary.js). Re-filtering in the browser is wrong for a paged list.

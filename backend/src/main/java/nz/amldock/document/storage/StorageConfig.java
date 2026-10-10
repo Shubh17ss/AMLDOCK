@@ -9,7 +9,10 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
+import java.net.URI;
 
 @Configuration
 public class StorageConfig {
@@ -36,19 +39,31 @@ public class StorageConfig {
         return DefaultCredentialsProvider.create();
     }
 
+    // Optional S3-compatible endpoint (S3Mock in perf/docker-compose.perf.yml). Blank means real
+    // AWS. Such stores address buckets by path rather than by subdomain, hence path-style.
+    @Value("${amldock.s3.endpoint:}")
+    private String endpoint;
+
     @Bean
     public S3Client s3Client(AwsCredentialsProvider credentials) {
-        return S3Client.builder()
+        var builder = S3Client.builder()
                 .region(Region.of(region))
-                .credentialsProvider(credentials)
-                .build();
+                .credentialsProvider(credentials);
+        if (!endpoint.isBlank()) {
+            builder.endpointOverride(URI.create(endpoint)).forcePathStyle(true);
+        }
+        return builder.build();
     }
 
     @Bean
     public S3Presigner s3Presigner(AwsCredentialsProvider credentials) {
-        return S3Presigner.builder()
+        var builder = S3Presigner.builder()
                 .region(Region.of(region))
-                .credentialsProvider(credentials)
-                .build();
+                .credentialsProvider(credentials);
+        if (!endpoint.isBlank()) {
+            builder.endpointOverride(URI.create(endpoint))
+                    .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build());
+        }
+        return builder.build();
     }
 }

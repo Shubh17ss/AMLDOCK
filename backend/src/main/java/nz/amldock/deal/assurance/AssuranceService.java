@@ -7,8 +7,11 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
+import nz.amldock.common.web.PageRequests;
+import nz.amldock.common.web.PageResponse;
+import nz.amldock.deal.DealListService;
 import nz.amldock.deal.DealRepository;
-import nz.amldock.deal.DealService;
+import nz.amldock.deal.DealScope;
 import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.assurance.dto.AssuranceDealDto;
 import nz.amldock.deal.assurance.dto.AssuranceVersionDto;
@@ -17,8 +20,6 @@ import nz.amldock.deal.assurance.dto.UpdateAssuranceRequest;
 import nz.amldock.deal.dto.DealListItemDto;
 import nz.amldock.deal.version.DealVersion;
 import nz.amldock.deal.version.DealVersionRepository;
-import nz.amldock.deal.monitoring.DealStatusMove;
-import nz.amldock.deal.monitoring.DealStatusMoveRepository;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.User;
@@ -30,8 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -56,25 +55,25 @@ public class AssuranceService {
     /** The statuses a deal has to be in for its versions to be assured. */
     private static final List<DealStatus> ASSURABLE = List.of(DealStatus.VERIFIED, DealStatus.CLOSED);
 
-    private final DealService dealService;
+    private final DealListService dealList;
+    private final AssuranceQuery query;
     private final DealRepository deals;
     private final DealVersionRepository versions;
     private final AssuranceIssueRepository issues;
-    private final DealStatusMoveRepository moves;
     private final DealLifecycleService lifecycle;
     private final FirmBranchRepository branches;
     private final UserRepository users;
     private final AuditService audit;
 
-    public AssuranceService(DealService dealService, DealRepository deals, DealVersionRepository versions,
-                            AssuranceIssueRepository issues, DealStatusMoveRepository moves,
+    public AssuranceService(DealListService dealList, AssuranceQuery query, DealRepository deals, DealVersionRepository versions,
+                            AssuranceIssueRepository issues,
                             DealLifecycleService lifecycle, FirmBranchRepository branches,
                             UserRepository users, AuditService audit) {
-        this.dealService = dealService;
+        this.dealList = dealList;
+        this.query = query;
         this.deals = deals;
         this.versions = versions;
         this.issues = issues;
-        this.moves = moves;
         this.lifecycle = lifecycle;
         this.branches = branches;
         this.users = users;
@@ -82,85 +81,48 @@ public class AssuranceService {
     }
 
     /**
-     * Every verified or closed deal the caller may read, each with its versions newest first.
+     * One page of the register: each verified or closed deal the caller may read, with its latest
+     * version only. Older versions are history; they stay readable on the deal's version tab.
      *
-     * <p>Scoped by {@link DealService#list}, so the firm and branch rules are the deals list's own.
+     * <p>Scoped by {@link DealScope}, so the firm and branch rules are the deals list's own.
      *
-     * <p>{@code from}/{@code to} narrow it by when things happened, at version level: a version is
-     * kept if it was verified in the range, or if it is the deal's latest version and the deal was
-     * closed in the range — closing is something that happens to the version the deal stands on,
-     * not to the ones it was worked past. A deal left with no versions is dropped. Either bound may
-     * be null for an open-ended range.
+     * <p>{@code from}/{@code to} keep a deal when its latest version was verified in the range, or
+     * the deal was closed in the range: closing happens to the version the deal stands on. Either
+     * bound may be null for an open-ended range. All of it runs in SQL ({@link AssuranceQuery}),
+     * and only the page's rows are loaded and mapped.
      */
     @Transactional(readOnly = true)
-    public List<AssuranceDealDto> list(Long firmId, Long branchId, Instant from, Instant to) {
-        List<DealListItemDto> rows = ASSURABLE.stream()
-                .flatMap(s -> dealService.list(s, firmId, branchId).stream())
-                .toList();
-        if (rows.isEmpty()) return List.of();
-        List<Long> dealIds = rows.stream().map(DealListItemDto::id).toList();
+    public PageResponse<AssuranceDealDto> list(AssuranceQuery.Filter filter, PageRequests paging) {
+        DealScope scope = dealList.scopeForCurrentUser(filter.firmId(), filter.branchId());
+        AssuranceQuery.RowPage page = query.page(scope, filter, paging);
+        if (page.rows().isEmpty()) return PageResponse.of(List.of(), paging, page.total(), page.exact());
 
-        Map<Long, List<DealVersion>> byDeal = versions.findAllByDealIdInOrderByVersionNoDesc(dealIds)
-                .stream()
-                .collect(Collectors.groupingBy(DealVersion::getDealId));
+        List<DealListItemDto> dealRows = dealList.toListItems(
+                dealList.loadInOrder(page.rows().stream().map(AssuranceQuery.Row::dealId).toList()));
+        Map<Long, DealListItemDto> dealById = dealRows.stream()
+                .collect(Collectors.toMap(DealListItemDto::id, Function.identity()));
 
-        boolean ranged = from != null || to != null;
-        Map<Long, Instant> closedAt = new HashMap<>();
-        if (ranged) {
-            // The transaction monitoring record, which every close writes — the timeline does not:
-            // a close carries no note, so it leaves no entry there.
-            for (Object[] r : moves.latestAt(dealIds, DealStatusMove.Kind.CLOSE)) {
-                closedAt.put((Long) r[0], (Instant) r[1]);
-            }
-        }
-
-        // Filter first, so issues and names are only loaded for rows that will be shown.
-        Map<Long, List<DealVersion>> kept = new HashMap<>();
-        for (DealListItemDto d : rows) {
-            List<DealVersion> vs = byDeal.getOrDefault(d.id(), List.of());
-            if (ranged) {
-                Instant closed = d.status() == DealStatus.CLOSED ? closedAt.get(d.id()) : null;
-                List<DealVersion> in = new ArrayList<>();
-                for (int i = 0; i < vs.size(); i++) {
-                    DealVersion v = vs.get(i);
-                    boolean latest = i == 0;
-                    if (within(v.getVerifiedAt(), from, to) || (latest && within(closed, from, to))) {
-                        in.add(v);
-                    }
-                }
-                vs = in;
-                if (vs.isEmpty()) continue;
-            }
-            kept.put(d.id(), vs);
-        }
-        if (kept.isEmpty()) return List.of();
-
-        List<DealVersion> shown = kept.values().stream().flatMap(List::stream).toList();
-        Map<Long, List<IssueDto>> issuesByVersion = shown.isEmpty() ? Map.of()
-                : issues.findAllByDealVersionIdInOrderBySortOrderAsc(shown.stream().map(DealVersion::getId).toList())
+        List<Long> versionIds = page.rows().stream().map(AssuranceQuery.Row::versionId).filter(Objects::nonNull).toList();
+        Map<Long, DealVersion> versionById = versionIds.isEmpty() ? Map.of()
+                : versions.findAllById(versionIds).stream().collect(Collectors.toMap(DealVersion::getId, Function.identity()));
+        Map<Long, List<IssueDto>> issuesByVersion = versionIds.isEmpty() ? Map.of()
+                : issues.findAllByDealVersionIdInOrderBySortOrderAsc(versionIds)
                         .stream()
                         .collect(Collectors.groupingBy(AssuranceIssue::getDealVersionId,
                                 Collectors.mapping(i -> new IssueDto(i.getIssue(), i.getRemediation()),
                                         Collectors.toList())));
-        Map<Long, User> people = usersById(shown.stream()
+        Map<Long, User> people = usersById(versionById.values().stream()
                 .flatMap(v -> Stream.of(v.getVerifiedByUserId(), v.getAssuranceByUserId())));
 
         List<AssuranceDealDto> out = new ArrayList<>();
-        for (DealListItemDto d : rows) {
-            List<DealVersion> vs = kept.get(d.id());
-            if (vs == null) continue;
-            Instant lastAssured = vs.stream().map(DealVersion::getAssuranceAt)
-                    .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
-            out.add(new AssuranceDealDto(d, lastAssured, vs.stream()
-                    .map(v -> toDto(v, people, issuesByVersion.getOrDefault(v.getId(), List.of())))
-                    .toList()));
+        for (AssuranceQuery.Row row : page.rows()) {
+            DealListItemDto deal = dealById.get(row.dealId());
+            if (deal == null) continue;   // deleted between the id query and this load
+            DealVersion v = row.versionId() == null ? null : versionById.get(row.versionId());
+            out.add(new AssuranceDealDto(deal, v == null ? null
+                    : toDto(v, people, issuesByVersion.getOrDefault(v.getId(), List.of()))));
         }
-        // Latest sign-off first. A deal with no versions (verified before versions existed) has
-        // nothing to assure, and sorts last rather than disappearing without explanation.
-        out.sort(Comparator.comparing(
-                (AssuranceDealDto a) -> a.versions().isEmpty() ? null : a.versions().get(0).verifiedAt(),
-                Comparator.nullsLast(Comparator.reverseOrder())));
-        return out;
+        return PageResponse.of(out, paging, page.total(), page.exact());
     }
 
     /**
@@ -226,12 +188,6 @@ public class AssuranceService {
                               + cleaned.stream().map(IssueDto::issue).collect(Collectors.joining("; "))));
 
         return toDto(v, usersById(Stream.of(v.getVerifiedByUserId(), actor.id())), cleaned);
-    }
-
-    private static boolean within(Instant at, Instant from, Instant to) {
-        if (at == null) return false;
-        if (from != null && at.isBefore(from)) return false;
-        return to == null || !at.isAfter(to);
     }
 
     private static String trim(String s) {

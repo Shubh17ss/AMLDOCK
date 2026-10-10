@@ -35,12 +35,22 @@ public class ScheduledDealNotificationDispatcher {
 
     private final DealNotificationDispatchService dispatch;
     private final int batchSize;
+    private final int maxBatchesPerTick;
 
+    /**
+     * @param maxBatchesPerTick how many batches one tick may send back to back while the outbox
+     *                          keeps returning full batches. Keep {@code maxBatchesPerTick x
+     *                          batchSize / poll interval} under the SES account's sending rate;
+     *                          if it is exceeded anyway, SES answers ACCOUNT_THROTTLED, which is
+     *                          retryable and goes into the normal backoff.
+     */
     public ScheduledDealNotificationDispatcher(
             DealNotificationDispatchService dispatch,
-            @Value("${amldock.notifications.batch-size:50}") int batchSize) {
+            @Value("${amldock.notifications.batch-size:50}") int batchSize,
+            @Value("${amldock.notifications.max-batches-per-tick:10}") int maxBatchesPerTick) {
         this.dispatch = dispatch;
         this.batchSize = batchSize;
+        this.maxBatchesPerTick = Math.max(1, maxBatchesPerTick);
     }
 
     /**
@@ -49,19 +59,28 @@ public class ScheduledDealNotificationDispatcher {
      *
      * <p>The initial delay lets the context finish starting — including SES template provisioning —
      * before the first send.
+     *
+     * <p>A full batch means there is probably more waiting, so the tick keeps going, up to
+     * {@code maxBatchesPerTick} batches. An idle outbox costs one cheap claim per tick; a backlog
+     * drains at up to {@code maxBatchesPerTick x batchSize} per tick instead of one batch, which
+     * matters most after an SES outage, exactly when the backlog has built up.
      */
     @Scheduled(fixedDelayString = "${amldock.notifications.poll-ms:10000}",
                initialDelayString = "${amldock.notifications.initial-delay-ms:20000}")
     public void pump() {
         try {
-            List<DealNotificationDispatchService.Sendable> batch = dispatch.claim(batchSize);
-            if (batch.isEmpty()) return;
+            for (int i = 0; i < maxBatchesPerTick; i++) {
+                List<DealNotificationDispatchService.Sendable> batch = dispatch.claim(batchSize);
+                if (batch.isEmpty()) return;
 
-            log.debug("Sending {} deal notification(s)", batch.size());
-            dispatch.applyOutcomes(dispatch.send(batch));
+                log.debug("Sending {} deal notification(s)", batch.size());
+                dispatch.applyOutcomes(dispatch.send(batch));
+                if (batch.size() < batchSize) return;   // drained
+            }
         } catch (Exception e) {
             // Never let a bad tick kill the schedule — Spring cancels a task that throws. Rows
-            // claimed but not resolved are recovered by the lease arm of the claim query.
+            // claimed but not resolved are recovered by the stale-claim query once their lease
+            // expires.
             log.error("Deal notification dispatch failed", e);
         }
     }

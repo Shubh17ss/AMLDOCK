@@ -92,8 +92,12 @@ public class DealNotificationDispatchService {
      */
     @Transactional
     public List<Sendable> claim(int batchSize) {
+        // Abandoned claims first: they are the oldest debt. Then fill what is left with due work.
         Instant staleBefore = Instant.now().minus(lease);
-        List<Long> ids = notifications.findClaimableIds(staleBefore, batchSize);
+        List<Long> ids = new ArrayList<>(notifications.findStaleClaimIds(staleBefore, batchSize));
+        if (ids.size() < batchSize) {
+            ids.addAll(notifications.findDueIds(batchSize - ids.size()));
+        }
         if (ids.isEmpty()) return List.of();
 
         Instant now = Instant.now();

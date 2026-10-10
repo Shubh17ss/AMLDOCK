@@ -6,7 +6,10 @@ import nz.amldock.audit.AuditService;
 import nz.amldock.client.dto.ClientInput;
 import nz.amldock.deal.dto.CreateDealRequest;
 import nz.amldock.deal.dto.DealDto;
+import nz.amldock.common.web.PageRequests;
+import nz.amldock.common.web.PageResponse;
 import nz.amldock.deal.dto.DealListItemDto;
+import nz.amldock.deal.dto.DealSummaryDto;
 import nz.amldock.deal.dto.NoteRequest;
 import nz.amldock.deal.dto.OptionalNoteRequest;
 import nz.amldock.deal.dto.CloseDealRequest;
@@ -55,18 +58,39 @@ public class DealController {
             "hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')";
 
     private final DealService deals;
+    private final DealListService dealList;
     private final AuditService audit;
 
-    public DealController(DealService deals, AuditService audit) {
+    public DealController(DealService deals, DealListService dealList, AuditService audit) {
         this.deals = deals;
+        this.dealList = dealList;
         this.audit = audit;
     }
 
+    /**
+     * One page of the deals the caller may read. Filtering, search and ordering run in SQL, so a
+     * request costs the same whatever the size of the firm. Dashboards read {@link #summary}.
+     *
+     * @param q    contains-match on reference, client name or property address
+     * @param sort {@code createdAt} (default) or {@code updatedAt}, newest first
+     */
     @GetMapping
-    public List<DealListItemDto> list(@RequestParam(required = false) DealStatus status,
-                                      @RequestParam(required = false) Long firmId,
-                                      @RequestParam(required = false) Long branchId) {
-        return deals.list(status, firmId, branchId);
+    public PageResponse<DealListItemDto> list(@RequestParam(required = false) DealStatus status,
+                                              @RequestParam(required = false) Long firmId,
+                                              @RequestParam(required = false) Long branchId,
+                                              @RequestParam(required = false) String q,
+                                              @RequestParam(defaultValue = "createdAt") String sort,
+                                              @RequestParam(required = false) Integer page,
+                                              @RequestParam(required = false) Integer size) {
+        DealListQuery.Sort order = "updatedAt".equals(sort) ? DealListQuery.Sort.UPDATED_AT : DealListQuery.Sort.CREATED_AT;
+        return dealList.list(status, firmId, branchId, q, order, PageRequests.of(page, size));
+    }
+
+    /** Per-status counts, value sums and oldest waits for the role dashboards. */
+    @GetMapping("/summary")
+    public DealSummaryDto summary(@RequestParam(required = false) Long firmId,
+                                  @RequestParam(required = false) Long branchId) {
+        return dealList.summary(firmId, branchId);
     }
 
     @GetMapping("/{id}")

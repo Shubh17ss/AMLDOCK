@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, CircularProgress, Divider, Stack, TextField, Typography,
@@ -8,15 +8,18 @@ import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import { getIndividual, listIndividuals } from '../../api/individuals.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
-import { matchesSearch } from '../../components/SearchField.jsx';
 import { personRolesLabel } from '../../api/ownership.js';
 import { countryName } from '../../data/countries.js';
 import { formatBytes, formatDate } from '../../utils/formatters.js';
 import { verificationDisplay } from './verificationDisplay.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
+import { countText } from '../../components/ListPagination.jsx';
 
 /** Past this many matches the list stops being a list and starts being a wall. */
 const MAX_ROWS = 8;
+
+/** The server ignores shorter search text (PageRequests.MIN_SEARCH_LENGTH). */
+const MIN_SEARCH = 3;
 
 /**
  * Names an individual, either by finding one the firm has met before or by typing a new one.
@@ -50,25 +53,31 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
   // therefore pull the caret out of a dialog still showing step one.
   useEffect(() => { if (active) inputRef.current?.focus(); }, [active]);
 
+  const query = name.trim();
+  // Searched on the server, 300 ms after typing stops, so a name is one request rather than one
+  // per letter. It used to download every individual the firm had and filter here.
+  const [debounced, setDebounced] = useState(query);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
   // Firm, never branch: an individual is on file for the firm, and a reviewer looking for someone
-  // onboarded at another office should still find them. Shares the registers' cache entry exactly
-  // when no branch is selected. The params are advisory anyway — the server narrows by role.
+  // onboarded at another office should still find them. The params are advisory anyway — the
+  // server narrows by role. Nothing until three characters are typed (the server ignores shorter
+  // text, and a trigram search needs three): opening straight into every
+  // person the firm has ever onboarded would be a list to scroll, not an answer to a question.
+  const searching = Boolean(active) && debounced.length >= MIN_SEARCH;
   const listQ = useQuery({
-    queryKey: ['individuals', firm?.id ?? null, null],
-    queryFn: () => listIndividuals({ firmId: firm?.id }),
-    enabled: Boolean(active),
+    queryKey: ['individuals', 'picker', firm?.id ?? null, debounced],
+    queryFn: () => listIndividuals({ firmId: firm?.id, q: debounced, size: MAX_ROWS }),
+    enabled: searching,
   });
 
-  const query = name.trim();
-  const all = listQ.data ?? [];
-
-  // Nothing until something is typed. Opening straight into every person the firm has ever
-  // onboarded would be a list to scroll, not an answer to a question.
-  const matches = useMemo(
-    () => (query ? all.filter((r) => matchesSearch(query, r.displayName)) : []),
-    [all, query],
-  );
-  const shown = matches.slice(0, MAX_ROWS);
+  const shown = searching ? listQ.data?.items ?? [] : [];
+  // How many match in total; only the first MAX_ROWS are fetched.
+  const matchCount = searching ? listQ.data?.totalElements ?? 0 : 0;
+  const pending = query.length >= MIN_SEARCH && (query !== debounced || listQ.isLoading);
 
   if (selected) {
     return <ChosenPerson person={selected} onClear={onClear} />;
@@ -92,18 +101,18 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
         </Alert>
       )}
 
-      {query && listQ.isLoading && (
+      {pending && (
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ px: 0.5 }}>
           <CircularProgress size={16} />
           <Typography variant="body2" sx={{ color: tokens.muted }}>Searching…</Typography>
         </Stack>
       )}
 
-      {query && !listQ.isLoading && matches.length > 0 && (
+      {!pending && matchCount > 0 && (
         <Stack spacing={1}>
           <SectionLabel>
-            {matches.length > MAX_ROWS
-              ? `Already on file — ${matches.length} matches`
+            {matchCount > MAX_ROWS
+              ? `Already on file — ${countText(listQ.data)} matches`
               : 'Already on file'}
           </SectionLabel>
           {shown.map((row) => (
@@ -115,15 +124,15 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
               onUse={onSelect}
             />
           ))}
-          {matches.length > shown.length && (
+          {matchCount > shown.length && (
             <Typography variant="caption" sx={{ color: tokens.muted, pl: 0.5 }}>
-              {matches.length - shown.length} more — keep typing to narrow it down.
+              {listQ.data?.totalExact === false ? 'Many' : matchCount - shown.length} more — keep typing to narrow it down.
             </Typography>
           )}
         </Stack>
       )}
 
-      {query && !listQ.isLoading && !listQ.isError && matches.length === 0 && (
+      {query.length >= 2 && !pending && !listQ.isError && matchCount === 0 && (
         <Stack direction="row" spacing={1.25} alignItems="center" sx={{ px: 0.5 }}>
           <PersonAddAltIcon sx={{ fontSize: 18, color: tokens.muted }} />
           <Typography variant="body2" sx={{ color: tokens.muted }}>
