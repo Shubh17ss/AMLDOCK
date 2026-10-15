@@ -141,14 +141,15 @@ public class SuspiciousActivityService {
     public SuspiciousActivityDto confirmUpload(Long id) {
         SuspiciousActivity s = activities.findById(id)
                 .orElseThrow(() -> new NotFoundException("Suspicious activity " + id + " not found"));
+        // Scope first: the idempotent return below must not hand another firm's entry back.
+        UserPrincipal actor = currentPrincipal();
+        assertSameScope(actor, s);
         if (s.getDocumentStatus() == DocumentStatus.ACTIVE) {
             return toDto(s); // idempotent
         }
         if (s.getDocumentStatus() == null || s.getS3Key() == null) {
             throw new BadRequestException("No upload was started for this entry");
         }
-        UserPrincipal actor = currentPrincipal();
-        assertSameScope(actor, s);
 
         if (!storage.exists(s.getS3Key())) {
             throw new BadRequestException("Object not found in S3 yet — was the upload successful?");

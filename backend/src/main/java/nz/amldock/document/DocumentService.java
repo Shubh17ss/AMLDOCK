@@ -124,7 +124,12 @@ public class DocumentService {
         d.setDealId(deal.getId());
         d.setOwnershipNodeId(nodeId);
         // Carried from the request so confirmUpload knows whether this scan joins an existing
-        // person (the back of a card) or starts a new one.
+        // person (the back of a card) or starts a new one. That person must be on this deal:
+        // deleting the scan and reading it both act on them, so a foreign id would let one
+        // deal's author rewrite or remove another deal's individual.
+        if (req.beneficialOwnerId() != null && !beneficialOwners.isOnDeal(deal.getId(), req.beneficialOwnerId())) {
+            throw new BadRequestException("Individual does not belong to this deal");
+        }
         d.setBeneficialOwnerId(req.beneficialOwnerId());
         d.setIdSide(req.idSide());
         d.setUploadedByUserId(actor.id());
@@ -142,15 +147,21 @@ public class DocumentService {
     public DocumentDto confirmUpload(Long documentId) {
         Document doc = documents.findById(documentId)
                 .orElseThrow(() -> new NotFoundException("Document " + documentId + " not found"));
-        if (doc.getStatus() == DocumentStatus.ACTIVE) {
-            return toDto(doc); // idempotent
+        // Authorise before anything is returned: the ids are sequential, so the idempotent
+        // ACTIVE return below must never hand a document to someone who could not read its
+        // deal — the same scope GET /api/documents/{id} applies.
+        UserPrincipal actor = currentPrincipal();
+        if (doc.getDealId() != null) {
+            mustLoadDealForRead(doc.getDealId());
         }
         if (doc.getStatus() == DocumentStatus.DELETED) {
             throw new BadRequestException("Document is deleted");
         }
-        UserPrincipal actor = currentPrincipal();
         if (!actor.id().equals(doc.getUploadedByUserId()) && !canManageDocuments(actor.role())) {
             throw new ForbiddenException("Only the uploader (or an elevated role) may confirm this upload");
+        }
+        if (doc.getStatus() == DocumentStatus.ACTIVE) {
+            return toDto(doc); // idempotent
         }
 
         if (!storage.exists(doc.getS3Key())) {
@@ -309,7 +320,7 @@ public class DocumentService {
 
         // The person goes only with their last remaining image — removing one side of a card
         // leaves someone who was still presented, evidenced by the other side.
-        beneficialOwners.removeIfOrphaned(d.getBeneficialOwnerId());
+        beneficialOwners.removeIfOrphaned(d.getDealId(), d.getBeneficialOwnerId());
     }
 
     /* ---------- helpers ---------- */

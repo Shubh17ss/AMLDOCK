@@ -100,14 +100,24 @@ public class BeneficialOwnerService {
         return owner;
     }
 
+    /**
+     * Whether a person is on a deal. Every person a document may name is: an upload naming one
+     * from elsewhere is refused, because deletion and extraction act on that person.
+     */
+    @Transactional(readOnly = true)
+    public boolean isOnDeal(Long dealId, Long beneficialOwnerId) {
+        return links.existsById(new DealBeneficialOwner.Key(dealId, beneficialOwnerId));
+    }
+
     /* ---------- extraction results ---------- */
 
     /**
      * Folds what was read off one image into the person it belongs to.
      *
-     * <p>The person is always {@code doc.beneficialOwnerId}, fixed when the image was uploaded.
-     * Extraction never chooses who a document belongs to, so a misread name cannot move evidence
-     * onto the wrong individual.
+     * <p>The person is always {@code doc.beneficialOwnerId}, fixed when the image was uploaded
+     * and checked then to be on the document's own deal (see {@link #isOnDeal}). Extraction never
+     * chooses who a document belongs to, so a misread name cannot move evidence onto the wrong
+     * individual.
      *
      * <p>Front and back are extracted independently and land in either order, so neither may
      * assume it went first — hence fill-or-improve rather than overwrite. A licence back usually
@@ -118,6 +128,13 @@ public class BeneficialOwnerService {
         if (doc.getBeneficialOwnerId() == null) return;      // not an identity scan
         BeneficialOwner owner = owners.findById(doc.getBeneficialOwnerId()).orElse(null);
         if (owner == null) return;                            // scan deleted mid-extraction
+        if (!isOnDeal(doc.getDealId(), owner.getId())) {
+            // Upload refuses this now; a row written before that check must still not reach
+            // into a person on another deal.
+            log.warn("Ignoring extraction for document {}: person {} is not on deal {}",
+                    doc.getId(), owner.getId(), doc.getDealId());
+            return;
+        }
 
         ObjectNode confidence = parseConfidence(owner.getExtractionConfidence());
 
@@ -165,8 +182,13 @@ public class BeneficialOwnerService {
      * they were still presented, and the other image still evidences them.
      */
     @Transactional
-    public void removeIfOrphaned(Long beneficialOwnerId) {
+    public void removeIfOrphaned(Long dealId, Long beneficialOwnerId) {
         if (beneficialOwnerId == null) return;
+        // Only a person this deal's scan created. A person on another deal is never this
+        // document's to remove, and a hand-added person (no source scan) leaves through the
+        // ownership tree, not because a scan attached to them was deleted.
+        DealBeneficialOwner link = links.findById(new DealBeneficialOwner.Key(dealId, beneficialOwnerId)).orElse(null);
+        if (link == null || link.getSourceDocumentId() == null) return;
         if (!documents.findAllByBeneficialOwnerIdAndStatus(beneficialOwnerId, DocumentStatus.ACTIVE).isEmpty()) {
             return;
         }

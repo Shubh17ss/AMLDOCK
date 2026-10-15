@@ -37,7 +37,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>{@code DealService} is mocked so this stays a test of the web layer and touches no data.
  * The security filter chain, the method-security annotations and the JSON mapper are all real.
  */
-@SpringBootTest
+// JWT_SECRET has no default; this throwaway value only signs tokens inside the test context.
+@SpringBootTest(properties = "JWT_SECRET=test-only-secret-test-only-secret-0123456789")
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
 class RiskEndpointsWebTest {

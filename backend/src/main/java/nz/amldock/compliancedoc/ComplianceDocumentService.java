@@ -116,14 +116,15 @@ public class ComplianceDocumentService {
     public ComplianceDocumentDto confirmUpload(Long documentId) {
         ComplianceDocument doc = docs.findById(documentId)
                 .orElseThrow(() -> new NotFoundException("Document " + documentId + " not found"));
+        // Scope first: the idempotent return below must not hand another firm's document back.
+        UserPrincipal actor = currentPrincipal();
+        assertSameScope(actor, doc);
         if (doc.getStatus() == DocumentStatus.ACTIVE) {
             return toDto(doc); // idempotent
         }
         if (doc.getStatus() == DocumentStatus.DELETED) {
             throw new BadRequestException("Document is deleted");
         }
-        UserPrincipal actor = currentPrincipal();
-        assertSameScope(actor, doc);
 
         if (!storage.exists(doc.getS3Key())) {
             throw new BadRequestException("Object not found in S3 yet — was the upload successful?");

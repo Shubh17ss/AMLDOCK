@@ -78,6 +78,8 @@ class BeneficialOwnerServiceTest {
         lenient().when(deals.findById(DEAL_ID)).thenReturn(Optional.of(deal));
         lenient().when(branches.findById(BRANCH_ID)).thenReturn(Optional.of(branch));
         lenient().when(owners.save(any())).thenAnswer(i -> i.getArgument(0));
+        // Every scan here names a person on its own deal unless a test says otherwise.
+        lenient().when(links.existsById(any())).thenReturn(true);
         lenient().when(ownership.attachExtractedIndividual(anyLong(), any(), anyString(), any(), any()))
                 .thenReturn(new OwnershipNode());
     }
@@ -188,6 +190,23 @@ class BeneficialOwnerServiceTest {
         verify(owners, never()).findById(any());
     }
 
+    @Test
+    void extractionNeverReachesAPersonOnAnotherDeal() {
+        // A scan naming someone from elsewhere (planted before upload checked it) must not
+        // rewrite that person's identity.
+        BeneficialOwner victim = existing(OWNER_ID, "Victim Name", LocalDate.of(1980, 1, 1), null);
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(victim));
+        when(links.existsById(any())).thenReturn(false);
+
+        service.applyExtraction(scan(OWNER_ID, IdSide.FRONT),
+                fields("Someone Else", LocalDate.of(1990, 5, 5), LocalDate.of(2031, 1, 1), "0.990"));
+
+        assertThat(victim.getFullName()).isEqualTo("Victim Name");
+        assertThat(victim.getDateOfBirth()).isEqualTo(LocalDate.of(1980, 1, 1));
+        assertThat(victim.getIdExpiryDate()).isNull();
+        verify(ownership, never()).refreshExtractedIndividual(anyLong(), any(), any());
+    }
+
     /* ---------- no merging, ever ---------- */
 
     @Test
@@ -247,10 +266,11 @@ class BeneficialOwnerServiceTest {
     @Test
     void removingOneSideOfACardKeepsThePerson() {
         // They were still presented, and the remaining image still evidences them.
+        linkedOnThisDeal(4L);
         when(documents.findAllByBeneficialOwnerIdAndStatus(OWNER_ID, DocumentStatus.ACTIVE))
                 .thenReturn(List.of(scan(OWNER_ID, IdSide.BACK)));
 
-        service.removeIfOrphaned(OWNER_ID);
+        service.removeIfOrphaned(DEAL_ID, OWNER_ID);
 
         verify(owners, never()).deleteById(anyLong());
         verify(ownership, never()).removeExtractedIndividual(anyLong());
@@ -258,10 +278,11 @@ class BeneficialOwnerServiceTest {
 
     @Test
     void removingTheLastScanRemovesThePerson() {
+        linkedOnThisDeal(4L);
         when(documents.findAllByBeneficialOwnerIdAndStatus(OWNER_ID, DocumentStatus.ACTIVE))
                 .thenReturn(List.of());
 
-        service.removeIfOrphaned(OWNER_ID);
+        service.removeIfOrphaned(DEAL_ID, OWNER_ID);
 
         verify(ownership).removeExtractedIndividual(OWNER_ID);
         verify(links).deleteAllByBeneficialOwnerId(OWNER_ID);
@@ -270,9 +291,38 @@ class BeneficialOwnerServiceTest {
 
     @Test
     void aDocumentThatNeverHadAnOwnerRemovesNothing() {
-        service.removeIfOrphaned(null);
+        service.removeIfOrphaned(DEAL_ID, null);
 
         verify(owners, never()).deleteById(anyLong());
+    }
+
+    @Test
+    void aPersonOnAnotherDealIsNeverRemovedByThisDealsScan() {
+        // The cross-firm deletion the audit found: a scan naming someone else's individual,
+        // then deleted, used to take that individual with it.
+        when(links.findById(any())).thenReturn(Optional.empty());
+
+        service.removeIfOrphaned(DEAL_ID, OWNER_ID);
+
+        verify(ownership, never()).removeExtractedIndividual(anyLong());
+        verify(links, never()).deleteAllByBeneficialOwnerId(anyLong());
+        verify(owners, never()).deleteById(anyLong());
+    }
+
+    @Test
+    void aHandAddedPersonIsNotRemovedWithAScan() {
+        // Added on the ownership tree with no source scan: they leave the way they came.
+        linkedOnThisDeal(null);
+
+        service.removeIfOrphaned(DEAL_ID, OWNER_ID);
+
+        verify(ownership, never()).removeExtractedIndividual(anyLong());
+        verify(owners, never()).deleteById(anyLong());
+    }
+
+    private void linkedOnThisDeal(Long sourceDocumentId) {
+        when(links.findById(any()))
+                .thenReturn(Optional.of(new DealBeneficialOwner(DEAL_ID, OWNER_ID, sourceDocumentId)));
     }
 
     /* ---------- release on deal deletion ---------- */

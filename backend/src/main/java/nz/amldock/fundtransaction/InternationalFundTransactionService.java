@@ -140,14 +140,15 @@ public class InternationalFundTransactionService {
     public FundTransactionDto confirmUpload(Long id) {
         InternationalFundTransaction t = transactions.findById(id)
                 .orElseThrow(() -> new NotFoundException("Transaction " + id + " not found"));
+        // Scope first: the idempotent return below must not hand another firm's entry back.
+        UserPrincipal actor = currentPrincipal();
+        assertSameScope(actor, t);
         if (t.getDocumentStatus() == DocumentStatus.ACTIVE) {
             return toDto(t); // idempotent
         }
         if (t.getDocumentStatus() == null || t.getS3Key() == null) {
             throw new BadRequestException("No upload was started for this transaction");
         }
-        UserPrincipal actor = currentPrincipal();
-        assertSameScope(actor, t);
 
         if (!storage.exists(t.getS3Key())) {
             throw new BadRequestException("Object not found in S3 yet — was the upload successful?");

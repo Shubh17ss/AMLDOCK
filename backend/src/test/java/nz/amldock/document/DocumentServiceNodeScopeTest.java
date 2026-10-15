@@ -7,6 +7,7 @@ import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.document.dto.DocumentDto;
 import nz.amldock.document.dto.UploadUrlRequest;
 import nz.amldock.document.storage.FileStorageService;
@@ -197,6 +198,103 @@ class DocumentServiceNodeScopeTest {
         assertThat(doc.getIdSide()).isEqualTo(IdSide.FRONT);
     }
 
+    /* ---------- confirming is scoped like reading (security audit C-01) ---------- */
+
+    @Test
+    void anotherFirmsConfirmedDocumentIsRefusedNotReturned() {
+        // The idempotent ACTIVE return used to come before any check, handing any firm's ID
+        // scan (filename, uploader, OCR'd name and date of birth) to whoever guessed its id.
+        Document doc = doc(9L, "passport.jpg", Instant.now());
+        doc.setUploadedByUserId(123L);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        signedInAs(Role.AML_COMPLIANCE_OFFICER, USER_ID, 200L, 20L);
+
+        assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void aManagerOfAnotherFirmCannotConfirmItsPendingUpload() {
+        Document doc = doc(9L, "licence-front.jpg", Instant.now());
+        doc.setDocumentType(DocumentType.NZ_DRIVER_LICENCE);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setUploadedByUserId(123L);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        signedInAs(Role.SALES_MANAGER, USER_ID, 200L, 20L);
+
+        assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(ForbiddenException.class);
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.PENDING);
+        verify(storage, never()).exists(any());
+        verify(beneficialOwners, never()).createProvisional(any());
+    }
+
+    @Test
+    void anAgentWhoCannotReadTheDealCannotConfirmOnIt() {
+        Document doc = doc(9L, "passport.jpg", Instant.now());
+        doc.setUploadedByUserId(123L);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        // Same firm and branch, but neither the deal's creator nor granted access to it.
+        signedInAs(Role.AGENT, 55L, FIRM_ID, BRANCH_ID);
+
+        assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void confirmingAnAlreadyActiveDocumentInScopeIsStillIdempotent() {
+        Document doc = doc(9L, "passport.jpg", Instant.now());
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+
+        DocumentDto dto = service.confirmUpload(9L);
+
+        assertThat(dto).isNotNull();
+        verify(storage, never()).exists(any());
+    }
+
+    /* ---------- the person a scan names is on its own deal (security audit C-02) ---------- */
+
+    @Test
+    void aScanCannotNameAPersonFromAnotherDeal() {
+        // Deleting or reading the scan acts on that person, so a foreign id would let one deal's
+        // author remove or rewrite another firm's individual.
+        when(beneficialOwners.isOnDeal(DEAL_ID, PERSON_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.presignUpload(backOfCard(PERSON_ID)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not belong to this deal");
+        verify(documents, never()).save(any());
+    }
+
+    @Test
+    void theBackOfACardStillJoinsThePersonOnThisDeal() {
+        when(beneficialOwners.isOnDeal(DEAL_ID, PERSON_ID)).thenReturn(true);
+        when(documents.save(any())).thenAnswer(i -> {
+            Document d = i.getArgument(0);
+            ReflectionTestUtils.setField(d, "id", 42L);
+            return d;
+        });
+        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+
+        service.presignUpload(backOfCard(PERSON_ID));
+
+        org.mockito.ArgumentCaptor<Document> saved = org.mockito.ArgumentCaptor.forClass(Document.class);
+        verify(documents).save(saved.capture());
+        assertThat(saved.getValue().getBeneficialOwnerId()).isEqualTo(PERSON_ID);
+    }
+
+    @Test
+    void deletingAScanRemovesItsPersonOnlyWithinTheScansDeal() {
+        Document doc = someoneElsesDocument(DealStatus.REVIEW);
+        doc.setBeneficialOwnerId(PERSON_ID);
+
+        service.delete(doc.getId());
+
+        verify(beneficialOwners).removeIfOrphaned(DEAL_ID, PERSON_ID);
+    }
+
+    private static UploadUrlRequest backOfCard(Long personId) {
+        return new UploadUrlRequest("licence-back.jpg", "image/jpeg", 1024L, DocumentType.NZ_DRIVER_LICENCE,
+                DEAL_ID, null, personId, IdSide.BACK);
+    }
+
     /* ---------- accepted document types (V35) ---------- */
 
     @Test
@@ -352,10 +450,14 @@ class DocumentServiceNodeScopeTest {
     }
 
     private void signedInAs(Role role, Long userId) {
+        signedInAs(role, userId, FIRM_ID, BRANCH_ID);
+    }
+
+    private void signedInAs(Role role, Long userId, Long firmId, Long branchId) {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(
                         new UserPrincipal(userId, "someone@firm.nz", "Someone",
-                                role, FIRM_ID, BRANCH_ID, true),
+                                role, firmId, branchId, true),
                         null, List.of()));
     }
 

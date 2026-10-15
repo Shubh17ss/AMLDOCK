@@ -17,10 +17,13 @@ docker compose up -d postgres
 
 ### 2. Run backend
 
+Set `JWT_SECRET` before launching. It is required and has no default: the backend refuses to start without it. Use a random value of at least 32 bytes, generated once per environment and never committed (for example `openssl rand -base64 48`).
+
 Set the AWS / S3 env vars before launching (required from M4 onwards — Spring will fail to construct the S3 client without a region/bucket, and presigned URLs need real credentials):
 
 PowerShell:
 ```
+$env:JWT_SECRET="<output of: openssl rand -base64 48>"
 $env:AWS_ACCESS_KEY_ID="AKIA..."
 $env:AWS_SECRET_ACCESS_KEY="..."
 $env:AWS_REGION="ap-southeast-2"
@@ -29,6 +32,7 @@ $env:S3_BUCKET="aml-dock-dev-documents"
 
 bash:
 ```
+export JWT_SECRET="<output of: openssl rand -base64 48>"
 export AWS_ACCESS_KEY_ID=AKIA...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_REGION=ap-southeast-2
