@@ -77,6 +77,21 @@ export const canEditContent = (status, role) =>
     : isEditable(status);
 
 /**
+ * Whether this role may add documents to a deal in this status.
+ *
+ * Mirrors `DealLifecycleService.canUploadDocuments`. Wider than canEditContent: the broker adds
+ * evidence while the deal is NEW; branch staff (admin, sales manager) and firm-level reviewers add
+ * it through NEW, REVIEW and ON_HOLD. Nobody adds to a VERIFIED or CLOSED deal.
+ */
+export const canUploadDocuments = (status, role) => {
+  if (role === 'AGENT' || role === 'AGENT_PA') return isEditable(status);
+  if (['ADMIN', 'SALES_MANAGER', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'].includes(role)) {
+    return REVIEWER_EDITABLE.includes(status);
+  }
+  return false;
+};
+
+/**
  * Every status change a reviewer can make, as a table.
  *
  * <p>Mirrors `DealLifecycleService.RULES`, `noteRequired` included — that is the server's own

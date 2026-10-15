@@ -229,14 +229,6 @@ public class DealService {
     @Transactional
     public Deal update(Long id, UpdateDealRequest req) {
         Deal d = mustFindEditable(id);
-        if (req.firmBranchId() != null && !req.firmBranchId().equals(d.getFirmBranchId())) {
-            FirmBranch newBranch = branches.findById(req.firmBranchId())
-                    .orElseThrow(() -> new BadRequestException("Branch " + req.firmBranchId() + " not found"));
-            if (!newBranch.isActive()) {
-                throw new BadRequestException("Branch is inactive");
-            }
-            d.setFirmBranchId(newBranch.getId());
-        }
         if (req.transactionType() != null) d.setTransactionType(req.transactionType());
         if (req.transactionValue() != null) d.setTransactionValue(req.transactionValue());
         if (req.pocName() != null) d.setPocName(blankToNull(req.pocName()));

@@ -63,8 +63,8 @@ public class UserController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER','AUDIT')")
-    public UserDto get(@PathVariable Long id) {
-        return UserDto.from(users.findById(id));
+    public UserDto get(@AuthenticationPrincipal UserPrincipal principal, @PathVariable Long id) {
+        return UserDto.from(users.findVisibleById(principal, id));
     }
 
     @PostMapping

@@ -73,7 +73,7 @@ class DealRequestValidationTest {
     void patchAcceptsAnUnansweredForeignExposure() {
         // Every autosave from section 2 onwards carries this until section 3 is answered.
         UpdateDealRequest req = new UpdateDealRequest(
-                null, TransactionType.SALE, null, "", null, "", "", "",
+                TransactionType.SALE, null, "", null, "", "", "",
                 "", null, null, null, null, null, "", null, null, "", null, null, null);
         assertThat(validator.validate(req)).isEmpty();
     }
@@ -81,7 +81,7 @@ class DealRequestValidationTest {
     @Test
     void patchStillRejectsAMalformedCountryCode() {
         UpdateDealRequest req = new UpdateDealRequest(
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null,
                 null, null, null, null, null, null, "nz", null, null, null, null, null, null);
         assertThat(validator.validate(req))
                 .extracting(v -> v.getPropertyPath().toString())

@@ -102,6 +102,26 @@ public class UserService {
     }
 
     /**
+     * One user, if the actor could see them in {@link #findVisible(UserPrincipal)}. Same tier rule,
+     * so the single-item read never shows more than the list does. Anyone out of scope is a 404,
+     * not a 403: ids are sequential, and a different answer would say which ones exist.
+     */
+    @Transactional(readOnly = true)
+    public User findVisibleById(UserPrincipal actor, Long id) {
+        User u = findById(id);
+        Role role = actor.role();
+        boolean visible = role.seesAllFirms()
+                || (role.isFirmLevel() && actor.realEstateFirmId() != null
+                        && actor.realEstateFirmId().equals(u.getRealEstateFirmId()))
+                || (role == Role.SALES_MANAGER && actor.firmBranchId() != null
+                        && actor.firmBranchId().equals(u.getFirmBranchId()));
+        if (!visible) {
+            throw new NotFoundException("User " + id + " not found");
+        }
+        return u;
+    }
+
+    /**
      * Create a user below the actor in the hierarchy. Enforces:
      *   1. the actor may create the requested role (top tier creates the tier below, never otherwise);
      *   2. firm/branch linkage matches the target role's tier;

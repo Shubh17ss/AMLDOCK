@@ -163,6 +163,11 @@ public class DocumentService {
         if (doc.getStatus() == DocumentStatus.ACTIVE) {
             return toDto(doc); // idempotent
         }
+        // Again here, not only at presign: the deal can be verified between the two calls, and
+        // confirming is the step that makes the document live and creates its provisional owner.
+        if (doc.getDealId() != null) {
+            mustLoadDealForWrite(doc.getDealId());
+        }
 
         if (!storage.exists(doc.getS3Key())) {
             throw new BadRequestException("Object not found in S3 yet — was the upload successful?");
@@ -292,12 +297,20 @@ public class DocumentService {
         // answer to "may this actor write to this deal", and it now admits reviewers through
         // REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the
         // firm check inside could never pass — that is the reason for the exemption, not rank.
+        //
+        // Anyone else here is the uploader, and answers to the upload rule rather than the edit
+        // rule: a branch admin or sales manager who may add a document in REVIEW must be able to
+        // take back their own mistake in REVIEW too.
         if (actor.role() != Role.ROOT && d.getDealId() != null) {
             Deal deal = deals.findById(d.getDealId())
                     .orElseThrow(() -> new NotFoundException("Deal " + d.getDealId() + " not found"));
             Long firmId = branches.findById(deal.getFirmBranchId())
                     .map(FirmBranch::getRealEstateFirmId).orElse(null);
-            lifecycle.assertEditable(deal, actor, firmId);
+            if (actor.role().isFirmLevel()) {
+                lifecycle.assertEditable(deal, actor, firmId);
+            } else {
+                lifecycle.assertCanUploadDocuments(deal, actor, firmId);
+            }
         }
         if (d.getStatus() == DocumentStatus.DELETED) return;
 
@@ -328,11 +341,12 @@ public class DocumentService {
     private Deal mustLoadDealForWrite(Long dealId) {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new BadRequestException("Deal " + dealId + " not found"));
-        // Upload scope mirrors read scope: agents to their own deal, branch-elevated to their
-        // branch, firm-level to their firm, ROOT to all.
+        // A real write gate: read scope plus the deal's status (see canUploadDocuments). It used to
+        // be read scope alone, which let anyone who could open a deal add documents, and the
+        // provisional owners a scan creates, to a VERIFIED or CLOSED one (C-07).
         Long firmId = branches.findById(deal.getFirmBranchId())
                 .map(FirmBranch::getRealEstateFirmId).orElse(null);
-        lifecycle.assertCanRead(deal, currentPrincipal(), firmId);
+        lifecycle.assertCanUploadDocuments(deal, currentPrincipal(), firmId);
         return deal;
     }
 

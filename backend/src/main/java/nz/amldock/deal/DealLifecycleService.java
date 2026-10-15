@@ -73,7 +73,8 @@ public class DealLifecycleService {
      * nothing about the verification is in question — what a reviewer comes back for is the sale
      * detail recorded on the way out, and correcting that means closing again. It is the one edge
      * that reaches VERIFIED without being a sign-off, which is why {@code stampDecision} and
-     * {@code DealVersionService.snapshotIfVerified} both have to know where it came from.
+     * {@code DealVersionService.snapshotIfVerified} both have to know where it came from. That is
+     * safe only because nothing reaches CLOSED except from VERIFIED, overrides included.
      *
      * <p>REOPEN is the one edge that was long absent, and it is here now only because verifying
      * writes a {@link nz.amldock.deal.version.DealVersion} first. The objection to it was never
@@ -180,10 +181,52 @@ public class DealLifecycleService {
     }
 
     /**
+     * Whether this role may add documents to a deal in this status.
+     *
+     * <p>Wider than {@link #canEditContent} on purpose. The broker (author or granted agent) adds
+     * evidence while the deal is still theirs, NEW. Everyone else who sees the deal from the
+     * branch or the firm (branch ADMIN, SALES_MANAGER, AMLCO, SENIOR_MANAGER) may add evidence
+     * throughout the states where it sits with compliance. Nobody adds to a VERIFIED or CLOSED
+     * deal: that would put new evidence under a sign-off that never saw it.
+     */
+    public static boolean canUploadDocuments(DealStatus status, Role role) {
+        return switch (role) {
+            case AGENT, AGENT_PA -> status == EDITABLE_STATUS;
+            case ADMIN, SALES_MANAGER, AML_COMPLIANCE_OFFICER, SENIOR_MANAGER ->
+                    REVIEWER_EDITABLE_STATUSES.contains(status);
+            case ROOT, AUDIT, FINANCE -> false;
+        };
+    }
+
+    /**
+     * The write gate for adding a document to a deal (and any owner a scan creates from it).
+     *
+     * <p>Scope is read scope, so the same people who can open the deal are the ones considered.
+     * The status rule is {@link #canUploadDocuments}. ROOT reads every firm but authors none of
+     * their records, so it is refused here as it is in {@link #assertEditable}.
+     */
+    public void assertCanUploadDocuments(Deal deal, UserPrincipal actor, Long dealFirmId) {
+        assertCanRead(deal, actor, dealFirmId);
+        if (actor.role() == Role.ROOT || actor.role() == Role.AUDIT) {
+            throw new ForbiddenException("Only staff of the deal's firm may add documents");
+        }
+        if (!canUploadDocuments(deal.getStatus(), actor.role())) {
+            String allowed = actor.role() == Role.AGENT || actor.role() == Role.AGENT_PA
+                    ? "[" + EDITABLE_STATUS + "]"
+                    : REVIEWER_EDITABLE_STATUSES.toString();
+            throw new BadRequestException("Documents cannot be added to a deal in " + deal.getStatus()
+                    + " — allowed from: " + allowed + ". Revert it first.");
+        }
+    }
+
+    /**
      * SENIOR_MANAGER-only force transition, deliberately outside the table above.
      *
      * <p>With no rejected state and no path out of VERIFIED or CLOSED, this is the only way to
      * correct a deal that ended up somewhere wrong.
+     *
+     * <p>It is not a way round the order, though: CLOSED is reachable only from VERIFIED, as it
+     * is for everyone else. UNCLOSE trusts every CLOSED deal to have been signed off first.
      */
     public DealStatus override(Deal deal, UserPrincipal actor, DealStatus target,
                                Long dealFirmId, String reason) {
@@ -199,6 +242,12 @@ public class DealLifecycleService {
         DealStatus previous = deal.getStatus();
         if (previous == target) {
             throw new BadRequestException("Deal is already in status " + target);
+        }
+        // CLOSED means "verified, then finished", by every route. A deal forced into CLOSED from
+        // anywhere else could be UNCLOSEd straight into VERIFIED with no readiness check, no
+        // version and no sign-off.
+        if (target == DealStatus.CLOSED && previous != DealStatus.VERIFIED) {
+            throw new BadRequestException("Only a verified deal can be closed");
         }
         deal.setStatus(target);
         // A senior manager forcing CLOSED back to VERIFIED is the same move as UNCLOSE, so it

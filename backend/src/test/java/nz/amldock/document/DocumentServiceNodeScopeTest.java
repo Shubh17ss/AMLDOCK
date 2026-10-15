@@ -88,6 +88,8 @@ class DocumentServiceNodeScopeTest {
         Deal deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
         deal.setFirmBranchId(BRANCH_ID);
+        // Uploading is status-checked now (C-07); NEW is open to every uploader.
+        deal.setStatus(DealStatus.NEW);
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);
 
@@ -288,6 +290,137 @@ class DocumentServiceNodeScopeTest {
         service.delete(doc.getId());
 
         verify(beneficialOwners).removeIfOrphaned(DEAL_ID, PERSON_ID);
+    }
+
+    /* ---------- uploading is a write, status-checked (security audit C-07) ---------- */
+
+    static final Long AUTHOR_ID = 321L;
+
+    @Test
+    void theAuthoringAgentUploadsOnlyWhileTheDealIsNew() {
+        dealStatus(DealStatus.NEW);
+        signedInAs(Role.AGENT, AUTHOR_ID);
+        assertPresignAllowed();
+
+        for (DealStatus s : java.util.EnumSet.of(DealStatus.REVIEW, DealStatus.ON_HOLD,
+                DealStatus.VERIFIED, DealStatus.CLOSED)) {
+            dealStatus(s);
+            assertPresignRefused(BadRequestException.class);
+        }
+    }
+
+    @Test
+    void branchStaffUploadThroughReviewButNotOnceVerified() {
+        for (Role role : java.util.EnumSet.of(Role.SALES_MANAGER, Role.ADMIN)) {
+            signedInAs(role, 66L);
+            for (DealStatus s : java.util.EnumSet.of(DealStatus.NEW, DealStatus.REVIEW, DealStatus.ON_HOLD)) {
+                dealStatus(s);
+                assertPresignAllowed();
+            }
+            for (DealStatus s : java.util.EnumSet.of(DealStatus.VERIFIED, DealStatus.CLOSED)) {
+                dealStatus(s);
+                assertPresignRefused(BadRequestException.class);
+            }
+        }
+    }
+
+    @Test
+    void branchStaffOfAnotherBranchCannotUpload() {
+        dealStatus(DealStatus.REVIEW);
+        signedInAs(Role.SALES_MANAGER, 66L, FIRM_ID, 11L);
+        assertPresignRefused(ForbiddenException.class);
+    }
+
+    @Test
+    void complianceUploadsOnHoldButNotOnASignedOffDeal() {
+        dealStatus(DealStatus.ON_HOLD);
+        assertPresignAllowed();   // setUp signs in as the firm's compliance officer
+
+        dealStatus(DealStatus.VERIFIED);
+        assertPresignRefused(BadRequestException.class);
+        dealStatus(DealStatus.CLOSED);
+        assertPresignRefused(BadRequestException.class);
+    }
+
+    @Test
+    void rootCannotUploadToAFirmsDeal() {
+        dealStatus(DealStatus.NEW);
+        signedInAs(Role.ROOT, 1L, null, null);
+        assertPresignRefused(ForbiddenException.class);
+    }
+
+    @Test
+    void aDealVerifiedBetweenPresignAndConfirmRefusesTheConfirm() {
+        // The case that planted an unverified owner under a sign-off: confirm made the scan live
+        // and created its person without looking at the deal's status.
+        Document doc = doc(9L, "licence-front.jpg", Instant.now());
+        doc.setDocumentType(DocumentType.NZ_DRIVER_LICENCE);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setUploadedByUserId(USER_ID);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        dealStatus(DealStatus.VERIFIED);
+
+        assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(BadRequestException.class);
+
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.PENDING);
+        verify(storage, never()).exists(any());
+        verify(beneficialOwners, never()).createProvisional(any());
+    }
+
+    @Test
+    void anAlreadyActiveDocumentOnAVerifiedDealIsStillIdempotent() {
+        // A retried confirm after sign-off changes nothing, so it is not refused.
+        Document doc = doc(9L, "passport.jpg", Instant.now());
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        dealStatus(DealStatus.VERIFIED);
+
+        assertThat(service.confirmUpload(9L)).isNotNull();
+    }
+
+    @Test
+    void aBranchAdminMayDeleteTheirOwnUploadInReview() {
+        // Upload and delete answer to the same rule for the uploader, so a mistake made in
+        // REVIEW can be taken back in REVIEW.
+        Document doc = someoneElsesDocument(DealStatus.REVIEW);
+        signedInAs(Role.ADMIN, 123L);   // the uploader, not the deal's author
+
+        service.delete(doc.getId());
+
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.DELETED);
+    }
+
+    @Test
+    void aBranchAdminMayNotDeleteTheirOwnUploadOnceVerified() {
+        Document doc = someoneElsesDocument(DealStatus.VERIFIED);
+        signedInAs(Role.ADMIN, 123L);
+
+        assertThatThrownBy(() -> service.delete(doc.getId())).isInstanceOf(BadRequestException.class);
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.ACTIVE);
+    }
+
+    private void dealStatus(DealStatus status) {
+        Deal deal = deals.findById(DEAL_ID).orElseThrow();
+        deal.setStatus(status);
+        deal.setCreatedByUserId(AUTHOR_ID);
+    }
+
+    private static UploadUrlRequest licenceScan() {
+        return new UploadUrlRequest("licence-front.jpg", "image/jpeg", 1024L, DocumentType.NZ_DRIVER_LICENCE,
+                DEAL_ID, null, null, null);
+    }
+
+    private void assertPresignAllowed() {
+        lenient().when(documents.save(any())).thenAnswer(i -> i.getArgument(0));
+        lenient().when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        org.assertj.core.api.Assertions.assertThatCode(() -> service.presignUpload(licenceScan()))
+                .doesNotThrowAnyException();
+    }
+
+    private void assertPresignRefused(Class<? extends Throwable> type) {
+        DealStatus status = deals.findById(DEAL_ID).orElseThrow().getStatus();
+        assertThatThrownBy(() -> service.presignUpload(licenceScan()))
+                .as("presign on %s", status)
+                .isInstanceOf(type);
     }
 
     private static UploadUrlRequest backOfCard(Long personId) {
