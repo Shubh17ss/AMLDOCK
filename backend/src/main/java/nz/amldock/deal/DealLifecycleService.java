@@ -256,6 +256,15 @@ public class DealLifecycleService {
         return previous;
     }
 
+    /**
+     * The decider check on its own, for a caller that must authorise before it does anything
+     * else with the deal. {@link #transition} runs the same check; this exists so a path that
+     * validates first (closing with a sale) cannot answer a stranger with the deal's details.
+     */
+    public void assertReviewer(Deal deal, UserPrincipal actor, Long dealFirmId) {
+        assertActor(deal, actor, dealFirmId, Who.REVIEWER);
+    }
+
     /* ---------- read scope — unchanged ---------- */
 
     /** Deals are authored by the branch-level deal creators: AGENT, AGENT_PA, ADMIN. */

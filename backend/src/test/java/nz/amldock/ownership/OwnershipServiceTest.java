@@ -10,6 +10,7 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.deal.DealStatus;
 import nz.amldock.document.Document;
 import nz.amldock.document.DocumentStatus;
 import nz.amldock.document.DocumentType;
@@ -796,6 +797,64 @@ class OwnershipServiceTest {
     }
 
     /* ---------- granting a verification ---------- */
+
+    /* ---------- writes honour the deal's edit lock (security audit C-15) ---------- */
+
+    @Test
+    void aSignedOffDealsStructureCannotBeChanged() {
+        // The real edit rule, not the mock's silence: this is the rule under test.
+        org.mockito.Mockito.doCallRealMethod().when(lifecycle).assertEditable(any(), any(), any());
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        lenient().when(nodes.findById(4L)).thenReturn(Optional.of(jane));
+
+        for (DealStatus s : java.util.EnumSet.of(DealStatus.VERIFIED, DealStatus.CLOSED)) {
+            deal.setStatus(s);
+            assertLocked(() -> service.verifyNode(DEAL_ID, 4L,
+                    new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null)));
+            assertLocked(() -> service.createEdge(DEAL_ID, new CreateEdgeRequest(2L, 4L, null, EdgeRole.SHAREHOLDER)));
+            assertLocked(() -> service.deleteNode(DEAL_ID, 4L, false));
+            assertLocked(() -> service.deleteEdge(DEAL_ID, 9L));
+            assertLocked(() -> service.setRoot(DEAL_ID, 4L));
+        }
+        assertThat(jane.getVerificationStatus()).isNotEqualTo(NodeVerificationStatus.VERIFIED);
+        verify(nodes, never()).save(any());
+        verify(edges, never()).save(any());
+    }
+
+    @Test
+    void aDealUnderReviewCanStillBeWorked() {
+        org.mockito.Mockito.doCallRealMethod().when(lifecycle).assertEditable(any(), any(), any());
+        deal.setStatus(DealStatus.REVIEW);
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+        when(users.findById(7L)).thenReturn(Optional.of(user(7L, "Olivia Officer")));
+
+        service.verifyNode(DEAL_ID, 4L, new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null));
+
+        assertThat(jane.getVerificationStatus()).isEqualTo(NodeVerificationStatus.VERIFIED);
+    }
+
+    @Test
+    void rootStillDeletesOnASignedOffDealOnReadScope() {
+        // ROOT belongs to no firm, so the edit rule could never admit it; it keeps the same
+        // exemption DocumentService.delete gives it.
+        deal.setStatus(DealStatus.VERIFIED);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                new UserPrincipal(1L, "root@amldock.com", "Root", Role.ROOT, null, null, true), null, List.of()));
+        OwnershipEdge e = edge(2L, 4L);
+        ReflectionTestUtils.setField(e, "id", 9L);
+        when(edges.findById(9L)).thenReturn(Optional.of(e));
+        stubNodes(node(2L, NodeType.PRIVATE_COMPANY, "Holdings"), node(4L, NodeType.INDIVIDUAL, "Jane Smith"));
+
+        service.deleteEdge(DEAL_ID, 9L);
+
+        verify(lifecycle, never()).assertEditable(any(), any(), any());
+        verify(lifecycle).assertCanRead(any(), any(), any());
+    }
+
+    private static void assertLocked(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        assertThatThrownBy(call).isInstanceOf(BadRequestException.class).hasMessageContaining("cannot be edited");
+    }
 
     @Test
     void verifyingStampsTheOutcomeAndTheCallerAgainstTheNode() {

@@ -67,9 +67,18 @@ export function parseUsersCsv(text) {
   });
 }
 
+// A cell starting with one of these is read as a formula by Excel, LibreOffice and Sheets, so
+// text a user typed (an IFT listing address, a reference) could run as one in whoever opens the
+// export (C-14). A leading apostrophe makes it plain text. A plain number, even a negative one
+// or one already formatted as a string (amounts arrive via toFixed), cannot be a formula and must
+// stay a number, so it is left alone.
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
+
 function escapeCsv(value) {
-  const s = String(value ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = String(value ?? '');
+  if (FORMULA_LEAD.test(s) && !PLAIN_NUMBER.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 /** Build a CSV string from a header array and an array of row arrays. */

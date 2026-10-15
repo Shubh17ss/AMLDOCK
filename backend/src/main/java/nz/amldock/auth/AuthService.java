@@ -120,14 +120,24 @@ public class AuthService {
             u = users.findByEmailIgnoreCase(auth.getName())
                     .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
         } catch (BadCredentialsException ex) {
-            audit.record(AuditAction.USER_LOGIN_FAILED, "User", null,
-                    "Failed admin login attempt for email " + email);
+            // recordFailure, not record: this method is @Transactional and is about to throw, so a
+            // row written in its transaction was rolled back with it, and password guessing on
+            // this route left no trail at all (C-10). No actor: nobody has proved who they are, so
+            // the address they typed goes in the summary, bounded because the caller chose it.
+            audit.recordFailure(null, null, AuditAction.USER_LOGIN_FAILED, "User", null,
+                    "Failed admin login attempt for email " + boundedEmail(email));
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
+        // A right password on the wrong route is worth seeing too: it is a real account's
+        // password being tried against the administrator's door.
         if (u.getRole() != Role.ROOT) {
+            audit.recordFailure(u.getId(), u.getEmail(), AuditAction.USER_LOGIN_FAILED, "User", u.getId(),
+                    "Admin login refused for " + u.getEmail() + ": not the platform administrator");
             throw new ApiException(HttpStatus.FORBIDDEN, "This route is for the platform administrator only");
         }
         if (!u.isActive()) {
+            audit.recordFailure(u.getId(), u.getEmail(), AuditAction.USER_LOGIN_FAILED, "User", u.getId(),
+                    "Admin login refused for " + u.getEmail() + ": account disabled");
             throw new ApiException(HttpStatus.FORBIDDEN, "User is disabled");
         }
         otp.issue(u, OtpPurpose.ADMIN_LOGIN);
@@ -276,5 +286,13 @@ public class AuthService {
     private AuthResponse toAuthResponse(User u) {
         return new AuthResponse(u.getId(), u.getEmail(), u.getFullName(), u.getRole(),
                 u.getRealEstateFirmId(), u.getFirmBranchId());
+    }
+
+    /** An unauthenticated caller chooses this value; an email address is at most 254 characters. */
+    private static final int MAX_AUDIT_EMAIL = 255;
+
+    private static String boundedEmail(String email) {
+        if (email == null) return null;
+        return email.length() <= MAX_AUDIT_EMAIL ? email : email.substring(0, MAX_AUDIT_EMAIL);
     }
 }

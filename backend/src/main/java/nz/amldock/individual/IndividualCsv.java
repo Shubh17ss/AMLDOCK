@@ -54,9 +54,16 @@ final class IndividualCsv {
         return Stream.of(cells).map(IndividualCsv::escape).collect(Collectors.joining(","));
     }
 
-    /** RFC 4180: quote a field holding a comma, quote or line break, doubling inner quotes. */
+    /**
+     * RFC 4180: quote a field holding a comma, quote or line break, doubling inner quotes.
+     *
+     * <p>First, a field a spreadsheet would read as a formula (leading {@code = + - @}, tab or CR)
+     * is prefixed with an apostrophe so it opens as text (C-14). Every cell here is a name,
+     * country or address someone typed, never a number, so nothing legitimate starts that way.
+     */
     static String escape(String value) {
         String s = value == null ? "" : value;
+        if (!s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0) s = "'" + s;
         boolean quote = s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0;
         return quote ? '"' + s.replace("\"", "\"\"") + '"' : s;
     }

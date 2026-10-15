@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.deal.DealStatus;
 import nz.amldock.document.Document;
 import nz.amldock.document.DocumentRepository;
 import nz.amldock.document.DocumentStatus;
@@ -65,13 +66,17 @@ class BeneficialOwnerServiceTest {
 
     BeneficialOwnerService service;
 
+    Deal deal;
+
     @BeforeEach
     void setUp() {
         service = new BeneficialOwnerService(owners, links, deals, documents, branches, ownership,
                 lifecycle, new ObjectMapper());
 
-        Deal deal = new Deal();
+        deal = new Deal();
         deal.setFirmBranchId(BRANCH_ID);
+        // Extraction is held back from a signed-off deal (C-13); NEW is where scans normally land.
+        deal.setStatus(DealStatus.NEW);
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);
 
@@ -205,6 +210,56 @@ class BeneficialOwnerServiceTest {
         assertThat(victim.getDateOfBirth()).isEqualTo(LocalDate.of(1980, 1, 1));
         assertThat(victim.getIdExpiryDate()).isNull();
         verify(ownership, never()).refreshExtractedIndividual(anyLong(), any(), any());
+    }
+
+    /* ---------- held back once signed off (security audit C-13) ---------- */
+
+    @Test
+    void aLateReadingNeverRewritesAVerifiedDealsOwner() {
+        // The race: the scan was still queued, or retrying, when compliance verified the deal.
+        for (DealStatus s : java.util.EnumSet.of(DealStatus.VERIFIED, DealStatus.CLOSED)) {
+            deal.setStatus(s);
+            BeneficialOwner owner = existing(OWNER_ID, "Jane Smith", LocalDate.of(1980, 1, 1), null);
+            when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+
+            boolean applied = service.applyExtraction(scan(OWNER_ID, IdSide.FRONT),
+                    fields("Jane Smyth", LocalDate.of(1990, 5, 5), LocalDate.of(2031, 1, 1), "0.990"));
+
+            assertThat(applied).as("on %s", s).isFalse();
+            assertThat(owner.getFullName()).isEqualTo("Jane Smith");
+            assertThat(owner.getDateOfBirth()).isEqualTo(LocalDate.of(1980, 1, 1));
+            assertThat(owner.getIdExpiryDate()).isNull();
+        }
+        verify(ownership, never()).refreshExtractedIndividual(anyLong(), any(), any());
+    }
+
+    @Test
+    void aReviewerVerifiedOwnerIsLeftAsTheyVerifiedThem() {
+        deal.setStatus(DealStatus.REVIEW);
+        BeneficialOwner owner = existing(OWNER_ID, "Jane Smith", null, null);
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+        when(ownership.isVerifiedIndividual(OWNER_ID)).thenReturn(true);
+
+        boolean applied = service.applyExtraction(scan(OWNER_ID, IdSide.FRONT),
+                fields("Jane Smyth", LocalDate.of(1990, 5, 5), null, "0.990"));
+
+        assertThat(applied).isFalse();
+        assertThat(owner.getFullName()).isEqualTo("Jane Smith");
+        assertThat(owner.getDateOfBirth()).isNull();
+        verify(ownership, never()).refreshExtractedIndividual(anyLong(), any(), any());
+    }
+
+    @Test
+    void anUnverifiedOwnerUnderReviewIsStillFilledIn() {
+        deal.setStatus(DealStatus.REVIEW);
+        BeneficialOwner owner = existing(OWNER_ID, null, null, null);
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+
+        boolean applied = service.applyExtraction(scan(OWNER_ID, IdSide.FRONT),
+                fields("Anna Eriksson", LocalDate.of(1974, 8, 12), null, "0.950"));
+
+        assertThat(applied).isTrue();
+        assertThat(owner.getFullName()).isEqualTo("Anna Eriksson");
     }
 
     /* ---------- no merging, ever ---------- */

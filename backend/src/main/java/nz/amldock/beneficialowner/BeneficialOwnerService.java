@@ -8,6 +8,7 @@ import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.deal.DealStatus;
 import nz.amldock.document.Document;
 import nz.amldock.document.DocumentRepository;
 import nz.amldock.document.DocumentStatus;
@@ -122,18 +123,32 @@ public class BeneficialOwnerService {
      * <p>Front and back are extracted independently and land in either order, so neither may
      * assume it went first — hence fill-or-improve rather than overwrite. A licence back usually
      * reads nothing and correctly leaves the person untouched.
+     *
+     * <p>Held back, not applied, once the deal is signed off or a reviewer has verified this
+     * person (C-13). The worker runs late: a scan still queued, or retrying, when compliance
+     * verifies the deal would otherwise rewrite the name under the reviewer's byline. The reading
+     * stays on the document, so nothing is lost; it is simply not folded in without a reviewer.
+     *
+     * @return false only when the reading was held back for that reason
      */
     @Transactional
-    public void applyExtraction(Document doc, ExtractedIdFields fields) {
-        if (doc.getBeneficialOwnerId() == null) return;      // not an identity scan
+    public boolean applyExtraction(Document doc, ExtractedIdFields fields) {
+        if (doc.getBeneficialOwnerId() == null) return true;      // not an identity scan
         BeneficialOwner owner = owners.findById(doc.getBeneficialOwnerId()).orElse(null);
-        if (owner == null) return;                            // scan deleted mid-extraction
+        if (owner == null) return true;                            // scan deleted mid-extraction
         if (!isOnDeal(doc.getDealId(), owner.getId())) {
             // Upload refuses this now; a row written before that check must still not reach
             // into a person on another deal.
             log.warn("Ignoring extraction for document {}: person {} is not on deal {}",
                     doc.getId(), owner.getId(), doc.getDealId());
-            return;
+            return true;
+        }
+        DealStatus dealStatus = deals.findById(doc.getDealId()).map(Deal::getStatus).orElse(null);
+        if (!DealLifecycleService.REVIEWER_EDITABLE_STATUSES.contains(dealStatus)
+                || ownership.isVerifiedIndividual(owner.getId())) {
+            log.info("Holding back extraction for document {}: deal {} is {} or person {} is verified",
+                    doc.getId(), doc.getDealId(), dealStatus, owner.getId());
+            return false;
         }
 
         ObjectNode confidence = parseConfidence(owner.getExtractionConfidence());
@@ -155,6 +170,7 @@ public class BeneficialOwnerService {
 
         ownership.refreshExtractedIndividual(
                 owner.getId(), displayNameFor(owner, doc), owner.getDateOfBirth());
+        return true;
     }
 
     /**

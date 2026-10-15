@@ -132,7 +132,7 @@ public class OwnershipService {
 
     @Transactional
     public NodeDto createNode(Long dealId, CreateNodeRequest req) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         OwnershipStructure structure = structures.findByDealId(deal.getId())
                 .orElseGet(() -> createEmptyStructure(deal.getId()));
 
@@ -180,7 +180,7 @@ public class OwnershipService {
 
     @Transactional
     public NodeDto updateNode(Long dealId, Long nodeId, UpdateNodeRequest req) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
         if (req.nodeType() != null) {
             assertRetypeAllowed(n, req.nodeType());
@@ -257,7 +257,7 @@ public class OwnershipService {
      */
     @Transactional
     public NodeDto verifyNode(Long dealId, Long nodeId, VerifyNodeRequest req) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
 
         NodeVerificationStatus outcome = req.outcome();
@@ -314,7 +314,7 @@ public class OwnershipService {
      */
     @Transactional
     public List<Long> deleteNode(Long dealId, Long nodeId, boolean force) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
 
         List<OwnershipEdge> outgoing = edges.findAllByParentNodeId(n.getId());
@@ -451,7 +451,7 @@ public class OwnershipService {
 
     @Transactional
     public EdgeDto createEdge(Long dealId, CreateEdgeRequest req) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         if (req.parentNodeId().equals(req.childNodeId())) {
             throw new BadRequestException("A node cannot be its own parent");
         }
@@ -496,7 +496,7 @@ public class OwnershipService {
 
     @Transactional
     public EdgeDto updateEdge(Long dealId, Long edgeId, UpdateEdgeRequest req) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         OwnershipEdge edge = edges.findById(edgeId)
                 .orElseThrow(() -> new NotFoundException("Edge " + edgeId + " not found"));
         // Sanity: the edge's nodes must belong to this deal's structure.
@@ -513,7 +513,7 @@ public class OwnershipService {
 
     @Transactional
     public void deleteEdge(Long dealId, Long edgeId) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         OwnershipEdge edge = edges.findById(edgeId)
                 .orElseThrow(() -> new NotFoundException("Edge " + edgeId + " not found"));
         mustLoadNodeForDeal(deal, edge.getParentNodeId());
@@ -538,7 +538,7 @@ public class OwnershipService {
      */
     @Transactional
     public TreeDto reorderSiblings(Long dealId, ReorderRequest req) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         OwnershipStructure structure = structures.findByDealId(deal.getId())
                 .orElseThrow(() -> new NotFoundException(
                         "Deal " + dealId + " has no ownership structure to reorder"));
@@ -608,7 +608,7 @@ public class OwnershipService {
 
     @Transactional
     public TreeDto setRoot(Long dealId, Long nodeId) {
-        Deal deal = assertReadable(dealId);
+        Deal deal = assertWritable(dealId);
         OwnershipStructure structure = structures.findByDealId(deal.getId())
                 .orElseGet(() -> createEmptyStructure(deal.getId()));
         if (nodeId == null) {
@@ -719,6 +719,18 @@ public class OwnershipService {
             if (displayName != null) n.setDisplayName(displayName);
             if (dateOfBirth != null) n.setDateOfBirth(dateOfBirth);
         });
+    }
+
+    /**
+     * Whether a reviewer has already cleared the node standing for this person. Extraction must not
+     * change identity a reviewer has signed their name to (C-13). Same lookup as
+     * {@link #refreshExtractedIndividual}, so it answers for the node that method would write.
+     */
+    @Transactional(readOnly = true)
+    public boolean isVerifiedIndividual(Long beneficialOwnerId) {
+        return nodes.findFirstByBeneficialOwnerId(beneficialOwnerId)
+                .map(n -> n.getVerificationStatus() != null && n.getVerificationStatus().isVerified())
+                .orElse(false);
     }
 
     /** Removes the node standing for a person. Used when their last scan is deleted. */
@@ -980,6 +992,23 @@ public class OwnershipService {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
         lifecycle.assertCanRead(deal, currentPrincipal(), firmIdFor(deal));
+        return deal;
+    }
+
+    /**
+     * The gate for every change to a structure: the same rule as editing the deal itself, so a
+     * VERIFIED or CLOSED deal's owners cannot move under its sign-off without a revert or
+     * override on the record (C-15). Read scope alone used to be enough.
+     *
+     * <p>ROOT keeps read scope, as in {@code DocumentService.delete}: it belongs to no firm, so the
+     * firm check inside assertEditable could never pass. It reaches only the two delete endpoints.
+     */
+    private Deal assertWritable(Long dealId) {
+        UserPrincipal actor = currentPrincipal();
+        if (actor.role() == nz.amldock.user.Role.ROOT) return assertReadable(dealId);
+        Deal deal = deals.findById(dealId)
+                .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
+        lifecycle.assertEditable(deal, actor, firmIdFor(deal));
         return deal;
     }
 

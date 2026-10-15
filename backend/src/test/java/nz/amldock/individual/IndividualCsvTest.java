@@ -23,6 +23,22 @@ class IndividualCsvTest {
     }
 
     @Test
+    void aFieldThatWouldOpenAsAFormulaOpensAsText() {
+        // C-14. A typed name or address starting like a formula ran as one in the spreadsheet of
+        // whoever opened the export.
+        assertThat(IndividualCsv.escape("=1+1")).isEqualTo("'=1+1");
+        assertThat(IndividualCsv.escape("+64 21 555 0100")).isEqualTo("'+64 21 555 0100");
+        assertThat(IndividualCsv.escape("-1")).isEqualTo("'-1");
+        assertThat(IndividualCsv.escape("@SUM(A1)")).isEqualTo("'@SUM(A1)");
+        assertThat(IndividualCsv.escape("\t=1")).isEqualTo("'\t=1");
+        // Only the first character counts, and quoting still applies after the prefix.
+        assertThat(IndividualCsv.escape("a=b")).isEqualTo("a=b");
+        assertThat(IndividualCsv.escape("=HYPERLINK(\"x\",\"y\")"))
+                .isEqualTo("\"'=HYPERLINK(\"\"x\"\",\"\"y\"\")\"");
+        assertThat(IndividualCsv.escape("=a,b")).isEqualTo("\"'=a,b\"");
+    }
+
+    @Test
     void typeLabelsMatchTheFrontend() {
         assertThat(IndividualCsv.typeLabel(NodeType.INDIVIDUAL)).isEqualTo("Individual");
         assertThat(IndividualCsv.typeLabel(NodeType.PRIVATE_COMPANY)).isEqualTo("Private company");

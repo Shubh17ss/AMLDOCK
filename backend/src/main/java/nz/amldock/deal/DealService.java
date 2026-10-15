@@ -407,6 +407,10 @@ public class DealService {
     @Transactional
     public TransitionResult closeWithSale(Long id, CloseDealRequest req) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        // Authorise before validating. The validation messages depend on the deal's property type,
+        // so running them first told any firm's reviewer whether another firm's deal was a
+        // development (C-12). act() below repeats the check as part of the transition.
+        lifecycle.assertReviewer(d, currentPrincipal(), firmIdOf(d));
         // The deal's own property type decides which shape of answer is legal, never the request.
         // A caller that could choose its own rules could send one figure for a development and
         // skip the per-unit breakdown that is the whole reason developments are asked differently.
