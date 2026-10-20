@@ -82,6 +82,7 @@ class OwnershipServiceTest {
     @Mock nz.amldock.document.storage.FileStorageService storage;
     @Mock nz.amldock.audit.AuditService audit;
     @Mock nz.amldock.user.UserRepository users;
+    @Mock nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;
 
     OwnershipService service;
     Deal deal;
@@ -91,7 +92,7 @@ class OwnershipServiceTest {
     @BeforeEach
     void setUp() {
         service = new OwnershipService(structures, nodes, edges, deals, branches, lifecycle,
-                owners, ownerLinks, risk, documents, storage, audit, users);
+                owners, ownerLinks, risk, documents, storage, audit, users, versionDocuments);
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
@@ -778,6 +779,38 @@ class OwnershipServiceTest {
         service.deleteNode(DEAL_ID, 2L, true);
 
         verify(storage).delete("deals/1/nodes/2/certificate.pdf");
+    }
+
+    /**
+     * C-09. A signed-off version shares the stored file, so deleting the node later must leave it
+     * for that version to still produce. The live row goes either way (ON DELETE CASCADE).
+     */
+    @Test
+    void keepsTheStoredFileWhileAPastVersionStillRefersToIt() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+        when(edges.findAllByParentNodeId(4L)).thenReturn(List.of());
+        lenient().when(edges.findAllByChildNodeId(4L)).thenReturn(List.of());
+
+        nz.amldock.document.Document signedOff = new nz.amldock.document.Document();
+        ReflectionTestUtils.setField(signedOff, "id", 70L);
+        signedOff.setS3Key("deals/1/nodes/4/passport.pdf");
+        signedOff.setOwnershipNodeId(4L);
+        nz.amldock.document.Document since = new nz.amldock.document.Document();
+        ReflectionTestUtils.setField(since, "id", 71L);
+        since.setS3Key("deals/1/nodes/4/added-later.pdf");
+        since.setOwnershipNodeId(4L);
+        when(documents.findAllByOwnershipNodeIdIn(any())).thenReturn(List.of(signedOff, since));
+        when(versionDocuments.existsBySourceDocumentId(70L)).thenReturn(true);
+        when(versionDocuments.existsBySourceDocumentId(71L)).thenReturn(false);
+
+        service.deleteNode(DEAL_ID, 4L, true);
+
+        verify(storage, never()).delete("deals/1/nodes/4/passport.pdf");
+        verify(storage).delete("deals/1/nodes/4/added-later.pdf");
+        // Both removals are still on the trail: the document left the live deal either way.
+        verify(audit, times(2)).record(eq(nz.amldock.audit.AuditAction.DOCUMENT_DELETED), eq("Document"),
+                anyLong(), any());
     }
 
     /** Once for the whole cascade, not once per node. */

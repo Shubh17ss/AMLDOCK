@@ -79,6 +79,9 @@ public class OwnershipService {
     // Only to put a name on a verification byline. Read-only, and tolerant of the account having
     // gone since - see nameOf.
     private final UserRepository users;
+    // Only to ask whether a past version still refers to a document's stored file before the
+    // cascade delete removes it (C-09). A repository, so no constructor cycle.
+    private final nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;
 
     public OwnershipService(OwnershipStructureRepository structures,
                             OwnershipNodeRepository nodes,
@@ -92,7 +95,8 @@ public class OwnershipService {
                             DocumentRepository documents,
                             FileStorageService storage,
                             AuditService audit,
-                            UserRepository users) {
+                            UserRepository users,
+                            nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments) {
         this.structures = structures;
         this.nodes = nodes;
         this.edges = edges;
@@ -106,6 +110,7 @@ public class OwnershipService {
         this.storage = storage;
         this.audit = audit;
         this.users = users;
+        this.versionDocuments = versionDocuments;
     }
 
     /* ---------- queries ---------- */
@@ -414,10 +419,18 @@ public class OwnershipService {
      * constructor cycle through BeneficialOwnerService; and it is a <em>soft</em> delete, which is
      * the wrong operation for a row the database is about to remove outright — the only parts that
      * apply here are the object removal and the audit row.
+     *
+     * <p>The object stays while a past version refers to it, the same rule as
+     * {@code DocumentService.delete}. A verified deal's version keeps its own copy of the
+     * document row ({@code deal_version_document}) but shares the stored file, so removing it here
+     * left every earlier sign-off listing evidence it could no longer produce (C-09). The row still
+     * goes; only an unreferenced object is really removed.
      */
     private void stripDocuments(Set<Long> nodeIds) {
         for (Document doc : documents.findAllByOwnershipNodeIdIn(nodeIds)) {
-            if (doc.getS3Key() != null) storage.delete(doc.getS3Key());
+            if (doc.getS3Key() != null && !versionDocuments.existsBySourceDocumentId(doc.getId())) {
+                storage.delete(doc.getS3Key());
+            }
             audit.record(AuditAction.DOCUMENT_DELETED, "Document", doc.getId(),
                     "Removed with ownership node " + doc.getOwnershipNodeId()
                             + ": " + doc.getOriginalFilename());
