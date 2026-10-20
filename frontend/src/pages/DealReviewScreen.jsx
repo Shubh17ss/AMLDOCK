@@ -446,6 +446,9 @@ export function DealReviewScreen() {
               setSelectedNodeId(nodeId);
               setTab('structure');
             }}
+            // A gap on the deal itself is answered in the deal drawer. It opens over this tab, so
+            // closing it lands back on the list, refreshed by the save. One drawer at a time.
+            onOpenDeal={() => { setSelectedNodeId(null); setDealDrawerOpen(true); }}
           />
         )}
       </ReviewTabPanel>

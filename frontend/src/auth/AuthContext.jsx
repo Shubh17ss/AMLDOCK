@@ -55,8 +55,9 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try { await apiLogout(); } catch { /* ignore */ }
-    // The saved dashboard scope is keyed by user id, and ids are reused — a reseeded database
-    // hands id 1 to a different person, who would otherwise inherit this selection.
+    // The saved dashboard scope is keyed by userId, and ids are reused: a reseeded database
+    // hands id 1 to a different person, who would otherwise inherit this selection. Signing out
+    // is not the only defence; DashboardScope also refreshes a saved scope's names from the API.
     clearSavedScope(user);
     setUser(null);
     setStatus('guest');

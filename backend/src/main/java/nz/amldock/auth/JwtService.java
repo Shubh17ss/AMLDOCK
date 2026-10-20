@@ -30,8 +30,12 @@ public class JwtService {
      * There is deliberately no default: every claim in an access token (role, firm, branch) is
      * trusted without a database lookup, so a guessable key is a forgeable ROOT session. A
      * missing secret stops startup rather than falling back to anything.
+     *
+     * <p>Read from {@code amldock.jwt.secret} (where application.yml declares it, usually as
+     * {@code ${JWT_SECRET:...}}), falling back to a bare {@code JWT_SECRET} for deployments that
+     * set only the environment variable. Reading the env var alone ignored the yml entry.
      */
-    public JwtService(@Value("${JWT_SECRET:}") String secret,
+    public JwtService(@Value("${amldock.jwt.secret:${JWT_SECRET:}}") String secret,
                       @Value("${amldock.jwt.access-ttl-minutes:15}") long accessTtlMinutes) {
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException(
