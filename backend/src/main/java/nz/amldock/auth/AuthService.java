@@ -88,8 +88,15 @@ public class AuthService {
                 "Login OTP requested for " + u.getEmail());
     }
 
-    /** Step 2: verify the code and issue session cookies. */
-    @Transactional
+    /**
+     * Step 2: verify the code and issue session cookies.
+     *
+     * <p>Not {@code @Transactional}, on purpose: this endpoint is public, and a transaction around
+     * it held a pooled connection while the OTP bookkeeping and the failure audit each took a
+     * second one in REQUIRES_NEW. Ten concurrent wrong guesses then held the whole pool and every
+     * request in the app waited out the connection timeout. Without it, each step commits on its
+     * own and a request holds at most one connection at a time.
+     */
     public AuthResponse verifyLoginOtp(String email, String code, HttpServletResponse response) {
         User u = activeNonRoot(email);
         try {
@@ -145,8 +152,10 @@ public class AuthService {
                 "Admin login OTP requested for " + u.getEmail());
     }
 
-    /** Step 2: verify the ROOT second-factor code and issue session cookies. */
-    @Transactional
+    /**
+     * Step 2: verify the ROOT second-factor code and issue session cookies. Not
+     * {@code @Transactional}, for the same reason as {@link #verifyLoginOtp}.
+     */
     public AuthResponse adminVerify(String email, String code, HttpServletResponse response) {
         User u = users.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code"));

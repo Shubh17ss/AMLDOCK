@@ -123,8 +123,13 @@ public class OtpService {
      * <p>Every failure throws {@link BadRequestException} with the same message whether the code was
      * wrong, expired or absent — the caller has nothing to usefully distinguish, and neither does an
      * attacker.
+     *
+     * <p>Deliberately not {@code @Transactional}. Each read below runs in its own short transaction
+     * and each write in the recorder's, so a guess holds at most one pooled connection at a time.
+     * An enclosing transaction here held one connection while the recorder took a second, so ten
+     * concurrent wrong guesses took the whole pool and stalled every request in the app (item 14).
+     * A caller that is itself transactional (the email change) still has its reads joined.
      */
-    @Transactional
     public OtpCode verify(User user, String submittedCode, OtpPurpose purpose) {
         OtpCode otp = codes
                 .findFirstByUserIdAndPurposeAndConsumedAtIsNullOrderByIdDesc(user.getId(), purpose)
