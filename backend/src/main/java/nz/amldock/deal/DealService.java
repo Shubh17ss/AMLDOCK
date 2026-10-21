@@ -341,9 +341,12 @@ public class DealService {
         // A broker discarding their own deal before handing it over. The deal form persists a
         // deal partway through so documents have something to attach to, so without this the
         // "Discard" button would leave an orphan the author has no way to clear.
+        // Only while they still work for the deal's firm: authorship outlives a move (NV-07).
         if (DealLifecycleService.isDealAuthor(actor.role())
                 && actor.id().equals(d.getCreatedByUserId())
-                && d.getStatus() == DealStatus.NEW) {
+                && d.getStatus() == DealStatus.NEW
+                && actor.realEstateFirmId() != null
+                && actor.realEstateFirmId().equals(firmOf(d))) {
             return;
         }
         // The two firm-level deciders, together: the rule is the same for both, and writing it
@@ -351,8 +354,7 @@ public class DealService {
         // Scoped to their own firm because that is exactly what DealScope lists for them — this
         // lets them delete what they can see, and nothing else.
         if (actor.role() == Role.SENIOR_MANAGER || actor.role() == Role.AML_COMPLIANCE_OFFICER) {
-            FirmBranch branch = branches.findById(d.getFirmBranchId()).orElse(null);
-            Long dealFirmId = branch == null ? null : branch.getRealEstateFirmId();
+            Long dealFirmId = firmOf(d);
             if (dealFirmId == null || !dealFirmId.equals(actor.realEstateFirmId())) {
                 throw new ForbiddenException("You can only delete deals within your own firm");
             }
@@ -360,6 +362,11 @@ public class DealService {
         }
         throw new ForbiddenException(
                 "Only ROOT, a compliance officer or a senior manager may delete a deal");
+    }
+
+    /** The firm the deal's branch belongs to, or null if the branch is gone. */
+    private Long firmOf(Deal d) {
+        return branches.findById(d.getFirmBranchId()).map(FirmBranch::getRealEstateFirmId).orElse(null);
     }
 
     /**

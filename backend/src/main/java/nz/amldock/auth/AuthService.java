@@ -52,7 +52,7 @@ public class AuthService {
                        AuditService audit,
                        OtpService otp,
                        @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays,
-                       @Value("${COOKIE_SECURE:false}") boolean secureCookies,
+                       @Value("${COOKIE_SECURE:true}") boolean secureCookies,
                        @Value("${COOKIE_SAME_SITE:Lax}") String sameSite) {
         this.authManager = authManager;
         this.users = users;

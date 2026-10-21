@@ -590,6 +590,43 @@ class DealLifecycleServiceTest {
                 .isInstanceOf(ForbiddenException.class).hasMessageContaining("Not your deal");
     }
 
+    /**
+     * NV-07. Authorship and grants are never revoked when a user is moved, so the deal's firm is
+     * checked as well: an agent moved to firm B loses firm A's deals, their own included.
+     */
+    @Test
+    void anAgentMovedToAnotherFirmLosesTheirOldDeals() {
+        Deal d = dealIn(DealStatus.NEW);
+        UserPrincipal movedBroker = new UserPrincipal(BROKER_ID, "broker@b.com", null, Role.AGENT, FIRM_B, 30L, true);
+
+        assertThatThrownBy(() -> lifecycle.assertCanRead(d, movedBroker, FIRM_A))
+                .isInstanceOf(ForbiddenException.class).hasMessageContaining("Not your firm's deal");
+        assertThatThrownBy(() -> lifecycle.assertEditable(d, movedBroker, FIRM_A))
+                .isInstanceOf(ForbiddenException.class).hasMessageContaining("Not your firm's deal");
+    }
+
+    @Test
+    void aGrantDoesNotFollowAnAgentToAnotherFirm() {
+        Deal d = savedDealIn(DealStatus.NEW, 99L);
+        UserPrincipal movedPa = new UserPrincipal(8L, "pa@b.com", null, Role.AGENT_PA, FIRM_B, 30L, true);
+        when(dealUsers.existsByDealIdAndUserId(99L, movedPa.id())).thenReturn(true);
+
+        assertThatThrownBy(() -> lifecycle.assertCanRead(d, movedPa, FIRM_A))
+                .isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> lifecycle.assertEditable(d, movedPa, FIRM_A))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    /** A move between branches of the same firm keeps the agent's deals, as before. */
+    @Test
+    void anAgentMovedWithinTheFirmKeepsTheirDeals() {
+        Deal d = dealIn(DealStatus.NEW);
+        UserPrincipal movedBroker = new UserPrincipal(BROKER_ID, "broker@a.com", null, Role.AGENT, FIRM_A, 11L, true);
+
+        assertThatCode(() -> lifecycle.assertCanRead(d, movedBroker, FIRM_A)).doesNotThrowAnyException();
+        assertThatCode(() -> lifecycle.assertEditable(d, movedBroker, FIRM_A)).doesNotThrowAnyException();
+    }
+
     @Test
     void financeSeesNoDeals() {
         UserPrincipal finance = new UserPrincipal(60L, "fin@a.com", null, Role.FINANCE, FIRM_A, null, true);

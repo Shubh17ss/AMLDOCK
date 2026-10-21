@@ -41,7 +41,7 @@ export S3_BUCKET=aml-dock-dev-documents
 
 #### Optional: SMTP for onboarding emails
 
-When an admin creates a user, a welcome email goes out with their temporary password and a deep-link to `/profile`. By default the email service runs in **logging-only** mode — the rendered email is written to the backend log so you can copy the link/password during local dev.
+When an admin creates a user, a welcome email goes out with their temporary password and a deep-link to `/profile`. By default the email service runs in **logging-only** mode: the backend log records the recipient and subject, but not the body, because bodies carry sign-in codes and passwords. On your own machine only, set `MAIL_LOG_BODIES=true` to log bodies too; never set it on a server.
 
 To actually send via SMTP:
 
@@ -66,9 +66,9 @@ Then:
 cd backend
 ./mvnw spring-boot:run
 ```
-The backend starts on `http://localhost:8080`. On first start, Flyway creates the schema and the seeder inserts a default admin:
-- email: `admin@amldock.local`
-- password: `Admin123!`
+The backend starts on `http://localhost:8080`. On first start, Flyway creates the schema. The seeder creates the ROOT administrator only from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. There is no built-in default: if either is unset, or the password is the retired `Admin123!`, no ROOT is created and the log says why. Set both before the first start of any new database.
+
+Session cookies are `Secure` by default (`COOKIE_SECURE=true`). Chrome, Edge and Firefox accept them on `http://localhost`. Set `COOKIE_SECURE=false` only for local dev in Safari or on a plain-HTTP host that is not localhost; never in production.
 
 The bucket must allow PUT and GET from your dev machine's IP for the presigned URLs to work (default S3 permissions are fine if the credentials' IAM user has `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:HeadObject` on the bucket). CORS on the bucket must allow `PUT` from `http://localhost:5173` — see `infra/s3-cors.example.json`.
 

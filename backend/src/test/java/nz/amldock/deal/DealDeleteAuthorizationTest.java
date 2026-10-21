@@ -164,6 +164,16 @@ class DealDeleteAuthorizationTest {
         verify(deals, never()).delete(any());
     }
 
+    /** NV-07: authorship outlives a move to another firm; the right to delete does not. */
+    @Test
+    void anAuthorMovedToAnotherFirmCannotDeleteTheirOldDeal() {
+        dealIn(OWN_BRANCH, DealStatus.NEW, AUTHOR_ID);
+        signedInAs(Role.AGENT, 2L, OTHER_FIRM_BRANCH, AUTHOR_ID);
+
+        assertThatThrownBy(() -> service.delete(1L)).isInstanceOf(ForbiddenException.class);
+        verify(deals, never()).delete(any());
+    }
+
     @Test
     void anAgentCannotDeleteSomebodyElsesDeal() {
         dealIn(OWN_BRANCH, DealStatus.NEW, AUTHOR_ID);

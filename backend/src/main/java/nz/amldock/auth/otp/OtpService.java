@@ -1,5 +1,6 @@
 package nz.amldock.auth.otp;
 
+import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.email.EmailMessage;
 import nz.amldock.email.EmailService;
@@ -7,6 +8,7 @@ import nz.amldock.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,19 +37,35 @@ public class OtpService {
     private final EmailService email;
     private final Duration ttl;
     private final int maxAttempts;
+    private final int maxIssuesPerWindow;
+    private final Duration issueWindow;
+    private final int maxFailuresPerWindow;
+    private final Duration failureWindow;
 
+    /**
+     * The limits are per account and purpose, not per code. A per-code cap alone was reset by
+     * asking for a new code, which made the six digits guessable without bound (NV-03).
+     */
     public OtpService(OtpCodeRepository codes,
                       OtpAttemptRecorder attempts,
                       PasswordEncoder encoder,
                       EmailService email,
                       @Value("${OTP_TTL_MINUTES:10}") long ttlMinutes,
-                      @Value("${OTP_MAX_ATTEMPTS:5}") int maxAttempts) {
+                      @Value("${OTP_MAX_ATTEMPTS:5}") int maxAttempts,
+                      @Value("${OTP_MAX_ISSUES_PER_WINDOW:5}") int maxIssuesPerWindow,
+                      @Value("${OTP_ISSUE_WINDOW_MINUTES:15}") long issueWindowMinutes,
+                      @Value("${OTP_MAX_FAILURES_PER_WINDOW:10}") int maxFailuresPerWindow,
+                      @Value("${OTP_FAILURE_WINDOW_MINUTES:60}") long failureWindowMinutes) {
         this.codes = codes;
         this.attempts = attempts;
         this.encoder = encoder;
         this.email = email;
         this.ttl = Duration.ofMinutes(ttlMinutes);
         this.maxAttempts = maxAttempts;
+        this.maxIssuesPerWindow = maxIssuesPerWindow;
+        this.issueWindow = Duration.ofMinutes(issueWindowMinutes);
+        this.maxFailuresPerWindow = maxFailuresPerWindow;
+        this.failureWindow = Duration.ofMinutes(failureWindowMinutes);
     }
 
     /** Generate a fresh code (invalidating prior ones of this purpose), persist its hash, mail it. */
@@ -68,6 +86,16 @@ public class OtpService {
      */
     @Transactional
     public void issueTo(User user, OtpPurpose purpose, String destination) {
+        // Each new code also kills the one the user is typing and sends them an email, so an
+        // unbounded request rate is both a lockout and a mail flood.
+        long recent = codes.countByUserIdAndPurposeAndCreatedAtAfter(
+                user.getId(), purpose, Instant.now().minus(issueWindow));
+        if (recent >= maxIssuesPerWindow) {
+            log.warn("Refused {} OTP for user {}: {} issued in the last {} min",
+                    purpose, user.getId(), recent, issueWindow.toMinutes());
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Too many codes requested — try again in a few minutes");
+        }
         codes.consumeOutstanding(user.getId(), purpose, Instant.now());
 
         String code = String.format("%06d", RNG.nextInt(1_000_000));
@@ -105,14 +133,28 @@ public class OtpService {
         if (otp.isExpired()) {
             throw new BadRequestException("Invalid or expired code");
         }
-        // Both branches below record through the recorder before throwing. Writing to `otp` here
-        // instead would look identical and do nothing: the throw rolls this transaction back.
-        if (otp.getAttempts() >= maxAttempts) {
+        // The account's failure budget spans every code of this purpose, so a fresh code does not
+        // bring a fresh set of guesses.
+        long failures = codes.sumAttemptsSince(user.getId(), purpose, Instant.now().minus(failureWindow));
+        if (failures >= maxFailuresPerWindow) {
+            attempts.burn(otp.getId());
+            log.warn("Refused {} OTP verify for user {}: {} failures in the last {} min",
+                    purpose, user.getId(), failures, failureWindow.toMinutes());
+            throw new BadRequestException("Too many attempts — try again later");
+        }
+        // Every write below goes through the recorder, in its own transaction. Writing to `otp`
+        // here instead would look identical and do nothing: the throw rolls this transaction back.
+        // The attempt is reserved before the (slow) hash check, so parallel guesses cannot all
+        // slip under the cap.
+        if (!attempts.reserveAttempt(otp.getId(), maxAttempts)) {
             attempts.burn(otp.getId());
             throw new BadRequestException("Too many attempts — request a new code");
         }
         if (!encoder.matches(submittedCode, otp.getCodeHash())) {
-            attempts.recordFailedAttempt(otp.getId());
+            throw new BadRequestException("Invalid or expired code");
+        }
+        if (!attempts.consume(otp.getId())) {
+            // A concurrent request spent it first; a code is good for one sign-in.
             throw new BadRequestException("Invalid or expired code");
         }
         otp.setConsumedAt(Instant.now());

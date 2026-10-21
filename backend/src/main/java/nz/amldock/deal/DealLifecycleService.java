@@ -314,6 +314,10 @@ public class DealLifecycleService {
                 if (!actor.id().equals(deal.getCreatedByUserId()) && !isGranted(deal, actor)) {
                     throw new ForbiddenException("Not your deal");
                 }
+                // And only while they still work for the deal's firm. Authorship and grants are
+                // never revoked when a user is moved, so without this an agent moved to another
+                // firm kept reading the old firm's deals (NV-07).
+                assertSameFirm(actor, branchFirmId);
             }
             case ADMIN, SALES_MANAGER -> {
                 if (actor.firmBranchId() == null || !actor.firmBranchId().equals(deal.getFirmBranchId())) {
@@ -346,6 +350,8 @@ public class DealLifecycleService {
             if (!actor.id().equals(deal.getCreatedByUserId()) && !isGranted(deal, actor)) {
                 throw new ForbiddenException("Not your deal");
             }
+            // Same firm binding as assertCanRead (NV-07).
+            assertSameFirm(actor, dealFirmId);
             return;
         }
         throw new ForbiddenException(who == Who.EDITOR

@@ -106,7 +106,7 @@ public class TrainingSessionService {
         s.setName(req.name().trim());
         s.setDescription(trimToNull(req.description()));
         s.setLocation(req.location().trim());
-        s.setUrl(trimToNull(req.url()));
+        s.setUrl(TrainingLinks.requireHttpUrlOrNull(req.url()));
         s.setTrainingProviderId(resolveProvider(req.trainingProviderId(), firmId, branchId));
         s.setSessionDate(req.sessionDate());
         s.setTotalMinutes(req.totalMinutes());
@@ -135,7 +135,8 @@ public class TrainingSessionService {
         // Replace semantics: an empty description means the author cleared it, not "unchanged".
         if (req.description() != null) s.setDescription(trimToNull(req.description()));
         if (req.location() != null && !req.location().isBlank()) s.setLocation(req.location().trim());
-        if (req.url() != null) s.setUrl(trimToNull(req.url()));
+        // An empty string clears the link; anything else must be an http(s) URL.
+        if (req.url() != null) s.setUrl(TrainingLinks.requireHttpUrlOrNull(req.url()));
         // The date is required on the session, so a null here can only mean "leave it".
         if (req.sessionDate() != null) s.setSessionDate(req.sessionDate());
         if (req.trainingProviderId() != null) {

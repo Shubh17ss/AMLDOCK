@@ -3,3 +3,4 @@ target/
 *.md
 .git/
 .gitignore
+src/main/resources/application.yml
