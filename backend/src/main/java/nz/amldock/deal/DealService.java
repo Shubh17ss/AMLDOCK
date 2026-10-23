@@ -537,6 +537,11 @@ public class DealService {
     public Deal comment(Long id, String body) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
+        // Read scope is the gate here, and AUDIT reads every deal, so say "no writes" explicitly
+        // rather than relying on AuditReadOnlyFilter alone.
+        if (actor.role().isReadOnly()) {
+            throw new ForbiddenException("The audit role has read-only access");
+        }
         lifecycle.assertCanRead(d, actor, firmIdOf(d));
         if (d.getStatus() == DealStatus.VERIFIED || d.getStatus() == DealStatus.CLOSED) {
             throw new BadRequestException("Notes can't be added to a verified or closed deal");

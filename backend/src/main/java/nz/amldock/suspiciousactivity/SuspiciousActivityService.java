@@ -105,7 +105,11 @@ public class SuspiciousActivityService {
         return toDto(saved);
     }
 
-    /** Presign the entry's supporting PDF. Replaces any previously attached file. */
+    /**
+     * Presign the entry's supporting PDF. Replacing an ACTIVE (confirmed) attachment destroys the
+     * old evidence, so it needs {@code canDeleteRecords()}, the same right as DELETE, and is
+     * audited. A PENDING upload that was never confirmed may be restarted by anyone in scope.
+     */
     @Transactional
     public UploadUrlResponse presignUpload(Long id, SuspiciousActivityUploadUrlRequest req) {
         if (req.sizeBytes() > maxBytes) {
@@ -122,9 +126,18 @@ public class SuspiciousActivityService {
         UserPrincipal actor = currentPrincipal();
         assertSameScope(actor, s);
 
+        if (s.getDocumentStatus() == DocumentStatus.ACTIVE) {
+            if (!actor.role().canDeleteRecords()) {
+                throw new ForbiddenException(
+                        "Replacing an attached document needs delete rights — ask a compliance officer");
+            }
+            audit.record(AuditAction.DOCUMENT_DELETED, ENTITY_TYPE, s.getId(),
+                    "Replaced " + s.getOriginalFilename() + " on suspicious activity " + s.getId());
+        }
         // A re-upload supersedes the old object; drop it so nothing is orphaned in S3.
         if (s.getS3Key() != null) {
             storage.delete(s.getS3Key());
+            storage.delete(FileStorageService.incomingKey(s.getS3Key())); // an unconfirmed upload's bytes
         }
         String key = buildKey(s.getRealEstateFirmId(), s.getId(), req.filename());
         s.setS3Key(key);
@@ -133,7 +146,7 @@ public class SuspiciousActivityService {
         s.setSizeBytes(req.sizeBytes());
         s.setDocumentStatus(DocumentStatus.PENDING);
 
-        String url = storage.presignUpload(key, req.contentType(), uploadTtl);
+        String url = storage.presignIncomingUpload(key, req.contentType(), uploadTtl);
         return new UploadUrlResponse(s.getId(), key, url, req.contentType(), (int) uploadTtl.toSeconds());
     }
 
@@ -151,10 +164,10 @@ public class SuspiciousActivityService {
             throw new BadRequestException("No upload was started for this entry");
         }
 
-        if (!storage.exists(s.getS3Key())) {
-            throw new BadRequestException("Object not found in S3 yet — was the upload successful?");
-        }
-        long actualSize = storage.size(s.getS3Key());
+        // Moves the bytes off the key the presigned URL writes to, so that URL can no longer
+        // change what was confirmed (F7).
+        long actualSize = storage.promoteUpload(s.getS3Key()).orElseThrow(
+                () -> new BadRequestException("Object not found in S3 yet — was the upload successful?"));
         if (s.getSizeBytes() == null || actualSize != s.getSizeBytes()) {
             s.setSizeBytes(actualSize);
         }

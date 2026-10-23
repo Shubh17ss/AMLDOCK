@@ -11,6 +11,8 @@ import nz.amldock.common.exception.ApiException;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -30,6 +32,8 @@ import java.util.HexFormat;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     public static final String REFRESH_COOKIE = "amldock_refresh";
 
@@ -68,22 +72,31 @@ public class AuthService {
     /* ---------- email + OTP login (all roles except ROOT) ---------- */
 
     /**
-     * Step 1 of the passwordless flow: email a one-time code. Surfaces a clear error when the
-     * email isn't attached to an eligible account (note: this intentionally allows the caller to
-     * tell which emails have accounts — acceptable for an internal tool).
+     * Step 1 of the passwordless flow: email a one-time code.
+     *
+     * <p>Answers the same way for every address. A code goes out only to an active, non-ROOT
+     * account; an unknown, disabled or administrator address gets the same empty success, and so
+     * does an account that has hit the per-user issue limit, since a 429 only real accounts can
+     * reach would be the same oracle (security scan F5). Email delivery is {@code @Async}, so the
+     * timing doesn't differ much either. Abuse is held back per IP by {@link LoginRateLimitFilter}.
+     *
+     * <p>Not {@code @Transactional}: the throttle's 429 is thrown inside {@code OtpService.issue}'s
+     * transaction, and swallowing it inside an outer one would leave that marked rollback-only and
+     * fail at commit. Issue and audit each commit on their own, as in {@link #verifyLoginOtp}.
      */
-    @Transactional
     public void requestLoginOtp(String email) {
         User u = users.findByEmailIgnoreCase(email).orElse(null);
-        // ROOT is not a normal-route account — give the same generic response as an unknown email
-        // so the normal sign-in never reveals that an email belongs to the administrator.
-        if (u == null || u.getRole() == Role.ROOT) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "No user is attached to this email");
+        if (u == null || u.getRole() == Role.ROOT || !u.isActive()) {
+            log.info("Login OTP requested for an ineligible address; nothing sent");
+            return;
         }
-        if (!u.isActive()) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "This account is disabled — contact your administrator");
+        try {
+            otp.issue(u, OtpPurpose.LOGIN);
+        } catch (ApiException ex) {
+            if (ex.getStatus() != HttpStatus.TOO_MANY_REQUESTS) throw ex;
+            log.info("Login OTP for user {} not re-issued: per-user limit reached", u.getId());
+            return;
         }
-        otp.issue(u, OtpPurpose.LOGIN);
         audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_REQUESTED, "User", u.getId(),
                 "Login OTP requested for " + u.getEmail());
     }
@@ -248,7 +261,7 @@ public class AuthService {
 
     private void issueCookies(User u, HttpServletResponse response) {
         String access = jwt.generateAccessToken(u.getId(), u.getEmail(), u.getRole(),
-                u.getRealEstateFirmId(), u.getFirmBranchId());
+                u.getRealEstateFirmId(), u.getFirmBranchId(), u.getTokenVersion());
         String rawRefresh = newRandomToken();
         RefreshToken rt = new RefreshToken();
         rt.setUserId(u.getId());

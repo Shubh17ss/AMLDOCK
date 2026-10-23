@@ -78,6 +78,7 @@ public class UserController {
         return UserDto.from(u);
     }
 
+    /** At most {@link UserService#MAX_BULK_ROWS} rows per call; who may import is checked first. */
     @PostMapping("/bulk")
     @PreAuthorize("isAuthenticated()")
     public List<UserDto> createBulk(@AuthenticationPrincipal UserPrincipal principal,
@@ -92,15 +93,23 @@ public class UserController {
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
     public UserDto update(@AuthenticationPrincipal UserPrincipal principal,
-                          @PathVariable Long id, @RequestBody UpdateUserRequest req) {
+                          @PathVariable Long id, @RequestBody UpdateUserRequest req,
+                          HttpServletResponse response) {
         // Read before the update, because the service mutates the managed entity in place — after
         // the call these would both report the new values and every comparison below would be false.
         User existing = users.findById(id);
         Role before = existing.getRole();
         boolean wasActive = existing.isActive();
         String previousEmail = existing.getEmail();
+        int tokenVersionBefore = existing.getTokenVersion();
 
         User u = users.update(principal, id, req);
+        // The edit ended the user's sessions (role, firm or branch changed). If that user is the
+        // caller, which only ROOT editing themselves can reach, give this browser a fresh session
+        // rather than signing them out.
+        if (u.getTokenVersion() != tokenVersionBefore && id.equals(principal.id())) {
+            auth.reissueSession(u, response);
+        }
         audit.record(AuditAction.USER_UPDATED, "User", u.getId(),
                 "Updated user " + u.getEmail());
         if (req.role() != null && req.role() != before) {
@@ -135,17 +144,30 @@ public class UserController {
 
     @PostMapping("/{id}/reset-password")
     @PreAuthorize("hasRole('ROOT')")
-    public ResponseEntity<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequest req) {
+    public ResponseEntity<Void> resetPassword(@AuthenticationPrincipal UserPrincipal principal,
+                                              @PathVariable Long id,
+                                              @Valid @RequestBody ResetPasswordRequest req,
+                                              HttpServletResponse response) {
+        // Revokes every refresh token the target holds (see UserService.resetPassword).
         users.resetPassword(id, req.newPassword());
         audit.record(AuditAction.USER_PASSWORD_RESET, "User", id, "Password reset by admin");
+        if (id.equals(principal.id())) {
+            // Resetting your own account: keep this browser signed in on a fresh session.
+            auth.reissueSession(users.findById(id), response);
+        }
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/me/change-password")
     public ResponseEntity<Void> changeMyPassword(@AuthenticationPrincipal UserPrincipal principal,
-                                                 @Valid @RequestBody ChangePasswordRequest req) {
+                                                 @Valid @RequestBody ChangePasswordRequest req,
+                                                 HttpServletResponse response) {
+        // Revokes every refresh token this user holds, including any stolen one...
         users.changeOwnPassword(principal.id(), req.currentPassword(), req.newPassword());
         audit.record(AuditAction.USER_PASSWORD_CHANGED, "User", principal.id(), "Password changed");
+        // ...then issues this browser a fresh session. Must come after the revoke, or it would be
+        // revoked with the rest.
+        auth.reissueSession(users.findById(principal.id()), response);
         return ResponseEntity.noContent().build();
     }
 

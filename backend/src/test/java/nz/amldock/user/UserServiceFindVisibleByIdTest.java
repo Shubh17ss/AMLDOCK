@@ -1,5 +1,7 @@
 package nz.amldock.user;
 
+import nz.amldock.auth.RefreshTokenRepository;
+import nz.amldock.auth.TokenStateCache;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirmRepository;
@@ -40,12 +42,14 @@ class UserServiceFindVisibleByIdTest {
     @Mock RealEstateFirmRepository firms;
     @Mock FirmBranchRepository branches;
     @Mock PasswordEncoder encoder;
+    @Mock RefreshTokenRepository refreshTokens;
+    @Mock TokenStateCache tokenStates;
 
     UserService service;
 
     @BeforeEach
     void setUp() {
-        service = new UserService(users, firms, branches, encoder);
+        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates);
         stubUser(AGENT_A10, FIRM_A, BRANCH_10);
         stubUser(AGENT_A11, FIRM_A, BRANCH_11);
         stubUser(AGENT_B20, FIRM_B, BRANCH_20);

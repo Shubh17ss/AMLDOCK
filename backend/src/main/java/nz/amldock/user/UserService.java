@@ -1,5 +1,7 @@
 package nz.amldock.user;
 
+import nz.amldock.auth.RefreshTokenRepository;
+import nz.amldock.auth.TokenStateCache;
 import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.BulkValidationException;
@@ -19,9 +21,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -32,15 +36,21 @@ public class UserService {
     private final RealEstateFirmRepository firms;
     private final FirmBranchRepository branches;
     private final PasswordEncoder encoder;
+    private final RefreshTokenRepository refreshTokens;
+    private final TokenStateCache tokenStates;
 
     public UserService(UserRepository users,
                        RealEstateFirmRepository firms,
                        FirmBranchRepository branches,
-                       PasswordEncoder encoder) {
+                       PasswordEncoder encoder,
+                       RefreshTokenRepository refreshTokens,
+                       TokenStateCache tokenStates) {
         this.users = users;
         this.firms = firms;
         this.branches = branches;
         this.encoder = encoder;
+        this.refreshTokens = refreshTokens;
+        this.tokenStates = tokenStates;
     }
 
     // Stable display order so toggling active/inactive (or any update) never reshuffles the list.
@@ -153,7 +163,16 @@ public class UserService {
         return users.save(u);
     }
 
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    /** Most users one bulk import may create. Mirrored by MAX_BULK_USERS in CreateUserDialog.jsx. */
+    public static final int MAX_BULK_ROWS = 50;
+    /** RFC 5321 path limit. Checked before the regex so the match always runs on bounded input. */
+    private static final int MAX_EMAIL_LENGTH = 254;
+    /** users.full_name is VARCHAR(255). */
+    private static final int MAX_FULL_NAME_LENGTH = 255;
+
+    // Domain labels exclude '.', so the label and separator never overlap and the match is linear.
+    // The previous form ([^@\s]+\.[^@\s]+$ after the '@') backtracked quadratically on a run of dots.
+    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s.]+(?:\\.[^@\\s.]+)+$");
 
     /**
      * Bulk-create users from a parsed CSV. Every row is validated against the same rules as the
@@ -164,9 +183,16 @@ public class UserService {
      */
     @Transactional
     public List<User> createBulk(UserPrincipal creator, BulkCreateUsersRequest req) {
+        // Who may import at all is settled before a single row is looked at.
+        if (creator.role().creatableRoles().isEmpty()) {
+            throw new ForbiddenException("You are not permitted to create users");
+        }
         List<BulkCreateUsersRequest.Row> rows = req.rows() == null ? List.of() : req.rows();
         if (rows.isEmpty()) {
             throw new BadRequestException("The file has no rows to import");
+        }
+        if (rows.size() > MAX_BULK_ROWS) {
+            throw new BadRequestException("A bulk import can contain at most " + MAX_BULK_ROWS + " users");
         }
 
         // Firm context: ROOT supplies it; everyone else is pinned to their own firm.
@@ -183,7 +209,9 @@ public class UserService {
                 String fullName = row.fullName() == null ? "" : row.fullName().trim();
                 String email = row.email() == null ? "" : row.email().trim();
                 if (fullName.isEmpty()) throw new BadRequestException("full name is required");
+                if (fullName.length() > MAX_FULL_NAME_LENGTH) throw new BadRequestException("full name is too long");
                 if (email.isEmpty()) throw new BadRequestException("email is required");
+                if (email.length() > MAX_EMAIL_LENGTH) throw new BadRequestException("email is too long");
                 if (!EMAIL.matcher(email).matches()) throw new BadRequestException("invalid email: " + email);
 
                 Role role = parseRole(row.role());
@@ -265,6 +293,12 @@ public class UserService {
         User u = findById(id);
         assertCanManage(actor, u);
         boolean isRoot = actor.role() == Role.ROOT;
+        // What an access token claims about this user. If any of it changes, or the account is
+        // switched off, tokens already issued no longer describe them (F6).
+        Role roleBefore = u.getRole();
+        Long firmBefore = u.getRealEstateFirmId();
+        Long branchBefore = u.getFirmBranchId();
+        boolean activeBefore = u.isActive();
 
         if (req.fullName() != null && !req.fullName().isBlank()) {
             u.setFullName(req.fullName());
@@ -304,6 +338,12 @@ public class UserService {
             u.setActive(req.active());
         }
         validateFirmLinkage(u.getRole(), u.getRealEstateFirmId(), u.getFirmBranchId());
+        if (u.getRole() != roleBefore
+                || !Objects.equals(u.getRealEstateFirmId(), firmBefore)
+                || !Objects.equals(u.getFirmBranchId(), branchBefore)
+                || (activeBefore && !u.isActive())) {
+            endSessions(u);
+        }
         return u;
     }
 
@@ -317,6 +357,10 @@ public class UserService {
         if (actor.id().equals(u.getId())) {
             throw new BadRequestException("You can't delete your own account");
         }
+        // Once the row is gone, JwtAuthenticationFilter finds no user and refuses their access
+        // tokens; refresh tokens are revoked here so none can be renewed in the meantime (F6).
+        refreshTokens.revokeAllForUser(u.getId(), Instant.now());
+        tokenStates.evictAfterCommit(u.getId());
         try {
             users.delete(u);
             users.flush(); // surface FK violations now rather than at commit
@@ -373,6 +417,7 @@ public class UserService {
             throw new BadRequestException("Only ROOT has a password; other users sign in with email + OTP");
         }
         u.setPasswordHash(encoder.encode(newPassword));
+        endSessions(u);
     }
 
     @Transactional
@@ -385,6 +430,26 @@ public class UserService {
             throw new BadRequestException("Current password is incorrect");
         }
         u.setPasswordHash(encoder.encode(newPassword));
+        endSessions(u);
+    }
+
+    /**
+     * Ends every session the user holds, on every device, in the same transaction as the change
+     * that calls for it (F2, F6):
+     * <ul>
+     *   <li>bumping the token version kills every access token already issued
+     *       (JwtAuthenticationFilter compares it);</li>
+     *   <li>revoking the refresh tokens stops any of them being renewed, so a stolen refresh cookie
+     *       can't rotate itself into fresh sessions forever.</li>
+     * </ul>
+     * Called on a password change or reset, deactivation, and a role, firm or branch change. The
+     * controller re-issues a session for the caller afterwards when the change was their own, so
+     * they are not signed out by it.
+     */
+    private void endSessions(User u) {
+        u.bumpTokenVersion();
+        refreshTokens.revokeAllForUser(u.getId(), Instant.now());
+        tokenStates.evictAfterCommit(u.getId());
     }
 
     /**

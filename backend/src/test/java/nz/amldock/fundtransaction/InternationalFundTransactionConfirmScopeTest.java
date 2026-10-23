@@ -74,7 +74,7 @@ class InternationalFundTransactionConfirmScopeTest {
         signedInAs(Role.AML_COMPLIANCE_OFFICER, OWN_FIRM);
 
         assertThatThrownBy(() -> service.confirmUpload(ENTRY_ID)).isInstanceOf(ForbiddenException.class);
-        verify(storage, never()).exists(any());
+        verify(storage, never()).promoteUpload(any());
     }
 
     @Test
@@ -85,7 +85,7 @@ class InternationalFundTransactionConfirmScopeTest {
         FundTransactionDto dto = service.confirmUpload(ENTRY_ID);
 
         assertThat(dto).isNotNull();
-        verify(storage, never()).exists(any());
+        verify(storage, never()).promoteUpload(any());
     }
 
     @Test
@@ -94,6 +94,18 @@ class InternationalFundTransactionConfirmScopeTest {
         signedInAs(Role.ROOT, null);
 
         assertThat(service.confirmUpload(ENTRY_ID)).isNotNull();
+    }
+
+    /** F7: confirm reads the staged upload; with nothing staged the entry stays PENDING. */
+    @Test
+    void confirmWithNothingUploadedLeavesItPending() {
+        entry(OWN_FIRM, DocumentStatus.PENDING, "ift/1/statement.pdf");
+        signedInAs(Role.FINANCE, OWN_FIRM);
+        when(storage.promoteUpload("ift/1/statement.pdf")).thenReturn(java.util.OptionalLong.empty());
+
+        assertThatThrownBy(() -> service.confirmUpload(ENTRY_ID))
+                .hasMessageContaining("Object not found in S3 yet");
+        verify(audit, never()).record(any(), any(), any(), any());
     }
 
     private void entry(Long firmId, DocumentStatus status, String s3Key) {

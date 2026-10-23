@@ -139,7 +139,7 @@ public class DocumentService {
         d.setOcrStatus(OcrStatus.NOT_APPLICABLE);
         Document saved = documents.save(d);
 
-        String url = storage.presignUpload(key, req.contentType(), uploadTtl);
+        String url = storage.presignIncomingUpload(key, req.contentType(), uploadTtl);
         return new UploadUrlResponse(saved.getId(), key, url, req.contentType(), (int) uploadTtl.toSeconds());
     }
 
@@ -169,10 +169,10 @@ public class DocumentService {
             mustLoadDealForWrite(doc.getDealId());
         }
 
-        if (!storage.exists(doc.getS3Key())) {
-            throw new BadRequestException("Object not found in S3 yet — was the upload successful?");
-        }
-        long actualSize = storage.size(doc.getS3Key());
+        // Moves the bytes off the key the presigned URL writes to, so that URL can no longer
+        // change what was confirmed (F7).
+        long actualSize = storage.promoteUpload(doc.getS3Key()).orElseThrow(
+                () -> new BadRequestException("Object not found in S3 yet — was the upload successful?"));
         if (actualSize != doc.getSizeBytes()) {
             // Update to actual to keep DB honest.
             doc.setSizeBytes(actualSize);

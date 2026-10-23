@@ -41,6 +41,13 @@ public class User extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /**
+     * Carried in every access token as {@code tv}. Bumping it ends every access token already
+     * issued to this user (JwtAuthenticationFilter rejects a mismatch). See UserService.endSessions.
+     */
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion;
+
     public Long getId() { return id; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
@@ -56,4 +63,6 @@ public class User extends BaseEntity {
     public void setFirmBranchId(Long firmBranchId) { this.firmBranchId = firmBranchId; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public int getTokenVersion() { return tokenVersion; }
+    public void bumpTokenVersion() { this.tokenVersion++; }
 }

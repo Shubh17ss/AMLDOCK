@@ -207,6 +207,9 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, 
   );
 }
 
+/** Most users one CSV import may create. The server enforces the same cap (UserService.MAX_BULK_ROWS). */
+const MAX_BULK_USERS = 50;
+
 /**
  * Bulk import users from a CSV (fullName, email, role, branch). The firm comes from the screen's
  * firm context; the backend validates every row against the same rules as the manual form and
@@ -238,6 +241,11 @@ function CsvUserImport({ onClose, currentUser, firmId }) {
         if (parsed.length === 0) {
           setRows([]); setFileName(null);
           setParseError('No data rows found in the file.');
+          return;
+        }
+        if (parsed.length > MAX_BULK_USERS) {
+          setRows([]); setFileName(null);
+          setParseError(`A bulk import can contain at most ${MAX_BULK_USERS} users — this file has ${parsed.length}. Split it into smaller files.`);
           return;
         }
         setRows(parsed);
@@ -300,6 +308,7 @@ function CsvUserImport({ onClose, currentUser, firmId }) {
             {isSalesManager
               ? ' The branch column is ignored — users are added to your branch.'
               : ' Branch is the branch name within this firm (leave blank for firm-level roles).'}
+            {` Up to ${MAX_BULK_USERS} users per file.`}
           </Typography>
 
           <Box>

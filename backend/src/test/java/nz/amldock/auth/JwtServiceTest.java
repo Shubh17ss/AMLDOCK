@@ -51,11 +51,12 @@ class JwtServiceTest {
     void aConfiguredSecretSignsAndVerifies() {
         JwtService jwt = new JwtService(SECRET, 15);
 
-        String token = jwt.generateAccessToken(7L, "a@firm.nz", Role.AGENT, 100L, 10L);
+        String token = jwt.generateAccessToken(7L, "a@firm.nz", Role.AGENT, 100L, 10L, 3);
         Claims claims = jwt.parse(token);
 
         assertThat(claims.getSubject()).isEqualTo("7");
         assertThat(claims.get("role", String.class)).isEqualTo("AGENT");
+        assertThat(claims.get(JwtService.TOKEN_VERSION_CLAIM, Integer.class)).isEqualTo(3);
     }
 
     @Test

@@ -27,8 +27,9 @@ public class JwtService {
     private final Duration accessTtl;
 
     /**
-     * There is deliberately no default: every claim in an access token (role, firm, branch) is
-     * trusted without a database lookup, so a guessable key is a forgeable ROOT session. A
+     * There is deliberately no default: the role, firm and branch claims are trusted as signed
+     * (only the token version and active flag are checked against the database), so a guessable
+     * key is a forgeable ROOT session. A
      * missing secret stops startup rather than falling back to anything.
      *
      * <p>Read from {@code amldock.jwt.secret} (where application.yml declares it, usually as
@@ -54,12 +55,17 @@ public class JwtService {
         this.accessTtl = Duration.ofMinutes(accessTtlMinutes);
     }
 
-    public String generateAccessToken(Long userId, String email, Role role, Long firmId, Long branchId) {
+    /** Claim carrying the user's token version; see {@link JwtAuthenticationFilter}. */
+    public static final String TOKEN_VERSION_CLAIM = "tv";
+
+    public String generateAccessToken(Long userId, String email, Role role, Long firmId, Long branchId,
+                                      int tokenVersion) {
         Instant now = Instant.now();
         var builder = Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("email", email)
                 .claim("role", role.name())
+                .claim(TOKEN_VERSION_CLAIM, tokenVersion)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(accessTtl)))
                 .signWith(key, Jwts.SIG.HS256);

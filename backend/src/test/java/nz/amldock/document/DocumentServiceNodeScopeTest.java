@@ -165,8 +165,7 @@ class DocumentServiceNodeScopeTest {
         doc.setOwnershipNodeId(NODE_ID);
         doc.setUploadedByUserId(USER_ID);
         when(documents.findById(9L)).thenReturn(Optional.of(doc));
-        when(storage.exists(any())).thenReturn(true);
-        when(storage.size(any())).thenReturn(doc.getSizeBytes());
+        when(storage.promoteUpload(any())).thenReturn(java.util.OptionalLong.of(doc.getSizeBytes()));
 
         service.confirmUpload(9L);
 
@@ -177,6 +176,22 @@ class DocumentServiceNodeScopeTest {
         assertThat(doc.getStatus()).isEqualTo(DocumentStatus.ACTIVE);
     }
 
+    /** F7: confirm reads the staged upload; with nothing staged the document stays PENDING. */
+    @Test
+    void confirmWithNothingUploadedLeavesItPending() {
+        Document doc = doc(9L, "licence-front.jpg", Instant.now());
+        doc.setDocumentType(DocumentType.NZ_DRIVER_LICENCE);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setUploadedByUserId(USER_ID);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        when(storage.promoteUpload(any())).thenReturn(java.util.OptionalLong.empty());
+
+        assertThatThrownBy(() -> service.confirmUpload(9L))
+                .hasMessageContaining("Object not found in S3 yet");
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.PENDING);
+        verify(beneficialOwners, never()).createProvisional(any());
+    }
+
     @Test
     void abrokersScanStillCreatesThePerson() {
         // The deal-form path is unchanged: no node, so the scan is the discovery of someone new.
@@ -185,8 +200,7 @@ class DocumentServiceNodeScopeTest {
         doc.setStatus(DocumentStatus.PENDING);
         doc.setUploadedByUserId(USER_ID);
         when(documents.findById(9L)).thenReturn(Optional.of(doc));
-        when(storage.exists(any())).thenReturn(true);
-        when(storage.size(any())).thenReturn(doc.getSizeBytes());
+        when(storage.promoteUpload(any())).thenReturn(java.util.OptionalLong.of(doc.getSizeBytes()));
         nz.amldock.beneficialowner.BeneficialOwner person = new nz.amldock.beneficialowner.BeneficialOwner();
         ReflectionTestUtils.setField(person, "id", PERSON_ID);
         when(beneficialOwners.createProvisional(doc)).thenReturn(person);
@@ -225,7 +239,7 @@ class DocumentServiceNodeScopeTest {
 
         assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(ForbiddenException.class);
         assertThat(doc.getStatus()).isEqualTo(DocumentStatus.PENDING);
-        verify(storage, never()).exists(any());
+        verify(storage, never()).promoteUpload(any());
         verify(beneficialOwners, never()).createProvisional(any());
     }
 
@@ -248,7 +262,7 @@ class DocumentServiceNodeScopeTest {
         DocumentDto dto = service.confirmUpload(9L);
 
         assertThat(dto).isNotNull();
-        verify(storage, never()).exists(any());
+        verify(storage, never()).promoteUpload(any());
     }
 
     /* ---------- the person a scan names is on its own deal (security audit C-02) ---------- */
@@ -273,7 +287,7 @@ class DocumentServiceNodeScopeTest {
             ReflectionTestUtils.setField(d, "id", 42L);
             return d;
         });
-        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
 
         service.presignUpload(backOfCard(PERSON_ID));
 
@@ -363,7 +377,7 @@ class DocumentServiceNodeScopeTest {
         assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(BadRequestException.class);
 
         assertThat(doc.getStatus()).isEqualTo(DocumentStatus.PENDING);
-        verify(storage, never()).exists(any());
+        verify(storage, never()).promoteUpload(any());
         verify(beneficialOwners, never()).createProvisional(any());
     }
 
@@ -411,7 +425,7 @@ class DocumentServiceNodeScopeTest {
 
     private void assertPresignAllowed() {
         lenient().when(documents.save(any())).thenAnswer(i -> i.getArgument(0));
-        lenient().when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        lenient().when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
         org.assertj.core.api.Assertions.assertThatCode(() -> service.presignUpload(licenceScan()))
                 .doesNotThrowAnyException();
     }
@@ -451,7 +465,7 @@ class DocumentServiceNodeScopeTest {
             ReflectionTestUtils.setField(d, "id", 42L);
             return d;
         });
-        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
 
         service.presignUpload(uploadRequest(DocumentType.FINANCIAL_STATEMENTS));
 
@@ -468,7 +482,7 @@ class DocumentServiceNodeScopeTest {
             ReflectionTestUtils.setField(d, "id", 42L);
             return d;
         });
-        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
 
         service.presignUpload(uploadRequest(DocumentType.TRUST_DEED));
 
@@ -488,7 +502,7 @@ class DocumentServiceNodeScopeTest {
             ReflectionTestUtils.setField(d, "id", 42L);
             return d;
         });
-        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
 
         service.presignUpload(uploadRequest(DocumentType.TRUSTEES_RESOLUTION));
 

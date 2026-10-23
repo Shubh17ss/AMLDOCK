@@ -67,7 +67,7 @@ class ComplianceDocumentConfirmScopeTest {
         signedInAs(Role.SENIOR_MANAGER, OWN_FIRM);
 
         assertThatThrownBy(() -> service.confirmUpload(DOC_ID)).isInstanceOf(ForbiddenException.class);
-        verify(storage, never()).exists(any());
+        verify(storage, never()).promoteUpload(any());
     }
 
     @Test
@@ -78,15 +78,53 @@ class ComplianceDocumentConfirmScopeTest {
         ComplianceDocumentDto dto = service.confirmUpload(DOC_ID);
 
         assertThat(dto).isNotNull();
-        verify(storage, never()).exists(any());
+        verify(storage, never()).promoteUpload(any());
     }
 
     @Test
-    void platformRolesStillSeeEveryFirm() {
+    void rootStillSeesEveryFirm() {
         document(OTHER_FIRM, DocumentStatus.ACTIVE);
-        signedInAs(Role.AUDIT, null);
+        signedInAs(Role.ROOT, null);
 
         assertThat(service.confirmUpload(DOC_ID)).isNotNull();
+    }
+
+    /** F4: AUDIT reads every firm's register but must not activate an upload in any of them. */
+    @Test
+    void auditorCannotConfirmAnUpload() {
+        document(OTHER_FIRM, DocumentStatus.PENDING);
+        signedInAs(Role.AUDIT, null);
+
+        assertThatThrownBy(() -> service.confirmUpload(DOC_ID))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("read-only");
+        verify(storage, never()).promoteUpload(any());
+    }
+
+    /** F4: nor open one: no version row is created and no upload URL is issued. */
+    @Test
+    void auditorCannotRequestAnUploadUrl() {
+        signedInAs(Role.AUDIT, null);
+        var req = new nz.amldock.compliancedoc.dto.ComplianceUploadUrlRequest(
+                ComplianceDocCategory.values()[0], "Forged programme", null,
+                "programme.pdf", "application/pdf", 1024L, OTHER_FIRM, null);
+
+        assertThatThrownBy(() -> service.presignUpload(req))
+                .isInstanceOf(ForbiddenException.class);
+        verify(docs, never()).save(any());
+        verify(storage, never()).presignIncomingUpload(any(), any(), any());
+    }
+
+    /** F7: confirm reads the staged upload; with nothing staged the document stays PENDING. */
+    @Test
+    void confirmWithNothingUploadedLeavesItPending() {
+        document(OWN_FIRM, DocumentStatus.PENDING);
+        signedInAs(Role.AML_COMPLIANCE_OFFICER, OWN_FIRM);
+        when(storage.promoteUpload(any())).thenReturn(java.util.OptionalLong.empty());
+
+        assertThatThrownBy(() -> service.confirmUpload(DOC_ID))
+                .hasMessageContaining("Object not found in S3 yet");
+        verify(audit, never()).record(any(), any(), any(), any());
     }
 
     private void document(Long firmId, DocumentStatus status) {
