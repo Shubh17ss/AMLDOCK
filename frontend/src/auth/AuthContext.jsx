@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   fetchMe, logout as apiLogout,
   requestOtp as apiRequestOtp, verifyOtp as apiVerifyOtp,
@@ -12,6 +13,10 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [status, setStatus] = useState('loading'); // 'loading' | 'authed' | 'guest'
+  // Cached API responses belong to whoever fetched them. Query keys carry no user, so the cache
+  // is emptied whenever the session ends or a new one starts; otherwise the next person to sign
+  // in on this tab could be shown the previous user's firm data while their own loads (NV-09).
+  const queryClient = useQueryClient();
 
   const refreshMe = useCallback(async () => {
     try {
@@ -27,10 +32,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     refreshMe();
     setOnUnauthorized(() => {
+      queryClient.clear();
       setUser(null);
       setStatus('guest');
     });
-  }, [refreshMe]);
+  }, [refreshMe, queryClient]);
 
   /**
    * Takes an AuthResponse the caller already has and makes it the current session.
@@ -47,20 +53,30 @@ export function AuthProvider({ children }) {
 
   // Email + OTP (non-ROOT): step 1 requests a code, step 2 verifies and starts the session.
   const requestOtp = useCallback((email) => apiRequestOtp(email), []);
-  const verifyOtp = useCallback(async (email, code) => adoptSession(await apiVerifyOtp(email, code)), [adoptSession]);
+  const verifyOtp = useCallback(async (email, code) => {
+    const me = await apiVerifyOtp(email, code);
+    queryClient.clear();
+    return adoptSession(me);
+  }, [adoptSession, queryClient]);
 
   // ROOT password + OTP: step 1 checks password & sends a code, step 2 verifies it.
   const adminLogin = useCallback((email, password) => apiAdminLogin(email, password), []);
-  const adminVerify = useCallback(async (email, code) => adoptSession(await apiAdminVerify(email, code)), [adoptSession]);
+  const adminVerify = useCallback(async (email, code) => {
+    const me = await apiAdminVerify(email, code);
+    queryClient.clear();
+    return adoptSession(me);
+  }, [adoptSession, queryClient]);
 
   const logout = useCallback(async () => {
     try { await apiLogout(); } catch { /* ignore */ }
-    // The saved dashboard scope is keyed by user id, and ids are reused — a reseeded database
-    // hands id 1 to a different person, who would otherwise inherit this selection.
+    // The saved dashboard scope is keyed by userId, and ids are reused: a reseeded database
+    // hands id 1 to a different person, who would otherwise inherit this selection. Signing out
+    // is not the only defence; DashboardScope also refreshes a saved scope's names from the API.
     clearSavedScope(user);
+    queryClient.clear();
     setUser(null);
     setStatus('guest');
-  }, [user]);
+  }, [user, queryClient]);
 
   return (
     <AuthContext.Provider value={{

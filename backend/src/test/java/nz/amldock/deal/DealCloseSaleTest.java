@@ -3,6 +3,7 @@ package nz.amldock.deal;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.deal.access.DealUserRepository;
 import nz.amldock.deal.dto.CloseDealRequest;
 import nz.amldock.deal.dto.SaleDto;
@@ -158,6 +159,29 @@ class DealCloseSaleTest {
                 sold(null, List.of(unit("Flat 1", "100")))))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Only a development");
+    }
+
+    /* ---------- another firm learns nothing from the validation (security audit C-12) ---------- */
+
+    @Test
+    void anotherFirmsReviewerIsRefusedBeforeTheSaleIsValidated() {
+        // A single figure is wrong for a development, but saying so would tell a stranger the
+        // deal is one. They get the same answer whatever the property is.
+        signedInAs(new UserPrincipal(30L, "amlco@other.com", null, Role.AML_COMPLIANCE_OFFICER, 2L, null, true));
+
+        verifiedDeal(PropertyType.DEVELOPMENT);
+        assertThatThrownBy(() -> service.closeWithSale(1L, sold(new BigDecimal("1"), null)))
+                .isInstanceOf(ForbiddenException.class);
+
+        verifiedDeal(PropertyType.RESIDENTIAL);
+        assertThatThrownBy(() -> service.closeWithSale(1L, sold(null, List.of(unit("Flat 1", "100")))))
+                .isInstanceOf(ForbiddenException.class);
+        verify(saleUnits, never()).saveAll(any());
+    }
+
+    private static void signedInAs(UserPrincipal p) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(p, null, p.getAuthorities()));
     }
 
     /* ---------- the transaction monitoring history ---------- */

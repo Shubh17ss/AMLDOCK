@@ -27,7 +27,7 @@ import { tokens, fonts, motion } from '../../theme/theme.js';
  * Props:
  *   open, onClose
  *   deal: the deal, for its current status
- *   canOverride: boolean — senior managers may force any status
+ *   canOverride: boolean — senior managers may force any status except CLOSED
  *   submitting: boolean
  *   onSubmit: (transition, reason) => Promise — `transition` is a row of STATUS_TRANSITIONS, or
  *             an override row carrying `action: 'override'`
@@ -50,6 +50,9 @@ export function DealStatusDialog({ open, deal, canOverride, onClose, onSubmit, s
     const reachable = new Set(normal.map((t) => t.to));
     return DEAL_STATUSES
       .filter((s) => s !== deal?.status && !reachable.has(s))
+      // CLOSED only from VERIFIED, overrides included (the server refuses the rest). From
+      // VERIFIED the ordinary close already reaches it, so it is never offered as an override.
+      .filter((s) => s !== 'CLOSED' || deal?.status === 'VERIFIED')
       .map((s) => ({ to: s, action: 'override', noteRequired: true }));
   }, [canOverride, normal, deal?.status]);
 

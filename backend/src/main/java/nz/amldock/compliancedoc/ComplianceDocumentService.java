@@ -73,6 +73,7 @@ public class ComplianceDocumentService {
 
     @Transactional
     public UploadUrlResponse presignUpload(ComplianceUploadUrlRequest req) {
+        assertNotReadOnly(currentPrincipal());
         if (req.sizeBytes() > maxBytes) {
             throw new BadRequestException("File exceeds " + (maxBytes / 1024 / 1024) + " MB limit");
         }
@@ -108,7 +109,7 @@ public class ComplianceDocumentService {
         d.setUploadedByUserId(actor.id());
         ComplianceDocument saved = docs.save(d);
 
-        String url = storage.presignUpload(key, req.contentType(), uploadTtl);
+        String url = storage.presignIncomingUpload(key, req.contentType(), uploadTtl);
         return new UploadUrlResponse(saved.getId(), key, url, req.contentType(), (int) uploadTtl.toSeconds());
     }
 
@@ -116,19 +117,21 @@ public class ComplianceDocumentService {
     public ComplianceDocumentDto confirmUpload(Long documentId) {
         ComplianceDocument doc = docs.findById(documentId)
                 .orElseThrow(() -> new NotFoundException("Document " + documentId + " not found"));
+        // Scope first: the idempotent return below must not hand another firm's document back.
+        UserPrincipal actor = currentPrincipal();
+        assertNotReadOnly(actor);
+        assertSameScope(actor, doc);
         if (doc.getStatus() == DocumentStatus.ACTIVE) {
             return toDto(doc); // idempotent
         }
         if (doc.getStatus() == DocumentStatus.DELETED) {
             throw new BadRequestException("Document is deleted");
         }
-        UserPrincipal actor = currentPrincipal();
-        assertSameScope(actor, doc);
 
-        if (!storage.exists(doc.getS3Key())) {
-            throw new BadRequestException("Object not found in S3 yet — was the upload successful?");
-        }
-        long actualSize = storage.size(doc.getS3Key());
+        // Moves the bytes off the key the presigned URL writes to, so that URL can no longer
+        // change what was confirmed (F7).
+        long actualSize = storage.promoteUpload(doc.getS3Key()).orElseThrow(
+                () -> new BadRequestException("Object not found in S3 yet — was the upload successful?"));
         if (actualSize != doc.getSizeBytes()) {
             doc.setSizeBytes(actualSize);
         }
@@ -265,5 +268,15 @@ public class ComplianceDocumentService {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof UserPrincipal up) return up;
         throw new BadRequestException("No authenticated user");
+    }
+
+    /**
+     * AUDIT reaches upload through read scope (it sees every firm), so the "writes nothing" rule
+     * is stated here too rather than resting on AuditReadOnlyFilter alone.
+     */
+    private static void assertNotReadOnly(UserPrincipal actor) {
+        if (actor.role().isReadOnly()) {
+            throw new ForbiddenException("The audit role has read-only access");
+        }
     }
 }

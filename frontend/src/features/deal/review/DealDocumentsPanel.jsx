@@ -21,8 +21,10 @@ import { tokens } from '../../../theme/theme.js';
  *                a file added into a version now was not part of the moment it records — and the
  *                viewer fetches through the version, which is the only route that still serves a
  *                document deleted from the live deal since.
+ * @param canUpload whether this viewer may add files; wider than the edit rule (branch staff may
+ *                  add evidence to a deal they cannot otherwise change). Defaults to !readOnly.
  */
-export function DealDocumentsPanel({ dealId, readOnly = false, version = null }) {
+export function DealDocumentsPanel({ dealId, readOnly = false, canUpload, version = null }) {
   // Held whole rather than by id: the uploader already has the row in hand when a viewer is asked
   // for, so re-finding it here would mean keeping a second copy of the list to find it in.
   const [viewingDoc, setViewingDoc] = useState(null);
@@ -41,7 +43,7 @@ export function DealDocumentsPanel({ dealId, readOnly = false, version = null })
         // The drawer is 560–640px, and MUI's breakpoints watch the viewport rather than the
         // container — without this the table runs off the edge on a wide screen.
         compact
-        canUpload={!readOnly}
+        canUpload={canUpload ?? !readOnly}
         // `dealOnly` narrows this the same way it narrows the live list, so a version shows the
         // deal's own files rather than the whole snapshot.
         frozenDocuments={version?.documents ?? null}

@@ -229,14 +229,6 @@ public class DealService {
     @Transactional
     public Deal update(Long id, UpdateDealRequest req) {
         Deal d = mustFindEditable(id);
-        if (req.firmBranchId() != null && !req.firmBranchId().equals(d.getFirmBranchId())) {
-            FirmBranch newBranch = branches.findById(req.firmBranchId())
-                    .orElseThrow(() -> new BadRequestException("Branch " + req.firmBranchId() + " not found"));
-            if (!newBranch.isActive()) {
-                throw new BadRequestException("Branch is inactive");
-            }
-            d.setFirmBranchId(newBranch.getId());
-        }
         if (req.transactionType() != null) d.setTransactionType(req.transactionType());
         if (req.transactionValue() != null) d.setTransactionValue(req.transactionValue());
         if (req.pocName() != null) d.setPocName(blankToNull(req.pocName()));
@@ -349,9 +341,12 @@ public class DealService {
         // A broker discarding their own deal before handing it over. The deal form persists a
         // deal partway through so documents have something to attach to, so without this the
         // "Discard" button would leave an orphan the author has no way to clear.
+        // Only while they still work for the deal's firm: authorship outlives a move (NV-07).
         if (DealLifecycleService.isDealAuthor(actor.role())
                 && actor.id().equals(d.getCreatedByUserId())
-                && d.getStatus() == DealStatus.NEW) {
+                && d.getStatus() == DealStatus.NEW
+                && actor.realEstateFirmId() != null
+                && actor.realEstateFirmId().equals(firmOf(d))) {
             return;
         }
         // The two firm-level deciders, together: the rule is the same for both, and writing it
@@ -359,8 +354,7 @@ public class DealService {
         // Scoped to their own firm because that is exactly what DealScope lists for them — this
         // lets them delete what they can see, and nothing else.
         if (actor.role() == Role.SENIOR_MANAGER || actor.role() == Role.AML_COMPLIANCE_OFFICER) {
-            FirmBranch branch = branches.findById(d.getFirmBranchId()).orElse(null);
-            Long dealFirmId = branch == null ? null : branch.getRealEstateFirmId();
+            Long dealFirmId = firmOf(d);
             if (dealFirmId == null || !dealFirmId.equals(actor.realEstateFirmId())) {
                 throw new ForbiddenException("You can only delete deals within your own firm");
             }
@@ -368,6 +362,11 @@ public class DealService {
         }
         throw new ForbiddenException(
                 "Only ROOT, a compliance officer or a senior manager may delete a deal");
+    }
+
+    /** The firm the deal's branch belongs to, or null if the branch is gone. */
+    private Long firmOf(Deal d) {
+        return branches.findById(d.getFirmBranchId()).map(FirmBranch::getRealEstateFirmId).orElse(null);
     }
 
     /**
@@ -415,6 +414,10 @@ public class DealService {
     @Transactional
     public TransitionResult closeWithSale(Long id, CloseDealRequest req) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        // Authorise before validating. The validation messages depend on the deal's property type,
+        // so running them first told any firm's reviewer whether another firm's deal was a
+        // development (C-12). act() below repeats the check as part of the transition.
+        lifecycle.assertReviewer(d, currentPrincipal(), firmIdOf(d));
         // The deal's own property type decides which shape of answer is legal, never the request.
         // A caller that could choose its own rules could send one figure for a development and
         // skip the per-unit breakdown that is the whole reason developments are asked differently.
@@ -534,6 +537,11 @@ public class DealService {
     public Deal comment(Long id, String body) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
+        // Read scope is the gate here, and AUDIT reads every deal, so say "no writes" explicitly
+        // rather than relying on AuditReadOnlyFilter alone.
+        if (actor.role().isReadOnly()) {
+            throw new ForbiddenException("The audit role has read-only access");
+        }
         lifecycle.assertCanRead(d, actor, firmIdOf(d));
         if (d.getStatus() == DealStatus.VERIFIED || d.getStatus() == DealStatus.CLOSED) {
             throw new BadRequestException("Notes can't be added to a verified or closed deal");

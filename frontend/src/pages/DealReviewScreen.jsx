@@ -29,7 +29,7 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
-import { canEditContent, dealStatusLabel, isEditable, transitionsFrom } from '../data/dealStatus.js';
+import { canEditContent, canUploadDocuments, dealStatusLabel, isEditable, transitionsFrom } from '../data/dealStatus.js';
 
 /**
  * The three faces of a deal under review.
@@ -237,6 +237,16 @@ export function DealReviewScreen() {
     // whole screen already reads, rather than added as a second test each consumer must remember.
     && !snapshot;
 
+  // Adding evidence answers to a wider rule than editing (canUploadDocuments): the deal's own
+  // agent while it is NEW, and branch staff or firm reviewers through REVIEW and ON_HOLD. The
+  // server holds the scope; this only decides whether to show the upload control. An agent must
+  // be the deal's own (a NEW deal's author is sent to the form above anyway).
+  const isAgent = user?.role === 'AGENT' || user?.role === 'AGENT_PA';
+  const mayUpload = (isOwnerAgent || !isAgent)
+    && canUploadDocuments(liveDeal.status, user?.role)
+    && canWrite(user?.role)
+    && !snapshot;
+
   const showOverride = canOverride(user?.role);
 
   const selectedNode = tree.tree?.nodes.find((n) => n.id === selectedNodeId) ?? null;
@@ -436,6 +446,9 @@ export function DealReviewScreen() {
               setSelectedNodeId(nodeId);
               setTab('structure');
             }}
+            // A gap on the deal itself is answered in the deal drawer. It opens over this tab, so
+            // closing it lands back on the list, refreshed by the save. One drawer at a time.
+            onOpenDeal={() => { setSelectedNodeId(null); setDealDrawerOpen(true); }}
           />
         )}
       </ReviewTabPanel>
@@ -449,6 +462,7 @@ export function DealReviewScreen() {
         dealId={dealId}
         onClose={() => setDealDrawerOpen(false)}
         readOnly={!mayEdit}
+        canUpload={mayUpload}
         // Commenting is not editing — a reviewer may still add a note to a deal they can no
         // longer change. Only the auditor, who writes nothing anywhere, is kept out.
         canComment={canWrite(user?.role)}
@@ -471,6 +485,7 @@ export function DealReviewScreen() {
         onClose={() => setSelectedNodeId(null)}
         onRequestDelete={mayEdit ? setDeleteNodeId : undefined}
         readOnly={!mayEdit}
+        canUpload={mayUpload}
         version={documentScope}
       />
 

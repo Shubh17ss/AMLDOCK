@@ -1,6 +1,10 @@
 package nz.amldock.user;
 
+import nz.amldock.auth.RefreshTokenRepository;
+import nz.amldock.auth.TokenStateCache;
+import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.BulkValidationException;
+import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
@@ -14,8 +18,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,7 +29,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,6 +41,8 @@ class UserServiceBulkTest {
     @Mock RealEstateFirmRepository firms;
     @Mock FirmBranchRepository branches;
     @Mock PasswordEncoder encoder;
+    @Mock RefreshTokenRepository refreshTokens;
+    @Mock TokenStateCache tokenStates;
 
     UserService service;
 
@@ -42,7 +52,7 @@ class UserServiceBulkTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserService(users, firms, branches, encoder);
+        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates);
     }
 
     private void stubActiveFirmAndBranch() {
@@ -129,5 +139,81 @@ class UserServiceBulkTest {
         assertThatThrownBy(() -> service.createBulk(salesManager, req))
                 .isInstanceOf(BulkValidationException.class);
         verify(users, never()).saveAll(any());
+    }
+
+    /* ---------- F1: size bounds and ReDoS ---------- */
+
+    private static List<Row> agentRows(int n) {
+        return IntStream.range(0, n)
+                .mapToObj(i -> new Row("User " + i, "user" + i + "@firm.com", "AGENT", ""))
+                .toList();
+    }
+
+    @Test
+    void rejectsMoreThanFiftyRows_beforeReadingAny() {
+        var req = new BulkCreateUsersRequest(1L, agentRows(UserService.MAX_BULK_ROWS + 1));
+
+        assertThatThrownBy(() -> service.createBulk(salesManager, req))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("at most 50");
+        verifyNoInteractions(users, firms, branches);
+    }
+
+    @Test
+    void acceptsExactlyFiftyRows() {
+        stubActiveFirmAndBranch();
+        when(users.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+        when(users.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var req = new BulkCreateUsersRequest(1L, agentRows(UserService.MAX_BULK_ROWS));
+
+        assertThat(service.createBulk(salesManager, req)).hasSize(50);
+    }
+
+    @Test
+    void rejectsRoleThatCannotCreateUsers_beforeReadingAnyRow() {
+        var agent = new UserPrincipal(5L, "agent@firm.com", null, Role.AGENT, 1L, 10L, true);
+        var req = new BulkCreateUsersRequest(1L, List.of(
+                new Row("X", "a@" + ".".repeat(100_000) + "@", "AGENT", "")));
+
+        assertThatThrownBy(() -> service.createBulk(agent, req))
+                .isInstanceOf(ForbiddenException.class);
+        verifyNoInteractions(users, firms, branches);
+    }
+
+    @Test
+    void rejectsOverlongEmail() {
+        String local = "a".repeat(250);
+        var req = new BulkCreateUsersRequest(1L, List.of(
+                new Row("Long", local + "@x.co", "AGENT", ""))); // 255 chars
+
+        assertThatThrownBy(() -> service.createBulk(salesManager, req))
+                .isInstanceOf(BulkValidationException.class)
+                .satisfies(ex -> assertThat(((BulkValidationException) ex).getErrors())
+                        .extracting("message").containsExactly("email is too long"));
+    }
+
+    @Test
+    void dotRunEmailFailsFast() {
+        // The old regex took ~n² steps on this shape; at 254 chars and with the linear pattern it is instant.
+        String evil = "a@" + ".".repeat(240) + "@";
+        var req = new BulkCreateUsersRequest(1L, List.of(new Row("Evil", evil, "AGENT", "")));
+
+        assertTimeoutPreemptively(Duration.ofSeconds(1), () ->
+                assertThatThrownBy(() -> service.createBulk(salesManager, req))
+                        .isInstanceOf(BulkValidationException.class));
+    }
+
+    @Test
+    void emailPatternStillAcceptsNormalAddresses() {
+        stubActiveFirmAndBranch();
+        when(users.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+        when(users.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var req = new BulkCreateUsersRequest(1L, List.of(
+                new Row("Jane", "jane.doe+aml@sub.example.co.nz", "AGENT", ""),
+                new Row("Raj", "r_k-1@firm.com", "AGENT", "")));
+
+        assertThat(service.createBulk(salesManager, req)).hasSize(2);
     }
 }

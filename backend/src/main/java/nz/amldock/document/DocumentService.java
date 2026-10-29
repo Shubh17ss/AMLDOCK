@@ -124,7 +124,12 @@ public class DocumentService {
         d.setDealId(deal.getId());
         d.setOwnershipNodeId(nodeId);
         // Carried from the request so confirmUpload knows whether this scan joins an existing
-        // person (the back of a card) or starts a new one.
+        // person (the back of a card) or starts a new one. That person must be on this deal:
+        // deleting the scan and reading it both act on them, so a foreign id would let one
+        // deal's author rewrite or remove another deal's individual.
+        if (req.beneficialOwnerId() != null && !beneficialOwners.isOnDeal(deal.getId(), req.beneficialOwnerId())) {
+            throw new BadRequestException("Individual does not belong to this deal");
+        }
         d.setBeneficialOwnerId(req.beneficialOwnerId());
         d.setIdSide(req.idSide());
         d.setUploadedByUserId(actor.id());
@@ -134,7 +139,7 @@ public class DocumentService {
         d.setOcrStatus(OcrStatus.NOT_APPLICABLE);
         Document saved = documents.save(d);
 
-        String url = storage.presignUpload(key, req.contentType(), uploadTtl);
+        String url = storage.presignIncomingUpload(key, req.contentType(), uploadTtl);
         return new UploadUrlResponse(saved.getId(), key, url, req.contentType(), (int) uploadTtl.toSeconds());
     }
 
@@ -142,21 +147,32 @@ public class DocumentService {
     public DocumentDto confirmUpload(Long documentId) {
         Document doc = documents.findById(documentId)
                 .orElseThrow(() -> new NotFoundException("Document " + documentId + " not found"));
-        if (doc.getStatus() == DocumentStatus.ACTIVE) {
-            return toDto(doc); // idempotent
+        // Authorise before anything is returned: the ids are sequential, so the idempotent
+        // ACTIVE return below must never hand a document to someone who could not read its
+        // deal — the same scope GET /api/documents/{id} applies.
+        UserPrincipal actor = currentPrincipal();
+        if (doc.getDealId() != null) {
+            mustLoadDealForRead(doc.getDealId());
         }
         if (doc.getStatus() == DocumentStatus.DELETED) {
             throw new BadRequestException("Document is deleted");
         }
-        UserPrincipal actor = currentPrincipal();
         if (!actor.id().equals(doc.getUploadedByUserId()) && !canManageDocuments(actor.role())) {
             throw new ForbiddenException("Only the uploader (or an elevated role) may confirm this upload");
         }
-
-        if (!storage.exists(doc.getS3Key())) {
-            throw new BadRequestException("Object not found in S3 yet — was the upload successful?");
+        if (doc.getStatus() == DocumentStatus.ACTIVE) {
+            return toDto(doc); // idempotent
         }
-        long actualSize = storage.size(doc.getS3Key());
+        // Again here, not only at presign: the deal can be verified between the two calls, and
+        // confirming is the step that makes the document live and creates its provisional owner.
+        if (doc.getDealId() != null) {
+            mustLoadDealForWrite(doc.getDealId());
+        }
+
+        // Moves the bytes off the key the presigned URL writes to, so that URL can no longer
+        // change what was confirmed (F7).
+        long actualSize = storage.promoteUpload(doc.getS3Key()).orElseThrow(
+                () -> new BadRequestException("Object not found in S3 yet — was the upload successful?"));
         if (actualSize != doc.getSizeBytes()) {
             // Update to actual to keep DB honest.
             doc.setSizeBytes(actualSize);
@@ -281,12 +297,20 @@ public class DocumentService {
         // answer to "may this actor write to this deal", and it now admits reviewers through
         // REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the
         // firm check inside could never pass — that is the reason for the exemption, not rank.
+        //
+        // Anyone else here is the uploader, and answers to the upload rule rather than the edit
+        // rule: a branch admin or sales manager who may add a document in REVIEW must be able to
+        // take back their own mistake in REVIEW too.
         if (actor.role() != Role.ROOT && d.getDealId() != null) {
             Deal deal = deals.findById(d.getDealId())
                     .orElseThrow(() -> new NotFoundException("Deal " + d.getDealId() + " not found"));
             Long firmId = branches.findById(deal.getFirmBranchId())
                     .map(FirmBranch::getRealEstateFirmId).orElse(null);
-            lifecycle.assertEditable(deal, actor, firmId);
+            if (actor.role().isFirmLevel()) {
+                lifecycle.assertEditable(deal, actor, firmId);
+            } else {
+                lifecycle.assertCanUploadDocuments(deal, actor, firmId);
+            }
         }
         if (d.getStatus() == DocumentStatus.DELETED) return;
 
@@ -309,7 +333,7 @@ public class DocumentService {
 
         // The person goes only with their last remaining image — removing one side of a card
         // leaves someone who was still presented, evidenced by the other side.
-        beneficialOwners.removeIfOrphaned(d.getBeneficialOwnerId());
+        beneficialOwners.removeIfOrphaned(d.getDealId(), d.getBeneficialOwnerId());
     }
 
     /* ---------- helpers ---------- */
@@ -317,11 +341,12 @@ public class DocumentService {
     private Deal mustLoadDealForWrite(Long dealId) {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new BadRequestException("Deal " + dealId + " not found"));
-        // Upload scope mirrors read scope: agents to their own deal, branch-elevated to their
-        // branch, firm-level to their firm, ROOT to all.
+        // A real write gate: read scope plus the deal's status (see canUploadDocuments). It used to
+        // be read scope alone, which let anyone who could open a deal add documents, and the
+        // provisional owners a scan creates, to a VERIFIED or CLOSED one (C-07).
         Long firmId = branches.findById(deal.getFirmBranchId())
                 .map(FirmBranch::getRealEstateFirmId).orElse(null);
-        lifecycle.assertCanRead(deal, currentPrincipal(), firmId);
+        lifecycle.assertCanUploadDocuments(deal, currentPrincipal(), firmId);
         return deal;
     }
 

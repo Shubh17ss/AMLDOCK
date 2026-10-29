@@ -148,15 +148,27 @@ export function DashboardScopeProvider({ children }) {
       }
     }
 
-    if (branch && branchesQ.isSuccess && !activeBranches.some((b) => b.id === branch.id)) {
-      setBranch(null);
+    if (branch && branchesQ.isSuccess) {
+      const freshBranch = activeBranches.find((b) => b.id === branch.id);
+      if (!freshBranch) {
+        setBranch(null);
+      } else if (freshBranch.name !== branch.name) {
+        // Same id, different name: renamed, or a reset database that reissued the id to a new
+        // branch. The id alone passed the check above, so the sidebar kept naming the old one.
+        setBranch({ id: freshBranch.id, name: freshBranch.name });
+      }
     }
 
-    // A scope saved before `country` was carried has `{id, name}` only, which would price an
-    // Australian entity in NZD via useCurrency's fallback. Repair it from the fresh DTO.
-    if (firm && firm.country == null) {
+    // The saved firm's name and country are copies; the API's are the truth. Refreshed whenever
+    // they differ, for the same reasons as the branch. Country also matters on its own: a scope
+    // saved before it was carried has none, which would price an Australian entity in NZD via
+    // useCurrency's fallback. Only set when something changed, so this effect does not loop.
+    if (firm) {
       const fresh = isRoot ? activeFirms.find((f) => f.id === firm.id) : firmQ.data;
-      if (fresh?.country) setFirm({ id: fresh.id, name: fresh.name, country: fresh.country });
+      if (fresh && fresh.id === firm.id
+          && (fresh.name !== firm.name || (fresh.country ?? null) !== (firm.country ?? null))) {
+        setFirm({ id: fresh.id, name: fresh.name, country: fresh.country });
+      }
     }
   }, [isRoot, firm, branch, activeFirms, activeBranches,
       firmsQ.isSuccess, firmQ.isSuccess, firmQ.isError, firmQ.data, branchesQ.isSuccess]);

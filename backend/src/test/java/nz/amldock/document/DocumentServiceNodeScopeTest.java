@@ -7,6 +7,7 @@ import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.document.dto.DocumentDto;
 import nz.amldock.document.dto.UploadUrlRequest;
 import nz.amldock.document.storage.FileStorageService;
@@ -87,6 +88,8 @@ class DocumentServiceNodeScopeTest {
         Deal deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
         deal.setFirmBranchId(BRANCH_ID);
+        // Uploading is status-checked now (C-07); NEW is open to every uploader.
+        deal.setStatus(DealStatus.NEW);
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);
 
@@ -162,8 +165,7 @@ class DocumentServiceNodeScopeTest {
         doc.setOwnershipNodeId(NODE_ID);
         doc.setUploadedByUserId(USER_ID);
         when(documents.findById(9L)).thenReturn(Optional.of(doc));
-        when(storage.exists(any())).thenReturn(true);
-        when(storage.size(any())).thenReturn(doc.getSizeBytes());
+        when(storage.promoteUpload(any())).thenReturn(java.util.OptionalLong.of(doc.getSizeBytes()));
 
         service.confirmUpload(9L);
 
@@ -174,6 +176,22 @@ class DocumentServiceNodeScopeTest {
         assertThat(doc.getStatus()).isEqualTo(DocumentStatus.ACTIVE);
     }
 
+    /** F7: confirm reads the staged upload; with nothing staged the document stays PENDING. */
+    @Test
+    void confirmWithNothingUploadedLeavesItPending() {
+        Document doc = doc(9L, "licence-front.jpg", Instant.now());
+        doc.setDocumentType(DocumentType.NZ_DRIVER_LICENCE);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setUploadedByUserId(USER_ID);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        when(storage.promoteUpload(any())).thenReturn(java.util.OptionalLong.empty());
+
+        assertThatThrownBy(() -> service.confirmUpload(9L))
+                .hasMessageContaining("Object not found in S3 yet");
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.PENDING);
+        verify(beneficialOwners, never()).createProvisional(any());
+    }
+
     @Test
     void abrokersScanStillCreatesThePerson() {
         // The deal-form path is unchanged: no node, so the scan is the discovery of someone new.
@@ -182,8 +200,7 @@ class DocumentServiceNodeScopeTest {
         doc.setStatus(DocumentStatus.PENDING);
         doc.setUploadedByUserId(USER_ID);
         when(documents.findById(9L)).thenReturn(Optional.of(doc));
-        when(storage.exists(any())).thenReturn(true);
-        when(storage.size(any())).thenReturn(doc.getSizeBytes());
+        when(storage.promoteUpload(any())).thenReturn(java.util.OptionalLong.of(doc.getSizeBytes()));
         nz.amldock.beneficialowner.BeneficialOwner person = new nz.amldock.beneficialowner.BeneficialOwner();
         ReflectionTestUtils.setField(person, "id", PERSON_ID);
         when(beneficialOwners.createProvisional(doc)).thenReturn(person);
@@ -195,6 +212,234 @@ class DocumentServiceNodeScopeTest {
         // Due straight away, and never NULL while claimable: the claim's index orders by it (V60).
         assertThat(doc.getOcrNextAttemptAt()).isNotNull().isBeforeOrEqualTo(Instant.now());
         assertThat(doc.getIdSide()).isEqualTo(IdSide.FRONT);
+    }
+
+    /* ---------- confirming is scoped like reading (security audit C-01) ---------- */
+
+    @Test
+    void anotherFirmsConfirmedDocumentIsRefusedNotReturned() {
+        // The idempotent ACTIVE return used to come before any check, handing any firm's ID
+        // scan (filename, uploader, OCR'd name and date of birth) to whoever guessed its id.
+        Document doc = doc(9L, "passport.jpg", Instant.now());
+        doc.setUploadedByUserId(123L);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        signedInAs(Role.AML_COMPLIANCE_OFFICER, USER_ID, 200L, 20L);
+
+        assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void aManagerOfAnotherFirmCannotConfirmItsPendingUpload() {
+        Document doc = doc(9L, "licence-front.jpg", Instant.now());
+        doc.setDocumentType(DocumentType.NZ_DRIVER_LICENCE);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setUploadedByUserId(123L);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        signedInAs(Role.SALES_MANAGER, USER_ID, 200L, 20L);
+
+        assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(ForbiddenException.class);
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.PENDING);
+        verify(storage, never()).promoteUpload(any());
+        verify(beneficialOwners, never()).createProvisional(any());
+    }
+
+    @Test
+    void anAgentWhoCannotReadTheDealCannotConfirmOnIt() {
+        Document doc = doc(9L, "passport.jpg", Instant.now());
+        doc.setUploadedByUserId(123L);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        // Same firm and branch, but neither the deal's creator nor granted access to it.
+        signedInAs(Role.AGENT, 55L, FIRM_ID, BRANCH_ID);
+
+        assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void confirmingAnAlreadyActiveDocumentInScopeIsStillIdempotent() {
+        Document doc = doc(9L, "passport.jpg", Instant.now());
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+
+        DocumentDto dto = service.confirmUpload(9L);
+
+        assertThat(dto).isNotNull();
+        verify(storage, never()).promoteUpload(any());
+    }
+
+    /* ---------- the person a scan names is on its own deal (security audit C-02) ---------- */
+
+    @Test
+    void aScanCannotNameAPersonFromAnotherDeal() {
+        // Deleting or reading the scan acts on that person, so a foreign id would let one deal's
+        // author remove or rewrite another firm's individual.
+        when(beneficialOwners.isOnDeal(DEAL_ID, PERSON_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.presignUpload(backOfCard(PERSON_ID)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not belong to this deal");
+        verify(documents, never()).save(any());
+    }
+
+    @Test
+    void theBackOfACardStillJoinsThePersonOnThisDeal() {
+        when(beneficialOwners.isOnDeal(DEAL_ID, PERSON_ID)).thenReturn(true);
+        when(documents.save(any())).thenAnswer(i -> {
+            Document d = i.getArgument(0);
+            ReflectionTestUtils.setField(d, "id", 42L);
+            return d;
+        });
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+
+        service.presignUpload(backOfCard(PERSON_ID));
+
+        org.mockito.ArgumentCaptor<Document> saved = org.mockito.ArgumentCaptor.forClass(Document.class);
+        verify(documents).save(saved.capture());
+        assertThat(saved.getValue().getBeneficialOwnerId()).isEqualTo(PERSON_ID);
+    }
+
+    @Test
+    void deletingAScanRemovesItsPersonOnlyWithinTheScansDeal() {
+        Document doc = someoneElsesDocument(DealStatus.REVIEW);
+        doc.setBeneficialOwnerId(PERSON_ID);
+
+        service.delete(doc.getId());
+
+        verify(beneficialOwners).removeIfOrphaned(DEAL_ID, PERSON_ID);
+    }
+
+    /* ---------- uploading is a write, status-checked (security audit C-07) ---------- */
+
+    static final Long AUTHOR_ID = 321L;
+
+    @Test
+    void theAuthoringAgentUploadsOnlyWhileTheDealIsNew() {
+        dealStatus(DealStatus.NEW);
+        signedInAs(Role.AGENT, AUTHOR_ID);
+        assertPresignAllowed();
+
+        for (DealStatus s : java.util.EnumSet.of(DealStatus.REVIEW, DealStatus.ON_HOLD,
+                DealStatus.VERIFIED, DealStatus.CLOSED)) {
+            dealStatus(s);
+            assertPresignRefused(BadRequestException.class);
+        }
+    }
+
+    @Test
+    void branchStaffUploadThroughReviewButNotOnceVerified() {
+        for (Role role : java.util.EnumSet.of(Role.SALES_MANAGER, Role.ADMIN)) {
+            signedInAs(role, 66L);
+            for (DealStatus s : java.util.EnumSet.of(DealStatus.NEW, DealStatus.REVIEW, DealStatus.ON_HOLD)) {
+                dealStatus(s);
+                assertPresignAllowed();
+            }
+            for (DealStatus s : java.util.EnumSet.of(DealStatus.VERIFIED, DealStatus.CLOSED)) {
+                dealStatus(s);
+                assertPresignRefused(BadRequestException.class);
+            }
+        }
+    }
+
+    @Test
+    void branchStaffOfAnotherBranchCannotUpload() {
+        dealStatus(DealStatus.REVIEW);
+        signedInAs(Role.SALES_MANAGER, 66L, FIRM_ID, 11L);
+        assertPresignRefused(ForbiddenException.class);
+    }
+
+    @Test
+    void complianceUploadsOnHoldButNotOnASignedOffDeal() {
+        dealStatus(DealStatus.ON_HOLD);
+        assertPresignAllowed();   // setUp signs in as the firm's compliance officer
+
+        dealStatus(DealStatus.VERIFIED);
+        assertPresignRefused(BadRequestException.class);
+        dealStatus(DealStatus.CLOSED);
+        assertPresignRefused(BadRequestException.class);
+    }
+
+    @Test
+    void rootCannotUploadToAFirmsDeal() {
+        dealStatus(DealStatus.NEW);
+        signedInAs(Role.ROOT, 1L, null, null);
+        assertPresignRefused(ForbiddenException.class);
+    }
+
+    @Test
+    void aDealVerifiedBetweenPresignAndConfirmRefusesTheConfirm() {
+        // The case that planted an unverified owner under a sign-off: confirm made the scan live
+        // and created its person without looking at the deal's status.
+        Document doc = doc(9L, "licence-front.jpg", Instant.now());
+        doc.setDocumentType(DocumentType.NZ_DRIVER_LICENCE);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setUploadedByUserId(USER_ID);
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        dealStatus(DealStatus.VERIFIED);
+
+        assertThatThrownBy(() -> service.confirmUpload(9L)).isInstanceOf(BadRequestException.class);
+
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.PENDING);
+        verify(storage, never()).promoteUpload(any());
+        verify(beneficialOwners, never()).createProvisional(any());
+    }
+
+    @Test
+    void anAlreadyActiveDocumentOnAVerifiedDealIsStillIdempotent() {
+        // A retried confirm after sign-off changes nothing, so it is not refused.
+        Document doc = doc(9L, "passport.jpg", Instant.now());
+        when(documents.findById(9L)).thenReturn(Optional.of(doc));
+        dealStatus(DealStatus.VERIFIED);
+
+        assertThat(service.confirmUpload(9L)).isNotNull();
+    }
+
+    @Test
+    void aBranchAdminMayDeleteTheirOwnUploadInReview() {
+        // Upload and delete answer to the same rule for the uploader, so a mistake made in
+        // REVIEW can be taken back in REVIEW.
+        Document doc = someoneElsesDocument(DealStatus.REVIEW);
+        signedInAs(Role.ADMIN, 123L);   // the uploader, not the deal's author
+
+        service.delete(doc.getId());
+
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.DELETED);
+    }
+
+    @Test
+    void aBranchAdminMayNotDeleteTheirOwnUploadOnceVerified() {
+        Document doc = someoneElsesDocument(DealStatus.VERIFIED);
+        signedInAs(Role.ADMIN, 123L);
+
+        assertThatThrownBy(() -> service.delete(doc.getId())).isInstanceOf(BadRequestException.class);
+        assertThat(doc.getStatus()).isEqualTo(DocumentStatus.ACTIVE);
+    }
+
+    private void dealStatus(DealStatus status) {
+        Deal deal = deals.findById(DEAL_ID).orElseThrow();
+        deal.setStatus(status);
+        deal.setCreatedByUserId(AUTHOR_ID);
+    }
+
+    private static UploadUrlRequest licenceScan() {
+        return new UploadUrlRequest("licence-front.jpg", "image/jpeg", 1024L, DocumentType.NZ_DRIVER_LICENCE,
+                DEAL_ID, null, null, null);
+    }
+
+    private void assertPresignAllowed() {
+        lenient().when(documents.save(any())).thenAnswer(i -> i.getArgument(0));
+        lenient().when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        org.assertj.core.api.Assertions.assertThatCode(() -> service.presignUpload(licenceScan()))
+                .doesNotThrowAnyException();
+    }
+
+    private void assertPresignRefused(Class<? extends Throwable> type) {
+        DealStatus status = deals.findById(DEAL_ID).orElseThrow().getStatus();
+        assertThatThrownBy(() -> service.presignUpload(licenceScan()))
+                .as("presign on %s", status)
+                .isInstanceOf(type);
+    }
+
+    private static UploadUrlRequest backOfCard(Long personId) {
+        return new UploadUrlRequest("licence-back.jpg", "image/jpeg", 1024L, DocumentType.NZ_DRIVER_LICENCE,
+                DEAL_ID, null, personId, IdSide.BACK);
     }
 
     /* ---------- accepted document types (V35) ---------- */
@@ -220,7 +465,7 @@ class DocumentServiceNodeScopeTest {
             ReflectionTestUtils.setField(d, "id", 42L);
             return d;
         });
-        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
 
         service.presignUpload(uploadRequest(DocumentType.FINANCIAL_STATEMENTS));
 
@@ -237,7 +482,7 @@ class DocumentServiceNodeScopeTest {
             ReflectionTestUtils.setField(d, "id", 42L);
             return d;
         });
-        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
 
         service.presignUpload(uploadRequest(DocumentType.TRUST_DEED));
 
@@ -257,7 +502,7 @@ class DocumentServiceNodeScopeTest {
             ReflectionTestUtils.setField(d, "id", 42L);
             return d;
         });
-        when(storage.presignUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
 
         service.presignUpload(uploadRequest(DocumentType.TRUSTEES_RESOLUTION));
 
@@ -352,10 +597,14 @@ class DocumentServiceNodeScopeTest {
     }
 
     private void signedInAs(Role role, Long userId) {
+        signedInAs(role, userId, FIRM_ID, BRANCH_ID);
+    }
+
+    private void signedInAs(Role role, Long userId, Long firmId, Long branchId) {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(
                         new UserPrincipal(userId, "someone@firm.nz", "Someone",
-                                role, FIRM_ID, BRANCH_ID, true),
+                                role, firmId, branchId, true),
                         null, List.of()));
     }
 

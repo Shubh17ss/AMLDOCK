@@ -40,7 +40,7 @@ const TABS = [
  * <p>Nothing here is committed by closing. Details has its own Save, and will say so if it is
  * dismissed with unsaved work.
  */
-export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canComment = true,
+export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canUpload, canComment = true,
                             frozenNotes = null, version = null, individuals = [] }) {
   const [tab, setTab] = useState('details');
 
@@ -220,7 +220,7 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canC
           />
         )}
         {deal && current === 'documents' && (
-          <DealDocumentsPanel dealId={dealId} readOnly={readOnly} version={version} />
+          <DealDocumentsPanel dealId={dealId} readOnly={readOnly} canUpload={canUpload} version={version} />
         )}
         {deal && current === 'users' && (
           <DealUsersPanel dealId={dealId} readOnly={readOnly} />

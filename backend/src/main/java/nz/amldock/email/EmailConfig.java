@@ -54,11 +54,12 @@ public class EmailConfig {
             @Value("${amldock.mail.from-name:AMLDOCK}") String fromName,
             @Value("${amldock.mail.reply-to:}") String replyTo,
             @Value("${amldock.notifications.configuration-set:}") String configurationSet,
+            @Value("${MAIL_LOG_BODIES:false}") boolean logBodies,
             ObjectProvider<SesV2Client> ses,
             ObjectProvider<JavaMailSender> sender) {
 
         if (!enabled) {
-            return new LoggingEmailService();
+            return new LoggingEmailService(logBodies);
         }
 
         if ("ses".equalsIgnoreCase(transport)) {
@@ -67,12 +68,12 @@ public class EmailConfig {
                 return new SesEmailService(
                         client, fromAddress, fromName, replyTo, configurationSet);
             }
-            return new LoggingEmailService();
+            return new LoggingEmailService(logBodies);
         }
 
         JavaMailSender mailSender = sender.getIfAvailable();
         if (mailSender == null) {
-            return new LoggingEmailService();
+            return new LoggingEmailService(logBodies);
         }
         return new SmtpEmailService(mailSender, fromAddress, fromName, replyTo);
     }

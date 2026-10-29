@@ -39,9 +39,10 @@ export function LoginPage() {
     try {
       await requestOtp(email);
       setStep('code');
-      showToast({ severity: 'success', message: 'A one-time code is on its way.' });
+      // The server answers the same for every address, so this can't say whether one was sent.
+      showToast({ severity: 'success', message: 'If that email has an account, a code is on its way.' });
     } catch (err) {
-      setError(err.response?.data?.message || 'No user is attached to this email');
+      setError(err.response?.data?.message || 'Could not request a code — please try again');
     } finally {
       setSubmitting(false);
     }

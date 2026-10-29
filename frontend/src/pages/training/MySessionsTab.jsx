@@ -6,6 +6,7 @@ import EventIcon from '@mui/icons-material/EventOutlined';
 import SchoolIcon from '@mui/icons-material/SchoolOutlined';
 import BusinessIcon from '@mui/icons-material/BusinessOutlined';
 import { tokens, fonts } from '../../theme/theme.js';
+import { safeHttpUrl } from '../../utils/formatters.js';
 
 const dateFmt = (iso) =>
   iso ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
@@ -89,8 +90,8 @@ export function MySessionsTab({ sessions, isLoading, isError }) {
                   {s.totalMinutes} min
                 </Typography>
 
-                {s.url && (
-                  <Link href={s.url} target="_blank" rel="noopener"
+                {safeHttpUrl(s.url) && (
+                  <Link href={safeHttpUrl(s.url)} target="_blank" rel="noopener noreferrer"
                         sx={{ fontSize: '0.82rem', mt: 1, display: 'inline-block', wordBreak: 'break-all' }}>
                     Open course link
                   </Link>

@@ -1,5 +1,7 @@
 package nz.amldock.user;
 
+import nz.amldock.auth.RefreshTokenRepository;
+import nz.amldock.auth.TokenStateCache;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.firm.FirmBranch;
@@ -20,7 +22,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Who may switch an account off.
@@ -44,6 +50,8 @@ class UserServiceActiveTest {
     @Mock RealEstateFirmRepository firms;
     @Mock FirmBranchRepository branches;
     @Mock PasswordEncoder encoder;
+    @Mock RefreshTokenRepository refreshTokens;
+    @Mock TokenStateCache tokenStates;
 
     UserService service;
 
@@ -58,7 +66,7 @@ class UserServiceActiveTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserService(users, firms, branches, encoder);
+        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates);
 
         // update() finishes with validateFirmLinkage, which re-checks that the firm and branch on
         // the row still exist and are active — it runs whatever field was actually changed.
@@ -237,5 +245,63 @@ class UserServiceActiveTest {
                 new UpdateUserRequest(null, null, Role.SENIOR_MANAGER, FIRM_A, null, null));
 
         assertThat(agent.getRole()).isEqualTo(Role.AGENT);
+        // Nothing an access token claims has changed, so nobody is signed out.
+        assertThat(agent.getTokenVersion()).isZero();
+        verifyNoInteractions(refreshTokens, tokenStates);
+    }
+
+    /* ---------- F6: a change to someone's access ends their sessions at once ---------- */
+
+    @Test
+    void suspendingEndsTheUsersSessions() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+
+        service.update(amlco, 50L, setActive(false));
+
+        assertThat(agent.getTokenVersion()).isEqualTo(1);
+        verify(refreshTokens).revokeAllForUser(eq(50L), any());
+        verify(tokenStates).evictAfterCommit(50L);
+    }
+
+    @Test
+    void reactivatingDoesNot() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+        agent.setActive(false);
+
+        service.update(amlco, 50L, setActive(true));
+
+        assertThat(agent.getTokenVersion()).isZero();
+        verifyNoInteractions(refreshTokens, tokenStates);
+    }
+
+    @Test
+    void aRoleChangeEndsTheUsersSessions() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+
+        service.update(root, 50L, new UpdateUserRequest(null, null, Role.ADMIN, FIRM_A, BRANCH_10, null));
+
+        assertThat(agent.getRole()).isEqualTo(Role.ADMIN);
+        assertThat(agent.getTokenVersion()).isEqualTo(1);
+        verify(refreshTokens).revokeAllForUser(eq(50L), any());
+    }
+
+    @Test
+    void aBranchMoveEndsTheUsersSessions() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+
+        service.update(root, 50L, new UpdateUserRequest(null, null, null, null, BRANCH_20, null));
+
+        assertThat(agent.getFirmBranchId()).isEqualTo(BRANCH_20);
+        assertThat(agent.getTokenVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void aNameChangeDoesNot() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+
+        service.update(amlco, 50L, new UpdateUserRequest("Renamed", null, null, null, null, null));
+
+        assertThat(agent.getTokenVersion()).isZero();
+        verifyNoInteractions(refreshTokens, tokenStates);
     }
 }

@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 
 /**
- * Persists what a <em>failed</em> verification learned, in a transaction of its own.
+ * Persists the attempt bookkeeping of a verification, in a transaction of its own.
  *
  * <p>This exists because of how {@link OtpService#verify} reports failure. It signals every failure
  * by throwing, and a {@code RuntimeException} out of a {@code @Transactional} method marks that
@@ -32,13 +32,24 @@ class OtpAttemptRecorder {
         this.codes = codes;
     }
 
-    /** Counts one wrong guess. Flushed, not merely saved, so the commit cannot be deferred. */
+    /**
+     * Reserves one guess before the code is checked, as a single conditional UPDATE. A read, then
+     * an increment, let concurrent requests all pass the cap on the same stale value (NV-02).
+     * Returns false when the code has no attempts left.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    void recordFailedAttempt(Long otpId) {
-        codes.findById(otpId).ifPresent(otp -> {
-            otp.setAttempts(otp.getAttempts() + 1);
-            codes.saveAndFlush(otp);
-        });
+    boolean reserveAttempt(Long otpId, int maxAttempts) {
+        return codes.reserveAttempt(otpId, maxAttempts) == 1;
+    }
+
+    /**
+     * Spends the code on a correct guess and hands back its reserved attempt, so a successful
+     * sign-in does not count against the user's failure budget. Returns false when a concurrent
+     * request already spent it.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    boolean consume(Long otpId) {
+        return codes.consumeReserved(otpId, Instant.now()) == 1;
     }
 
     /** Burns a code that has run out of attempts, so retrying cannot revive it. */
