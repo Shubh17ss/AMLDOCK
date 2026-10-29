@@ -104,7 +104,11 @@ public class InternationalFundTransactionService {
         return toDto(saved);
     }
 
-    /** Presign the entry's supporting PDF. Replaces any previously attached file. */
+    /**
+     * Presign the entry's supporting PDF. Replacing an ACTIVE (confirmed) attachment destroys the
+     * old evidence, so it needs {@code canDeleteRecords()}, the same right as DELETE, and is
+     * audited. A PENDING upload that was never confirmed may be restarted by anyone in scope.
+     */
     @Transactional
     public UploadUrlResponse presignUpload(Long id, FundTransactionUploadUrlRequest req) {
         if (req.sizeBytes() > maxBytes) {
@@ -121,9 +125,18 @@ public class InternationalFundTransactionService {
         UserPrincipal actor = currentPrincipal();
         assertSameScope(actor, t);
 
+        if (t.getDocumentStatus() == DocumentStatus.ACTIVE) {
+            if (!actor.role().canDeleteRecords()) {
+                throw new ForbiddenException(
+                        "Replacing an attached document needs delete rights — ask a compliance officer");
+            }
+            audit.record(AuditAction.DOCUMENT_DELETED, ENTITY_TYPE, t.getId(),
+                    "Replaced " + t.getOriginalFilename() + " on fund transaction " + t.getId());
+        }
         // A re-upload supersedes the old object; drop it so nothing is orphaned in S3.
         if (t.getS3Key() != null) {
             storage.delete(t.getS3Key());
+            storage.delete(FileStorageService.incomingKey(t.getS3Key())); // an unconfirmed upload's bytes
         }
         String key = buildKey(t.getRealEstateFirmId(), t.getId(), req.filename());
         t.setS3Key(key);
@@ -132,7 +145,7 @@ public class InternationalFundTransactionService {
         t.setSizeBytes(req.sizeBytes());
         t.setDocumentStatus(DocumentStatus.PENDING);
 
-        String url = storage.presignUpload(key, req.contentType(), uploadTtl);
+        String url = storage.presignIncomingUpload(key, req.contentType(), uploadTtl);
         return new UploadUrlResponse(t.getId(), key, url, req.contentType(), (int) uploadTtl.toSeconds());
     }
 
@@ -140,19 +153,20 @@ public class InternationalFundTransactionService {
     public FundTransactionDto confirmUpload(Long id) {
         InternationalFundTransaction t = transactions.findById(id)
                 .orElseThrow(() -> new NotFoundException("Transaction " + id + " not found"));
+        // Scope first: the idempotent return below must not hand another firm's entry back.
+        UserPrincipal actor = currentPrincipal();
+        assertSameScope(actor, t);
         if (t.getDocumentStatus() == DocumentStatus.ACTIVE) {
             return toDto(t); // idempotent
         }
         if (t.getDocumentStatus() == null || t.getS3Key() == null) {
             throw new BadRequestException("No upload was started for this transaction");
         }
-        UserPrincipal actor = currentPrincipal();
-        assertSameScope(actor, t);
 
-        if (!storage.exists(t.getS3Key())) {
-            throw new BadRequestException("Object not found in S3 yet — was the upload successful?");
-        }
-        long actualSize = storage.size(t.getS3Key());
+        // Moves the bytes off the key the presigned URL writes to, so that URL can no longer
+        // change what was confirmed (F7).
+        long actualSize = storage.promoteUpload(t.getS3Key()).orElseThrow(
+                () -> new BadRequestException("Object not found in S3 yet — was the upload successful?"));
         if (t.getSizeBytes() == null || actualSize != t.getSizeBytes()) {
             t.setSizeBytes(actualSize);
         }

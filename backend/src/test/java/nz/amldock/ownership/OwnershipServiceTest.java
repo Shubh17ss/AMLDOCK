@@ -10,6 +10,7 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.deal.DealStatus;
 import nz.amldock.document.Document;
 import nz.amldock.document.DocumentStatus;
 import nz.amldock.document.DocumentType;
@@ -81,6 +82,7 @@ class OwnershipServiceTest {
     @Mock nz.amldock.document.storage.FileStorageService storage;
     @Mock nz.amldock.audit.AuditService audit;
     @Mock nz.amldock.user.UserRepository users;
+    @Mock nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;
 
     OwnershipService service;
     Deal deal;
@@ -90,7 +92,7 @@ class OwnershipServiceTest {
     @BeforeEach
     void setUp() {
         service = new OwnershipService(structures, nodes, edges, deals, branches, lifecycle,
-                owners, ownerLinks, risk, documents, storage, audit, users);
+                owners, ownerLinks, risk, documents, storage, audit, users, versionDocuments);
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
@@ -779,6 +781,38 @@ class OwnershipServiceTest {
         verify(storage).delete("deals/1/nodes/2/certificate.pdf");
     }
 
+    /**
+     * C-09. A signed-off version shares the stored file, so deleting the node later must leave it
+     * for that version to still produce. The live row goes either way (ON DELETE CASCADE).
+     */
+    @Test
+    void keepsTheStoredFileWhileAPastVersionStillRefersToIt() {
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+        when(edges.findAllByParentNodeId(4L)).thenReturn(List.of());
+        lenient().when(edges.findAllByChildNodeId(4L)).thenReturn(List.of());
+
+        nz.amldock.document.Document signedOff = new nz.amldock.document.Document();
+        ReflectionTestUtils.setField(signedOff, "id", 70L);
+        signedOff.setS3Key("deals/1/nodes/4/passport.pdf");
+        signedOff.setOwnershipNodeId(4L);
+        nz.amldock.document.Document since = new nz.amldock.document.Document();
+        ReflectionTestUtils.setField(since, "id", 71L);
+        since.setS3Key("deals/1/nodes/4/added-later.pdf");
+        since.setOwnershipNodeId(4L);
+        when(documents.findAllByOwnershipNodeIdIn(any())).thenReturn(List.of(signedOff, since));
+        when(versionDocuments.existsBySourceDocumentId(70L)).thenReturn(true);
+        when(versionDocuments.existsBySourceDocumentId(71L)).thenReturn(false);
+
+        service.deleteNode(DEAL_ID, 4L, true);
+
+        verify(storage, never()).delete("deals/1/nodes/4/passport.pdf");
+        verify(storage).delete("deals/1/nodes/4/added-later.pdf");
+        // Both removals are still on the trail: the document left the live deal either way.
+        verify(audit, times(2)).record(eq(nz.amldock.audit.AuditAction.DOCUMENT_DELETED), eq("Document"),
+                anyLong(), any());
+    }
+
     /** Once for the whole cascade, not once per node. */
     @Test
     void recomputesTheDealsRiskOnceForTheWholeCascade() {
@@ -796,6 +830,64 @@ class OwnershipServiceTest {
     }
 
     /* ---------- granting a verification ---------- */
+
+    /* ---------- writes honour the deal's edit lock (security audit C-15) ---------- */
+
+    @Test
+    void aSignedOffDealsStructureCannotBeChanged() {
+        // The real edit rule, not the mock's silence: this is the rule under test.
+        org.mockito.Mockito.doCallRealMethod().when(lifecycle).assertEditable(any(), any(), any());
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        lenient().when(nodes.findById(4L)).thenReturn(Optional.of(jane));
+
+        for (DealStatus s : java.util.EnumSet.of(DealStatus.VERIFIED, DealStatus.CLOSED)) {
+            deal.setStatus(s);
+            assertLocked(() -> service.verifyNode(DEAL_ID, 4L,
+                    new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null)));
+            assertLocked(() -> service.createEdge(DEAL_ID, new CreateEdgeRequest(2L, 4L, null, EdgeRole.SHAREHOLDER)));
+            assertLocked(() -> service.deleteNode(DEAL_ID, 4L, false));
+            assertLocked(() -> service.deleteEdge(DEAL_ID, 9L));
+            assertLocked(() -> service.setRoot(DEAL_ID, 4L));
+        }
+        assertThat(jane.getVerificationStatus()).isNotEqualTo(NodeVerificationStatus.VERIFIED);
+        verify(nodes, never()).save(any());
+        verify(edges, never()).save(any());
+    }
+
+    @Test
+    void aDealUnderReviewCanStillBeWorked() {
+        org.mockito.Mockito.doCallRealMethod().when(lifecycle).assertEditable(any(), any(), any());
+        deal.setStatus(DealStatus.REVIEW);
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+        when(users.findById(7L)).thenReturn(Optional.of(user(7L, "Olivia Officer")));
+
+        service.verifyNode(DEAL_ID, 4L, new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null));
+
+        assertThat(jane.getVerificationStatus()).isEqualTo(NodeVerificationStatus.VERIFIED);
+    }
+
+    @Test
+    void rootStillDeletesOnASignedOffDealOnReadScope() {
+        // ROOT belongs to no firm, so the edit rule could never admit it; it keeps the same
+        // exemption DocumentService.delete gives it.
+        deal.setStatus(DealStatus.VERIFIED);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                new UserPrincipal(1L, "root@amldock.com", "Root", Role.ROOT, null, null, true), null, List.of()));
+        OwnershipEdge e = edge(2L, 4L);
+        ReflectionTestUtils.setField(e, "id", 9L);
+        when(edges.findById(9L)).thenReturn(Optional.of(e));
+        stubNodes(node(2L, NodeType.PRIVATE_COMPANY, "Holdings"), node(4L, NodeType.INDIVIDUAL, "Jane Smith"));
+
+        service.deleteEdge(DEAL_ID, 9L);
+
+        verify(lifecycle, never()).assertEditable(any(), any(), any());
+        verify(lifecycle).assertCanRead(any(), any(), any());
+    }
+
+    private static void assertLocked(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        assertThatThrownBy(call).isInstanceOf(BadRequestException.class).hasMessageContaining("cannot be edited");
+    }
 
     @Test
     void verifyingStampsTheOutcomeAndTheCallerAgainstTheNode() {

@@ -507,7 +507,7 @@ class DealServiceRiskAndPatchTest {
         Patch valuationMax(BigDecimal v) { this.valuationMax = v; return this; }
 
         UpdateDealRequest build() {
-            return new UpdateDealRequest(null, null, null, null, null, null, null, notes,
+            return new UpdateDealRequest(null, null, null, null, null, null, notes,
                     transactionPurpose, trustInvolved,
                     ownershipTenureYears, ownershipTenureMonths, faceToFaceIdVerified, null,
                     foreignExposureCountry, null, redFlagPresent, redFlag,

@@ -154,9 +154,13 @@ public class IdExtractionService {
 
         // Same transaction as the result. The person already exists — created when this image
         // was confirmed — so this only fills them in; it never decides who the scan belongs to.
-        beneficialOwners.applyExtraction(doc, fields);
+        boolean applied = beneficialOwners.applyExtraction(doc, fields);
 
-        recordAudit(doc, AuditAction.OCR_COMPLETED, summarise(doc, fields));
+        // A reading held back from a signed-off deal or a verified owner says so on the trail,
+        // so a reviewer reading it knows the person was left as they verified them.
+        String summary = summarise(doc, fields);
+        if (!applied) summary += " (not applied: deal signed off or owner already verified)";
+        recordAudit(doc, AuditAction.OCR_COMPLETED, summary);
     }
 
     @Transactional

@@ -26,6 +26,14 @@ class DealScopeTest {
         assertThat(s.creatorId()).isEqualTo(7L);
     }
 
+    /** NV-07: an agent's list is also held to the firm they work for now, whatever they ask. */
+    @Test
+    void anAgentsListIsPinnedToTheirCurrentFirm() {
+        assertThat(DealScope.forActor(user(Role.AGENT), OTHER_FIRM, null))
+                .isEqualTo(new DealScope(7L, FIRM, null));
+        assertThat(DealScope.forActor(user(Role.AGENT_PA), null, null).firmId()).isEqualTo(FIRM);
+    }
+
     @Test
     void branchStaffArePinnedToTheirOwnBranch() {
         assertThat(DealScope.forActor(user(Role.SALES_MANAGER), null, OTHER_BRANCH))

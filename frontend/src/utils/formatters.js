@@ -154,3 +154,18 @@ export function timeAgo(iso) {
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
   return new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
 }
+
+/**
+ * The URL itself when it is an absolute http(s) link, otherwise null. For links whose text comes
+ * from other users: a javascript: or data: href would run in the viewer's session (NV-11).
+ */
+export function safeHttpUrl(url) {
+  if (typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? trimmed : null;
+  } catch {
+    return null;
+  }
+}

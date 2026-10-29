@@ -11,6 +11,8 @@ import nz.amldock.common.exception.ApiException;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -30,6 +32,8 @@ import java.util.HexFormat;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     public static final String REFRESH_COOKIE = "amldock_refresh";
 
@@ -52,7 +56,7 @@ public class AuthService {
                        AuditService audit,
                        OtpService otp,
                        @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays,
-                       @Value("${COOKIE_SECURE:false}") boolean secureCookies,
+                       @Value("${COOKIE_SECURE:true}") boolean secureCookies,
                        @Value("${COOKIE_SAME_SITE:Lax}") String sameSite) {
         this.authManager = authManager;
         this.users = users;
@@ -68,28 +72,44 @@ public class AuthService {
     /* ---------- email + OTP login (all roles except ROOT) ---------- */
 
     /**
-     * Step 1 of the passwordless flow: email a one-time code. Surfaces a clear error when the
-     * email isn't attached to an eligible account (note: this intentionally allows the caller to
-     * tell which emails have accounts — acceptable for an internal tool).
+     * Step 1 of the passwordless flow: email a one-time code.
+     *
+     * <p>Answers the same way for every address. A code goes out only to an active, non-ROOT
+     * account; an unknown, disabled or administrator address gets the same empty success, and so
+     * does an account that has hit the per-user issue limit, since a 429 only real accounts can
+     * reach would be the same oracle (security scan F5). Email delivery is {@code @Async}, so the
+     * timing doesn't differ much either. Abuse is held back per IP by {@link LoginRateLimitFilter}.
+     *
+     * <p>Not {@code @Transactional}: the throttle's 429 is thrown inside {@code OtpService.issue}'s
+     * transaction, and swallowing it inside an outer one would leave that marked rollback-only and
+     * fail at commit. Issue and audit each commit on their own, as in {@link #verifyLoginOtp}.
      */
-    @Transactional
     public void requestLoginOtp(String email) {
         User u = users.findByEmailIgnoreCase(email).orElse(null);
-        // ROOT is not a normal-route account — give the same generic response as an unknown email
-        // so the normal sign-in never reveals that an email belongs to the administrator.
-        if (u == null || u.getRole() == Role.ROOT) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "No user is attached to this email");
+        if (u == null || u.getRole() == Role.ROOT || !u.isActive()) {
+            log.info("Login OTP requested for an ineligible address; nothing sent");
+            return;
         }
-        if (!u.isActive()) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "This account is disabled — contact your administrator");
+        try {
+            otp.issue(u, OtpPurpose.LOGIN);
+        } catch (ApiException ex) {
+            if (ex.getStatus() != HttpStatus.TOO_MANY_REQUESTS) throw ex;
+            log.info("Login OTP for user {} not re-issued: per-user limit reached", u.getId());
+            return;
         }
-        otp.issue(u, OtpPurpose.LOGIN);
         audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_OTP_REQUESTED, "User", u.getId(),
                 "Login OTP requested for " + u.getEmail());
     }
 
-    /** Step 2: verify the code and issue session cookies. */
-    @Transactional
+    /**
+     * Step 2: verify the code and issue session cookies.
+     *
+     * <p>Not {@code @Transactional}, on purpose: this endpoint is public, and a transaction around
+     * it held a pooled connection while the OTP bookkeeping and the failure audit each took a
+     * second one in REQUIRES_NEW. Ten concurrent wrong guesses then held the whole pool and every
+     * request in the app waited out the connection timeout. Without it, each step commits on its
+     * own and a request holds at most one connection at a time.
+     */
     public AuthResponse verifyLoginOtp(String email, String code, HttpServletResponse response) {
         User u = activeNonRoot(email);
         try {
@@ -120,14 +140,24 @@ public class AuthService {
             u = users.findByEmailIgnoreCase(auth.getName())
                     .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
         } catch (BadCredentialsException ex) {
-            audit.record(AuditAction.USER_LOGIN_FAILED, "User", null,
-                    "Failed admin login attempt for email " + email);
+            // recordFailure, not record: this method is @Transactional and is about to throw, so a
+            // row written in its transaction was rolled back with it, and password guessing on
+            // this route left no trail at all (C-10). No actor: nobody has proved who they are, so
+            // the address they typed goes in the summary, bounded because the caller chose it.
+            audit.recordFailure(null, null, AuditAction.USER_LOGIN_FAILED, "User", null,
+                    "Failed admin login attempt for email " + boundedEmail(email));
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
+        // A right password on the wrong route is worth seeing too: it is a real account's
+        // password being tried against the administrator's door.
         if (u.getRole() != Role.ROOT) {
+            audit.recordFailure(u.getId(), u.getEmail(), AuditAction.USER_LOGIN_FAILED, "User", u.getId(),
+                    "Admin login refused for " + u.getEmail() + ": not the platform administrator");
             throw new ApiException(HttpStatus.FORBIDDEN, "This route is for the platform administrator only");
         }
         if (!u.isActive()) {
+            audit.recordFailure(u.getId(), u.getEmail(), AuditAction.USER_LOGIN_FAILED, "User", u.getId(),
+                    "Admin login refused for " + u.getEmail() + ": account disabled");
             throw new ApiException(HttpStatus.FORBIDDEN, "User is disabled");
         }
         otp.issue(u, OtpPurpose.ADMIN_LOGIN);
@@ -135,8 +165,10 @@ public class AuthService {
                 "Admin login OTP requested for " + u.getEmail());
     }
 
-    /** Step 2: verify the ROOT second-factor code and issue session cookies. */
-    @Transactional
+    /**
+     * Step 2: verify the ROOT second-factor code and issue session cookies. Not
+     * {@code @Transactional}, for the same reason as {@link #verifyLoginOtp}.
+     */
     public AuthResponse adminVerify(String email, String code, HttpServletResponse response) {
         User u = users.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code"));
@@ -229,7 +261,7 @@ public class AuthService {
 
     private void issueCookies(User u, HttpServletResponse response) {
         String access = jwt.generateAccessToken(u.getId(), u.getEmail(), u.getRole(),
-                u.getRealEstateFirmId(), u.getFirmBranchId());
+                u.getRealEstateFirmId(), u.getFirmBranchId(), u.getTokenVersion());
         String rawRefresh = newRandomToken();
         RefreshToken rt = new RefreshToken();
         rt.setUserId(u.getId());
@@ -276,5 +308,13 @@ public class AuthService {
     private AuthResponse toAuthResponse(User u) {
         return new AuthResponse(u.getId(), u.getEmail(), u.getFullName(), u.getRole(),
                 u.getRealEstateFirmId(), u.getFirmBranchId());
+    }
+
+    /** An unauthenticated caller chooses this value; an email address is at most 254 characters. */
+    private static final int MAX_AUDIT_EMAIL = 255;
+
+    private static String boundedEmail(String email) {
+        if (email == null) return null;
+        return email.length() <= MAX_AUDIT_EMAIL ? email : email.substring(0, MAX_AUDIT_EMAIL);
     }
 }

@@ -508,6 +508,50 @@ class DealLifecycleServiceTest {
                 .isInstanceOf(BadRequestException.class).hasMessageContaining("reason is required");
     }
 
+    /**
+     * C-05. A force-close from anywhere but VERIFIED let UNCLOSE land a never-signed-off deal in
+     * VERIFIED. The override follows the same order as everyone else.
+     */
+    @Test
+    void overrideCannotCloseADealThatWasNeverVerified() {
+        for (DealStatus s : EnumSet.of(DealStatus.NEW, DealStatus.REVIEW, DealStatus.ON_HOLD)) {
+            Deal d = dealIn(s);
+            assertThatThrownBy(() -> lifecycle.override(d, seniorManager, DealStatus.CLOSED, FIRM_A, "abandoned"))
+                    .as("override %s -> CLOSED", s)
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("Only a verified deal can be closed");
+            assertThat(d.getStatus()).isEqualTo(s);
+        }
+    }
+
+    /** C-07. Who may add documents, by status; scope is assertCanRead's and tested there. */
+    @Test
+    void documentUploadFollowsItsOwnStatusRule() {
+        for (DealStatus s : DealStatus.values()) {
+            boolean open = EnumSet.of(DealStatus.NEW, DealStatus.REVIEW, DealStatus.ON_HOLD).contains(s);
+            for (Role r : EnumSet.of(Role.ADMIN, Role.SALES_MANAGER, Role.AML_COMPLIANCE_OFFICER, Role.SENIOR_MANAGER)) {
+                assertThat(DealLifecycleService.canUploadDocuments(s, r)).as("%s in %s", r, s).isEqualTo(open);
+            }
+            for (Role r : EnumSet.of(Role.AGENT, Role.AGENT_PA)) {
+                assertThat(DealLifecycleService.canUploadDocuments(s, r)).as("%s in %s", r, s)
+                        .isEqualTo(s == DealStatus.NEW);
+            }
+            for (Role r : EnumSet.of(Role.ROOT, Role.AUDIT, Role.FINANCE)) {
+                assertThat(DealLifecycleService.canUploadDocuments(s, r)).as("%s in %s", r, s).isFalse();
+            }
+        }
+    }
+
+    @Test
+    void overrideMayStillCloseAVerifiedDeal() {
+        Deal d = dealIn(DealStatus.VERIFIED);
+
+        DealStatus previous = lifecycle.override(d, seniorManager, DealStatus.CLOSED, FIRM_A, "sale settled");
+
+        assertThat(previous).isEqualTo(DealStatus.VERIFIED);
+        assertThat(d.getStatus()).isEqualTo(DealStatus.CLOSED);
+    }
+
     /* ---------- read scope is unchanged by this rework ---------- */
 
     @Test
@@ -544,6 +588,43 @@ class DealLifecycleServiceTest {
 
         assertThatThrownBy(() -> lifecycle.assertCanRead(savedDealIn(DealStatus.NEW, 100L), otherBroker, FIRM_A))
                 .isInstanceOf(ForbiddenException.class).hasMessageContaining("Not your deal");
+    }
+
+    /**
+     * NV-07. Authorship and grants are never revoked when a user is moved, so the deal's firm is
+     * checked as well: an agent moved to firm B loses firm A's deals, their own included.
+     */
+    @Test
+    void anAgentMovedToAnotherFirmLosesTheirOldDeals() {
+        Deal d = dealIn(DealStatus.NEW);
+        UserPrincipal movedBroker = new UserPrincipal(BROKER_ID, "broker@b.com", null, Role.AGENT, FIRM_B, 30L, true);
+
+        assertThatThrownBy(() -> lifecycle.assertCanRead(d, movedBroker, FIRM_A))
+                .isInstanceOf(ForbiddenException.class).hasMessageContaining("Not your firm's deal");
+        assertThatThrownBy(() -> lifecycle.assertEditable(d, movedBroker, FIRM_A))
+                .isInstanceOf(ForbiddenException.class).hasMessageContaining("Not your firm's deal");
+    }
+
+    @Test
+    void aGrantDoesNotFollowAnAgentToAnotherFirm() {
+        Deal d = savedDealIn(DealStatus.NEW, 99L);
+        UserPrincipal movedPa = new UserPrincipal(8L, "pa@b.com", null, Role.AGENT_PA, FIRM_B, 30L, true);
+        when(dealUsers.existsByDealIdAndUserId(99L, movedPa.id())).thenReturn(true);
+
+        assertThatThrownBy(() -> lifecycle.assertCanRead(d, movedPa, FIRM_A))
+                .isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> lifecycle.assertEditable(d, movedPa, FIRM_A))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    /** A move between branches of the same firm keeps the agent's deals, as before. */
+    @Test
+    void anAgentMovedWithinTheFirmKeepsTheirDeals() {
+        Deal d = dealIn(DealStatus.NEW);
+        UserPrincipal movedBroker = new UserPrincipal(BROKER_ID, "broker@a.com", null, Role.AGENT, FIRM_A, 11L, true);
+
+        assertThatCode(() -> lifecycle.assertCanRead(d, movedBroker, FIRM_A)).doesNotThrowAnyException();
+        assertThatCode(() -> lifecycle.assertEditable(d, movedBroker, FIRM_A)).doesNotThrowAnyException();
     }
 
     @Test

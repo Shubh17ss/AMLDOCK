@@ -47,3 +47,10 @@ instructions.md
 perf/
 CLAUDE.md
 scale.txt
+
+
+#security testing
+security-audit
+skills-lock.json
+.agents
+security-audit-opencode

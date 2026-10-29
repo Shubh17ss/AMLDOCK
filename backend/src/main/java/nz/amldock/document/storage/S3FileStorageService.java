@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.time.Duration;
+import java.util.OptionalLong;
 
 @Service
 public class S3FileStorageService implements FileStorageService {
@@ -37,10 +38,10 @@ public class S3FileStorageService implements FileStorageService {
     }
 
     @Override
-    public String presignUpload(String key, String contentType, Duration ttl) {
+    public String presignIncomingUpload(String key, String contentType, Duration ttl) {
         PutObjectRequest put = PutObjectRequest.builder()
                 .bucket(bucket)
-                .key(key)
+                .key(FileStorageService.incomingKey(key))
                 .contentType(contentType)
                 .build();
         PutObjectPresignRequest req = PutObjectPresignRequest.builder()
@@ -48,6 +49,41 @@ public class S3FileStorageService implements FileStorageService {
                 .putObjectRequest(put)
                 .build();
         return presigner.presignPutObject(req).url().toString();
+    }
+
+    @Override
+    public OptionalLong promoteUpload(String key) {
+        String incoming = FileStorageService.incomingKey(key);
+        boolean staged;
+        try {
+            copy(incoming, key);
+            staged = true;
+        } catch (NoSuchKeyException e) {
+            staged = false;
+        } catch (S3Exception e) {
+            if (e.statusCode() != 404) throw e;
+            staged = false;
+        }
+        // Size of what now sits at the final key: whatever the copy took, even if the uploader
+        // PUT again between any head we might have made and the copy.
+        OptionalLong size = headSize(key);
+        if (staged) {
+            delete(incoming);
+        }
+        return size;
+    }
+
+    /** One HEAD: the object's size, or empty if it isn't there. */
+    private OptionalLong headSize(String key) {
+        try {
+            return OptionalLong.of(client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucket).key(key).build()).contentLength());
+        } catch (NoSuchKeyException e) {
+            return OptionalLong.empty();
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) return OptionalLong.empty();
+            throw e;
+        }
     }
 
     @Override

@@ -1,6 +1,7 @@
 package nz.amldock.email;
 
 import nz.amldock.training.TrainingCourse;
+import nz.amldock.training.TrainingLinks;
 import nz.amldock.training.TrainingSession;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -59,7 +60,7 @@ public class TrainingAssignmentEmail {
                 session.getLocation(),
                 date,
                 minutes,
-                session.getUrl() == null ? "" : "Link:     " + session.getUrl() + "\n",
+                !TrainingLinks.isHttpUrl(session.getUrl()) ? "" : "Link:     " + session.getUrl().trim() + "\n",
                 session.getDescription() == null ? "" : "\n" + session.getDescription() + "\n",
                 link);
 
@@ -95,7 +96,8 @@ public class TrainingAssignmentEmail {
                 escape(session.getLocation()),
                 escape(date),
                 escape(minutes),
-                session.getUrl() == null ? "" : ("""
+                // Rows saved before the http(s) rule are left out rather than linked (NV-11).
+                !TrainingLinks.isHttpUrl(session.getUrl()) ? "" : ("""
                     <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Link</td><td><a href="%s">%s</a></td></tr>"""
                         .formatted(escape(session.getUrl()), escape(session.getUrl()))),
                 session.getDescription() == null ? "" : ("""

@@ -28,13 +28,16 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final AuditReadOnlyFilter auditReadOnlyFilter;
+    private final LoginRateLimitFilter loginRateLimitFilter;
 
     @Value("${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://amldock.com,https://dev.amldock.com}")
     private String allowedOrigins;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtFilter, AuditReadOnlyFilter auditReadOnlyFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter, AuditReadOnlyFilter auditReadOnlyFilter,
+                          LoginRateLimitFilter loginRateLimitFilter) {
         this.jwtFilter = jwtFilter;
         this.auditReadOnlyFilter = auditReadOnlyFilter;
+        this.loginRateLimitFilter = loginRateLimitFilter;
     }
 
     @Bean
@@ -78,6 +81,8 @@ public class SecurityConfig {
                         .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER", "AUDIT")
                         .anyRequest().authenticated()
                 )
+                // Throttle the public sign-in endpoints before anything else touches the request.
+                .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 // After the JWT filter, so the principal's role is resolved by the time it runs.
                 .addFilterAfter(auditReadOnlyFilter, JwtAuthenticationFilter.class);

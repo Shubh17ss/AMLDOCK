@@ -86,8 +86,11 @@ const CARD_MIN_HEIGHT = 62;
  *                  deal. Everyone else reads the same workings without the controls.
  * @param onSelectNode opens the owner a factor or gap belongs to, so a gap is one click from
  *                     the field that fills it.
+ * @param onOpenDeal   opens the deal's own drawer, for a gap that belongs to no owner (tenure,
+ *                     face to face, foreign exposure). Those are answered on its Details tab, so
+ *                     they get the same one click as an owner's gap.
  */
-export function RiskPanel({ dealId, canDecide = false, onSelectNode }) {
+export function RiskPanel({ dealId, canDecide = false, onSelectNode, onOpenDeal }) {
   const qc = useQueryClient();
   const { showToast } = useToast();
   const [override, setOverride] = useState(null);   // the band being set, or null
@@ -319,7 +322,10 @@ export function RiskPanel({ dealId, canDecide = false, onSelectNode }) {
               label={g.label}
               owner={ownerOf(g)}
               icon={<ErrorIcon sx={{ fontSize: '1.15rem', color: tokens.rejected }} />}
-              onOpen={g.nodeId && onSelectNode ? () => onSelectNode(g.nodeId) : undefined}
+              // An owner's gap opens that owner; the deal's own opens the deal.
+              onOpen={g.nodeId
+                ? (onSelectNode ? () => onSelectNode(g.nodeId) : undefined)
+                : onOpenDeal}
             />
           ))}
         </Section>

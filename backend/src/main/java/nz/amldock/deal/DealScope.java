@@ -18,7 +18,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
  * A second transcription of it would be a second thing to keep right.
  *
  * @param creatorId set for agents: deals they created, plus any they have been added to
- * @param firmId    deals on any branch of this firm
+ * @param firmId    deals on any branch of this firm (for agents, their current firm)
  * @param branchId  deals on this branch
  */
 public record DealScope(Long creatorId, Long firmId, Long branchId) {
@@ -32,8 +32,12 @@ public record DealScope(Long creatorId, Long firmId, Long branchId) {
         Long firm = firmIdFilter;
         Long branch = branchIdFilter;
         switch (actor.role()) {
-            // Their own deals plus any they have been added to (deal_user).
-            case AGENT, AGENT_PA -> creator = actor.id();
+            // Their own deals plus any they have been added to (deal_user), within the firm they
+            // work for now. Moving to another firm leaves the old firm's deals behind (NV-07).
+            case AGENT, AGENT_PA -> {
+                creator = actor.id();
+                firm = actor.realEstateFirmId();
+            }
             case ADMIN, SALES_MANAGER -> branch = actor.firmBranchId();
             case AML_COMPLIANCE_OFFICER, SENIOR_MANAGER -> firm = actor.realEstateFirmId();
             // Both see every firm, so the caller's filters stand as given.

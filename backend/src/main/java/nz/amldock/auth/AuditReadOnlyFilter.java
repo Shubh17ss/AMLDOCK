@@ -22,13 +22,23 @@ import java.util.Set;
  * may not issue a state-changing request to the API, whatever any annotation says.
  *
  * Runs after {@link JwtAuthenticationFilter}, so the principal is resolved by the time it reads
- * the role. {@code /api/auth/**} is exempt because refresh and logout are POSTs the session
- * depends on — they change the caller's own token, not any record.
+ * the role.
+ *
+ * <p>Fails closed: a read-only principal is refused every non-safe method on every path. The path
+ * is consulted only to exempt the sign-in, refresh and logout endpoints (POSTs the session depends
+ * on; they change the caller's own token, not any record), and it is the decoded, normalised servlet path, compared
+ * exactly. A raw-URI prefix test used to decide this, and {@code /%61pi/...} slipped past it while
+ * Spring MVC still routed it to {@code /api/...}. Now an encoding trick can only over-block.
  */
 @Component
 public class AuditReadOnlyFilter extends OncePerRequestFilter {
 
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
+    /** Session endpoints: they change the caller's own sign-in, never a record. Matched exactly. */
+    private static final Set<String> EXEMPT_PATHS = Set.of(
+            "/api/auth/otp/request", "/api/auth/otp/verify",
+            "/api/auth/admin/login", "/api/auth/admin/verify",
+            "/api/auth/refresh", "/api/auth/logout");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -44,12 +54,12 @@ public class AuditReadOnlyFilter extends OncePerRequestFilter {
     private boolean isBlocked(HttpServletRequest request) {
         if (SAFE_METHODS.contains(request.getMethod())) return false;
 
-        String path = request.getRequestURI();
-        if (!path.startsWith("/api/") || path.startsWith("/api/auth/")) return false;
-
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth != null
+        boolean readOnly = auth != null
                 && auth.getPrincipal() instanceof UserPrincipal principal
                 && principal.role().isReadOnly();
+        if (!readOnly) return false;
+
+        return !EXEMPT_PATHS.contains(request.getServletPath());
     }
 }

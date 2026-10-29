@@ -14,9 +14,12 @@ import java.math.BigDecimal;
  * <p>Consequence worth knowing: null cannot clear a field. String fields go through
  * DealService.blankToNull, so an explicit {@code ""} is how the form clears one. That is why
  * foreignExposureCountry uses a literal {@code "NONE"} sentinel rather than null.
+ *
+ * <p>No branch: a deal's branch is decided once, at creation, where it is checked against the
+ * creator's scope. Accepting it here let an editor move a deal onto any firm's branch (C-06).
+ * A client that still sends {@code firmBranchId} has it ignored.
  */
 public record UpdateDealRequest(
-        Long firmBranchId,
         TransactionType transactionType,
         BigDecimal transactionValue,
         String pocName,

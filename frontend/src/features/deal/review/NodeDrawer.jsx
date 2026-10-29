@@ -34,7 +34,7 @@ const TABS = [
  * nothing — each tab saves its own work with its own button.
  */
 export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onRequestDelete,
-                            readOnly = false, version = null }) {
+                            readOnly = false, canUpload, version = null }) {
   const [tab, setTab] = useState('details');
   const { showToast } = useToast();
 
@@ -217,6 +217,7 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
         {node && tab !== 'verification' && (
           <NodeEditorPane
             readOnly={readOnly}
+            canUpload={canUpload}
             tree={tree}
             selectedNodeId={node.id}
             useTree={useTree}

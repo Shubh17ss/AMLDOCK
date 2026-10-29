@@ -30,6 +30,12 @@ export function NodeEditorPane({
    */
   readOnly = false,
   /**
+   * Whether this viewer may add evidence. Separate from readOnly because the upload rule is wider
+   * than the edit rule (DealLifecycleService.canUploadDocuments): branch staff add documents to a
+   * deal they cannot otherwise change. Defaults to !readOnly.
+   */
+  canUpload,
+  /**
    * Set when the screen is showing a past version of the deal: `{ dealId, versionNo, documents }`.
    * Everything document-shaped below then reads from the snapshot rather than from the live deal,
    * so a version does not quietly show files added — or hide files deleted — since it was signed
@@ -254,7 +260,7 @@ export function NodeEditorPane({
             ownershipNodeId={selected.id}
             allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
             compact
-            canUpload={!readOnly}
+            canUpload={canUpload ?? !readOnly}
             frozenDocuments={versionNodeDocs}
             title={`Documents on ${selected.displayName}`}
             onViewDocument={setViewingDoc}

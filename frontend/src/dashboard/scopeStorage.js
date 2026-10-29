@@ -4,7 +4,10 @@
 // importing the provider — DashboardScope consumes AuthContext, so importing it back would be a
 // cycle. This module depends on nothing, which is what lets both sides use it.
 
-const keyFor = (user) => `amldock.dashScope.${user?.id ?? user?.email ?? 'anon'}`;
+// `userId`, the field the session actually carries (AuthResponse.userId). This read `user.id`,
+// which is always undefined, so every key silently fell back to the email, and an account
+// re-created with the same address inherited the deleted one's firm and branch.
+const keyFor = (user) => `amldock.dashScope.${user?.userId ?? user?.email ?? 'anon'}`;
 
 export function readSavedScope(user) {
   try {

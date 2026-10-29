@@ -67,9 +67,29 @@ export function parseUsersCsv(text) {
   });
 }
 
-function escapeCsv(value) {
-  const s = String(value ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+// Text a user typed (an IFT listing address, a reference) must never run as a formula in the
+// spreadsheet of whoever opens the export. Same three rules as the server's owners export
+// (backend IndividualCsv.escape):
+//  1. A formula character (= + - @) right after a separator (, ; | tab, line break, then optional
+//     spaces) gets an apostrophe. Otherwise "x;=HYPERLINK(...)" splits into a live formula in a
+//     spreadsheet that separates on ';' (security scan F10).
+//  2. A cell that would open as a formula (leading = + - @, even after spaces, or a leading tab or
+//     CR) gets an apostrophe, so it opens as text (C-14).
+//  3. Every cell is quoted, so no separator inside a value can split it.
+// A plain number, even a negative one or one already formatted as a string (amounts arrive via
+// toFixed), cannot be a formula and must stay a number, so rules 1–2 skip it. It is still quoted,
+// and spreadsheets read a quoted plain number as a number.
+const AFTER_SEPARATOR = /([,;\t|\r\n]\s*)([=+\-@])/g;
+const FORMULA_LEAD = /^[\t\r]|^\s*[=+\-@]/;
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
+
+export function escapeCsv(value) {
+  let s = String(value ?? '');
+  if (!PLAIN_NUMBER.test(s)) {
+    s = s.replace(AFTER_SEPARATOR, "$1'$2");
+    if (FORMULA_LEAD.test(s)) s = `'${s}`;
+  }
+  return `"${s.replace(/"/g, '""')}"`;
 }
 
 /** Build a CSV string from a header array and an array of row arrays. */

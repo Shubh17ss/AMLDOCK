@@ -51,6 +51,13 @@ class EmailConfigTest {
                 .isInstanceOf(LoggingEmailService.class);
     }
 
+    /** Bodies carry sign-in codes, so the logging fallback keeps them out of the logs by default. */
+    @Test
+    void theLoggingFallbackDoesNotLogBodiesByDefault() {
+        EmailService s = emailService(false, "ses", sesClient, mailSender);
+        assertThat(((LoggingEmailService) s).logsBodies()).isFalse();
+    }
+
     @Test
     void sesWithoutAClientLogsRatherThanFailing() {
         // sesV2Client is conditional on this same property, so "ses" with no client means the
@@ -78,7 +85,7 @@ class EmailConfigTest {
     private EmailService emailService(boolean enabled, String transport,
                                       SesV2Client ses, JavaMailSender mail) {
         return config.emailService(enabled, transport,
-                "admin@amldock.com", "AMLDOCK", "", "",
+                "admin@amldock.com", "AMLDOCK", "", "", false,
                 provider(ses), provider(mail));
     }
 

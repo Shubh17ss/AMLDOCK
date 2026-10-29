@@ -217,11 +217,18 @@ public class AuditService {
         throw new ForbiddenException("Not authenticated");
     }
 
-    private String resolveIp(HttpServletRequest req) {
-        String fwd = req.getHeader("X-Forwarded-For");
-        if (fwd != null && !fwd.isBlank()) {
-            return fwd.split(",")[0].trim();
-        }
-        return req.getRemoteAddr();
+    /** audit_log.ip_address is VARCHAR(45), the longest IPv6 text form. */
+    static final int MAX_IP_LENGTH = 45;
+
+    /**
+     * The caller's address as the server established it. Never the raw X-Forwarded-For header:
+     * any client can send that, so it let callers choose the IP on their own audit rows, and a
+     * value over 45 characters made the INSERT fail and the row vanish (item 11). Behind a proxy,
+     * {@code TrustedProxyConfig} has already set getRemoteAddr() from the part a trusted proxy wrote.
+     */
+    static String resolveIp(HttpServletRequest req) {
+        String ip = req.getRemoteAddr();
+        if (ip == null) return null;
+        return ip.length() <= MAX_IP_LENGTH ? ip : ip.substring(0, MAX_IP_LENGTH);
     }
 }

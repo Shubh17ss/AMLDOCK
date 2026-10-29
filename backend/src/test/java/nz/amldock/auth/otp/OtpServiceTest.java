@@ -1,5 +1,6 @@
 package nz.amldock.auth.otp;
 
+import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.email.EmailMessage;
 import nz.amldock.email.EmailService;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -56,7 +58,7 @@ class OtpServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new OtpService(codes, attempts, encoder, email, 10, 5);
+        service = new OtpService(codes, attempts, encoder, email, 10, 5, 5, 15, 10, 60);
         user = new User();
         ReflectionTestUtils.setField(user, "id", USER_ID);
         user.setEmail("agent@firm.nz");
@@ -83,25 +85,27 @@ class OtpServiceTest {
     /* ---------- the cap ---------- */
 
     /**
-     * The regression test for the whole bug. Before the fix nothing was recorded at all, because
-     * the throw took the increment with it.
+     * The attempt is taken from the budget before the hash is checked, in the recorder's own
+     * transaction, so the caller's rollback cannot undo it and parallel guesses cannot share it.
      */
     @Test
-    void aWrongCodeRecordsTheAttemptThroughTheRecorder() {
+    void aWrongCodeSpendsAReservedAttempt() {
         OtpCode otp = existing("123456", 0);
+        when(attempts.reserveAttempt(otp.getId(), 5)).thenReturn(true);
 
         assertThatThrownBy(() -> service.verify(user, "000000", OtpPurpose.LOGIN))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Invalid or expired code");
 
-        // Recorded out-of-band, in a transaction the caller's rollback cannot reach.
-        verify(attempts).recordFailedAttempt(otp.getId());
+        verify(attempts).reserveAttempt(otp.getId(), 5);
+        verify(attempts, never()).consume(any());
         assertThat(otp.getConsumedAt()).as("a wrong guess does not burn the code").isNull();
     }
 
     @Test
-    void aCodeThatHasRunOutOfAttemptsIsBurnedAndRefused() {
+    void aCodeWithNoAttemptLeftIsBurnedAndRefused() {
         OtpCode otp = existing("123456", 5);
+        when(attempts.reserveAttempt(otp.getId(), 5)).thenReturn(false);
 
         assertThatThrownBy(() -> service.verify(user, "123456", OtpPurpose.LOGIN))
                 .isInstanceOf(BadRequestException.class)
@@ -110,7 +114,24 @@ class OtpServiceTest {
         verify(attempts).burn(otp.getId());
         // Even the *right* code is refused once the cap is reached — otherwise the limit would only
         // slow an attacker down rather than stop them.
-        verify(attempts, never()).recordFailedAttempt(any());
+        verify(attempts, never()).consume(any());
+    }
+
+    /**
+     * NV-03: asking for a new code used to bring five new guesses. The budget is now the
+     * account's, so a fresh code with zero attempts is still refused once it is spent.
+     */
+    @Test
+    void aFreshCodeIsRefusedOnceTheAccountsFailureBudgetIsSpent() {
+        OtpCode otp = existing("123456", 0);
+        when(codes.sumAttemptsSince(any(), any(), any())).thenReturn(10L);
+
+        assertThatThrownBy(() -> service.verify(user, "123456", OtpPurpose.LOGIN))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Too many attempts");
+
+        verify(attempts).burn(otp.getId());
+        verify(attempts, never()).reserveAttempt(any(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     /* ---------- the happy path ---------- */
@@ -118,12 +139,26 @@ class OtpServiceTest {
     @Test
     void theRightCodeIsAcceptedAndConsumed() {
         OtpCode otp = existing("123456", 0);
+        when(attempts.reserveAttempt(otp.getId(), 5)).thenReturn(true);
+        when(attempts.consume(otp.getId())).thenReturn(true);
 
         OtpCode consumed = service.verify(user, "123456", OtpPurpose.LOGIN);
 
         assertThat(consumed.getConsumedAt()).isNotNull();
-        verify(attempts, never()).recordFailedAttempt(any());
+        verify(attempts).consume(otp.getId());
         assertThat(otp.getConsumedAt()).as("single use — the row is spent").isNotNull();
+    }
+
+    /** Two requests with the right code at once: only the one that spends the row signs in. */
+    @Test
+    void theRightCodeLosesToAConcurrentUse() {
+        OtpCode otp = existing("123456", 0);
+        when(attempts.reserveAttempt(otp.getId(), 5)).thenReturn(true);
+        when(attempts.consume(otp.getId())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.verify(user, "123456", OtpPurpose.LOGIN))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Invalid or expired code");
     }
 
     @Test
@@ -136,7 +171,7 @@ class OtpServiceTest {
 
         // Nothing to count: an expired code cannot be guessed into working, so an attempt against
         // it says nothing about anybody's intent.
-        verify(attempts, never()).recordFailedAttempt(any());
+        verify(attempts, never()).reserveAttempt(any(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     @Test
@@ -199,5 +234,24 @@ class OtpServiceTest {
         assertThatCode(() -> verify(codes, never())
                 .consumeOutstanding(any(), org.mockito.ArgumentMatchers.eq(OtpPurpose.LOGIN), any()))
                 .doesNotThrowAnyException();
+    }
+
+    /* ---------- the request throttle ---------- */
+
+    /**
+     * NV-03: every request killed the code the user was typing and emailed them, with no limit.
+     * The sixth request inside the window is refused before anything is consumed or sent.
+     */
+    @Test
+    void theSixthCodeInsideTheWindowIsRefused() {
+        when(codes.countByUserIdAndPurposeAndCreatedAtAfter(any(), any(), any())).thenReturn(5L);
+
+        assertThatThrownBy(() -> service.issue(user, OtpPurpose.LOGIN))
+                .isInstanceOf(ApiException.class)
+                .satisfies(ex -> assertThat(((ApiException) ex).getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+
+        verify(codes, never()).consumeOutstanding(any(), any(), any());
+        verify(codes, never()).save(any());
+        verify(email, never()).send(any());
     }
 }

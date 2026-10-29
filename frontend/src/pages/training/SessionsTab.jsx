@@ -20,6 +20,7 @@ import { useToast } from '../../components/ToastProvider.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { canDelete, canManageTraining, roleLabel } from '../../auth/roles.js';
 import { tokens, fonts } from '../../theme/theme.js';
+import { safeHttpUrl } from '../../utils/formatters.js';
 
 const dateFmt = (iso) =>
   iso ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -199,8 +200,8 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
                   </Typography>
                 )}
 
-                {detail.url && (
-                  <Link href={detail.url} target="_blank" rel="noopener"
+                {safeHttpUrl(detail.url) && (
+                  <Link href={safeHttpUrl(detail.url)} target="_blank" rel="noopener noreferrer"
                         sx={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>
                     {detail.url}
                   </Link>

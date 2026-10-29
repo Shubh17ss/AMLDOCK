@@ -371,7 +371,7 @@ public class TrainingCourseService {
         f.setS3Key(buildKey(c.getRealEstateFirmId(), c.getId(), req.filename()));
         TrainingCourseFile saved = files.save(f);
 
-        String url = storage.presignUpload(saved.getS3Key(), req.contentType(), uploadTtl);
+        String url = storage.presignIncomingUpload(saved.getS3Key(), req.contentType(), uploadTtl);
         return new UploadUrlResponse(saved.getId(), saved.getS3Key(), url,
                 req.contentType(), (int) uploadTtl.toSeconds());
     }
@@ -386,10 +386,10 @@ public class TrainingCourseService {
         if (f.getDocumentStatus() == DocumentStatus.ACTIVE) {
             return toFileDto(f); // idempotent
         }
-        if (!storage.exists(f.getS3Key())) {
-            throw new BadRequestException("Object not found in S3 yet — was the upload successful?");
-        }
-        long actualSize = storage.size(f.getS3Key());
+        // Moves the bytes off the key the presigned URL writes to, so that URL can no longer
+        // change what was confirmed (F7).
+        long actualSize = storage.promoteUpload(f.getS3Key()).orElseThrow(
+                () -> new BadRequestException("Object not found in S3 yet — was the upload successful?"));
         if (f.getSizeBytes() == null || actualSize != f.getSizeBytes()) {
             f.setSizeBytes(actualSize);
         }
@@ -403,10 +403,9 @@ public class TrainingCourseService {
     // Not readOnly — writes a DOCUMENT_DOWNLOADED audit row.
     @Transactional
     public DownloadUrlResponse presignDownload(Long courseId, Long fileId) {
-        TrainingCourse c = mustLoad(courseId);
         UserPrincipal actor = TrainingScope.currentPrincipal();
-        TrainingScope.assertSameFirm(actor, c.getRealEstateFirmId(), "course");
-        TrainingCourseFile f = mustLoadFile(courseId, fileId);
+        TrainingCourse c = courses.findById(courseId).orElse(null);
+        TrainingCourseFile f = mustLoadReadableFile(c, courseId, fileId, actor);
 
         if (f.getDocumentStatus() != DocumentStatus.ACTIVE || f.getS3Key() == null) {
             throw new NotFoundException("That file has not finished uploading");
@@ -436,6 +435,28 @@ public class TrainingCourseService {
     private TrainingCourse mustLoad(Long id) {
         return courses.findById(id)
                 .orElseThrow(() -> new NotFoundException("Course " + id + " not found"));
+    }
+
+    /**
+     * A course file the actor may read: training managers and the auditor (the whole register,
+     * as in {@link #list}) or someone assigned to the course. Everyone else, and every id that
+     * doesn't resolve (no course, another firm's course, no file, a file from another course),
+     * gets the same 404 with the same message. Ids are sequential, and different answers would
+     * map out which pairs exist (security scan F8).
+     */
+    private TrainingCourseFile mustLoadReadableFile(TrainingCourse c, Long courseId, Long fileId,
+                                                    UserPrincipal actor) {
+        NotFoundException notFound = new NotFoundException("File not found");
+        if (c == null) throw notFound;
+        boolean sameFirm = actor.role().seesAllFirms()
+                || Objects.equals(actor.realEstateFirmId(), c.getRealEstateFirmId());
+        if (!sameFirm) throw notFound;
+        boolean mayRead = TrainingSessionService.canViewWholeRegister(actor.role())
+                || assignees.findByTrainingCourseIdAndUserId(c.getId(), actor.id()).isPresent();
+        if (!mayRead) throw notFound;
+        TrainingCourseFile f = files.findById(fileId).orElse(null);
+        if (f == null || !courseId.equals(f.getTrainingCourseId())) throw notFound;
+        return f;
     }
 
     private TrainingCourseFile mustLoadFile(Long courseId, Long fileId) {
