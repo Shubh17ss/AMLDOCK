@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableContainer,
+  Alert, Box, Button, Paper, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Tooltip, Typography,
 } from '@mui/material';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { listDealVersions } from '../api/dealVersions.js';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
-import { AssuranceChip, VersionChip } from '../features/deal/assurance/AssuranceDialog.jsx';
+import { VersionChip } from '../features/deal/assurance/AssuranceDialog.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { formatDateTimeNumeric } from '../utils/formatters.js';
 
@@ -62,8 +62,6 @@ export function DealVersionsPage() {
                 <TableCell>Verified by</TableCell>
                 <TableCell>Verified at</TableCell>
                 <TableCell>Note</TableCell>
-                <TableCell>State</TableCell>
-                <TableCell>Assurance</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -94,27 +92,11 @@ export function DealVersionsPage() {
                       </Box>
                     </Tooltip>
                   </TableCell>
-                  <TableCell>
-                    {v.reopenedAt ? (
-                      <Tooltip
-                        title={[
-                          v.reopenedByName ? `Reopened by ${v.reopenedByName}` : 'Reopened',
-                          formatDateTimeNumeric(v.reopenedAt),
-                          v.reopenNote,
-                        ].filter(Boolean).join(' · ')}
-                      >
-                        <Chip size="small" label="Superseded" variant="outlined" sx={{ color: tokens.muted }} />
-                      </Tooltip>
-                    ) : (
-                      <Chip size="small" label="Current" color="info" />
-                    )}
-                  </TableCell>
-                  <TableCell><AssuranceChip status={v.assuranceStatus} /></TableCell>
                 </TableRow>
               ))}
               {versions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 5, color: tokens.muted }}>
+                  <TableCell colSpan={4} align="center" sx={{ py: 5, color: tokens.muted }}>
                     This deal has not been verified yet, so it has no versions.
                   </TableCell>
                 </TableRow>

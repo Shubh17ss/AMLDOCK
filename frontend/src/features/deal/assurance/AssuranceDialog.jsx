@@ -276,15 +276,18 @@ function IssueList({ issues, onRemove }) {
   );
 }
 
-export function VersionChip({ no }) {
-  return (
+/** `v3`, in the ledger face. With `onClick` it becomes a button that opens that version. */
+export function VersionChip({ no, onClick }) {
+  const chip = (
     <Chip
       size="small"
       label={`v${no}`}
       variant="outlined"
+      onClick={onClick}
       sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', height: 22 }}
     />
   );
+  return onClick ? <Tooltip title={`Open v${no}`}>{chip}</Tooltip> : chip;
 }
 
 export function AssuranceChip({ status }) {
