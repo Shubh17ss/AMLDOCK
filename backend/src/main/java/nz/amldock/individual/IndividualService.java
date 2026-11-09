@@ -136,7 +136,8 @@ public class IndividualService {
                     person == null ? null : person.getCountryOfResidence(),
                     n.getPersonRoles(),
                     n.getVerificationStatus(),
-                    n.getVerifiedAt());
+                    n.getVerifiedAt(),
+                    n.getVerificationNotes());
         }).filter(java.util.Objects::nonNull).toList();
     }
 

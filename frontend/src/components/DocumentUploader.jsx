@@ -268,7 +268,7 @@ export function DocumentUploader({
                 </TableCell>
                 <TableCell><Chip size="small" label={documentTypeLabel(d.documentType)} /></TableCell>
                 <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
-                <TableCell>{d.uploadedByEmail ?? '—'}</TableCell>
+                <TableCell>{d.uploadedByName || d.uploadedByEmail || '—'}</TableCell>
                 <TableCell>{formatDateTime(d.createdAt) ?? '—'}</TableCell>
                 <TableCell align="right">
                   {onViewDocument && (

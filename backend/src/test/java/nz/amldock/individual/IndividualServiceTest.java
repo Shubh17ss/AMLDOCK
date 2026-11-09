@@ -251,7 +251,7 @@ class IndividualServiceTest {
         return new DocumentDto(99L, "passport-front.jpg", "image/jpeg", 2_100_000L,
                 DocumentType.PASSPORT, DocumentStatus.ACTIVE,
                 DEAL_ID, NODE_ID, PERSON_ID, IdSide.FRONT,
-                3L, "agent@example.com",
+                3L, "agent@example.com", "Agent Smith",
                 OcrStatus.DONE, "textract", null, null, Instant.now(),
                 Instant.now(), Instant.now());
     }

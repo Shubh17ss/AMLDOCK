@@ -9,7 +9,6 @@ import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 import { DocumentViewerDialog } from '../../components/DocumentViewerDialog.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
-import LinkOffIcon from '@mui/icons-material/LinkOff';
 
 /**
  * Editor for a selected ownership node. Lets the user:
@@ -132,39 +131,23 @@ export function NodeEditorPane({
       // The deal is refetched too — useOwnershipTree invalidates it on every node write, since
       // the answers on this form feed its risk rating.
       await useTree.updateNode.mutateAsync({ nodeId: selected.id, payload: buildNodePayload(form) });
+      // The share held in the parent rides on the same Update. Only written when it changed, so a
+      // plain details edit costs one request.
+      const percentage = edgeForm.percentage === '' ? null : Number(edgeForm.percentage);
+      if (incomingEdge && percentage !== (incomingEdge.percentage ?? null)) {
+        await useTree.updateEdge.mutateAsync({
+          edgeId: incomingEdge.id,
+          // No role in the payload. updateEdge reads a null role as "leave alone".
+          payload: { percentage },
+        });
+      }
       showToast({ severity: 'success', message: 'Deal updated' });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save');
     }
   };
 
-  const saveEdge = async () => {
-    if (!incomingEdge) return;
-    setError(null);
-    try {
-      await useTree.updateEdge.mutateAsync({
-        edgeId: incomingEdge.id,
-        // No role in the payload. updateEdge reads a null role as "leave alone", so a role
-        // captured before this field went away stays on the edge rather than being cleared by an
-        // unrelated save.
-        payload: {
-          percentage: edgeForm.percentage === '' ? null : Number(edgeForm.percentage),
-        },
-      });
-      showToast({ severity: 'success', message: 'Deal updated' });
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update edge');
-    }
-  };
-
-  const detachFromParent = async () => {
-    if (!incomingEdge) return;
-    try {
-      await useTree.deleteEdge.mutateAsync(incomingEdge.id);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to detach');
-    }
-  };
+  const saving = useTree.updateNode.isPending || useTree.updateEdge.isPending;
 
   // Hands off to the same dialog the row's kebab opens, rather than deleting from here.
   //
@@ -213,20 +196,6 @@ export function NodeEditorPane({
                 value={edgeForm.percentage}
                 onChange={(e) => setEdgeForm((p) => ({ ...p, percentage: e.target.value }))}
                 sx={{ width: 180 }} />
-              {/* Same shape as the Update / Remove pair at the foot of this tab: two equal
-                  buttons filling the row, the destructive one bordered rather than solid. Both
-                  default size, so the heights and the 12px radius match. */}
-              <Stack direction="row" justifyContent="space-between">
-                <Button variant="outlined" color="error" onClick={detachFromParent}
-                  disabled={useTree.deleteEdge.isPending} sx={{ width: '45%' }}>
-                  <LinkOffIcon fontSize="small" sx={{ mr: 1 }} />
-                  Detach from parent
-                </Button>
-                <Button variant="contained" onClick={saveEdge}
-                  disabled={useTree.updateEdge.isPending} sx={{ width: '45%' }}>
-                  Save link
-                </Button>
-              </Stack>
             </>
           )}
 
@@ -239,8 +208,8 @@ export function NodeEditorPane({
                   Remove from structure
                 </Button>
                 <Button variant="contained" onClick={saveDetails}
-                  disabled={useTree.updateNode.isPending} sx={{ width: '45%' }}>
-                  {useTree.updateNode.isPending ? 'Saving…' : 'Update'}
+                  disabled={saving} sx={{ width: '45%' }}>
+                  {saving ? 'Saving…' : 'Update'}
                 </Button>
               </Stack>
             </>

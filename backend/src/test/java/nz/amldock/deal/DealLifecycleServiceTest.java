@@ -98,9 +98,22 @@ class DealLifecycleServiceTest {
         assertThat(d.getStatus()).isEqualTo(DealStatus.NEW);
     }
 
-    /** ON_HOLD's only exit is back to the broker; there is deliberately no resume-to-review. */
+    /** Compliance can resume an on-hold deal straight into review; the broker cannot. */
     @Test
-    void anOnHoldDealCannotGoStraightBackIntoReview() {
+    void aReviewerCanResumeAnOnHoldDealIntoReview() {
+        Deal d = dealIn(DealStatus.ON_HOLD);
+
+        assertThatThrownBy(() -> lifecycle.transition(d, broker, DealAction.RESUME, FIRM_A, "deed arrived"))
+                .isInstanceOf(ForbiddenException.class);
+        assertThat(d.getStatus()).isEqualTo(DealStatus.ON_HOLD);
+
+        lifecycle.transition(d, amlco, DealAction.RESUME, FIRM_A, "Trust deed received");
+        assertThat(d.getStatus()).isEqualTo(DealStatus.REVIEW);
+    }
+
+    /** RESUME is the way back into review from hold; submit and verify still are not. */
+    @Test
+    void anOnHoldDealIsNotSubmittedOrVerifiedDirectly() {
         Deal d = dealIn(DealStatus.ON_HOLD);
 
         assertThatThrownBy(() -> lifecycle.transition(d, broker, DealAction.SUBMIT, FIRM_A, null))
@@ -133,6 +146,7 @@ class DealLifecycleServiceTest {
         return switch (action) {
             case SUBMIT        -> EnumSet.of(DealStatus.NEW);
             case HOLD, VERIFY  -> EnumSet.of(DealStatus.REVIEW);
+            case RESUME        -> EnumSet.of(DealStatus.ON_HOLD);
             case CLOSE, REOPEN -> EnumSet.of(DealStatus.VERIFIED);
             case UNCLOSE       -> EnumSet.of(DealStatus.CLOSED);
             case REVERT        -> EnumSet.of(DealStatus.REVIEW, DealStatus.ON_HOLD);

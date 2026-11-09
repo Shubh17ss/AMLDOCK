@@ -14,6 +14,7 @@ const COLOR = {
   DEAL_CREATED: 'info',
   DEAL_SUBMITTED_FOR_REVIEW: 'primary',
   DEAL_PUT_ON_HOLD: 'warning',
+  DEAL_RESUMED: 'primary',
   DEAL_VERIFIED: 'success',
   DEAL_CLOSED: 'default',
   DEAL_REVERTED: 'warning',

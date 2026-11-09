@@ -30,6 +30,8 @@ public enum AuditAction {
     // throws when an old row is read — V29 and V38 remap the names this set replaced.
     DEAL_SUBMITTED_FOR_REVIEW,
     DEAL_PUT_ON_HOLD,
+    /** An on-hold deal was taken back into review by compliance. */
+    DEAL_RESUMED,
     DEAL_VERIFIED,
     DEAL_CLOSED,
     DEAL_REVERTED,

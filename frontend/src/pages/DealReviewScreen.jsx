@@ -26,6 +26,9 @@ import { CloseDealDialog } from '../features/deal/CloseDealDialog.jsx';
 import { useDealStatusAction } from '../features/deal/useDealStatusAction.js';
 import { TransactionMonitoringView } from '../features/deal/TransactionMonitoringView.jsx';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import { AssuranceDialog } from '../features/deal/assurance/AssuranceDialog.jsx';
+import { formatPropertyAddressShort } from '../data/addressFinderMeta.js';
 import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
@@ -82,6 +85,7 @@ export function DealReviewScreen() {
   // Closing asks a second set of questions, so the status list hands over to its own dialog
   // rather than growing a branch for the one verb that records an outcome as well as a position.
   const [closeOpen, setCloseOpen]           = useState(false);
+  const [assuranceOpen, setAssuranceOpen]   = useState(false);
   const [actionError, setActionError]       = useState(null);
 
   /*
@@ -276,6 +280,13 @@ export function DealReviewScreen() {
   const canDecideRisk = isDealReviewer(user?.role) && canWrite(user?.role) && !snapshot;
 
   const versions = versionsQ.data ?? [];
+  // The version the deal stands on: newest first, and not yet worked past.
+  const currentVersion = versions.find((v) => v.reopenedAt == null) ?? null;
+  // Same gate as the Assurance register's menu; the server only accepts verified or closed deals.
+  const canUpdateAssurance = isDealReviewer(user?.role) && canWrite(user?.role)
+    && !snapshot && currentVersion != null
+    && (liveDeal.status === 'VERIFIED' || liveDeal.status === 'CLOSED');
+  const showVersionLinks = versions.length > 0 && !showingTransactions;
 
   return (
     <Stack spacing={2}>
@@ -288,7 +299,7 @@ export function DealReviewScreen() {
             </Button>
           ) : (
             <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(listPath)} size="small">
-              Back to queue
+              Listing Register
             </Button>
           )}
           <Box sx={{ flexGrow: 1 }} />
@@ -297,34 +308,42 @@ export function DealReviewScreen() {
               whichever tab is open. */}
           <DealStatusChip status={deal.status} />
           <RiskRatingChip rating={deal.riskRating} hideWhenUnset />
-          <Chip label={deal.transactionType} size="small" variant="outlined" />
           {(deal.valuationMin != null || deal.valuationMax != null || deal.transactionValue != null) && (
             <Chip label={`${money.code} ${money.dealRange(deal)}`} size="small" variant="outlined" />
           )}
         </Stack>
 
-        {/* One button. It used to be up to six verbs, and "Verify" beside an ownership tree read
-            as an action on the tree rather than on the deal.
-
-            Transaction monitoring sits beside it because the two are halves of the same idea: this
-            is where the deal goes next, and that is where it has been. Absent until the deal has
-            been verified once — an empty history is not worth a control. */}
-        {(canUpdateStatus || (versions.length > 0 && !showingTransactions)) && (
-          <Stack direction="row" justifyContent="flex-end" spacing={1}>
-            {versions.length > 0 && !showingTransactions && (
-              <Button
-                size="small"
-                startIcon={<ReceiptLongOutlinedIcon />}
-                onClick={openTransactions}
-              >
-                Transaction monitoring
-              </Button>
-            )}
-            {canUpdateStatus && (
-              <Button variant="contained" size="small" onClick={() => setStatusOpen(true)}>
-                Update status
-              </Button>
-            )}
+        {/* History on the left — where the deal has been (transaction monitoring) and what was
+            signed off (CDD versions). Absent until the deal has been verified once. Actions on the
+            right: compliance's assurance verdict, then the deal's next move. */}
+        {(canUpdateStatus || canUpdateAssurance || showVersionLinks) && (
+          <Stack direction="row" justifyContent="space-between" alignItems="center"
+            spacing={1} flexWrap="wrap" useFlexGap sx={{ py: 1.5 }}>
+            <Stack direction="row" spacing={1}>
+              {showVersionLinks && (
+                <>
+                  <Button size="small" startIcon={<ReceiptLongOutlinedIcon />} onClick={openTransactions}>
+                    Transaction monitoring
+                  </Button>
+                  <Button size="small" startIcon={<HistoryOutlinedIcon />}
+                    onClick={() => navigate(`${pathname.replace(/\/$/, '')}/versions`)}>
+                    CDD Versions
+                  </Button>
+                </>
+              )}
+            </Stack>
+            <Stack direction="row" spacing={1}>
+              {canUpdateAssurance && (
+                <Button variant="outlined" size="small" onClick={() => setAssuranceOpen(true)}>
+                  Update Assurance
+                </Button>
+              )}
+              {canUpdateStatus && (
+                <Button variant="contained" size="small" onClick={() => setStatusOpen(true)}>
+                  Update Transaction
+                </Button>
+              )}
+            </Stack>
           </Stack>
         )}
       </Stack>
@@ -501,6 +520,15 @@ export function DealReviewScreen() {
         // Straight into the panel that asks for everything the picker no longer does.
         onCreated={setSelectedNodeId}
       />
+
+      {canUpdateAssurance && (
+        <AssuranceDialog
+          open={assuranceOpen}
+          deal={{ ...liveDeal, propertyAddress: formatPropertyAddressShort(liveDeal.property) || null }}
+          version={currentVersion}
+          onClose={() => setAssuranceOpen(false)}
+        />
+      )}
 
       <DealStatusDialog
         open={statusOpen}

@@ -3,7 +3,7 @@ import {
   Box, IconButton, Menu, MenuItem, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Tooltip, Typography,
 } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
@@ -143,6 +143,7 @@ function DealRowMenu({ deal, openPath, user }) {
 
 export function DealsTable({ deals = [], emptyMessage = 'No deals yet.', emptyState = null }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Only the broker who owns an unfinished deal wants the form: finishing it is the one thing to
   // do with their own half-written deal, and it opens at the first unanswered section. Everyone
@@ -168,7 +169,7 @@ export function DealsTable({ deals = [], emptyMessage = 'No deals yet.', emptySt
       <Table size="small">
         <TableHead>
           <TableRow>
-            <TableCell>Property</TableCell>
+            <TableCell>Property Transaction</TableCell>
             <TableCell>Users</TableCell>
             <TableCell>Created</TableCell>
             <TableCell>Updated</TableCell>
@@ -178,13 +179,14 @@ export function DealsTable({ deals = [], emptyMessage = 'No deals yet.', emptySt
         </TableHead>
         <TableBody>
           {deals.map((d) => (
-            <TableRow key={d.id} hover>
-              {/* A real anchor rather than a row-level onClick: it opens in a new tab on a
-                  middle-click, it is reachable from the keyboard, and it says where it goes. */}
+            // The whole row opens the deal. The property stays a real anchor as well, so it still
+            // opens in a new tab on a middle- or cmd-click and is reachable from the keyboard.
+            <TableRow key={d.id} hover onClick={() => navigate(openPathFor(d))} sx={{ cursor: 'pointer' }}>
               <TableCell>
                 <Box
                   component={RouterLink}
                   to={openPathFor(d)}
+                  onClick={(e) => e.stopPropagation()}
                   sx={{
                     fontWeight: 700,
                     color: tokens.ink,
@@ -200,7 +202,9 @@ export function DealsTable({ deals = [], emptyMessage = 'No deals yet.', emptySt
               <TableCell sx={{ color: tokens.muted }}>{formatDate(d.createdAt)}</TableCell>
               <TableCell sx={{ color: tokens.muted }}>{formatDate(d.updatedAt)}</TableCell>
               <TableCell><DealStatusChip status={d.status} /></TableCell>
-              <TableCell align="right">
+              {/* Clicks in here — the menu, and the dialogs it portals out, which still bubble
+                  through React — belong to the menu, not the row. */}
+              <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                 <DealRowMenu deal={d} openPath={openPathFor(d)} user={user} />
               </TableCell>
             </TableRow>

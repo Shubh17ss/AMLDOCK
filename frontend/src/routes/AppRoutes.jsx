@@ -43,6 +43,7 @@ import { CddAssurancePage } from '../pages/cdd/CddAssurancePage.jsx';
 import { FirmDealsPage } from '../pages/FirmDealsPage.jsx';
 import { NewDealPage } from '../pages/NewDealPage.jsx';
 import { DealReviewScreen } from '../pages/DealReviewScreen.jsx';
+import { DealVersionsPage } from '../pages/DealVersionsPage.jsx';
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 
 /**
@@ -200,6 +201,8 @@ export function AppRoutes() {
             and what they may *change* is decided inside DealReviewScreen by role and status —
             a guard here could only answer the coarser question of who gets to read it. */}
         <Route path="/deals/:id" element={<DealReviewScreen />} />
+        {/* CDD Versions: the deal's signed-off versions. Same reach as the deal page. */}
+        <Route path="/deals/:id/versions" element={<DealVersionsPage />} />
         {/* Both role groups: a compliance officer may correct a NEW deal on the broker's
             behalf, so DEAL_AUTHOR_ROLES alone would lock them out at the router. The real
             authority is NewDealPage's own mayEdit check and, behind it, assertEditable. */}
@@ -217,6 +220,11 @@ export function AppRoutes() {
         <Route path="/firm/deals/:id" element={
           <ProtectedRoute roles={['SALES_MANAGER', ...DEAL_REVIEWER_ROLES, 'ROOT']}>
             <DealReviewScreen />
+          </ProtectedRoute>
+        } />
+        <Route path="/firm/deals/:id/versions" element={
+          <ProtectedRoute roles={['SALES_MANAGER', ...DEAL_REVIEWER_ROLES, 'ROOT']}>
+            <DealVersionsPage />
           </ProtectedRoute>
         } />
 

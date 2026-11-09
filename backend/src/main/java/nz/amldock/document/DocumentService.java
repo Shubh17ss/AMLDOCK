@@ -372,8 +372,8 @@ public class DocumentService {
     }
 
     private DocumentDto toDto(Document d) {
-        String email = users.findById(d.getUploadedByUserId()).map(User::getEmail).orElse(null);
-        return DocumentDto.from(d, email);
+        User uploader = d.getUploadedByUserId() == null ? null : users.findById(d.getUploadedByUserId()).orElse(null);
+        return DocumentDto.from(d, uploader);
     }
 
     private String buildKey(Long dealId, Long nodeId, String filename) {

@@ -171,6 +171,16 @@ public class DealController {
         return deals.toDtoAfterMutation(r.deal());
     }
 
+    /** Takes an on-hold deal back into review, without sending it to the broker. */
+    @PostMapping("/{id}/resume")
+    @PreAuthorize(REVIEWER_ROLES)
+    public DealDto resume(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+        var r = deals.act(id, DealAction.RESUME, req.note());
+        audit.record(AuditAction.DEAL_RESUMED, "Deal", r.deal().getId(),
+                "Deal " + r.deal().getReference() + " resumed for review from " + r.previousStatus());
+        return deals.toDtoAfterMutation(r.deal());
+    }
+
     @PostMapping("/{id}/verify")
     @PreAuthorize(REVIEWER_ROLES)
     public DealDto verify(@PathVariable Long id,

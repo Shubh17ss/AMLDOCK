@@ -16,6 +16,11 @@ public enum DealAction {
     VERIFY,
     /** VERIFIED → CLOSED. */
     CLOSE,
+    /**
+     * ON_HOLD → REVIEW. Compliance takes a parked deal back up without returning it to the
+     * broker, once what it was waiting on has arrived. Note required.
+     */
+    RESUME,
     /** REVIEW | ON_HOLD → NEW, handing edit rights back to the broker. Note required. */
     REVERT,
     /**

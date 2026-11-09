@@ -33,7 +33,7 @@ export function VoiceClip({ doc }) {
         <GraphicEqIcon fontSize="small" color="primary" />
         <Typography variant="caption" sx={{ color: tokens.muted, flexGrow: 1 }}>
           {doc.originalFilename} · {formatDateTime(doc.createdAt)}
-          {doc.uploadedByEmail ? ` · ${doc.uploadedByEmail}` : ''}
+          {(doc.uploadedByName || doc.uploadedByEmail) ? ` · ${doc.uploadedByName || doc.uploadedByEmail}` : ''}
         </Typography>
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}

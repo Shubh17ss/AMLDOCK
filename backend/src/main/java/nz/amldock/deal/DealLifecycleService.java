@@ -58,16 +58,17 @@ public class DealLifecycleService {
      *                  ▼                          │
      * NEW ──submit──▶ REVIEW ──verify──▶ VERIFIED ──close──▶ CLOSED
      *  ▲                │                    ▲                │
-     *  │                └──hold──▶ ON_HOLD   └─────unclose────┘
-     *  └──────revert────┴──────────────┘
+     *  │                ▲ └──hold──▶ ON_HOLD └─────unclose────┘
+     *  │                └──resume───────┤
+     *  └──────revert────┴───────────────┘
      * </pre>
      *
      * <p>There is no staging status between the broker and compliance: submitting hands the deal
      * straight to review, because a queue nobody works from is not a state.
      *
-     * <p>ON_HOLD is the only negative outcome and its only exit is back to NEW — a parked deal
-     * always returns through the broker, so there is a fresh submission on the record before
-     * verification.
+     * <p>ON_HOLD is the only negative outcome. It has two exits: back to NEW when the broker has
+     * to change something, or RESUME straight to REVIEW when compliance was only waiting on
+     * something and can carry on themselves. Resuming takes a note, so the record says why.
      *
      * <p>UNCLOSE is the way back from CLOSED, and it lands on VERIFIED rather than REVIEW because
      * nothing about the verification is in question — what a reviewer comes back for is the sale
@@ -86,6 +87,7 @@ public class DealLifecycleService {
     private static final Map<DealAction, Rule> RULES = Map.of(
         DealAction.SUBMIT, new Rule(EnumSet.of(DealStatus.NEW),      DealStatus.REVIEW,   Who.EDITOR,   false),
         DealAction.HOLD,   new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.ON_HOLD,  Who.REVIEWER, true),
+        DealAction.RESUME, new Rule(EnumSet.of(DealStatus.ON_HOLD),  DealStatus.REVIEW,   Who.REVIEWER, true),
         // Optional since the readiness check: the system now checks what a verify note used to
         // be asked to vouch for, so the reviewer adds one only when there is something to say.
         DealAction.VERIFY, new Rule(EnumSet.of(DealStatus.REVIEW),   DealStatus.VERIFIED, Who.REVIEWER, false),
@@ -407,6 +409,7 @@ public class DealLifecycleService {
         return switch (a) {
             case SUBMIT -> "submitted for review";
             case HOLD   -> "put on hold";
+            case RESUME -> "resumed for review";
             case VERIFY -> "verified";
             case CLOSE  -> "closed";
             case REVERT -> "reverted";

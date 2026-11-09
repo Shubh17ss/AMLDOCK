@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  closeDeal, holdDeal, overrideDeal, reopenDeal, revertDeal, submitDealForReview,
+  closeDeal, holdDeal, overrideDeal, reopenDeal, resumeDeal, revertDeal, submitDealForReview,
   uncloseDeal, verifyDeal,
 } from '../../api/deals.js';
 import { useToast } from '../../components/ToastProvider.jsx';
@@ -11,6 +11,7 @@ const SAID = {
   submit:   { message: 'Sent to compliance for review', severity: 'success' },
   verify:   { message: 'Deal verified', severity: 'success' },
   hold:     { message: 'Deal put on hold', severity: 'warning' },
+  resume:   { message: 'Back in review', severity: 'success' },
   revert:   { message: 'Sent back to the broker', severity: 'warning' },
   close:    { message: 'Deal closed', severity: 'success' },
   reopen:   { message: 'Reopened for changes — the signed-off version is saved', severity: 'warning' },
@@ -48,6 +49,7 @@ export function useDealStatusAction(dealId, { onDone, onFailed } = {}) {
       switch (transition.action) {
         case 'submit': return submitDealForReview(dealId);
         case 'hold':   return holdDeal(dealId, reason);
+        case 'resume': return resumeDeal(dealId, reason);
         case 'verify': return verifyDeal(dealId, reason);
         case 'revert': return revertDeal(dealId, reason);
         case 'close':  return closeDeal(dealId, transition.sale);

@@ -115,6 +115,7 @@ function ExceptionsTable({ rows, emptyMessage }) {
             <TableCell>Type</TableCell>
             <TableCell>Verified</TableCell>
             <TableCell>Property</TableCell>
+            <TableCell>Notes</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -141,11 +142,27 @@ function ExceptionsTable({ rows, emptyMessage }) {
                   </Box>
                 </Tooltip>
               </TableCell>
+              <TableCell>
+                {/* Fixed box so a long note scrolls in place rather than stretching the row. */}
+                {r.verificationNotes ? (
+                  <Box
+                    sx={{
+                      width: 260, maxHeight: 72, overflowY: 'auto',
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      fontSize: '0.8rem', color: tokens.ink, pr: 0.5,
+                    }}
+                  >
+                    {r.verificationNotes}
+                  </Box>
+                ) : (
+                  <Box sx={{ width: 260, color: tokens.muted }}>—</Box>
+                )}
+              </TableCell>
             </TableRow>
           ))}
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={4} align="center" sx={{ py: 5, color: tokens.muted }}>
+              <TableCell colSpan={5} align="center" sx={{ py: 5, color: tokens.muted }}>
                 {emptyMessage}
               </TableCell>
             </TableRow>

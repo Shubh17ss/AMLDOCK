@@ -66,6 +66,12 @@ export async function submitDealForReview(id) {
   return data;
 }
 
+/** ON_HOLD → REVIEW. Compliance takes a parked deal back up. Note required. */
+export async function resumeDeal(id, note) {
+  const { data } = await apiClient.post(`/deals/${id}/resume`, { note });
+  return data;
+}
+
 /** REVIEW → ON_HOLD. */
 export async function holdDeal(id, note) {
   const { data } = await apiClient.post(`/deals/${id}/hold`, { note });

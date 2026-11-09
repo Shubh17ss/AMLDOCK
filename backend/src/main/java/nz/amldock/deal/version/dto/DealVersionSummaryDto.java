@@ -1,6 +1,10 @@
 package nz.amldock.deal.version.dto;
 
+import nz.amldock.deal.assurance.AssuranceStatus;
+import nz.amldock.deal.assurance.dto.AssuranceVersionDto.IssueDto;
+
 import java.time.Instant;
+import java.util.List;
 
 /**
  * One row of the Versions menu: enough to choose between versions without loading any of them.
@@ -10,6 +14,8 @@ import java.time.Instant;
  *
  * @param reopenedAt null while this is the version the deal still stands on. Once set, this
  *                   version has been superseded or is being worked past.
+ * @param assuranceStatus compliance's verdict on this version; null while nobody has reviewed it
+ * @param issues          the findings behind an ACTION_REQUIRED verdict; empty otherwise
  */
 public record DealVersionSummaryDto(
         Integer versionNo,
@@ -24,5 +30,9 @@ public record DealVersionSummaryDto(
         String reopenNote,
         int nodeCount,
         int documentCount,
-        int personCount
+        int personCount,
+        AssuranceStatus assuranceStatus,
+        String assuranceByName,
+        Instant assuranceAt,
+        List<IssueDto> issues
 ) {}
