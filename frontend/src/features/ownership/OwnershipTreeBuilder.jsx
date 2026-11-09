@@ -244,7 +244,7 @@ function PropertyAnchor({ deal, onOpen, selected = false, drag = NO_DRAG, dragEn
   const address = formatPropertyAddress(p) || 'Property address not recorded';
   const detail = [
     p.propertyType ? propertyTypeLabel(p.propertyType) : null,
-    'the property this deal concerns',
+    '',
   ].filter(Boolean).join(' · ');
 
   const { setNodeRef } = useDroppable({ id: PROPERTY_DROP_ID, disabled: !dragEnabled });
