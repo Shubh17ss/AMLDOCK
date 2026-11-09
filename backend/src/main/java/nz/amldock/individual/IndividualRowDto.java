@@ -40,8 +40,12 @@ public record IndividualRowDto(
          * the column the CDD Exceptions register dates each exception by.
          *
          * <p>Who granted it is deliberately not here. The registers are lists, and a byline is a
-         * fact about one decision - it lives on the owner's Verification tab, where the reason
-         * sits beside it.
+         * fact about one decision - it lives on the owner's Verification tab.
          */
-        Instant verifiedAt
+        Instant verifiedAt,
+        /**
+         * The note recorded with the verification decision. Required for an exception, so the CDD
+         * Exceptions register shows why each one was granted. Null when none was written.
+         */
+        String verificationNotes
 ) {}

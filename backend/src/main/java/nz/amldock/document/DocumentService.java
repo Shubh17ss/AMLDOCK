@@ -19,6 +19,7 @@ import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipNodeRepository;
+import nz.amldock.ownership.VerificationReset;
 import nz.amldock.ownership.OwnershipStructure;
 import nz.amldock.ownership.OwnershipStructureRepository;
 import nz.amldock.user.Role;
@@ -50,6 +51,7 @@ public class DocumentService {
     private final AuditService audit;
     /** Asked before an S3 object is removed: is a verified version still pointing at it? */
     private final DealVersionDocumentRepository versionDocuments;
+    private final VerificationReset verificationReset;
     private final long maxBytes;
     private final Duration uploadTtl;
     private final Duration downloadTtl;
@@ -65,6 +67,7 @@ public class DocumentService {
                            BeneficialOwnerService beneficialOwners,
                            AuditService audit,
                            DealVersionDocumentRepository versionDocuments,
+                           VerificationReset verificationReset,
                            @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
                            @Value("${S3_UPLOAD_TTL_MINUTES:5}") long uploadTtlMinutes,
                            @Value("${S3_DOWNLOAD_TTL_MINUTES:5}") long downloadTtlMinutes) {
@@ -79,6 +82,7 @@ public class DocumentService {
         this.beneficialOwners = beneficialOwners;
         this.audit = audit;
         this.versionDocuments = versionDocuments;
+        this.verificationReset = verificationReset;
         this.maxBytes = maxBytes;
         this.uploadTtl = Duration.ofMinutes(uploadTtlMinutes);
         this.downloadTtl = Duration.ofMinutes(downloadTtlMinutes);
@@ -103,12 +107,7 @@ public class DocumentService {
             }
             // Checked here, not only in the picker. A restriction that lives in a dropdown is a
             // suggestion — this is the point every upload has to pass through.
-            if (!node.getNodeType().accepts(req.documentType())) {
-                throw new BadRequestException(
-                        "A " + node.getNodeType().name().replace('_', ' ').toLowerCase()
-                                + " does not accept " + req.documentType().name().replace('_', ' ').toLowerCase()
-                                + " documents");
-            }
+            assertAccepts(node, req.documentType());
             nodeId = node.getId();
         }
 
@@ -213,6 +212,9 @@ public class DocumentService {
             }
         }
 
+        // New evidence on an owner already verified: the decision did not see it.
+        verificationReset.clearForDocument(doc, "document added");
+
         return toDto(doc);
     }
 
@@ -285,13 +287,126 @@ public class DocumentService {
     public void delete(Long id) {
         Document d = documents.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
+        assertMayChange(d);
+        if (d.getStatus() == DocumentStatus.DELETED) return;
+
+        // The row goes DELETED either way, so the document leaves the live deal either way — that
+        // is what listForDeal filters on and it is unaffected by any of this.
+        //
+        // The bytes are a different question. A verified deal keeps a copy of the documents it was
+        // signed off with (deal_version_document), and those rows name this same S3 object: keys
+        // carry a UUID, so an object is written once and never overwritten, and nothing is gained
+        // by duplicating it per version. Deleting it here would leave every past version listing
+        // evidence it could no longer produce — the sign-off would still claim the passport was
+        // checked and no longer be able to show it. So the object stays for as long as a version
+        // refers to it, and only an unreferenced one is really removed.
+        if (!versionDocuments.existsBySourceDocumentId(d.getId())) {
+            storage.delete(d.getS3Key());
+        }
+        d.setStatus(DocumentStatus.DELETED);
+        audit.record(AuditAction.DOCUMENT_DELETED, "Document", d.getId(),
+                "Deleted " + d.getOriginalFilename());
+
+        // Evidence the verification rested on is gone, so the verification goes with it.
+        verificationReset.clearForDocument(d, "document removed");
+
+        // The person goes only with their last remaining image — removing one side of a card
+        // leaves someone who was still presented, evidenced by the other side.
+        beneficialOwners.removeIfOrphaned(d.getDealId(), d.getBeneficialOwnerId());
+    }
+
+    /**
+     * Moves a document between owners and the property (the deal's own documents) on one deal:
+     * owner to owner, owner to property, property to owner. One to one: the row changes place, it
+     * is not copied. {@code targetNodeId} null means the property.
+     *
+     * <p>An ID scan hangs off the person record the deal form created rather than off a node or
+     * the deal, and does not move; the drawer will not delete one either.
+     *
+     * <p>Both owners' verifications are withdrawn if they have one: one has lost evidence the
+     * decision rested on, the other has gained evidence it never saw. The S3 key stays as it is —
+     * it is only where the bytes live, and past versions name the object by it.
+     */
+    @Transactional
+    public DocumentDto move(Long id, Long targetNodeId) {
+        Document d = documents.findById(id)
+                .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
+        if (d.getStatus() != DocumentStatus.ACTIVE) {
+            throw new BadRequestException("Only an uploaded, live document can be moved");
+        }
+        assertMayChange(d);
+
+        boolean onOwner = d.getOwnershipNodeId() != null;
+        boolean onProperty = !onOwner && d.getBeneficialOwnerId() == null;
+        if (!onOwner && !onProperty) {
+            // An ID scan hanging off the person the deal form created.
+            throw new BadRequestException(
+                    "This is an ID scan from the deal form, filed on the person. Move it there.");
+        }
+
+        OwnershipNode source = onOwner ? ownershipNodes.findById(d.getOwnershipNodeId()).orElse(null) : null;
+        String from = onOwner
+                ? (source == null ? "#" + d.getOwnershipNodeId() : "\"" + source.getDisplayName() + "\"")
+                : "the property";
+
+        OwnershipNode target = null;
+        if (targetNodeId == null) {
+            if (onProperty) throw new BadRequestException("The document is already on the property");
+            if (!DEAL_LEVEL_TYPES.contains(d.getDocumentType())) {
+                throw new BadRequestException("The property does not take "
+                        + d.getDocumentType().name().replace('_', ' ').toLowerCase()
+                        + " documents; file it on an owner");
+            }
+        } else {
+            if (targetNodeId.equals(d.getOwnershipNodeId())) {
+                throw new BadRequestException("The document is already filed on that owner");
+            }
+            target = ownershipNodes.findById(targetNodeId)
+                    .orElseThrow(() -> new BadRequestException("Ownership node " + targetNodeId + " not found"));
+            OwnershipStructure structure = ownershipStructures.findById(target.getOwnershipStructureId())
+                    .orElseThrow(() -> new BadRequestException("Ownership structure not found"));
+            if (d.getDealId() == null || !d.getDealId().equals(structure.getDealId())) {
+                throw new BadRequestException("A document can only move to an owner on the same deal");
+            }
+            assertAccepts(target, d.getDocumentType());
+        }
+
+        d.setOwnershipNodeId(target == null ? null : target.getId());
+
+        audit.record(AuditAction.DOCUMENT_MOVED, "Document", d.getId(),
+                "Moved " + d.getOriginalFilename() + " from " + from + " to "
+                        + (target == null ? "the property" : "\"" + target.getDisplayName() + "\""));
+        // Only owners carry a verification; the property has none to withdraw.
+        if (source != null) verificationReset.clearIfVerified(source, "document moved away");
+        if (target != null) verificationReset.clearIfVerified(target, "document added");
+        return toDto(d);
+    }
+
+    /**
+     * What the property — the deal's own documents — may hold. Mirrors the frontend's
+     * DEAL_DOCUMENT_TYPES, which narrows its upload picker; enforced here only on a move, so an
+     * owner's passport cannot be parked on the deal with nobody behind it.
+     */
+    private static final java.util.Set<DocumentType> DEAL_LEVEL_TYPES = java.util.EnumSet.of(
+            DocumentType.TITLE_DOC, DocumentType.SALE_AGREEMENT, DocumentType.OWNERSHIP_STRUCTURE,
+            DocumentType.VALUATION_MIN_EVIDENCE, DocumentType.VALUATION_MAX_EVIDENCE,
+            DocumentType.PROOF_OF_ADDRESS, DocumentType.REGISTRY_SEARCH_RESULT,
+            DocumentType.WEB_SEARCH_RESULT, DocumentType.OTHER);
+
+    /* ---------- helpers ---------- */
+
+    /**
+     * Who may delete or move a document: its uploader, or a firm-level reviewer or ROOT for
+     * anyone's. Still status-checked for everyone firm-scoped.
+     */
+    private void assertMayChange(Document d) {
         UserPrincipal actor = currentPrincipal();
         // A firm-level reviewer may remove a document somebody else uploaded — they are the
         // ones working through the file. ROOT joins them because it manages the platform.
         boolean elevated = actor.role() == Role.ROOT || actor.role().isFirmLevel();
         if (!elevated && !actor.id().equals(d.getUploadedByUserId())) {
             throw new ForbiddenException(
-                    "Only the uploader, a compliance officer, a senior manager or ROOT may delete this document");
+                    "Only the uploader, a compliance officer, a senior manager or ROOT may change this document");
         }
         // Still status-checked for everyone firm-scoped: assertEditable is the codebase's
         // answer to "may this actor write to this deal", and it now admits reviewers through
@@ -312,31 +427,17 @@ public class DocumentService {
                 lifecycle.assertCanUploadDocuments(deal, actor, firmId);
             }
         }
-        if (d.getStatus() == DocumentStatus.DELETED) return;
-
-        // The row goes DELETED either way, so the document leaves the live deal either way — that
-        // is what listForDeal filters on and it is unaffected by any of this.
-        //
-        // The bytes are a different question. A verified deal keeps a copy of the documents it was
-        // signed off with (deal_version_document), and those rows name this same S3 object: keys
-        // carry a UUID, so an object is written once and never overwritten, and nothing is gained
-        // by duplicating it per version. Deleting it here would leave every past version listing
-        // evidence it could no longer produce — the sign-off would still claim the passport was
-        // checked and no longer be able to show it. So the object stays for as long as a version
-        // refers to it, and only an unreferenced one is really removed.
-        if (!versionDocuments.existsBySourceDocumentId(d.getId())) {
-            storage.delete(d.getS3Key());
-        }
-        d.setStatus(DocumentStatus.DELETED);
-        audit.record(AuditAction.DOCUMENT_DELETED, "Document", d.getId(),
-                "Deleted " + d.getOriginalFilename());
-
-        // The person goes only with their last remaining image — removing one side of a card
-        // leaves someone who was still presented, evidenced by the other side.
-        beneficialOwners.removeIfOrphaned(d.getDealId(), d.getBeneficialOwnerId());
     }
 
-    /* ---------- helpers ---------- */
+    /** The upload rule, shared with a move: a node only holds the document types its type accepts. */
+    private static void assertAccepts(OwnershipNode node, DocumentType type) {
+        if (!node.getNodeType().accepts(type)) {
+            throw new BadRequestException(
+                    "A " + node.getNodeType().name().replace('_', ' ').toLowerCase()
+                            + " does not accept " + type.name().replace('_', ' ').toLowerCase()
+                            + " documents");
+        }
+    }
 
     private Deal mustLoadDealForWrite(Long dealId) {
         Deal deal = deals.findById(dealId)
@@ -372,8 +473,8 @@ public class DocumentService {
     }
 
     private DocumentDto toDto(Document d) {
-        String email = users.findById(d.getUploadedByUserId()).map(User::getEmail).orElse(null);
-        return DocumentDto.from(d, email);
+        User uploader = d.getUploadedByUserId() == null ? null : users.findById(d.getUploadedByUserId()).orElse(null);
+        return DocumentDto.from(d, uploader);
     }
 
     private String buildKey(Long dealId, Long nodeId, String filename) {

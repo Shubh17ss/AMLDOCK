@@ -60,6 +60,7 @@ class DealRiskServiceTest {
     @Mock OwnershipNodeRepository nodes;
     @Mock BeneficialOwnerRepository people;
     @Mock AuditService audit;
+    @Mock nz.amldock.ownership.OwnershipEdgeRepository edges;
 
     DealRiskService service;
     Deal deal;
@@ -69,7 +70,7 @@ class DealRiskServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new DealRiskService(deals, structures, nodes, people, audit);
+        service = new DealRiskService(deals, structures, nodes, people, edges, audit);
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
@@ -329,6 +330,56 @@ class DealRiskServiceTest {
         assertThat(a.unanswered()).extracting(DealRiskService.RiskGap::code).contains("NOMINEE");
     }
 
+    /* ---------- a private company held by another entity ---------- */
+
+    @Test
+    void aNestedCompanyIsNotAskedTheNomineeQuestion() {
+        OwnershipNode parent = company("Holding Co", n -> n.setNomineeStatus(NomineeStatus.NO));
+        OwnershipNode nested = company("Sub Co", n -> n.setNomineeStatus(NomineeStatus.NOT_ASKED));
+        withNodes(parent, nested);
+        withEdge(parent, nested);
+
+        RiskAssessment a = service.assess(deal);
+
+        assertThat(a.unanswered())
+                .filteredOn(g -> g.code().equals("NOMINEE"))
+                .isEmpty();
+    }
+
+    @Test
+    void aNestedCompanysNomineeYesScoresNothing() {
+        OwnershipNode parent = company("Holding Co", n -> n.setNomineeStatus(NomineeStatus.NO));
+        OwnershipNode nested = company("Sub Co", n -> n.setNomineeStatus(NomineeStatus.YES));
+        withNodes(parent, nested);
+        withEdge(parent, nested);
+
+        assertThat(service.assess(deal).factors())
+                .filteredOn(f -> f.code().equals("NOMINEE"))
+                .isEmpty();
+    }
+
+    @Test
+    void aTopLevelCompanyAboveANestedOneIsStillAsked() {
+        OwnershipNode parent = company("Holding Co", n -> n.setNomineeStatus(NomineeStatus.YES));
+        OwnershipNode nested = company("Sub Co", n -> n.setNomineeStatus(NomineeStatus.YES));
+        withNodes(parent, nested);
+        withEdge(parent, nested);
+
+        assertThat(service.assess(deal).value()).isEqualTo(6);
+    }
+
+    @Test
+    void aNestedLimitedPartnershipIsStillAsked() {
+        OwnershipNode parent = company("Holding Co", n -> n.setNomineeStatus(NomineeStatus.NO));
+        OwnershipNode lp = limitedPartnership(n -> n.setNomineeStatus(NomineeStatus.YES));
+        withNodes(parent, lp);
+        withEdge(parent, lp);
+
+        assertThat(service.assess(deal).factors())
+                .filteredOn(f -> f.code().equals("NOMINEE"))
+                .hasSize(1);
+    }
+
     @Test
     void aNomineeLimitedPartnerCostsTheSameAsANomineeDirector() {
         // One column, two questions. Only the wording knows which was actually put.
@@ -559,6 +610,14 @@ class DealRiskServiceTest {
     private RiskAssessment assessWith(OwnershipNode n) {
         withNodes(n);
         return service.assess(deal);
+    }
+
+    /** Puts {@code child} under {@code parent}: the child is owned by another entity. */
+    private void withEdge(OwnershipNode parent, OwnershipNode child) {
+        nz.amldock.ownership.OwnershipEdge e = new nz.amldock.ownership.OwnershipEdge();
+        e.setParentNodeId(parent.getId());
+        e.setChildNodeId(child.getId());
+        lenient().when(edges.findAllByParentNodeIdIn(any())).thenReturn(List.of(e));
     }
 
     private void withNodes(OwnershipNode... all) {

@@ -5,6 +5,7 @@ import nz.amldock.document.DocumentStatus;
 import nz.amldock.document.DocumentType;
 import nz.amldock.document.IdSide;
 import nz.amldock.document.OcrStatus;
+import nz.amldock.user.User;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -22,6 +23,7 @@ public record DocumentDto(
         IdSide idSide,
         Long uploadedByUserId,
         String uploadedByEmail,
+        String uploadedByName,
         OcrStatus ocrStatus,
         String ocrProvider,
         String ocrFields,
@@ -30,11 +32,14 @@ public record DocumentDto(
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static DocumentDto from(DocumentFields d, String uploaderEmail) {
+    /** {@code uploader} may be null — a deleted user, or a system-created document. */
+    public static DocumentDto from(DocumentFields d, User uploader) {
         return new DocumentDto(d.getDocumentId(), d.getOriginalFilename(), d.getContentType(), d.getSizeBytes(),
                 d.getDocumentType(), d.getStatus(), d.getDealId(), d.getOwnershipNodeId(),
                 d.getBeneficialOwnerId(), d.getIdSide(),
-                d.getUploadedByUserId(), uploaderEmail,
+                d.getUploadedByUserId(),
+                uploader == null ? null : uploader.getEmail(),
+                uploader == null ? null : uploader.getFullName(),
                 d.getOcrStatus(), d.getOcrProvider(), d.getOcrFields(), d.getOcrConfidence(),
                 d.getOcrCompletedAt(), d.getCreatedAt(), d.getUpdatedAt());
     }

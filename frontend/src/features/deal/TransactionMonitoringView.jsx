@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { getTransactionMonitoring } from '../../api/deals.js';
+import { VersionChip } from './assurance/AssuranceDialog.jsx';
 import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { dealStatusDot, dealStatusLabel } from '../../data/dealStatus.js';
@@ -56,18 +57,19 @@ export function TransactionMonitoringView({ dealId, onOpenVersion }) {
 
       <Box>
         {q.isError && <Alert severity="error">Couldn’t load the history. Try again.</Alert>}
-        {q.isLoading && <SkeletonTable rows={3} columns={5} />}
+        {q.isLoading && <SkeletonTable rows={3} columns={6} />}
         {q.isSuccess && rows.length === 0 && (
           <Paper variant="outlined" sx={{ py: 6, textAlign: 'center', color: tokens.muted }}>
             This deal hasn’t been closed yet.
           </Paper>
         )}
         {q.isSuccess && rows.length > 0 && (
-          // Scrolls sideways on a phone rather than squeezing five columns into one.
+          // Scrolls sideways on a phone rather than squeezing six columns into one.
           <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 820 }}>
+            <Table size="small" sx={{ minWidth: 900 }}>
               <TableHead>
                 <TableRow>
+                  <TableCell>Transaction Version</TableCell>
                   <TableCell>Movement</TableCell>
                   <TableCell>Appraised value</TableCell>
                   <TableCell>Closing value</TableCell>
@@ -79,6 +81,14 @@ export function TransactionMonitoringView({ dealId, onOpenVersion }) {
                 {rows.map((r, i) => (
                   // eslint-disable-next-line react/no-array-index-key
                   <TableRow key={`${r.occurredAt}-${i}`} sx={{ verticalAlign: 'top' }}>
+                    {/* The version the deal stood on for this move. Absent for a move recorded
+                        without one — an override close, say. */}
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      {r.versionNo != null
+                        ? <VersionChip no={r.versionNo}
+                                       onClick={onOpenVersion ? () => onOpenVersion(r.versionNo) : undefined} />
+                        : <Typography component="span" sx={{ color: tokens.muted }}>—</Typography>}
+                    </TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Stack direction="row" spacing={1.25} alignItems="flex-start">
                         <StatusStamp status={r.fromStatus} at={r.fromAt} versionNo={r.versionNo} onOpen={onOpenVersion} />

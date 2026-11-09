@@ -126,6 +126,7 @@ public class DealService {
         Client c = clients.findById(d.getClientId()).orElse(null);
         User creator = users.findById(d.getCreatedByUserId()).orElse(null);
         return DealDto.from(d,
+                firm == null ? null : firm.getId(),
                 firm == null ? null : firm.getName(),
                 branch == null ? null : branch.getName(),
                 p == null ? null : PropertyDto.from(p),
@@ -879,6 +880,7 @@ public class DealService {
         Client c = clients.findById(d.getClientId()).orElse(null);
         User creator = users.findById(d.getCreatedByUserId()).orElse(null);
         return DealDto.from(d,
+                f == null ? null : f.getId(),
                 f == null ? null : f.getName(),
                 b == null ? null : b.getName(),
                 p == null ? null : PropertyDto.from(p),

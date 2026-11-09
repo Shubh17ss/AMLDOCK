@@ -82,6 +82,7 @@ public class OwnershipService {
     // Only to ask whether a past version still refers to a document's stored file before the
     // cascade delete removes it (C-09). A repository, so no constructor cycle.
     private final nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;
+    private final VerificationReset verificationReset;
 
     public OwnershipService(OwnershipStructureRepository structures,
                             OwnershipNodeRepository nodes,
@@ -96,7 +97,8 @@ public class OwnershipService {
                             FileStorageService storage,
                             AuditService audit,
                             UserRepository users,
-                            nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments) {
+                            nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments,
+                            VerificationReset verificationReset) {
         this.structures = structures;
         this.nodes = nodes;
         this.edges = edges;
@@ -111,6 +113,7 @@ public class OwnershipService {
         this.audit = audit;
         this.users = users;
         this.versionDocuments = versionDocuments;
+        this.verificationReset = verificationReset;
     }
 
     /* ---------- queries ---------- */
@@ -173,6 +176,13 @@ public class OwnershipService {
             applyPersonPatch(person, req.person());
         }
 
+        // A copy from the owner picker is the same person or entity as its source, so it carries
+        // the source's identity: that is what links their verifications across deals. Only within
+        // one firm — a person record never crosses reporting entities.
+        if (req.copyDocumentsFromNodeId() != null) {
+            inheritIdentity(deal, n, req.copyDocumentsFromNodeId());
+        }
+
         OwnershipNode savedNode = nodes.save(n);
         if (req.copyDocumentsFromNodeId() != null) {
             copyDocumentsOnto(deal, savedNode, req.copyDocumentsFromNodeId());
@@ -187,6 +197,9 @@ public class OwnershipService {
     public NodeDto updateNode(Long dealId, Long nodeId, UpdateNodeRequest req) {
         Deal deal = assertWritable(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
+        // Compared by value rather than by what was sent: the form sends every field on every
+        // save, so "present in the request" would clear a verification on any Update at all.
+        List<Object> detailsBefore = detailsOf(n, personFor(n));
         if (req.nodeType() != null) {
             assertRetypeAllowed(n, req.nodeType());
             n.setNodeType(req.nodeType());
@@ -237,6 +250,10 @@ public class OwnershipService {
                 n.setDisplayName(person.getFullName());
             }
         }
+        if (!detailsOf(n, person).equals(detailsBefore)) {
+            verificationReset.clearIfVerified(n, "details changed");
+        }
+
         // Two of the company answers feed the deal's rating, so a node write is now one of the
         // ways it can move. Runs unconditionally: working out whether this particular patch
         // touched a risk-bearing field would be a second copy of the rule.
@@ -504,7 +521,11 @@ public class OwnershipService {
         e.setChildNodeId(child.getId());
         e.setPercentage(normalisePercentage(req.percentage()));
         e.setRole(req.role());
-        return EdgeDto.from(edges.save(e));
+        EdgeDto saved = EdgeDto.from(edges.save(e));
+        // The child now sits under another entity, which changes what its answers count for —
+        // a nested private company's nominee answer, for one.
+        risk.recomputeFor(dealId);
+        return saved;
     }
 
     @Transactional
@@ -531,6 +552,8 @@ public class OwnershipService {
                 .orElseThrow(() -> new NotFoundException("Edge " + edgeId + " not found"));
         mustLoadNodeForDeal(deal, edge.getParentNodeId());
         edges.delete(edge);
+        // The child may now sit directly on the property; see createEdge.
+        risk.recomputeFor(dealId);
     }
 
     /* ---------- sibling order ---------- */
@@ -831,6 +854,34 @@ public class OwnershipService {
     }
 
     /** Only non-null fields are written; an empty string is a value and clears the field. */
+    /**
+     * Everything about an owner a verification vouches for — what the Details form edits, the
+     * person record behind an individual included.
+     *
+     * <p>Left out on purpose: the roles (the form's Type), the share of the property and the sort
+     * order, which say where the owner sits rather than who they are, and the verification itself.
+     */
+    private static List<Object> detailsOf(OwnershipNodeFields n, BeneficialOwner p) {
+        return java.util.Arrays.asList(
+                n.getNodeType(), n.getDisplayName(), n.getDateOfBirth(),
+                n.getIdDocumentType(), n.getIdDocumentNumber(), n.getIdDocumentCountry(),
+                n.getBusinessNumber(), n.getCompanyNumber(), n.getIncorporationDate(),
+                n.getRegisteredOffice(), n.getTrustName(), n.getTrustDeedDocumentId(),
+                n.getSettlorName(), n.getExtraJson(), n.getReference(), n.getNotes(),
+                n.getJurisdictionCountry(), n.getCompanyHasConstitution(), n.getNomineeStatus(),
+                n.getCompanyComplexOwnership(), n.getCompanyPersonalAssets(), n.getCompanyNewDeveloper(),
+                n.getTrustType(), n.getTrustDiscretionary(), n.getTrustHoldingComplexity(),
+                n.getSourceOfFunds(),
+                p == null ? null : p.getFullName(),
+                p == null ? null : p.getEmail(),
+                p == null ? null : p.getPhoneCountry(),
+                p == null ? null : p.getPhoneNumber(),
+                p == null ? null : p.getOccupation(),
+                p == null ? null : p.getSourceOfFunds(),
+                p == null ? null : p.getCountryOfResidence(),
+                p == null ? null : p.getPhysicalAddress());
+    }
+
     private static void applyPersonPatch(BeneficialOwner person, PersonPatch patch) {
         if (patch == null) return;
         if (patch.fullName() != null && !patch.fullName().isBlank()) person.setFullName(patch.fullName().trim());
@@ -866,6 +917,17 @@ public class OwnershipService {
             throw new BadRequestException(
                     "\"" + n.getDisplayName() + "\" owns other nodes, so it cannot become an individual."
                             + " Detach them first.");
+        }
+    }
+
+    private void inheritIdentity(Deal deal, OwnershipNode target, Long sourceNodeId) {
+        OwnershipNode source = nodes.findById(sourceNodeId)
+                .orElseThrow(() -> new NotFoundException("Node " + sourceNodeId + " not found"));
+        OwnershipStructure sourceStructure = structures.findById(source.getOwnershipStructureId())
+                .orElseThrow(() -> new NotFoundException("Structure for node " + sourceNodeId + " not found"));
+        Deal sourceDeal = assertReadable(sourceStructure.getDealId());
+        if (Objects.equals(firmIdFor(sourceDeal), firmIdFor(deal))) {
+            target.setIdentityKey(source.getIdentityKey());
         }
     }
 

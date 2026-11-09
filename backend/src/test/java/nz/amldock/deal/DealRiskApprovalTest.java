@@ -72,6 +72,7 @@ class DealRiskApprovalTest {
     @Mock OwnershipStructureRepository structures;
     @Mock OwnershipNodeRepository nodes;
     @Mock nz.amldock.audit.AuditService audit;
+    @Mock nz.amldock.ownership.OwnershipEdgeRepository edges;
     @Mock nz.amldock.ownership.OwnershipService ownership;
     @Mock nz.amldock.notification.DealNotificationEnqueuer notifier;
     @Mock nz.amldock.deal.version.DealVersionService versions;
@@ -90,7 +91,7 @@ class DealRiskApprovalTest {
         service = new DealService(deals, properties, clients, branches, firms, users,
                 new DealLifecycleService(mock(DealUserRepository.class)),
                 new DealNoteService(dealNotes, documents, users),
-                beneficialOwners, new DealRiskService(deals, structures, nodes, people, audit),
+                beneficialOwners, new DealRiskService(deals, structures, nodes, people, edges, audit),
                 ownership, audit, notifier, versions, saleUnits,
                 org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
                 org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));

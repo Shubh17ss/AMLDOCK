@@ -255,3 +255,15 @@ export async function reorder(dealId, { parentNodeId = null, childNodeIds }) {
   return data;
 }
 
+
+/**
+ * Every deal this owner has been verified on, one row each, newest first. "The same owner" is a
+ * copy made from the owner picker, which carries its source's identity.
+ *
+ * @returns {Promise<Array<{ nodeId, dealId, dealReference, propertyAddress, branchId, branchName,
+ *   verificationStatus, verifiedAt, verifiedByName, currentDeal, canOpen }>>}
+ */
+export async function getVerificationTrail(dealId, nodeId) {
+  const { data } = await apiClient.get(`/deals/${dealId}/ownership/nodes/${nodeId}/verification-trail`);
+  return data;
+}
