@@ -32,6 +32,8 @@ public enum AuditAction {
     DEAL_PUT_ON_HOLD,
     /** An on-hold deal was taken back into review by compliance. */
     DEAL_RESUMED,
+    /** A verified owner's details or documents changed, so their verification was withdrawn. */
+    NODE_VERIFICATION_CLEARED,
     DEAL_VERIFIED,
     DEAL_CLOSED,
     DEAL_REVERTED,
@@ -84,6 +86,8 @@ public enum AuditAction {
     DOCUMENT_UPLOADED,
     DOCUMENT_DOWNLOADED,
     DOCUMENT_DELETED,
+    /** A document filed on one owner was moved to another owner on the same deal. */
+    DOCUMENT_MOVED,
     DOCUMENT_REVIEW_SET,
     DOCUMENT_REVIEW_COMPLETED,
     FUND_TRANSACTION_CREATED,

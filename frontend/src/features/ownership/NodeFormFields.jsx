@@ -47,6 +47,8 @@ export function NodeFormFields({
    * link rather than here.
    */
   showPropertyShare = false,
+  /** Held by another entity rather than sitting on the property. */
+  nested = false,
 }) {
   const set = (patch) => onChange({ ...value, ...patch });
   const setPerson = (patch) => onChange({ ...value, person: { ...(value.person ?? {}), ...patch } });
@@ -212,6 +214,10 @@ export function NodeFormFields({
             value={value.nomineeStatus ?? 'NOT_ASKED'}
             onChange={(v) => set({ nomineeStatus: v })}
             options={NOMINEE_OPTIONS}
+            // Only a company directly on the property is scored on this; one held by another
+            // entity keeps whatever is recorded, but it does not move the rating.
+            helper={!nested ? undefined
+              : 'Not counted towards the risk rating — this company is held by another entity.'}
           />
 
           <SegmentedField

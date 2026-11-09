@@ -9,6 +9,7 @@ import { DocumentUploader } from '../../components/DocumentUploader.jsx';
 import { DocumentViewerDialog } from '../../components/DocumentViewerDialog.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { ParkedPanel } from '../deal/review/ParkedPanel.jsx';
+import { isVerified } from './verificationDisplay.js';
 
 /**
  * Editor for a selected ownership node. Lets the user:
@@ -181,6 +182,7 @@ export function NodeEditorPane({
             includeTypeSelector={false}
             // Top of the chain — nothing owns it, so its share is of the property itself.
             showPropertyShare={!incomingEdge}
+            nested={Boolean(incomingEdge)}
           />
 
           {incomingEdge && (
@@ -202,6 +204,13 @@ export function NodeEditorPane({
           {!readOnly && (
             <>
               <Divider />
+              {/* Type and the shareholding % don't count — they say where the owner sits, not
+                  who they are — hence "details" rather than "anything". */}
+              {isVerified(selected.verificationStatus) && (
+                <Typography variant="caption" sx={{ color: 'var(--cl-warn-text)', mb: -1.5 }}>
+                  Saving changes to this owner&apos;s details will clear their verification.
+                </Typography>
+              )}
               <Stack direction="row" justifyContent="space-between">
                 <Button variant="outlined" color="error" startIcon={<DeleteOutlineIcon />}
                   onClick={handleDelete} sx={{ width: '45%' }}>
@@ -233,6 +242,11 @@ export function NodeEditorPane({
             frozenDocuments={versionNodeDocs}
             title={`Documents on ${selected.displayName}`}
             onViewDocument={setViewingDoc}
+            // Every other owner on this deal; the uploader narrows it to those whose type takes
+            // the document. Not on a version, which already turns off every write.
+            moveTargets={versionNodeDocs ? null
+              : (tree?.nodes ?? []).filter((n) => n.id !== selected.id)}
+            canMoveToProperty={!versionNodeDocs}
           />
         </Stack>
       )}

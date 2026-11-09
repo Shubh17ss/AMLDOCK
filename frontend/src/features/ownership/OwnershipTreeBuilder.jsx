@@ -64,8 +64,10 @@ function subtitleFor(node) {
  * copies of a rule will disagree eventually, so if this grows a fourth case the server's version
  * is the one to read.
  */
-function riskReasonFor(node) {
-  if (node.nomineeStatus === 'YES') {
+function riskReasonFor(node, nested) {
+  // A private company held by another entity is not asked the nominee question, and the server
+  // does not count its answer — see DealRiskService.scoreNode.
+  if (node.nomineeStatus === 'YES' && !(nested && node.nodeType === 'PRIVATE_COMPANY')) {
     return node.nodeType === 'LIMITED_PARTNERSHIP'
       ? 'Reports a nominee limited partner — this sets the deal to High risk'
       : 'Reports a nominee director or shareholder — this sets the deal to High risk';
@@ -442,7 +444,7 @@ function NodeBranch({
   const isSelected = selectedNodeId === node.id;
   // No parent edge means this row is at the top level, and the only thing that can be done to its
   // position is to give it an owner. Everything below has a parentEdge and gets the other two.
-  const riskReason = riskReasonFor(node);
+  const riskReason = riskReasonFor(node, Boolean(parentEdge));
   const visual = visualFor(node.nodeType);
 
   // A person is not an entity, and the tree should say so without a legend: every other type gets

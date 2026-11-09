@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -8,6 +8,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { getDeal } from '../api/deals.js';
 import { getDealVersion, listDealVersions } from '../api/dealVersions.js';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import { NotFoundPage } from './NotFoundPage.jsx';
 import { canOverride, canWrite, isDealAuthor, isDealReviewer } from '../auth/roles.js';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
@@ -141,7 +143,37 @@ export function DealReviewScreen() {
     setParams(merged);
   };
 
-  const dealQ = useQuery({ queryKey: ['deals', dealId], queryFn: () => getDeal(dealId) });
+  const dealQ = useQuery({
+    queryKey: ['deals', dealId],
+    queryFn: () => getDeal(dealId),
+    // A deal that is missing or not this viewer's will not appear on a second try.
+    retry: (count, err) => ![403, 404].includes(err?.response?.status) && count < 3,
+  });
+
+  /*
+   * Follow the deal into its branch.
+   *
+   * A link can lead here from anywhere — another deal's verification trail, a register, a
+   * notification — and the scope selector should say where the deal on screen lives. Only for a
+   * viewer who can switch: a branch-pinned role can only ever open its own branch's deals. ROOT
+   * and AUDIT may need the entity changed as well; its country is filled in by the scope's own
+   * reconciliation once the entity list has it.
+   */
+  const scope = useDashboardScope();
+  const liveForScope = dealQ.data;
+  useEffect(() => {
+    const d = liveForScope;
+    if (!d?.firmBranchId || !scope.branchSelectable) return;
+    if (scope.isRoot && d.firmId && scope.firm?.id !== d.firmId) {
+      scope.setFirm({ id: d.firmId, name: d.firmName, country: null });
+    }
+    if (scope.branch?.id !== d.firmBranchId) {
+      scope.setBranch({ id: d.firmBranchId, name: d.branchName });
+    }
+    // Keyed on the deal: once it has been followed, a viewer changing the selector by hand is not
+    // pulled back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveForScope?.id]);
   const liveTree = useOwnershipTree(dealId);
 
   const versionsQ = useQuery({
@@ -184,6 +216,16 @@ export function DealReviewScreen() {
     return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
   }
   if (dealQ.isError) {
+    const status = dealQ.error?.response?.status;
+    if (status === 403 || status === 404) {
+      return (
+        <NotFoundPage
+          embedded
+          title="Deal not found"
+          message="This deal doesn't exist, or you don't have access to it."
+        />
+      );
+    }
     return <Alert severity="error">Failed to load deal.</Alert>;
   }
 
@@ -492,6 +534,8 @@ export function DealReviewScreen() {
         // show the files this version was signed off with, not the deal's current ones.
         version={documentScope}
         individuals={individuals}
+        // The live owners, for moving a property document onto one. A version turns moving off.
+        owners={liveTree.tree?.nodes ?? []}
       />
 
       {/* ── The selected owner ──────────────────────────────────────────── */}

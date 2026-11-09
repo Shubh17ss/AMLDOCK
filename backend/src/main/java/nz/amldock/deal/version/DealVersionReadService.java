@@ -129,6 +129,7 @@ public class DealVersionReadService {
         User creator = users.findById(v.getCreatedByUserId()).orElse(null);
 
         DealDto deal = DealDto.from(v,
+                firm == null ? null : firm.getId(),
                 firm == null ? null : firm.getName(),
                 branch == null ? null : branch.getName(),
                 versionProperties.findByDealVersionId(vid).map(p -> nz.amldock.property.dto.PropertyDto.from(p)).orElse(null),

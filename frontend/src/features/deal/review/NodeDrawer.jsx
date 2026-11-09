@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box, Button, Drawer, IconButton, Stack, Tab, Tabs, Tooltip, Typography,
 } from '@mui/material';
@@ -37,6 +38,15 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
                             readOnly = false, canUpload, version = null }) {
   const [tab, setTab] = useState('details');
   const { showToast } = useToast();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  // From this owner's verification trail to another deal they are on: its latest state, under
+  // the same list this deal was opened from. The deal screen switches the scope to its branch.
+  const openDeal = (otherDealId) => {
+    onClose?.();
+    navigate(`${pathname.startsWith('/firm/') ? '/firm/deals' : '/deals'}/${otherDealId}`);
+  };
 
   /*
    * The verification form, held here rather than in the tab.
@@ -211,6 +221,9 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
             value={verification}
             onChange={setVerification}
             readOnly={readOnly}
+            // Not on a version: a snapshot shows the owner as signed off, not where else they went.
+            dealId={version ? null : dealId}
+            onOpenDeal={version ? null : openDeal}
           />
         )}
 

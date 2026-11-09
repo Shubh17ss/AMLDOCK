@@ -1,19 +1,24 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Chip, FormControl, IconButton, InputLabel, LinearProgress,
-  MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Tooltip, Typography,
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
+  IconButton, InputLabel, LinearProgress, ListItemIcon, ListItemText, Menu, MenuItem, Paper,
+  Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip,
+  Typography,
 } from '@mui/material';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import DriveFileMoveOutlinedIcon from '@mui/icons-material/DriveFileMoveOutlined';
 import {
-  AUDIO_DOCUMENT_TYPES, DOCUMENT_TYPES, deleteDocument, documentTypeLabel, fetchDownloadUrl,
-  listDealDocuments, listNodeDocuments, uploadToS3,
+  AUDIO_DOCUMENT_TYPES, DEAL_DOCUMENT_TYPES, DOCUMENT_TYPES, deleteDocument, documentTypeLabel, fetchDownloadUrl,
+  listDealDocuments, listNodeDocuments, moveDocument, uploadToS3,
 } from '../api/documents.js';
+import { ACCEPTED_DOCUMENT_TYPES, nodeTypeLabel } from '../api/ownership.js';
+import { useToast } from './ToastProvider.jsx';
 import { CameraCaptureDialog } from './CameraCaptureDialog.jsx';
 import { tokens } from '../theme/theme.js';
 import { formatBytes, formatDateTime } from '../utils/formatters.js';
@@ -58,6 +63,13 @@ export function DocumentUploader({
    * moment, and a file uploaded into it now was not part of that moment.
    */
   frozenDocuments = null,
+  /**
+   * The other owners on the deal, `[{ id, displayName, nodeType }]`, that a document filed here
+   * may be moved to. Null turns Move off — the deal-level panel has no owner to move from.
+   */
+  moveTargets = null,
+  /** Offer the property (the deal's own documents) as a place to move to — set on owner tabs. */
+  canMoveToProperty = false,
 }) {
   const qc = useQueryClient();
   const inputRef = useRef(null);
@@ -68,6 +80,7 @@ export function DocumentUploader({
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(null); // { name, phase, percent }
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [moving, setMoving] = useState(null); // the document row being moved
 
   const isNodeScoped = ownershipNodeId != null;
   const listKey = isNodeScoped ? ['documents', 'node', ownershipNodeId] : ['documents', dealId];
@@ -83,6 +96,11 @@ export function DocumentUploader({
     qc.invalidateQueries({ queryKey: listKey });
     // Always invalidate the deal-level list so the PDF viewer dropdown updates.
     if (dealId) qc.invalidateQueries({ queryKey: ['documents', dealId] });
+    // Adding or removing an owner's evidence withdraws their verification on the server, so the
+    // tree, the registers and the verification trail all need re-reading.
+    if (dealId) qc.invalidateQueries({ queryKey: ['ownership', dealId] });
+    qc.invalidateQueries({ queryKey: ['individuals'] });
+    qc.invalidateQueries({ queryKey: ['verificationTrail'] });
   };
 
   const uploadMut = useMutation({
@@ -146,6 +164,30 @@ export function DocumentUploader({
    */
   const isDeletableHere = (d) =>
     !isNodeScoped || d.ownershipNodeId === ownershipNodeId;
+
+  // Owners this document could go to: the node's type has to take that document, the same rule
+  // the server applies on upload and on a move.
+  //
+  // Each target carries a string key, because a Select cannot hold null: 'property' for the deal,
+  // otherwise the node id.
+  const targetsFor = (d) => {
+    const owners = (moveTargets ?? [])
+      .filter((n) => {
+        const accepted = ACCEPTED_DOCUMENT_TYPES[n.nodeType];
+        return !accepted || accepted.includes(d.documentType);
+      })
+      .map((n) => ({ key: String(n.id), nodeId: n.id, label: n.displayName, sub: nodeTypeLabel(n.nodeType) }));
+    const property = canMoveToProperty && DEAL_DOCUMENT_TYPES.includes(d.documentType)
+      ? [{ key: 'property', nodeId: null, label: 'Property — deal documents', sub: 'The deal itself' }]
+      : [];
+    return [...property, ...owners];
+  };
+
+  // What may move from this list: a document filed on this owner, or — on the deal's own list —
+  // a property document. ID scans hang off the person and stay where they are.
+  const isMovableHere = (d) => (isNodeScoped
+    ? d.ownershipNodeId === ownershipNodeId
+    : d.ownershipNodeId == null && d.beneficialOwnerId == null);
 
   const handleDownload = async (id) => {
     try {
@@ -243,7 +285,10 @@ export function DocumentUploader({
           overflowX: 'auto',
         }}
       >
-        <Table size="small" stickyHeader={scrollTable}>
+        {/* One line per document. A narrow drawer scrolls the table sideways rather than
+            folding a filename or a date onto three lines. */}
+        <Table size="small" stickyHeader={scrollTable}
+               sx={{ '& td, & th': { whiteSpace: 'nowrap' } }}>
           <TableHead>
             <TableRow>
               <TableCell>File</TableCell>
@@ -259,7 +304,14 @@ export function DocumentUploader({
               <TableRow key={d.id}>
                 <TableCell>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <span>{d.originalFilename}</span>
+                    <Tooltip title={d.originalFilename}>
+                      <Box component="span" sx={{
+                        display: 'inline-block', maxWidth: 220, verticalAlign: 'bottom',
+                        overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {d.originalFilename}
+                      </Box>
+                    </Tooltip>
                     {d.idSide && (
                       <Chip size="small" variant="outlined"
                             label={d.idSide === 'BACK' ? 'back' : 'front'} />
@@ -271,35 +323,16 @@ export function DocumentUploader({
                 <TableCell>{d.uploadedByName || d.uploadedByEmail || '—'}</TableCell>
                 <TableCell>{formatDateTime(d.createdAt) ?? '—'}</TableCell>
                 <TableCell align="right">
-                  {onViewDocument && (
-                    <Tooltip title="View in PDF pane">
-                      <IconButton size="small" onClick={() => onViewDocument(d)}>
-                        <VisibilityIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                  <Tooltip title="Download">
-                    <IconButton size="small" onClick={() => handleDownload(d.id)}>
-                      <DownloadIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  {mayUpload && (isDeletableHere(d) ? (
-                    <Tooltip title="Delete">
-                      <IconButton size="small"
-                                  onClick={() => deleteMut.mutate(d.id)}
-                                  disabled={deleteMut.isPending}>
-                        <DeleteOutlineIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip title="This is an ID scan from the deal form. Remove it there — deleting the last one removes the person.">
-                      <span>
-                        <IconButton size="small" disabled>
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  ))}
+                  <DocumentRowMenu
+                    doc={d}
+                    onView={onViewDocument ? () => onViewDocument(d) : null}
+                    onDownload={() => handleDownload(d.id)}
+                    onMove={mayUpload && isMovableHere(d) && targetsFor(d).length > 0
+                      ? () => setMoving(d) : null}
+                    onDelete={mayUpload && isDeletableHere(d) ? () => deleteMut.mutate(d.id) : null}
+                    deleteBlocked={mayUpload && !isDeletableHere(d)}
+                    deleting={deleteMut.isPending}
+                  />
                 </TableCell>
               </TableRow>
             ))}
@@ -314,6 +347,21 @@ export function DocumentUploader({
         </Table>
       </TableContainer>
 
+      {moving && (
+        <MoveDocumentDialog
+          doc={moving}
+          targets={targetsFor(moving)}
+          onClose={() => setMoving(null)}
+          onMoved={(target) => {
+            invalidate();
+            if (target.nodeId != null) {
+              qc.invalidateQueries({ queryKey: ['documents', 'node', target.nodeId] });
+            }
+            setMoving(null);
+          }}
+        />
+      )}
+
       <CameraCaptureDialog
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
@@ -321,5 +369,121 @@ export function DocumentUploader({
         suggestedName={documentType?.toLowerCase()}
       />
     </Stack>
+  );
+}
+
+/**
+ * A document row's actions behind one button, like the registers' row menus. Items that do not
+ * apply are hidden; the one exception is Delete on an ID scan, kept and disabled with the reason,
+ * because a missing Delete would read as a bug.
+ */
+function DocumentRowMenu({ doc, onView, onDownload, onMove, onDelete, deleteBlocked, deleting }) {
+  const [anchor, setAnchor] = useState(null);
+  const close = () => setAnchor(null);
+  const run = (fn) => () => { close(); fn(); };
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <IconButton size="small" aria-label={`Actions for ${doc.originalFilename}`}
+                    onClick={(e) => setAnchor(e.currentTarget)}>
+          <MoreVertIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Menu open={Boolean(anchor)} anchorEl={anchor} onClose={close}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+        {onView && (
+          <MenuItem onClick={run(onView)}>
+            <ListItemIcon><VisibilityIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>View</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={run(onDownload)}>
+          <ListItemIcon><DownloadIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Download</ListItemText>
+        </MenuItem>
+        {onMove && (
+          <MenuItem onClick={run(onMove)}>
+            <ListItemIcon><DriveFileMoveOutlinedIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Move document…</ListItemText>
+          </MenuItem>
+        )}
+        {onDelete && (
+          <MenuItem onClick={run(onDelete)} disabled={deleting} sx={{ color: tokens.rejected }}>
+            <ListItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: tokens.rejected }} /></ListItemIcon>
+            <ListItemText>Delete</ListItemText>
+          </MenuItem>
+        )}
+        {deleteBlocked && (
+          <MenuItem disabled sx={{ whiteSpace: 'normal', maxWidth: 280 }}>
+            <ListItemIcon><DeleteOutlineIcon fontSize="small" /></ListItemIcon>
+            <ListItemText
+              primary="Delete"
+              secondary="An ID scan from the deal form. Remove it there — deleting the last one removes the person."
+            />
+          </MenuItem>
+        )}
+      </Menu>
+    </>
+  );
+}
+
+/** Moves one document to one other owner on the deal. */
+function MoveDocumentDialog({ doc, targets, onClose, onMoved }) {
+  const { showToast } = useToast();
+  const [targetKey, setTargetKey] = useState('');
+  const [error, setError] = useState(null);
+  const target = targets.find((t) => t.key === targetKey) ?? null;
+
+  const mut = useMutation({
+    mutationFn: () => moveDocument(doc.id, target.nodeId),
+    onSuccess: () => {
+      showToast({
+        severity: 'success',
+        message: `Moved to ${target.nodeId == null ? 'the property' : target.label}`,
+      });
+      onMoved(target);
+    },
+    onError: (e) => setError(e.response?.data?.message || 'That didn’t go through. Try again.'),
+  });
+
+  return (
+    <Dialog open onClose={mut.isPending ? undefined : onClose} maxWidth="xs" fullWidth>
+      <DialogTitle component="div" sx={{ pb: 1 }}>
+        <Typography variant="h6" component="h2">Move document</Typography>
+        <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5, overflowWrap: 'anywhere' }}>
+          {doc.originalFilename}
+        </Typography>
+      </DialogTitle>
+      <DialogContent>
+        <FormControl fullWidth sx={{ mt: 1 }}>
+          <InputLabel id="move-target-label">Move to</InputLabel>
+          <Select
+            labelId="move-target-label"
+            label="Move to"
+            value={targetKey}
+            onChange={(e) => { setTargetKey(e.target.value); setError(null); }}
+          >
+            {targets.map((t) => (
+              <MenuItem key={t.key} value={t.key}>
+                <ListItemText primary={t.label} secondary={t.sub} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Typography variant="caption" sx={{ display: 'block', color: tokens.muted, mt: 1.5 }}>
+          Only places that can hold a {documentTypeLabel(doc.documentType).toLowerCase()} are listed.
+          Moving it clears the verification on any owner involved, if they&apos;re verified.
+        </Typography>
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <Button onClick={onClose} disabled={mut.isPending}>Cancel</Button>
+        <Button variant="contained" disabled={!target || mut.isPending} onClick={() => mut.mutate()}>
+          {mut.isPending ? 'Moving…' : 'Move'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import nz.amldock.document.dto.ConfirmUploadRequest;
 import nz.amldock.document.dto.DocumentDto;
 import nz.amldock.document.dto.DownloadUrlResponse;
+import nz.amldock.document.dto.MoveDocumentRequest;
 import nz.amldock.document.dto.UploadUrlRequest;
 import nz.amldock.document.dto.UploadUrlResponse;
 import org.springframework.http.ResponseEntity;
@@ -55,6 +56,15 @@ public class DocumentController {
     @GetMapping("/{id}/download-url")
     public DownloadUrlResponse downloadUrl(@PathVariable Long id) {
         return documents.presignDownload(id);
+    }
+
+    /**
+     * Moves a document from the owner it is filed on to one other owner on the same deal. Who may
+     * do it is the delete rule, checked in the service for the same reason.
+     */
+    @PostMapping("/{id}/move")
+    public DocumentDto move(@PathVariable Long id, @Valid @RequestBody MoveDocumentRequest req) {
+        return documents.move(id, req.targetNodeId());
     }
 
     /**

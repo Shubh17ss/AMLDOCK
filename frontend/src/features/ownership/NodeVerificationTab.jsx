@@ -4,6 +4,7 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import { SegmentedField } from '../../components/SegmentedField.jsx';
 import { tokens } from '../../theme/theme.js';
 import { formatVerifiedAt, verificationDisplay } from './verificationDisplay.js';
+import { VerificationTrail } from './VerificationTrail.jsx';
 
 /**
  * The two verifications a reviewer can grant.
@@ -27,7 +28,12 @@ const OUTCOMES = [
  * free-text note always on show, a voice recorder and the clips it had saved — described the
  * verification process rather than recording a decision, and none of it said who decided.
  */
-export function NodeVerificationTab({ node, value, onChange, readOnly = false }) {
+export function NodeVerificationTab({
+  node, value, onChange, readOnly = false,
+  /** The deal on screen; with `onOpenDeal`, turns on the trail of this owner's other deals. */
+  dealId = null,
+  onOpenDeal = null,
+}) {
   const granted = verificationDisplay(node?.verificationStatus);
   const byline = [node?.verifiedByName, formatVerifiedAt(node?.verifiedAt)]
     .filter(Boolean)
@@ -85,6 +91,10 @@ export function NodeVerificationTab({ node, value, onChange, readOnly = false })
             </Stack>
           </Stack>
         </Box>
+      )}
+
+      {dealId && onOpenDeal && (
+        <VerificationTrail dealId={dealId} nodeId={node?.id} onOpenDeal={onOpenDeal} />
       )}
 
       <SegmentedField

@@ -160,6 +160,16 @@ export async function deleteDocument(id) {
 }
 
 /**
+ * Moves a document between owners and the property on one deal. `targetNodeId` null means the
+ * property — the deal's own documents. The server refuses an owner on another deal, a place that
+ * does not take that document type, and an ID scan that hangs off the person.
+ */
+export async function moveDocument(id, targetNodeId) {
+  const { data } = await apiClient.post(`/documents/${id}/move`, { targetNodeId });
+  return data;
+}
+
+/**
  * Upload a single File to S3 using the presigned PUT flow:
  *   1) request presigned URL    (backend → S3)
  *   2) PUT bytes directly       (browser → S3)

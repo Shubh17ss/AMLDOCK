@@ -92,7 +92,8 @@ class OwnershipServiceTest {
     @BeforeEach
     void setUp() {
         service = new OwnershipService(structures, nodes, edges, deals, branches, lifecycle,
-                owners, ownerLinks, risk, documents, storage, audit, users, versionDocuments);
+                owners, ownerLinks, risk, documents, storage, audit, users, versionDocuments,
+                new VerificationReset(nodes, audit));
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
@@ -161,6 +162,8 @@ class OwnershipServiceTest {
         service.createEdge(DEAL_ID, new CreateEdgeRequest(2L, 1L, null, EdgeRole.SHAREHOLDER));
 
         verify(edges).save(any(OwnershipEdge.class));
+        // Nesting changes what the child's answers count for, so the rating is worked again.
+        verify(risk).recomputeFor(DEAL_ID);
     }
 
     @Test
@@ -407,6 +410,80 @@ class OwnershipServiceTest {
     /* ---------- helpers ---------- */
 
     /* ---------- documents follow a person onto a new deal ---------- */
+
+    /* ---------- editing a verified owner withdraws the verification ---------- */
+
+    private OwnershipNode verifiedCompany() {
+        OwnershipNode c = node(2L, NodeType.PRIVATE_COMPANY, "Eriksson Holdings");
+        c.setNotes("Trading company");
+        c.setVerificationStatus(NodeVerificationStatus.VERIFIED_WITH_EXCEPTION);
+        c.setVerificationNotes("Registry extract sighted instead of constitution");
+        c.setVerifiedByUserId(7L);
+        c.setVerifiedAt(java.time.Instant.now());
+        stubNodes(c);
+        return c;
+    }
+
+    @Test
+    void changingADetailClearsTheVerification() {
+        OwnershipNode c = verifiedCompany();
+
+        service.updateNode(DEAL_ID, 2L, patchOf(Map.of("notes", "Now a holding company")));
+
+        assertThat(c.getVerificationStatus()).isEqualTo(NodeVerificationStatus.NOT_STARTED);
+        assertThat(c.getVerifiedByUserId()).isNull();
+        assertThat(c.getVerifiedAt()).isNull();
+        assertThat(c.getVerificationNotes()).isNull();
+    }
+
+    @Test
+    void typeAndShareDoNotClearTheVerification() {
+        OwnershipNode c = verifiedCompany();
+
+        service.updateNode(DEAL_ID, 2L, patchOf(Map.of(
+                "personRoles", List.of("EFFECTIVE_CONTROLLER"), "propertyPercentage", 40)));
+
+        assertThat(c.getVerificationStatus()).isEqualTo(NodeVerificationStatus.VERIFIED_WITH_EXCEPTION);
+        assertThat(c.getVerifiedByUserId()).isEqualTo(7L);
+    }
+
+    @Test
+    void resendingTheSameDetailsDoesNotClearTheVerification() {
+        // The form sends every field on every Update, so only a real change may count.
+        OwnershipNode c = verifiedCompany();
+
+        service.updateNode(DEAL_ID, 2L, patchOf(Map.of(
+                "displayName", "Eriksson Holdings", "notes", "Trading company")));
+
+        assertThat(c.getVerificationStatus()).isEqualTo(NodeVerificationStatus.VERIFIED_WITH_EXCEPTION);
+    }
+
+    /* ---------- identity across deals ---------- */
+
+    @Test
+    void aCopyFromThePickerCarriesItsSourcesIdentity() {
+        // The link the Verification tab's trail is built on.
+        OwnershipNode source = node(1L, NodeType.INDIVIDUAL, "Anna Eriksson");
+        stubNodes(source);
+
+        service.createNode(DEAL_ID, copyRequest("Anna Eriksson", 1L));
+
+        ArgumentCaptor<OwnershipNode> saved = ArgumentCaptor.forClass(OwnershipNode.class);
+        verify(nodes).save(saved.capture());
+        assertThat(saved.getValue().getIdentityKey()).isEqualTo(source.getIdentityKey());
+    }
+
+    @Test
+    void aNodeEnteredByHandIsItsOwnIdentity() {
+        OwnershipNode other = node(1L, NodeType.INDIVIDUAL, "Anna Eriksson");
+
+        service.createNode(DEAL_ID, JSON.convertValue(Map.of(
+                "nodeType", NodeType.INDIVIDUAL, "displayName", "Anna Eriksson"), CreateNodeRequest.class));
+
+        ArgumentCaptor<OwnershipNode> saved = ArgumentCaptor.forClass(OwnershipNode.class);
+        verify(nodes).save(saved.capture());
+        assertThat(saved.getValue().getIdentityKey()).isNotNull().isNotEqualTo(other.getIdentityKey());
+    }
 
     @Test
     void copyingAnIndividualGivesEachDocumentItsOwnObject() {
@@ -883,6 +960,7 @@ class OwnershipServiceTest {
 
         verify(lifecycle, never()).assertEditable(any(), any(), any());
         verify(lifecycle).assertCanRead(any(), any(), any());
+        verify(risk).recomputeFor(DEAL_ID);
     }
 
     private static void assertLocked(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
