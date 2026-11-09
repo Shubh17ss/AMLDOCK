@@ -76,7 +76,8 @@ class DocumentVersionRetentionTest {
     void setUp() {
         service = new DocumentService(documents, deals, branches, ownershipNodes, ownershipStructures,
                 users, storage, new DealLifecycleService(mock(DealUserRepository.class)), beneficialOwners, audit,
-                versionDocuments, 26214400L, 5L, 5L);
+                versionDocuments, new nz.amldock.ownership.VerificationReset(ownershipNodes, audit),
+                26214400L, 5L, 5L);
 
         // REVIEW, because that is the status a reopened deal is in — the only one in which a
         // reviewer can delete a document that an earlier version already froze.

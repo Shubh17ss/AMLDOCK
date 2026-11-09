@@ -236,7 +236,7 @@ class IndividualServiceTest {
         ReflectionTestUtils.setField(deal, "reference", reference);
         PropertyDto p = new PropertyDto(PROPERTY_ID, "14 Ridgeway Rd", null, "Remuera",
                 "Auckland", null, "NZ", null, null, null, null, null, null);
-        return DealDto.from(deal, "Bayleys", "Remuera", p, null, "agent@example.com");
+        return DealDto.from(deal, 100L, "Bayleys", "Remuera", p, null, "agent@example.com");
     }
 
     private static Property property() {
@@ -251,7 +251,7 @@ class IndividualServiceTest {
         return new DocumentDto(99L, "passport-front.jpg", "image/jpeg", 2_100_000L,
                 DocumentType.PASSPORT, DocumentStatus.ACTIVE,
                 DEAL_ID, NODE_ID, PERSON_ID, IdSide.FRONT,
-                3L, "agent@example.com",
+                3L, "agent@example.com", "Agent Smith",
                 OcrStatus.DONE, "textract", null, null, Instant.now(),
                 Instant.now(), Instant.now());
     }

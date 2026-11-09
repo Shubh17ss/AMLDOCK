@@ -81,6 +81,8 @@ export function useOwnershipTree(dealId) {
     // added here would be missing from the picker for the rest of the session — including when
     // the very next owner is their co-owner. Prefix key: every firm/branch scope goes stale.
     qc.invalidateQueries({ queryKey: ['individuals'] });
+    // A verification here is a row in this owner's trail, wherever else they appear.
+    qc.invalidateQueries({ queryKey: ['verificationTrail'] });
   };
 
   const createNodeMut = useMutation({ mutationFn: (payload) => createNode(dealId, payload), onSuccess: invalidate });

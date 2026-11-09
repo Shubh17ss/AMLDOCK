@@ -83,7 +83,8 @@ class DocumentServiceNodeScopeTest {
     @BeforeEach
     void setUp() {
         service = new DocumentService(documents, deals, branches, ownershipNodes, ownershipStructures,
-                users, storage, lifecycle, beneficialOwners, audit, versionDocuments, 26214400L, 5L, 5L);
+                users, storage, lifecycle, beneficialOwners, audit, versionDocuments,
+                new nz.amldock.ownership.VerificationReset(ownershipNodes, audit), 26214400L, 5L, 5L);
 
         Deal deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);

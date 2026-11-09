@@ -5,6 +5,8 @@ import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
 import nz.amldock.deal.DealRepository;
+import nz.amldock.deal.assurance.AssuranceIssueRepository;
+import nz.amldock.deal.assurance.dto.AssuranceVersionDto.IssueDto;
 import nz.amldock.deal.dto.DealDto;
 import nz.amldock.deal.version.dto.DealVersionDto;
 import nz.amldock.deal.version.dto.DealVersionSummaryDto;
@@ -59,6 +61,7 @@ public class DealVersionReadService {
     private final DealVersionEdgeRepository versionEdges;
     private final DealVersionDocumentRepository versionDocuments;
     private final DealVersionPersonRepository versionPeople;
+    private final AssuranceIssueRepository assuranceIssues;
 
     private final DealRepository deals;
     private final DealLifecycleService lifecycle;
@@ -76,6 +79,7 @@ public class DealVersionReadService {
                                   DealVersionEdgeRepository versionEdges,
                                   DealVersionDocumentRepository versionDocuments,
                                   DealVersionPersonRepository versionPeople,
+                                  AssuranceIssueRepository assuranceIssues,
                                   DealRepository deals,
                                   DealLifecycleService lifecycle,
                                   DealNoteService dealNotes,
@@ -91,6 +95,7 @@ public class DealVersionReadService {
         this.versionEdges = versionEdges;
         this.versionDocuments = versionDocuments;
         this.versionPeople = versionPeople;
+        this.assuranceIssues = assuranceIssues;
         this.deals = deals;
         this.lifecycle = lifecycle;
         this.dealNotes = dealNotes;
@@ -124,6 +129,7 @@ public class DealVersionReadService {
         User creator = users.findById(v.getCreatedByUserId()).orElse(null);
 
         DealDto deal = DealDto.from(v,
+                firm == null ? null : firm.getId(),
                 firm == null ? null : firm.getName(),
                 branch == null ? null : branch.getName(),
                 versionProperties.findByDealVersionId(vid).map(p -> nz.amldock.property.dto.PropertyDto.from(p)).orElse(null),
@@ -216,7 +222,7 @@ public class DealVersionReadService {
                 .sorted(java.util.Comparator.comparing(DealVersionDocument::getCreatedAt).reversed())
                 .map(d -> {
                     User u = d.getUploadedByUserId() == null ? null : uploaders.get(d.getUploadedByUserId());
-                    return DocumentDto.from(d, u == null ? null : u.getEmail());
+                    return DocumentDto.from(d, u);
                 })
                 .toList();
     }
@@ -242,6 +248,7 @@ public class DealVersionReadService {
     private DealVersionSummaryDto summary(DealVersion v, Map<Long, User> people) {
         User verifier = people.get(v.getVerifiedByUserId());
         User reopener = v.getReopenedByUserId() == null ? null : people.get(v.getReopenedByUserId());
+        User assurer = v.getAssuranceByUserId() == null ? null : people.get(v.getAssuranceByUserId());
         Long vid = v.getId();
         return new DealVersionSummaryDto(
                 v.getVersionNo(),
@@ -256,7 +263,13 @@ public class DealVersionReadService {
                 v.getReopenNote(),
                 versionNodes.findAllByDealVersionId(vid).size(),
                 versionDocuments.findAllByDealVersionId(vid).size(),
-                versionPeople.findAllByDealVersionId(vid).size());
+                versionPeople.findAllByDealVersionId(vid).size(),
+                v.getAssuranceStatus(),
+                assurer == null ? null : assurer.getFullName(),
+                v.getAssuranceAt(),
+                assuranceIssues.findAllByDealVersionIdOrderBySortOrderAsc(vid).stream()
+                        .map(i -> new IssueDto(i.getIssue(), i.getRemediation()))
+                        .toList());
     }
 
     /* ---------- helpers ---------- */
@@ -267,6 +280,7 @@ public class DealVersionReadService {
         rows.forEach(v -> {
             ids.add(v.getVerifiedByUserId());
             if (v.getReopenedByUserId() != null) ids.add(v.getReopenedByUserId());
+            if (v.getAssuranceByUserId() != null) ids.add(v.getAssuranceByUserId());
         });
         if (ids.isEmpty()) return Map.of();
         return users.findAllById(ids.stream().distinct().toList()).stream()

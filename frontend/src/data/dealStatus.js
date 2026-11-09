@@ -48,7 +48,7 @@ export const DEAL_STATUS_META = {
   REVIEW:   { label: 'In review', chip: 'warning', dot: tokens.review },
   ON_HOLD:  { label: 'On hold',   chip: 'error',   dot: tokens.rejected },
   VERIFIED: { label: 'Verified',  chip: 'success', dot: tokens.approved },
-  CLOSED:   { label: 'Closed',    chip: 'default', dot: tokens.muted },
+  CLOSED:   { label: 'Closed',    chip: 'info',    dot: tokens.muted },
 };
 
 export const dealStatusLabel = (s) =>
@@ -111,6 +111,8 @@ export const STATUS_TRANSITIONS = [
   // A note is optional when verifying: the readiness check covers what it used to vouch for.
   { to: 'VERIFIED', from: ['REVIEW'], action: 'verify', noteRequired: false, noteOptional: true },
   { to: 'ON_HOLD', from: ['REVIEW'], action: 'hold', noteRequired: true },
+  // Compliance picks a parked deal back up without sending it to the broker.
+  { to: 'REVIEW', from: ['ON_HOLD'], action: 'resume', noteRequired: true },
   { to: 'NEW', from: ['REVIEW', 'ON_HOLD'], action: 'revert', noteRequired: true },
   { to: 'REVIEW', from: ['VERIFIED'], action: 'reopen', noteRequired: true },
   { to: 'CLOSED', from: ['VERIFIED'], action: 'close', noteRequired: false },

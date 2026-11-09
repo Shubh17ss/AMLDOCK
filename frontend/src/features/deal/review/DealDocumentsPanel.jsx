@@ -24,7 +24,7 @@ import { tokens } from '../../../theme/theme.js';
  * @param canUpload whether this viewer may add files; wider than the edit rule (branch staff may
  *                  add evidence to a deal they cannot otherwise change). Defaults to !readOnly.
  */
-export function DealDocumentsPanel({ dealId, readOnly = false, canUpload, version = null }) {
+export function DealDocumentsPanel({ dealId, readOnly = false, canUpload, version = null, owners = [] }) {
   // Held whole rather than by id: the uploader already has the row in hand when a viewer is asked
   // for, so re-finding it here would mean keeping a second copy of the list to find it in.
   const [viewingDoc, setViewingDoc] = useState(null);
@@ -49,6 +49,8 @@ export function DealDocumentsPanel({ dealId, readOnly = false, canUpload, versio
         frozenDocuments={version?.documents ?? null}
         title="Documents on this deal"
         onViewDocument={setViewingDoc}
+        // A property document can be moved onto one owner. Not on a version, which is read-only.
+        moveTargets={version ? null : owners}
       />
 
       <DocumentViewerDialog

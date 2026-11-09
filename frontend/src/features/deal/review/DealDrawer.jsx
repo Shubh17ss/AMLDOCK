@@ -41,7 +41,7 @@ const TABS = [
  * dismissed with unsaved work.
  */
 export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canUpload, canComment = true,
-                            frozenNotes = null, version = null, individuals = [] }) {
+                            frozenNotes = null, version = null, individuals = [], owners = [] }) {
   const [tab, setTab] = useState('details');
 
   // The user list is not part of a snapshot: it is who can reach the deal today, which would
@@ -220,7 +220,8 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
           />
         )}
         {deal && current === 'documents' && (
-          <DealDocumentsPanel dealId={dealId} readOnly={readOnly} canUpload={canUpload} version={version} />
+          <DealDocumentsPanel dealId={dealId} readOnly={readOnly} canUpload={canUpload} version={version}
+                             owners={owners} />
         )}
         {deal && current === 'users' && (
           <DealUsersPanel dealId={dealId} readOnly={readOnly} />

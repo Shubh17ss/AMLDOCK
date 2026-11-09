@@ -6,6 +6,8 @@ import nz.amldock.beneficialowner.BeneficialOwner;
 import nz.amldock.beneficialowner.BeneficialOwnerRepository;
 import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NomineeStatus;
+import nz.amldock.ownership.OwnershipEdge;
+import nz.amldock.ownership.OwnershipEdgeRepository;
 import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipNodeRepository;
 import nz.amldock.ownership.OwnershipStructure;
@@ -47,6 +49,8 @@ import java.util.stream.Collectors;
  *   trust holdings       unascertainable +6, extensive/diverse +4, more than one asset +2
  *   discretionary trust? No +2
  *   nominee director/shareholder, or nominee limited partner?   Yes +6
+ *                        (a private company only when it sits directly on the property; one
+ *                        held by another entity is not asked, and its answer does not count)
  *   complex ownership structure?   Yes +3
  *   a new developer?     Yes +2
  *   used for personal assets?   Yes +2
@@ -139,17 +143,20 @@ public class DealRiskService {
     private final OwnershipStructureRepository structures;
     private final OwnershipNodeRepository nodes;
     private final BeneficialOwnerRepository people;
+    private final OwnershipEdgeRepository edges;
     private final AuditService audit;
 
     public DealRiskService(DealRepository deals,
                            OwnershipStructureRepository structures,
                            OwnershipNodeRepository nodes,
                            BeneficialOwnerRepository people,
+                           OwnershipEdgeRepository edges,
                            AuditService audit) {
         this.deals = deals;
         this.structures = structures;
         this.nodes = nodes;
         this.people = people;
+        this.edges = edges;
         this.audit = audit;
     }
 
@@ -263,12 +270,14 @@ public class DealRiskService {
 
         List<OwnershipNode> all = nodesOf(deal.getId());
         Map<Long, String> residence = countriesOfResidence(all);
+        Set<Long> held = heldByAnotherEntity(all);
         for (OwnershipNode node : all) {
             // Guarded rather than looked up directly: every entity node has a null person id,
             // and Map.of() — what countriesOfResidence returns when there are no individuals —
             // throws on a null key rather than answering null.
             Long personId = node.getBeneficialOwnerId();
-            scoreNode(node, personId == null ? null : residence.get(personId), factors, gaps);
+            scoreNode(node, personId == null ? null : residence.get(personId),
+                    !held.contains(node.getId()), factors, gaps);
         }
 
         int value = factors.stream().mapToInt(RiskFactor::points).sum();
@@ -344,7 +353,7 @@ public class DealRiskService {
      * trust's holdings are not a gap on a company, and listing them as one would send a reviewer
      * looking for a field that does not exist.
      */
-    private static void scoreNode(OwnershipNode n, String personCountry,
+    private static void scoreNode(OwnershipNode n, String personCountry, boolean topLevel,
                                   List<RiskFactor> factors, List<RiskGap> gaps) {
         NodeType type = n.getNodeType();
         Long id = n.getNodeId();
@@ -373,7 +382,12 @@ public class DealRiskService {
                     n.getTrustDiscretionary(), 2);
         }
 
-        if (type == NodeType.PRIVATE_COMPANY || type == NodeType.LIMITED_PARTNERSHIP) {
+        // A private company held by another entity is not asked about a nominee: the question
+        // bears on whoever holds the property directly. Neither a gap nor points, whatever the
+        // stored answer. A limited partnership is asked wherever it sits.
+        boolean askedNominee = type == NodeType.LIMITED_PARTNERSHIP
+                || (type == NodeType.PRIVATE_COMPANY && topLevel);
+        if (askedNominee) {
             // One column, two questions: a company is asked about a nominee director or
             // shareholder, a limited partnership about a nominee limited partner. The consequence
             // is identical, so only the wording has to know which was actually put.
@@ -459,6 +473,18 @@ public class DealRiskService {
     }
 
     /* ---------- reading the structure ---------- */
+
+    /**
+     * The nodes some other entity owns — the child end of an edge. Everything else sits directly
+     * on the property, the same reading as {@code OwnershipService.reorderTopLevel}.
+     */
+    private Set<Long> heldByAnotherEntity(List<OwnershipNode> all) {
+        if (all.isEmpty()) return Set.of();
+        List<Long> ids = all.stream().map(OwnershipNode::getId).toList();
+        return edges.findAllByParentNodeIdIn(ids).stream()
+                .map(OwnershipEdge::getChildNodeId)
+                .collect(Collectors.toSet());
+    }
 
     private List<OwnershipNode> nodesOf(Long dealId) {
         if (dealId == null) return List.of();   // a deal being created has no structure yet

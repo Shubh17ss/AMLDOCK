@@ -2,11 +2,21 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { tokens, shadows, fonts } from '../theme/theme.js';
 
-export function NotFoundPage() {
+/**
+ * The not-found view. Full screen for an unknown route; `embedded` renders it inside the app
+ * shell, for a record that is missing or that the viewer may not see.
+ */
+export function NotFoundPage({
+  embedded = false,
+  title = 'Page not found',
+  message = 'This page doesn\u2019t exist or was moved.',
+}) {
   return (
     <Box sx={{
       display: 'flex', justifyContent: 'center', alignItems: 'center',
-      minHeight: '100vh', backgroundColor: tokens.canvas,
+      minHeight: embedded ? 420 : '100vh',
+      backgroundColor: embedded ? 'transparent' : tokens.canvas,
+      py: embedded ? 6 : 0,
     }}>
       <Stack spacing={3} alignItems="center">
         {/* Big clearance numeral */}
@@ -25,10 +35,10 @@ export function NotFoundPage() {
 
         <Stack spacing={0.75} alignItems="center">
           <Typography variant="h5" sx={{ fontWeight: 700, color: tokens.ink }}>
-            Page not found
+            {title}
           </Typography>
-          <Typography variant="body2" sx={{ color: tokens.muted }}>
-            This page doesn&apos;t exist or was moved.
+          <Typography variant="body2" sx={{ color: tokens.muted, textAlign: 'center' }}>
+            {message}
           </Typography>
         </Stack>
 

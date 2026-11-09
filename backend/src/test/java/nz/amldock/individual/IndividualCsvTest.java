@@ -93,6 +93,6 @@ class IndividualCsvTest {
     private static IndividualRowDto row(String country, Instant verifiedAt) {
         return new IndividualRowDto(1L, NodeType.INDIVIDUAL, 2L, "D-1", "1 Queen St, Auckland", "Mei Chen",
                 LocalDate.of(1980, 2, 1), country, Set.of(), NodeVerificationStatus.VERIFIED_WITH_EXCEPTION,
-                verifiedAt);
+                verifiedAt, null);
     }
 }

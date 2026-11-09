@@ -18,6 +18,8 @@ public record DealDto(
         TransactionType transactionType,
         BigDecimal transactionValue,
         Long firmBranchId,
+        /** The reporting entity, so a viewer who can switch entity can follow a link into it. */
+        Long firmId,
         String firmName,
         String branchName,
         String pocName,
@@ -57,12 +59,12 @@ public record DealDto(
         // V51 — tenure asked and not known yet.
         boolean ownershipTenureTbc
 ) {
-    public static DealDto from(DealFields d, String firmName, String branchName,
+    public static DealDto from(DealFields d, Long firmId, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
                                String createdByEmail) {
         return new DealDto(
                 d.getDealId(), d.getReference(), d.getStatus(), d.getTransactionType(),
-                d.getTransactionValue(), d.getFirmBranchId(), firmName, branchName,
+                d.getTransactionValue(), d.getFirmBranchId(), firmId, firmName, branchName,
                 d.getPocName(), d.getPocRole(), d.getPocPhone(), d.getPocEmail(),
                 property, client, d.getNotes(),
                 d.getCreatedByUserId(), createdByEmail,
