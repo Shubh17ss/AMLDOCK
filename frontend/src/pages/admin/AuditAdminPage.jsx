@@ -13,8 +13,6 @@ import dayjs from 'dayjs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, searchAudit } from '../../api/audit.js';
 import { AuditActionChip } from '../../components/AuditActionChip.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
-import { useAuth } from '../../auth/AuthContext.jsx';
-import { seesAllFirms } from '../../auth/roles.js';
 import { tokens } from '../../theme/theme.js';
 
 const DEFAULT_FILTERS = {
@@ -27,10 +25,8 @@ const DEFAULT_FILTERS = {
 };
 
 export function AuditAdminPage() {
-  const { user } = useAuth();
-  // A firm-level viewer gets their own entity's activity, narrowed by actor server-side —
-  // don't call it the platform trail to them.
-  const scopeLabel = seesAllFirms(user?.role) ? 'platform trail' : 'your reporting entity';
+  // ROOT only (AUDIT_LOG_ROLES), so this is always the whole platform's trail.
+  const scopeLabel = 'platform trail';
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(50);

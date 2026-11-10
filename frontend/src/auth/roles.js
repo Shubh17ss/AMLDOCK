@@ -113,9 +113,8 @@ export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER
 // three, and AuditReadOnlyFilter refuses AUDIT's writes everywhere regardless. Derived rather than
 // listed so it cannot drift from SETTINGS_ROLES or from the read-only set.
 export const SCOPE_SETUP_ROLES = SETTINGS_ROLES.filter((r) => canWrite(r));
-// Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior manager
-// sees their own entity's, scoped server-side by actor in AuditService.search.
-export const AUDIT_LOG_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+// Settings › Audit Log. ROOT only — the server enforces the same on /api/audit.
+export const AUDIT_LOG_ROLES = ['ROOT'];
 // CDD › Assurance. Compliance's second look at its own sign-offs, so it is theirs to work; ROOT and
 // AUDIT read it, because checking that assurance is being done is what they are there for. Who may
 // actually mark a version is narrower again — isDealReviewer — and the server holds that line.
