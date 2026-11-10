@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { BentoTile, Eyebrow } from '../components/bento/BentoTile.jsx';
 import { ReviewDialog } from '../components/documents/ReviewDialog.jsx';
@@ -27,6 +27,7 @@ export function SectionLandingPage({ group }) {
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
   const [reviewing, setReviewing] = useState(null);
+  const navigate = useNavigate();
 
   const mayReview = canManageReview(user?.role);
 
@@ -70,7 +71,15 @@ export function SectionLandingPage({ group }) {
           const StatusIcon = meta?.Icon;
 
           return (
-            <BentoTile key={item.id} index={i} sx={{ p: 2.75 }}>
+            // The whole card opens the module. A click handler rather than `to`: a link would wrap
+            // the Review button below, which must open its dialog without leaving the page.
+            <BentoTile
+              key={item.id}
+              index={i}
+              onClick={() => navigate(item.to)}
+              ariaLabel={`Open ${item.label}`}
+              sx={{ p: 2.75 }}
+            >
               {/* Icon + review status */}
               <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 2 }}>
                 <Box sx={{
@@ -97,28 +106,16 @@ export function SectionLandingPage({ group }) {
               <Typography sx={{ fontWeight: 700, fontSize: '1.02rem', color: tokens.ink }}>
                 {item.label}
               </Typography>
-              <Typography sx={{ mt: 0.75, fontSize: '0.84rem', color: tokens.muted, lineHeight: 1.45 }}>
+              <Typography sx={{ mt: 0.75, mb: 1.75, fontSize: '0.84rem', color: tokens.muted, lineHeight: 1.45 }}>
                 {item.blurb}
               </Typography>
 
-              <Typography
-                component={RouterLink}
-                to={item.to}
-                sx={{
-                  mt: 'auto', pt: 2, fontSize: '0.8rem', fontWeight: 600, color: tokens.blue,
-                  display: 'inline-flex', alignItems: 'center', gap: 0.5, textDecoration: 'none',
-                  alignSelf: 'flex-start',
-                  '&:hover': { textDecoration: 'underline' },
-                }}
-              >
-                Open module
-                <Box component="span" aria-hidden sx={{ fontSize: '1em' }}>→</Box>
-              </Typography>
 
               {/* Review footer — date, plus the action for roles that may manage it */}
               {reviewable && (
+                // Pinned to the foot of the card, so footers line up across a row of cards.
                 <Box sx={{
-                  mt: 1.75, pt: 1.25, borderTop: `1px solid ${tokens.hairline}`,
+                  mt: 'auto', pt: 1.25, borderTop: `1px solid ${tokens.hairline}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1,
                 }}>
                   <Box sx={{ minWidth: 0 }}>
@@ -135,7 +132,9 @@ export function SectionLandingPage({ group }) {
                       size="small"
                       variant="outlined"
                       startIcon={<StatusIcon sx={{ color: `${meta.color} !important` }} />}
-                      onClick={() => setReviewing(item)}
+                      // Kept to itself: neither the click nor Enter/Space should reach the card.
+                      onClick={(e) => { e.stopPropagation(); setReviewing(item); }}
+                      onKeyDown={(e) => e.stopPropagation()}
                       sx={{ flexShrink: 0 }}
                     >
                       Review

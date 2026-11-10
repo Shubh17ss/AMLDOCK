@@ -76,11 +76,7 @@ export function DealNotesTimeline({
           )}
           {status && <DealStatusChip status={status} />}
         </Stack>
-        <Typography variant="caption" sx={{ color: tokens.muted }}>
-          Notes added to this deal, oldest first. Notes can’t be edited or deleted.
-        </Typography>
-
-        <Divider sx={{ my: 2 }} />
+        {/* <Divider sx={{ my: 2 }} /> */}
 
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={22} /></Box>
@@ -88,7 +84,7 @@ export function DealNotesTimeline({
         {failed && <Alert severity="error">Couldn’t load the notes for this deal.</Alert>}
 
         {!loading && !failed && entries.length === 0 && (
-          <Typography variant="body2" sx={{ color: tokens.muted, py: 1 }}>
+          <Typography variant="body2" sx={{ color: tokens.muted, py: 0 }}>
             Nothing here yet.
           </Typography>
         )}

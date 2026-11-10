@@ -157,6 +157,9 @@ export function CddAssurancePage() {
 /** A deal and the version it stands on, with that version's verdict. */
 function DealRow({ deal, version: v }) {
   const label = deal.propertyAddress ?? deal.reference;
+  // The verdict itself opens the findings behind it — the same dialog as the row menu's item.
+  const [viewingIssues, setViewingIssues] = useState(false);
+  const hasIssues = v?.assuranceStatus === 'ACTION_REQUIRED' && v.issues?.length > 0;
   return (
     <TableRow hover>
       <TableCell>
@@ -182,7 +185,15 @@ function DealRow({ deal, version: v }) {
           <>
             <TableCell><VersionChip no={v.versionNo} /></TableCell>
             <TableCell>
-              <AssuranceChip status={v.assuranceStatus} />
+              <AssuranceChip
+                status={v.assuranceStatus}
+                onClick={hasIssues ? () => setViewingIssues(true) : undefined}
+                title="Show issues"
+              />
+              {hasIssues && (
+                <IssuesDialog open={viewingIssues} deal={deal} version={v}
+                              onClose={() => setViewingIssues(false)} />
+              )}
               {v.assuranceStatus === 'ACTION_REQUIRED' && v.issues?.length > 0 && (
                 <Typography component="span" variant="caption" sx={{ ml: 1, color: tokens.muted }}>
                   {v.issues.length} {v.issues.length === 1 ? 'issue' : 'issues'}
@@ -246,7 +257,7 @@ function VersionMenu({ deal, version: v }) {
             needs the findings as much as the reviewer who recorded them. */}
         {hasIssues && (
           <MenuItem onClick={() => { close(); setViewing(true); }}>
-            <ReportProblemOutlinedIcon fontSize="small" sx={{ mr: 1, color: tokens.rejected }} /> Show issues
+            <ReportProblemOutlinedIcon fontSize="small" sx={{ mr: 1, color: tokens.rejected }} /> Action required
           </MenuItem>
         )}
 

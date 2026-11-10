@@ -42,13 +42,12 @@ const FLOW_META = {
 // The amount column names the entity's own currency, so a downloaded file is unambiguous once
 // it's away from the screen that produced it.
 const csvHeaders = (currencyCode) => [
-  'Deal', 'Listing address', 'Transaction flow', 'Date', `Amount ${currencyCode}`,
+  'Listing address', 'Transaction flow', 'Date', `Amount ${currencyCode}`,
   'Overseas jurisdiction code', 'Overseas jurisdiction', 'Submission reference',
   'Branch', 'Attachment', 'Recorded by', 'Recorded at',
 ];
 
 const csvRowFor = (tx) => [
-  tx.dealReference ?? '',
   tx.listingAddress ?? '',
   FLOW_META[tx.transactionFlow]?.label ?? tx.transactionFlow ?? '',
   tx.transactionDate ?? '',
@@ -85,7 +84,7 @@ export function InternationalFundTransactionRegisterPage() {
   // AUDIT reads this register but files nothing into it.
   const mayWrite = canWrite(user?.role);
   // The delete action gets its own column at the far right so it never sits under "File".
-  const colCount = mayDelete ? 9 : 8;
+  const colCount = mayDelete ? 8 : 7;
 
   const txQ = useQuery({
     queryKey: ['fundTransactions', firm?.id ?? null, branch?.id ?? null],
@@ -167,7 +166,6 @@ export function InternationalFundTransactionRegisterPage() {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Deal</TableCell>
               <TableCell>Listing address</TableCell>
               <TableCell>Flow</TableCell>
               <TableCell>Date</TableCell>
@@ -187,12 +185,11 @@ export function InternationalFundTransactionRegisterPage() {
                   <TableCell>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Typography sx={{ fontSize: '0.875rem', color: tokens.ink }}>
-                        {tx.dealReference || '—'}
+                        {tx.listingAddress}
                       </Typography>
                       {tx.branchName && <Chip size="small" label={tx.branchName} />}
                     </Stack>
                   </TableCell>
-                  <TableCell sx={{ color: tokens.ink }}>{tx.listingAddress}</TableCell>
                   <TableCell>
                     <Chip
                       size="small"

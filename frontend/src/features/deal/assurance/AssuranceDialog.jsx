@@ -23,8 +23,8 @@ const VERSIONS_BG = `color-mix(in srgb, ${tokens.muted} 8%, ${tokens.tile})`;
 
 /** How each verdict reads, and in what colour. Null is "not reviewed". */
 const ASSURANCE_META = {
-  ASSURED:         { label: 'Assured',         color: 'success' },
-  ACTION_REQUIRED: { label: 'Action required', color: 'error' },
+  ASSURED:         { label: 'Assured',         color: 'success', wash: 'var(--cl-ok-wash)',  ink: tokens.approved },
+  ACTION_REQUIRED: { label: 'Action required', color: 'error',   wash: 'var(--cl-err-wash)', ink: tokens.rejected },
 };
 
 /**
@@ -172,7 +172,6 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
         <Button onClick={onClose} disabled={mut.isPending}>Cancel</Button>
         <Button
           variant="contained"
-          color={result === 'ACTION_REQUIRED' ? 'error' : 'primary'}
           disabled={!ready || mut.isPending}
           onClick={() => mut.mutate()}
         >
@@ -290,9 +289,24 @@ export function VersionChip({ no, onClick }) {
   return onClick ? <Tooltip title={`Open v${no}`}>{chip}</Tooltip> : chip;
 }
 
-export function AssuranceChip({ status }) {
+/** The verdict as a chip. With `onClick` it becomes a button — the register opens the issues. */
+export function AssuranceChip({ status, onClick, title }) {
   const meta = ASSURANCE_META[status];
-  return meta
-    ? <Chip size="small" label={meta.label} color={meta.color} />
-    : <Chip size="small" label="Not reviewed" variant="outlined" sx={{ color: tokens.muted }} />;
+  if (!meta) return <Chip size="small" label="Not reviewed" variant="outlined" sx={{ color: tokens.muted }} />;
+  // Clickable, MUI floods the chip with the dark palette shade on hover. A slightly deeper wash is
+  // enough to say "this opens something" without the chip changing colour.
+  const hover = `color-mix(in srgb, ${meta.wash} 88%, ${meta.ink})`;
+  const chip = (
+    <Chip
+      size="small"
+      label={meta.label}
+      color={meta.color}
+      onClick={onClick}
+      sx={onClick ? {
+        '&:hover, &.Mui-focusVisible': { backgroundColor: hover },
+        '&:active': { boxShadow: 'none' },
+      } : undefined}
+    />
+  );
+  return onClick && title ? <Tooltip title={title}>{chip}</Tooltip> : chip;
 }

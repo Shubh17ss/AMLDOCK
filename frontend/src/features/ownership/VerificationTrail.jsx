@@ -27,9 +27,9 @@ export function VerificationTrail({ dealId, nodeId, onOpenDeal }) {
       <Typography sx={{ fontSize: '0.9rem', fontWeight: 600, color: tokens.ink, mb: 1 }}>
         Verification trail
       </Typography>
-      <Typography variant="caption" sx={{ display: 'block', color: tokens.muted, mb: 1.25 }}>
+      {/* <Typography variant="caption" sx={{ display: 'block', color: tokens.muted, mb: 1.25 }}>
         This owner has been verified on other deals too.
-      </Typography>
+      </Typography> */}
       <Stack spacing={1}>
         {entries.map((e) => (
           <TrailRow key={e.nodeId} entry={e} onOpen={() => onOpenDeal?.(e.dealId)} />
@@ -57,9 +57,6 @@ function TrailRow({ entry: e, onOpen }) {
             {e.propertyAddress ?? e.dealReference}
           </Typography>
         </Stack>
-        <Typography variant="caption" sx={{ display: 'block', color: tokens.muted }}>
-          {[e.branchName, e.propertyAddress ? e.dealReference : null].filter(Boolean).join(' · ')}
-        </Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.5 }}>
           <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: display.text }}>
             {display.label}

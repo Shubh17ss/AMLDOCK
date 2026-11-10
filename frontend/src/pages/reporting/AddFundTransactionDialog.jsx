@@ -9,7 +9,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { createFundTransactionWithDocument } from '../../api/fundTransactions.js';
 import { CountrySelect } from '../../components/CountrySelect.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
-import { useCurrency } from '../../dashboard/useCurrency.js';
+import { MoneyField } from '../../components/MoneyField.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens } from '../../theme/theme.js';
 import { DateField } from '../../components/DateField.jsx';
@@ -18,7 +18,6 @@ import { DateField } from '../../components/DateField.jsx';
 const PDF_MIME = 'application/pdf';
 
 const emptyForm = () => ({
-  dealReference: '',
   listingAddress: '',
   transactionFlow: 'INWARDS',
   transactionDate: '',
@@ -36,7 +35,6 @@ export function AddFundTransactionDialog({ open, onClose }) {
   const qc = useQueryClient();
   const { showToast } = useToast();
   const { firm, branch } = useDashboardScope();
-  const money = useCurrency();
   const fileInputRef = useRef(null);
   const [form, setForm] = useState(emptyForm);
   const [file, setFile] = useState(null);
@@ -60,11 +58,11 @@ export function AddFundTransactionDialog({ open, onClose }) {
     // The entry lands in the register currently selected in the sidebar: a selected branch
     // tags it branch-specific, otherwise it's firm-wide.
     mutationFn: () => createFundTransactionWithDocument({
-      dealReference: form.dealReference.trim(),
       listingAddress: form.listingAddress.trim(),
       transactionFlow: form.transactionFlow,
       transactionDate: form.transactionDate,
-      amount: form.amount,
+      // "12." is a value half-typed; send it as 12.
+      amount: form.amount.replace(/\.$/, ''),
       overseasJurisdiction: form.overseasJurisdiction,
       submissionReference: form.submissionReference.trim(),
       realEstateFirmId: firm?.id,
@@ -111,13 +109,6 @@ export function AddFundTransactionDialog({ open, onClose }) {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Deal"
-              value={form.dealReference}
-              onChange={ch('dealReference')}
-              placeholder="Deal name or reference"
-              fullWidth
-            />
-            <TextField
               label="Listing address"
               value={form.listingAddress}
               onChange={ch('listingAddress')}
@@ -147,14 +138,15 @@ export function AddFundTransactionDialog({ open, onClose }) {
               />
             </Stack>
 
-            <TextField
-              label={`Amount (${money.label})`}
-              type="number"
+            {/* Grouped as you type, cents allowed. The currency is the entity's own, named on the
+                register's Amount column. */}
+            <MoneyField
+              label="Amount"
               value={form.amount}
               onChange={ch('amount')}
-              inputProps={{ min: 0, step: '0.01' }}
+              currencyLabel="$"
+              allowDecimals
               required
-              fullWidth
             />
 
             <CountrySelect
