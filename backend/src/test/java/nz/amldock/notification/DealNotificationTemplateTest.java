@@ -154,7 +154,7 @@ class DealNotificationTemplateTest {
 
         assertThat(html).doesNotContain("<script>x</script>");
         assertThat(html).contains("&lt;script&gt;");
-        assertThat(html).contains("DEAL-2026-0001");
+        assertThat(html).contains("1 High St");
         // A null field renders as nothing rather than the literal word "null".
         assertThat(html).doesNotContain("null");
     }

@@ -37,7 +37,7 @@ export function DeleteDealDialog({ open, deal, onClose, onDeleted }) {
     onError: (e) => setError(e.response?.data?.message || 'Could not delete this deal. Try again.'),
   });
 
-  const label = deal?.propertyAddress ?? deal?.reference ?? `deal #${deal?.id}`;
+  const label = deal?.propertyAddress ?? 'this untitled deal';
 
   return (
     <Dialog

@@ -25,6 +25,7 @@ import { formatDateTimeNumeric } from '../../utils/formatters.js';
 import {
   AssuranceChip, AssuranceDialog, IssuesDialog, VersionChip,
 } from '../../features/deal/assurance/AssuranceDialog.jsx';
+import { dealName } from '../../utils/dealName.js';
 
 const COLUMNS = 7;
 
@@ -156,7 +157,7 @@ export function CddAssurancePage() {
 
 /** A deal and the version it stands on, with that version's verdict. */
 function DealRow({ deal, version: v }) {
-  const label = deal.propertyAddress ?? deal.reference;
+  const label = dealName(deal.propertyAddress);
   // The verdict itself opens the findings behind it — the same dialog as the row menu's item.
   const [viewingIssues, setViewingIssues] = useState(false);
   const hasIssues = v?.assuranceStatus === 'ACTION_REQUIRED' && v.issues?.length > 0;
@@ -240,7 +241,7 @@ function VersionMenu({ deal, version: v }) {
       <Tooltip title="Actions">
         <IconButton
           size="small"
-          aria-label={`Actions for v${v.versionNo} of ${deal.reference}`}
+          aria-label={`Actions for v${v.versionNo} of ${dealName(deal.propertyAddress)}`}
           onClick={(e) => setAnchor(e.currentTarget)}
         >
           <MoreVertIcon fontSize="small" />

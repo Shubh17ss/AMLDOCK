@@ -34,7 +34,7 @@ const TITLE_BY_PATH_PREFIX = [
 function titleFor(pathname, role) {
   // The deal id sits in the middle of /deals/:id/edit, so this one can't be expressed as a
   // prefix like the rest of the table.
-  if (/^\/deals\/\d+\/edit\/?$/.test(pathname)) return 'Edit deal';
+  if (/^\/deals\/[a-z0-9]{12}\/edit\/?$/.test(pathname)) return 'Edit deal';
   // One page, two honest names. DealService.readableDeals pins the list to `createdBy = me` for an
   // agent and to their branch for an ADMIN, so the register genuinely *is* a deal author's own
   // deals — and calling it "Listing Register" to the person who arrived via a tab labelled Deals
@@ -53,8 +53,9 @@ function titleFor(pathname, role) {
  * /deals/new and the two list routes out.
  */
 function dealIdFromPath(pathname) {
-  const match = /^\/(?:firm\/)?deals\/(\d+)/.exec(pathname);
-  return match ? Number(match[1]) : null;
+  // A deal's public id: 12 lowercase letters and digits. `/deals/new` is not one.
+  const match = /^\/(?:firm\/)?deals\/([a-z0-9]{12})(?:\/|$)/.exec(pathname);
+  return match ? match[1] : null;
 }
 
 export function AppShell() {
@@ -70,8 +71,8 @@ export function AppShell() {
    * inside the same QueryClientProvider, so react-query dedupes the in-flight call on a cold
    * load and serves the cache afterwards.
    *
-   * The key has to be ['deals', <Number>] to match. ['deals', '5'] is a different key from
-   * ['deals', 5], and getting that wrong fetches the deal twice with nothing visibly broken.
+   * The key has to be ['deals', <public id>] exactly as DealReviewScreen writes it — the string
+   * from the URL, never converted — or the deal is fetched twice with nothing visibly broken.
    *
    * retry: false — the honest failure here is a 403 on somebody else's deal, and retrying that
    * achieves nothing. An error simply leaves the centre empty.

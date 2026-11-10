@@ -18,6 +18,7 @@ import { DeleteDealDialog } from '../features/deal/DeleteDealDialog.jsx';
 import { useDealStatusAction } from '../features/deal/useDealStatusAction.js';
 import { formatDate } from '../utils/formatters.js';
 import { tokens } from '../theme/theme.js';
+import { dealName } from '../utils/dealName.js';
 
 /**
  * The deal list, shared by the Listing Register (/cdd/deals) and the firm-wide list
@@ -69,7 +70,7 @@ function DealRowMenu({ deal, openPath, user }) {
       <Tooltip title="Actions">
         <IconButton
           size="small"
-          aria-label={`Actions for ${deal.propertyAddress ?? deal.reference ?? `deal ${deal.id}`}`}
+          aria-label={`Actions for ${dealName(deal.propertyAddress)}`}
           onClick={(e) => setAnchor(e.currentTarget)}
         >
           <MoreVertIcon fontSize="small" />
@@ -154,7 +155,7 @@ export function DealsTable({ deals = [], emptyMessage = 'No deals yet.', emptySt
 
   // An address is null when every part of it is blank, and a row whose only label is an em dash
   // would be a dead end now that the reference column is gone.
-  const propertyLabel = (d) => d.propertyAddress ?? d.reference ?? `#${d.id}`;
+  const propertyLabel = (d) => dealName(d.propertyAddress);
 
   if (deals.length === 0) {
     return emptyState ?? (

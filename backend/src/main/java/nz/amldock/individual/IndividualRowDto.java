@@ -26,7 +26,8 @@ public record IndividualRowDto(
          * and the person behind it are two rows that look alike and read very differently.
          */
         NodeType nodeType,
-        Long dealId,
+        /** The deal's public id. */
+        String dealId,
         String dealReference,
         String propertyAddress,
         String displayName,

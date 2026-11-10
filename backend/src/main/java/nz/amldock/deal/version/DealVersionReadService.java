@@ -120,7 +120,7 @@ public class DealVersionReadService {
     /** One version, as the whole deal it was. */
     @Transactional(readOnly = true)
     public DealVersionDto get(Long dealId, Integer versionNo) {
-        mustReadDeal(dealId);
+        Deal live = mustReadDeal(dealId);
         DealVersion v = mustFind(dealId, versionNo);
         Long vid = v.getId();
 
@@ -128,7 +128,8 @@ public class DealVersionReadService {
         RealEstateFirm firm = branch == null ? null : firms.findById(branch.getRealEstateFirmId()).orElse(null);
         User creator = users.findById(v.getCreatedByUserId()).orElse(null);
 
-        DealDto deal = DealDto.from(v,
+        // Named by the live deal's public id: a version is the deal, earlier.
+        DealDto deal = DealDto.from(v, live.getPublicId(),
                 firm == null ? null : firm.getId(),
                 firm == null ? null : firm.getName(),
                 branch == null ? null : branch.getName(),

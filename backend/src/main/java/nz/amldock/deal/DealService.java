@@ -125,7 +125,7 @@ public class DealService {
         Property p = properties.findById(d.getPropertyId()).orElse(null);
         Client c = clients.findById(d.getClientId()).orElse(null);
         User creator = users.findById(d.getCreatedByUserId()).orElse(null);
-        return DealDto.from(d,
+        return DealDto.from(d, d.getPublicId(),
                 firm == null ? null : firm.getId(),
                 firm == null ? null : firm.getName(),
                 branch == null ? null : branch.getName(),
@@ -209,6 +209,7 @@ public class DealService {
         d.setValuationMax(req.valuationMax());
         d.setCreatedByUserId(actor.id());
         applyRiskRating(d);
+        d.setPublicId(newPublicId());
         Deal saved = deals.save(d);
 
         // Generate human reference now that we have an id
@@ -872,6 +873,13 @@ public class DealService {
         throw new BadRequestException("No authenticated user");
     }
 
+    /** A public id no deal has yet. A clash is vanishingly rare; the unique index is the backstop. */
+    private String newPublicId() {
+        String id = PublicIds.newId();
+        while (deals.existsByPublicId(id)) id = PublicIds.newId();
+        return id;
+    }
+
     // expose for controller resolving DTOs after mutation
     public DealDto toDtoAfterMutation(Deal d) {
         FirmBranch b = branches.findById(d.getFirmBranchId()).orElse(null);
@@ -879,7 +887,7 @@ public class DealService {
         Property p = properties.findById(d.getPropertyId()).orElse(null);
         Client c = clients.findById(d.getClientId()).orElse(null);
         User creator = users.findById(d.getCreatedByUserId()).orElse(null);
-        return DealDto.from(d,
+        return DealDto.from(d, d.getPublicId(),
                 f == null ? null : f.getId(),
                 f == null ? null : f.getName(),
                 b == null ? null : b.getName(),

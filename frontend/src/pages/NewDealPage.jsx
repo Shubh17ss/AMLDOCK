@@ -24,6 +24,8 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { isDealAuthor, isDealReviewer } from '../auth/roles.js';
 import { canEditContent } from '../data/dealStatus.js';
 import { tokens } from '../theme/theme.js';
+import { dealName } from '../utils/dealName.js';
+import { formatPropertyAddressShort } from '../data/addressFinderMeta.js';
 
 const SECTIONS = ['Your client', 'The property', 'Property details', 'Client identity', 'Risk & valuation'];
 
@@ -73,6 +75,8 @@ export function NewDealPage() {
 
   const draft = useDealDraft({ resumeDealId });
   const { form, setField, setNested, setGroup, dealId, deal, saveState, error, setError } = draft;
+  // A deal is named by its address; the reference is not shown.
+  const dealLabel = dealName(formatPropertyAddressShort(deal?.property));
 
   // A resumed deal opens at section 3: sections 1 and 2 are what created it, and re-asking
   // them is exactly the friction this split removes. They stay reachable with Back.
@@ -296,7 +300,7 @@ export function NewDealPage() {
 
       <PageHeader
         eyebrow={`section ${section + 1} of ${SECTIONS.length}`}
-        title={isEditMode ? `Editing ${deal?.reference ?? 'deal'}` : 'New deal'}
+        title={isEditMode ? `Editing ${dealLabel}` : 'New deal'}
         actions={<SaveStateChip state={saveState} hasDraft={Boolean(dealId)} />}
       />
 
@@ -364,9 +368,9 @@ export function NewDealPage() {
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      {isLast && deal?.reference && (
+      {isLast && dealId && (
         <Alert severity="info">
-          Submitting moves <strong>{deal.reference}</strong> to <strong>In review</strong> and
+          Submitting moves <strong>{dealLabel}</strong> to <strong>In review</strong> and
           locks it from further edits. It's already saved, so you can leave and finish later from{' '}
           <strong>Deals</strong> — once it is with compliance, only they can send it back.
         </Alert>
@@ -441,7 +445,7 @@ export function NewDealPage() {
           <DialogContentText>
             {isEditMode ? (
               <>
-                <strong>{deal?.reference ?? `#${dealId}`}</strong> will be removed permanently,
+                <strong>{dealLabel}</strong> will be removed permanently,
                 along with its property and client records. This cannot be undone.
               </>
             ) : dealId ? (

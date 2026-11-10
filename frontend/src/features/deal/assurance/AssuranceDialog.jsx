@@ -11,6 +11,7 @@ import { OptionPill } from '../../../components/OptionPill.jsx';
 import { useToast } from '../../../components/ToastProvider.jsx';
 import { tokens, fonts } from '../../../theme/theme.js';
 import { formatDateTimeNumeric } from '../../../utils/formatters.js';
+import { dealName } from '../../../utils/dealName.js';
 
 /*
  * Compliance's assurance verdict on a signed-off deal version: the dialog that records it, the
@@ -63,7 +64,7 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
       qc.invalidateQueries({ queryKey: ['dealVersions', deal.id] });
       showToast({
         severity: 'success',
-        message: `v${v.versionNo} of ${deal.reference} marked `
+        message: `v${v.versionNo} of ${dealName(deal.propertyAddress)} marked `
           + (result === 'ASSURED' ? 'assured' : 'action required'),
       });
       onClose();
@@ -89,8 +90,7 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
           <VersionChip no={v.versionNo} />
         </Stack>
         <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>
-          {deal.propertyAddress ?? deal.reference}
-          {deal.propertyAddress ? ` · ${deal.reference}` : ''}
+          {dealName(deal.propertyAddress)}
         </Typography>
       </DialogTitle>
 
@@ -193,8 +193,7 @@ export function IssuesDialog({ open, deal, version: v, onClose }) {
           <AssuranceChip status={v.assuranceStatus} />
         </Stack>
         <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>
-          {deal.propertyAddress ?? deal.reference}
-          {deal.propertyAddress ? ` · ${deal.reference}` : ''}
+          {dealName(deal.propertyAddress)}
         </Typography>
       </DialogTitle>
       <DialogContent>

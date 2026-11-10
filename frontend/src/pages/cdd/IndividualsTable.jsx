@@ -5,6 +5,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { countryName, flagClass } from '../../data/countries.js';
 import { nodeTypeLabel } from '../../api/ownership.js';
 import { tokens, fonts } from '../../theme/theme.js';
+import { dealName } from '../../utils/dealName.js';
 
 const dateFmt = new Intl.DateTimeFormat('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -79,7 +80,7 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
                       '&:hover': { color: tokens.blue, textDecoration: 'underline' },
                     }}
                   >
-                    {r.propertyAddress ?? r.dealReference}
+                    {dealName(r.propertyAddress)}
                   </Box>
                 </Tooltip>
               </TableCell>

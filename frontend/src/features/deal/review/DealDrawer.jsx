@@ -139,7 +139,7 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
               color: tokens.blue,
             }}
           >
-            {deal?.reference ?? 'This deal'}
+            This deal
           </Typography>
           <Typography
             sx={{

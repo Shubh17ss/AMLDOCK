@@ -206,7 +206,7 @@ class DealNotificationEnqueuerTest {
         assertThat(payload).contains("\"branchName\":\"Ponsonby\"");
         assertThat(payload).contains("\"actorName\":\"Ada Officer\"");
         // Trailing slash on the configured base URL must not double up.
-        assertThat(payload).contains("\"dealUrl\":\"http://localhost:5173/deals/42\"");
+        assertThat(payload).contains("\"dealUrl\":\"http://localhost:5173/deals/k7m2x9qa4tbe\"");
     }
 
     /* ---------- degenerate cases ---------- */
@@ -258,6 +258,7 @@ class DealNotificationEnqueuerTest {
         Deal d = new Deal();
         setId(d, 42L);
         d.setReference("DEAL-2026-0042");
+        d.setPublicId("k7m2x9qa4tbe");
         d.setFirmBranchId(BRANCH);
         d.setCreatedByUserId(BROKER);
         d.setStatus(DealStatus.NEW);

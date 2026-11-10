@@ -53,7 +53,8 @@ const TAB_VALUES = TABS.map((t) => t.value);
 
 export function DealReviewScreen() {
   const { id } = useParams();
-  const dealId = Number(id);
+  // The deal's public id, as it appears in the URL. Never a number.
+  const dealId = id;
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname } = location;

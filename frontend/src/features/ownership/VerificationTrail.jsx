@@ -5,6 +5,7 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import { getVerificationTrail } from '../../api/ownership.js';
 import { tokens, fonts } from '../../theme/theme.js';
 import { formatVerifiedAt, verificationDisplay } from './verificationDisplay.js';
+import { dealName } from '../../utils/dealName.js';
 
 /**
  * The verifications granted to this owner on every deal they have been picked onto.
@@ -54,7 +55,7 @@ function TrailRow({ entry: e, onOpen }) {
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}
           >
-            {e.propertyAddress ?? e.dealReference}
+            {dealName(e.propertyAddress)}
           </Typography>
         </Stack>
         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.5 }}>
@@ -83,7 +84,7 @@ function TrailRow({ entry: e, onOpen }) {
         border: `1px solid ${tokens.hairline}`,
         '&:hover': { borderColor: tokens.blue, backgroundColor: tokens.blueWash },
       }}
-      aria-label={`Open ${e.propertyAddress ?? e.dealReference}`}
+      aria-label={`Open ${dealName(e.propertyAddress)}`}
     >
       {body}
     </ButtonBase>

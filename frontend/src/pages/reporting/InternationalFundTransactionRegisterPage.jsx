@@ -187,7 +187,6 @@ export function InternationalFundTransactionRegisterPage() {
                       <Typography sx={{ fontSize: '0.875rem', color: tokens.ink }}>
                         {tx.listingAddress}
                       </Typography>
-                      {tx.branchName && <Chip size="small" label={tx.branchName} />}
                     </Stack>
                   </TableCell>
                   <TableCell>

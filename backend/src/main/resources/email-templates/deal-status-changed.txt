@@ -1,8 +1,7 @@
 Hi {{recipientName_plain}},
 
-{{actorName_plain}} moved deal {{reference_plain}} from {{fromStatus_plain}} to {{toStatus_plain}}.
+{{actorName_plain}} moved the deal at {{propertyAddress_plain}} from {{fromStatus_plain}} to {{toStatus_plain}}.
 
-Reference:  {{reference_plain}}
 Now:        {{toStatus_plain}}
 Previously: {{fromStatus_plain}}
 Client:     {{clientName_plain}}

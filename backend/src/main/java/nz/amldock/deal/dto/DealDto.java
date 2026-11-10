@@ -12,7 +12,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 public record DealDto(
-        Long id,
+        /** The deal's public id — see {@link nz.amldock.deal.PublicIds}. */
+        String id,
         String reference,
         DealStatus status,
         TransactionType transactionType,
@@ -59,11 +60,11 @@ public record DealDto(
         // V51 — tenure asked and not known yet.
         boolean ownershipTenureTbc
 ) {
-    public static DealDto from(DealFields d, Long firmId, String firmName, String branchName,
+    public static DealDto from(DealFields d, String publicId, Long firmId, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
                                String createdByEmail) {
         return new DealDto(
-                d.getDealId(), d.getReference(), d.getStatus(), d.getTransactionType(),
+                publicId, d.getReference(), d.getStatus(), d.getTransactionType(),
                 d.getTransactionValue(), d.getFirmBranchId(), firmId, firmName, branchName,
                 d.getPocName(), d.getPocRole(), d.getPocPhone(), d.getPocEmail(),
                 property, client, d.getNotes(),

@@ -2,7 +2,10 @@ package nz.amldock.ownership;
 
 import nz.amldock.ownership.dto.NodeDto;
 import nz.amldock.ownership.dto.UpdateNodeRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.mock.mockito.SpyBean;
+import nz.amldock.deal.DealRefResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,11 +46,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("dev")
 class NodeVerificationEndpointsWebTest {
 
+    // Deals are named by public id on the wire; this one stands for deal 1.
+    @SpyBean DealRefResolver dealRefs;
+
+    @BeforeEach
+    void namesDealOne() {
+        org.mockito.Mockito.doReturn(1L).when(dealRefs).resolve("abcdefghjkmn");
+    }
+
     @Autowired MockMvc mvc;
     @MockBean OwnershipService ownership;
 
     private static final Instant VERIFIED_AT = Instant.parse("2026-09-27T09:15:00Z");
-    private static final String ROUTE = "/api/deals/1/ownership/nodes/42/verification";
+    private static final String ROUTE = "/api/deals/abcdefghjkmn/ownership/nodes/42/verification";
 
     private static NodeDto verified(NodeVerificationStatus status, String notes) {
         OwnershipNode n = new OwnershipNode();
