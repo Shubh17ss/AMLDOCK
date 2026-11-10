@@ -107,7 +107,8 @@ public class DealNotificationEnqueuer {
 
         List<DealNotificationPreferenceRepository.RecipientCandidate> candidates =
                 preferences.findRecipientCandidates(
-                        branch.getId(), event.name(), deal.getCreatedByUserId(), actor.id());
+                        branch.getId(), deal.getId(), event.name(),
+                        deal.getCreatedByUserId(), actor.id());
         if (candidates.isEmpty()) return;
 
         RealEstateFirm firm = firms.findById(branch.getRealEstateFirmId()).orElse(null);

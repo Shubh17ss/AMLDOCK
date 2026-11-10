@@ -162,7 +162,8 @@ class DealNotificationEnqueuerTest {
         // The actor id is passed down so the database can leave them out, rather than every
         // recipient being fetched and then filtered here.
         verify(preferences).findRecipientCandidates(
-                eq(BRANCH), eq(DealNotificationEvent.DEAL_CREATED.name()), eq(BROKER), eq(ACTOR));
+                eq(BRANCH), eq(42L), eq(DealNotificationEvent.DEAL_CREATED.name()),
+                eq(BROKER), eq(ACTOR));
     }
 
     /* ---------- status changes ---------- */
@@ -174,7 +175,8 @@ class DealNotificationEnqueuerTest {
 
         enqueuer.enqueueStatusChanged(d, principal(), DealStatus.REVIEW);
 
-        verify(preferences, never()).findRecipientCandidates(anyLong(), anyString(), anyLong(), anyLong());
+        verify(preferences, never()).findRecipientCandidates(
+                anyLong(), anyLong(), anyString(), anyLong(), anyLong());
         verify(notifications, never()).saveAll(any());
     }
 
@@ -238,7 +240,7 @@ class DealNotificationEnqueuerTest {
     /* ---------- helpers ---------- */
 
     private void givenCandidates(DealNotificationPreferenceRepository.RecipientCandidate... cs) {
-        when(preferences.findRecipientCandidates(anyLong(), anyString(), any(), anyLong()))
+        when(preferences.findRecipientCandidates(anyLong(), anyLong(), anyString(), any(), anyLong()))
                 .thenReturn(List.of(cs));
     }
 
