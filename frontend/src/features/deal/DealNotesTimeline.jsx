@@ -4,16 +4,11 @@ import {
   Alert, Box, Button, Card, CardContent, CircularProgress, Divider, Stack, TextField, Typography,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { addDealNote, listDealNotes } from '../../api/deals.js';
 import { fetchDownloadUrl } from '../../api/documents.js';
 import { DealStatusChip } from '../../components/DealStatusChip.jsx';
-import { dealStatusLabel } from '../../data/dealStatus.js';
 import { formatDateTime } from '../../utils/formatters.js';
 import { tokens, fonts } from '../../theme/theme.js';
-
-/** A finished file takes no more notes — the server refuses them too (DealService.comment). */
-const CLOSED_TO_NOTES = ['VERIFIED', 'CLOSED'];
 
 /**
  * The deal's notes: the broker's opening note, then every note added here, oldest first.
@@ -22,8 +17,7 @@ const CLOSED_TO_NOTES = ['VERIFIED', 'CLOSED'];
  * Transaction monitoring view's story and the audit log's; this one is the conversation people
  * had about the file.
  *
- * @param dealStatus the live deal's status. Verified and closed deals show the thread but no
- *                 composer.
+ * <p>Open to new notes in every status, verified and closed included (DealService.comment).
  *
  * @param embedded true when this owns a whole tab, which makes the card and the "Notes" heading
  *                 around it redundant — the tab already said so.
@@ -33,7 +27,7 @@ const CLOSED_TO_NOTES = ['VERIFIED', 'CLOSED'];
  *                 moment.
  */
 export function DealNotesTimeline({
-  dealId, status, dealStatus, canComment = true, embedded = false, frozenEntries = null,
+  dealId, status, canComment = true, embedded = false, frozenEntries = null,
 }) {
   const qc = useQueryClient();
   const [body, setBody] = useState('');
@@ -62,8 +56,7 @@ export function DealNotesTimeline({
   // A frozen thread is already in hand: nothing to load, nothing to fail, and nothing to add to.
   const loading = !frozenEntries && q.isLoading;
   const failed = !frozenEntries && q.isError;
-  const closedToNotes = CLOSED_TO_NOTES.includes(dealStatus);
-  const mayComment = canComment && !frozenEntries && !closedToNotes;
+  const mayComment = canComment && !frozenEntries;
 
   // One body, two frames. Built as an element rather than a wrapper component: a component
   // declared here would be a new type on every render, and React would remount the whole subtree
@@ -94,15 +87,6 @@ export function DealNotesTimeline({
             <TimelineEntry key={e.id ?? `creation-${i}`} entry={e} last={i === entries.length - 1} />
           ))}
         </Stack>
-
-        {canComment && !frozenEntries && closedToNotes && (
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2.5, color: tokens.muted }}>
-            <LockOutlinedIcon sx={{ fontSize: '1rem' }} />
-            <Typography variant="body2">
-              Notes are closed — this deal is {dealStatusLabel(dealStatus)}.
-            </Typography>
-          </Stack>
-        )}
 
         {mayComment && (
           <Box sx={{ mt: 2.5 }}>

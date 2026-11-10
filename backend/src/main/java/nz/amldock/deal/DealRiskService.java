@@ -230,6 +230,11 @@ public class DealRiskService {
         if (dealId == null) return null;
         Deal deal = deals.findById(dealId).orElse(null);
         if (deal == null) return null;
+        // A verified or closed deal's risk is part of its sign-off; nothing moves it until the
+        // deal is reopened.
+        if (deal.getStatus() == DealStatus.VERIFIED || deal.getStatus() == DealStatus.CLOSED) {
+            return null;
+        }
 
         RiskRating previous = deal.getRiskRating();
         if (!apply(deal)) return null;

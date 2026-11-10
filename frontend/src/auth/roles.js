@@ -230,3 +230,28 @@ export function navProfileFor(role) {
   if (role === 'ROOT') return 'root';
   return 'agent';
 }
+
+/** Who may delay CDD on a deal: every role that writes, except finance. Mirrors DealService.setCddDelayed. */
+export const canDelayCdd = (role) => canWrite(role) && role !== 'FINANCE';
+
+/**
+ * Who may grant or revoke access to a deal. Mirrors DealUserService.mustManage, and like it does
+ * not depend on the deal's status: access can change whether the deal is new or closed.
+ */
+export function canManageDealAccess(user, deal) {
+  if (!user || !deal) return false;
+  switch (user.role) {
+    case 'ROOT':
+    case 'AML_COMPLIANCE_OFFICER':
+    case 'SENIOR_MANAGER':
+      return true;
+    case 'SALES_MANAGER':
+      return user.firmBranchId != null && user.firmBranchId === deal.firmBranchId;
+    case 'AGENT':
+    case 'AGENT_PA':
+    case 'ADMIN':
+      return user.userId === deal.createdByUserId;
+    default:
+      return false;
+  }
+}

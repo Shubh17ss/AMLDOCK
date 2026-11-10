@@ -66,6 +66,10 @@ public enum AuditAction {
     DEAL_RISK_APPROVAL_WITHDRAWN,
     /** A reviewer manually overrode the risk band, whether overruling the engine or agreeing with it. */
     DEAL_RISK_OVERRIDDEN,
+    /** Someone recorded that CDD on the transaction is being delayed. */
+    DEAL_CDD_DELAYED,
+    /** A CDD delay was undone while the deal was still being worked. */
+    DEAL_CDD_DELAY_UNDONE,
     /** A reviewer assured a signed-off version of a deal: they looked again and it holds up. */
     DEAL_VERSION_ASSURED,
     /** A reviewer found a signed-off version needs action, and recorded the issues and remediation. */

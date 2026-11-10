@@ -58,7 +58,10 @@ public record DealDto(
         boolean riskApproved,
         String riskOverrideComment,
         // V51 — tenure asked and not known yet.
-        boolean ownershipTenureTbc
+        boolean ownershipTenureTbc,
+        // V64 — CDD delayed on this transaction, and since when.
+        boolean cddDelayed,
+        Instant cddDelayedAt
 ) {
     public static DealDto from(DealFields d, String publicId, Long firmId, String firmName, String branchName,
                                PropertyDto property, ClientDto client,
@@ -79,6 +82,7 @@ public record DealDto(
                 d.getOwnershipTenureYears(), d.getOwnershipTenureMonths(),
                 d.getFaceToFaceIdVerified(), d.getKeyContactNodeId(),
                 d.getRiskValue(), d.isRiskApproved(), d.getRiskOverrideComment(),
-                d.isOwnershipTenureTbc());
+                d.isOwnershipTenureTbc(),
+                d.isCddDelayed(), d.getCddDelayedAt());
     }
 }

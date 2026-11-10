@@ -310,6 +310,22 @@ public class DealController {
         return deals.overrideRisk(id, req.rating(), req.comment());
     }
 
+    /* ---------- delay CDD ---------- */
+    // Every role but the auditor and finance. DealService repeats the check against the deal's
+    // own branch and refuses a verified or closed deal.
+
+    @PostMapping("/{id}/cdd-delay")
+    @PreAuthorize("!hasAnyRole('AUDIT','FINANCE')")
+    public DealDto delayCdd(@DealRef("id") Long id) {
+        return deals.toDtoAfterMutation(deals.setCddDelayed(id, true));
+    }
+
+    @DeleteMapping("/{id}/cdd-delay")
+    @PreAuthorize("!hasAnyRole('AUDIT','FINANCE')")
+    public DealDto undoCddDelay(@DealRef("id") Long id) {
+        return deals.toDtoAfterMutation(deals.setCddDelayed(id, false));
+    }
+
     /* ---------- notes timeline ---------- */
     // No @PreAuthorize: a note is exactly as readable and writable as the deal it belongs to, and
     // DealService runs assertCanRead on both paths. Annotating by role here would be a second,

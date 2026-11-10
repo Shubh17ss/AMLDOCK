@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { getDeal } from '../api/deals.js';
+import { delayCdd, getDeal, undoCddDelay } from '../api/deals.js';
 import { getDealVersion, listDealVersions } from '../api/dealVersions.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
 import { NotFoundPage } from './NotFoundPage.jsx';
-import { canOverride, canWrite, isDealAuthor, isDealReviewer } from '../auth/roles.js';
+import {
+  canDelayCdd, canManageDealAccess, canOverride, canWrite, isDealAuthor, isDealReviewer,
+} from '../auth/roles.js';
+import { useToast } from '../components/ToastProvider.jsx';
+import { DelayCddDialog } from '../features/deal/DelayCddDialog.jsx';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
@@ -90,6 +94,9 @@ export function DealReviewScreen() {
   const [closeOpen, setCloseOpen]           = useState(false);
   const [assuranceOpen, setAssuranceOpen]   = useState(false);
   const [actionError, setActionError]       = useState(null);
+  const [delayOpen, setDelayOpen]           = useState(false);
+  const { showToast } = useToast();
+  const qc = useQueryClient();
 
   /*
    * Which version is on screen, or null for the live deal.
@@ -213,6 +220,21 @@ export function DealReviewScreen() {
     onFailed: setActionError,
   });
 
+  // Delay CDD and its undo. Both refresh the deal, which is what drives the banner.
+  const delayMut = useMutation({
+    mutationFn: (delayed) => (delayed ? delayCdd(dealId) : undoCddDelay(dealId)),
+    onSuccess: (_, delayed) => {
+      qc.invalidateQueries({ queryKey: ['deals'] });
+      setDelayOpen(false);
+      setActionError(null);
+      showToast({ severity: 'success', message: delayed ? 'CDD delayed' : 'CDD delay undone' });
+    },
+    onError: (err) => {
+      setDelayOpen(false);
+      setActionError(err.response?.data?.message || 'That didn’t go through. Try again.');
+    },
+  });
+
   if (dealQ.isLoading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
   }
@@ -318,9 +340,17 @@ export function DealReviewScreen() {
    * depend on the deal having a transition available — rating a deal is not a move along the
    * lifecycle — and it is not gated on canEditContent either, because setting a risk level is a
    * compliance act on a deal under review, which is exactly when the deal itself is closed to
-   * content changes. The server checks the same thing, scoped to the deal's own firm.
+   * content changes. A verified or closed deal is different: its risk is part of the sign-off,
+   * so it is locked until the deal is reopened. The server checks the same thing, scoped to the
+   * deal's own firm.
    */
-  const canDecideRisk = isDealReviewer(user?.role) && canWrite(user?.role) && !snapshot;
+  const signedOff = liveDeal.status === 'VERIFIED' || liveDeal.status === 'CLOSED';
+  const canDecideRisk = isDealReviewer(user?.role) && canWrite(user?.role) && !snapshot
+    && !signedOff;
+
+  // Delay CDD: any role that writes except finance, while the deal is still being worked. The
+  // flag itself stays visible after verify or close; only changing it is closed off.
+  const canToggleDelay = canDelayCdd(user?.role) && !snapshot && !signedOff;
 
   const versions = versionsQ.data ?? [];
   // The version the deal stands on: newest first, and not yet worked past.
@@ -359,7 +389,7 @@ export function DealReviewScreen() {
         {/* History on the left — where the deal has been (transaction monitoring) and what was
             signed off (CDD versions). Absent until the deal has been verified once. Actions on the
             right: compliance's assurance verdict, then the deal's next move. */}
-        {(canUpdateStatus || canUpdateAssurance || showVersionLinks) && (
+        {(canUpdateStatus || canUpdateAssurance || showVersionLinks || canToggleDelay) && (
           <Stack direction="row" justifyContent="space-between" alignItems="center"
             spacing={1} flexWrap="wrap" useFlexGap sx={{ py: 1.5 }}>
             <Stack direction="row" spacing={1}>
@@ -376,6 +406,11 @@ export function DealReviewScreen() {
               )}
             </Stack>
             <Stack direction="row" spacing={1}>
+              {canToggleDelay && !liveDeal.cddDelayed && (
+                <Button variant="outlined" size="small" onClick={() => setDelayOpen(true)}>
+                  Delay CDD
+                </Button>
+              )}
               {canUpdateAssurance && (
                 <Button variant="outlined" size="small" onClick={() => setAssuranceOpen(true)}>
                   Update Assurance
@@ -409,6 +444,28 @@ export function DealReviewScreen() {
         summary={snapshot?.summary}
         onBackToCurrent={() => setViewingVersion(null)}
       />
+
+      {/* Shown whatever the status, so a verified or closed deal still says CDD was delayed.
+          Undo only while the delay can still be changed. */}
+      {deal.cddDelayed && (
+        <Alert
+          severity="info"
+          sx={{ py: 0.5, alignItems: 'center' }}
+          action={canToggleDelay ? (
+            <Button
+              color="inherit"
+              size="small"
+              disabled={delayMut.isPending}
+              onClick={() => delayMut.mutate(false)}
+              sx={{ textDecoration: 'underline', textTransform: 'none', fontWeight: 600 }}
+            >
+              Undo
+            </Button>
+          ) : null}
+        >
+          CDD has been <strong>delayed</strong> on this transaction.
+        </Alert>
+      )}
 
       {/* The version banner already says the page is read-only and why, so this one would be a
           second answer to a question the reader has stopped asking. */}
@@ -528,6 +585,8 @@ export function DealReviewScreen() {
         // Commenting is not editing — a reviewer may still add a note to a deal they can no
         // longer change. Only the auditor, who writes nothing anywhere, is kept out.
         canComment={canWrite(user?.role)}
+        // Granting and revoking access is open in every status, to the roles the server allows.
+        canManageAccess={canManageDealAccess(user, liveDeal) && !snapshot}
         // The thread as it stood at the sign-off, which also turns off the composer and the live
         // audit tab. Null on the live deal, where the drawer fetches its own.
         frozenNotes={snapshot?.notes ?? null}
@@ -574,6 +633,13 @@ export function DealReviewScreen() {
           onClose={() => setAssuranceOpen(false)}
         />
       )}
+
+      <DelayCddDialog
+        open={delayOpen}
+        submitting={delayMut.isPending}
+        onConfirm={() => delayMut.mutate(true)}
+        onClose={() => setDelayOpen(false)}
+      />
 
       <DealStatusDialog
         open={statusOpen}

@@ -20,6 +20,8 @@ import { ACCEPTED_DOCUMENT_TYPES } from '../api/ownership.js';
 import { getDeal } from '../api/deals.js';
 import { formatPropertyAddressShort } from '../data/addressFinderMeta.js';
 import { useToast } from './ToastProvider.jsx';
+import { EmptyState } from './EmptyState.jsx';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { tokens } from '../theme/theme.js';
 import { formatBytes, formatDateTime } from '../utils/formatters.js';
 
@@ -249,7 +251,11 @@ export function DocumentUploader({
         </Paper>
       )}
 
-      {rows.length > 0 && (
+      {/* With no upload row (a verified or closed deal, a version, a read-only viewer) an empty
+          list would otherwise leave the tab blank. Waits for the list, so it never flashes. */}
+      {!mayUpload && rows.length === 0 && (frozenDocuments || listQ.isSuccess) && (
+        <Alert severity="info">No documents attached</Alert>)}
+        {rows.length > 0 && (
         <Stack spacing={1}>
           <Typography variant="subtitle2" sx={{ color: tokens.ink }}>Attached documents</Typography>
           <TableContainer
