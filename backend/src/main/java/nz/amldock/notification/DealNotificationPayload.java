@@ -64,7 +64,17 @@ public record DealNotificationPayload(
         // Built by us from APP_BASE_URL and a numeric id, so it carries no user input. It appears
         // in an href and in the text body unchanged, so there is only one form of it.
         data.put("dealUrl", dealUrl == null ? "" : dealUrl);
+        // The logo the account emails share, served by the same app the deal link points into.
+        // Derived from the link rather than stored, so notifications already queued get it too.
+        data.put("logoUrl", logoUrlFrom(dealUrl));
         return data;
+    }
+
+    /** {@code https://app/deals/abc…} → {@code https://app/email/amldock-logo.png}. */
+    static String logoUrlFrom(String dealUrl) {
+        if (dealUrl == null) return "";
+        int at = dealUrl.indexOf("/deals/");
+        return at < 0 ? "" : nz.amldock.email.EmailLayout.logoUrl(dealUrl.substring(0, at));
     }
 
     private static void put(Map<String, String> data, String name, String value) {

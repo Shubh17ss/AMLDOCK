@@ -43,30 +43,15 @@ public class WelcomeEmail {
                 — AMLDOCK
                 """.formatted(fullName, roleLabel, loginUrl, recipientEmail);
 
-        String html = """
-                <!doctype html>
-                <html><body style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937; max-width: 520px; margin:0 auto; padding: 24px;">
-                  <h2 style="color:#1f4b7a; margin-top:0;">Welcome to AMLDOCK</h2>
-                  <p>Hi %s,</p>
-                  <p>An AMLDOCK account has been created for you with the role <strong>%s</strong>.</p>
-
-                  <table style="border-collapse: collapse; margin: 16px 0;">
-                    <tr><td style="padding: 4px 12px 4px 0; color:#6b7280;">Email</td><td><strong>%s</strong></td></tr>
-                  </table>
-
-                  <p style="color:#374151;">Your account is passwordless. Enter your email at sign-in and
-                     we'll send you a one-time code to complete login.</p>
-
-                  <p style="margin: 20px 0;">
-                    <a href="%s" style="display:inline-block; background:#1f4b7a; color:#ffffff; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Sign in</a>
-                  </p>
-
-                  <p style="color:#6b7280; font-size: 13px;">
-                    If you weren't expecting this email, contact your administrator.
-                  </p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
-                </body></html>
-                """.formatted(escape(fullName), escape(roleLabel), escape(recipientEmail), loginUrl);
+        String body = EmailLayout.paragraph("Hi " + escape(fullName) + ",")
+                + EmailLayout.paragraph("An AMLDOCK account has been created for you as <strong>"
+                        + escape(roleLabel) + "</strong>.")
+                + EmailLayout.paragraph("Sign in with <strong>" + escape(recipientEmail) + "</strong>.")
+                + EmailLayout.paragraph("Your account is passwordless: enter your email at sign-in and we'll"
+                        + " send you a one-time code to complete login.")
+                + EmailLayout.button(loginUrl, "Sign in")
+                + EmailLayout.finePrint("If you weren't expecting this email, contact your administrator.");
+        String html = EmailLayout.page(EmailLayout.logoUrl(appBaseUrl), "Welcome to AMLDOCK", body);
 
         return EmailMessage.of(recipientEmail, SUBJECT, html, text);
     }
@@ -86,10 +71,6 @@ public class WelcomeEmail {
     }
 
     private static String escape(String s) {
-        if (s == null) return "";
-        return s.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
+        return EmailLayout.escape(s);
     }
 }
