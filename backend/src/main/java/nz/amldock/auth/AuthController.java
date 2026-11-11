@@ -6,6 +6,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import nz.amldock.auth.dto.AuthResponse;
 import nz.amldock.auth.dto.LoginRequest;
+import nz.amldock.auth.dto.MobileAuthResponse;
+import nz.amldock.auth.dto.MobileLogoutRequest;
+import nz.amldock.auth.dto.MobileRefreshRequest;
 import nz.amldock.auth.dto.OtpRequestRequest;
 import nz.amldock.auth.dto.OtpVerifyRequest;
 import nz.amldock.user.UserPrincipal;
@@ -66,6 +69,26 @@ public class AuthController {
         String raw = readCookie(request, AuthService.REFRESH_COOKIE);
         Long userId = principal == null ? null : principal.id();
         auth.logout(raw, userId, response);
+    }
+
+    /* ---------- native mobile app: tokens in the body, no cookies ---------- */
+
+    @PostMapping("/mobile/otp/verify")
+    public MobileAuthResponse verifyOtpMobile(@Valid @RequestBody OtpVerifyRequest req) {
+        return auth.verifyLoginOtpMobile(req.email(), req.code());
+    }
+
+    @PostMapping("/mobile/refresh")
+    public MobileAuthResponse refreshMobile(@Valid @RequestBody MobileRefreshRequest req) {
+        return auth.refreshMobile(req.refreshToken());
+    }
+
+    @PostMapping("/mobile/logout")
+    public ResponseEntity<Void> logoutMobile(@AuthenticationPrincipal UserPrincipal principal,
+                                             @Valid @RequestBody(required = false) MobileLogoutRequest req) {
+        Long userId = principal == null ? null : principal.id();
+        auth.logoutMobile(req == null ? null : req.refreshToken(), userId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me")

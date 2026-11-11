@@ -32,7 +32,8 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
 
     static final Set<String> LIMITED_PATHS = Set.of(
             "/api/auth/otp/request", "/api/auth/otp/verify",
-            "/api/auth/admin/login", "/api/auth/admin/verify");
+            "/api/auth/admin/login", "/api/auth/admin/verify",
+            "/api/auth/mobile/otp/verify");
 
     private static final long WINDOW_MILLIS = 60_000;
 
