@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Card, CardContent, Divider, FormControlLabel,
-  Stack, Switch, TextField, Typography,
+  Alert, Box, Button, Card, CardContent, Divider,
+  Stack, TextField, Typography,
 } from '@mui/material';
 import { updateFirm } from '../../api/firms.js';
 import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
@@ -13,8 +13,8 @@ import { useToast } from '../../components/ToastProvider.jsx';
 import { emailFieldProps, isBadEmail } from '../../utils/email.js';
 
 /**
- * Reporting entity details form. `editableIdentity` (ROOT) unlocks the name, NZBN/ABN, country,
- * active flag and branch count; otherwise those are read-only and only the liaison and compliance
+ * Reporting entity details form. `editableIdentity` (ROOT) unlocks the name, NZBN/ABN, country
+ * and branch count; otherwise those are read-only and only the liaison and compliance
  * officer blocks are editable. The server refuses a branch count from anyone but ROOT.
  */
 export function FirmDetailsCard({ firm, editableIdentity = false }) {
@@ -43,7 +43,6 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
         payload.name = form.name;
         payload.nzbn = form.nzbn;
         payload.country = form.country;
-        payload.active = form.active;
       }
       return updateFirm(firm.publicId, payload);
     },
@@ -78,13 +77,6 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
             <TextField label="NZBN/ABN" value={form.nzbn ?? ''} onChange={ch('nzbn')}
                        InputProps={{ readOnly: !editableIdentity }} disabled={!editableIdentity}
                        helperText={editableIdentity ? undefined : "NZBN/ABN can't be changed."} />
-            {editableIdentity && (
-              <FormControlLabel
-                control={<Switch checked={Boolean(form.active)}
-                                 onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} />}
-                label="Active"
-              />
-            )}
 
             <Typography variant="subtitle2" sx={{ color: tokens.muted }}>Liaison</Typography>
             <TextField label="Liaison name" value={form.liaisonName ?? ''} onChange={ch('liaisonName')} />

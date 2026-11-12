@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, TextField, Tooltip, Typography,
+  Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import { InstantSwitch } from '../../components/InstantSwitch.jsx';
+import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import BlockRoundedIcon from '@mui/icons-material/BlockRounded';
+import { ActiveStatusChip } from './ActiveStatusChip.jsx';
 import EditIcon from '@mui/icons-material/Edit';
 import { createBranch, deactivateBranch, listBranches, updateBranch } from '../../api/firms.js';
 import { tokens } from '../../theme/theme.js';
@@ -19,12 +22,17 @@ const EMPTY_BRANCH = {
 };
 
 /**
- * Branches of a firm with add / edit, and (for ROOT / senior managers) deactivate.
+ * Branches of a reporting entity with add / edit.
+ *
+ * `adminView` is ROOT's page: a read-only Status column and a ⋯ menu per branch (Edit, Deactivate,
+ * Delete). Otherwise — the entity's own staff — there is no status column, and actions are Edit
+ * plus, for senior managers (`canDeactivate`), the deactivate icon.
+ *
  * `firmRef` is the reporting entity's public id. `maxBranches` is the count declared in the
  * reporting entity's details (set by ROOT) — adding beyond it is blocked here
  * and, authoritatively, by the API.
  */
-export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches = null }) {
+export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches = null, adminView = false }) {
   const qc = useQueryClient();
   const { showToast } = useToast();
   const branchesQ = useQuery({
@@ -38,22 +46,6 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
   const activeCount = branchesQ.data?.filter((b) => b.active).length ?? 0;
   const atLimit = maxBranches != null && activeCount >= maxBranches;
 
-  const toggleActive = useMutation({
-    mutationFn: ({ id, active }) => updateBranch(id, { active }),
-  });
-
-  // Resolves only once the branch list has refetched — see InstantSwitch.
-  // A refusal is toasted and rethrown, so the switch still snaps back.
-  const setActive = async (branch, active) => {
-    try {
-      await toggleActive.mutateAsync({ id: branch.publicId, active });
-    } catch (e) {
-      showToast({ severity: 'error', message: e.response?.data?.message || 'That didn’t go through. Try again.' });
-      throw e;
-    }
-    await qc.invalidateQueries({ queryKey: ['firms', firmRef, 'branches'] });
-    showToast({ severity: 'success', message: `${branch.name} ${active ? 'activated' : 'deactivated'}` });
-  };
   const deleteMut = useMutation({
     mutationFn: (branch) => deactivateBranch(branch.publicId),
     onSuccess: (_, branch) => {
@@ -93,7 +85,8 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
                 <TableCell>City</TableCell>
                 <TableCell>Liaison</TableCell>
                 <TableCell>Phone</TableCell>
-                <TableCell>Active</TableCell>
+                {/* ROOT reads each branch's status; the entity's own staff do not see the column. */}
+                {adminView && <TableCell>Status</TableCell>}
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -104,12 +97,11 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
                   <TableCell>{b.city ?? '—'}</TableCell>
                   <TableCell>{b.managerName ?? '—'}</TableCell>
                   <TableCell>{b.phone ?? '—'}</TableCell>
-                  <TableCell>
-                    <InstantSwitch size="small" checked={b.active}
-                                   disabled={!canDeactivate}
-                                   onToggle={(active) => setActive(b, active)} />
-                  </TableCell>
+                  {adminView && <TableCell><ActiveStatusChip active={b.active} /></TableCell>}
                   <TableCell align="right">
+                    {adminView ? (
+                      <BranchActionsMenu branch={b} onEdit={() => setEditTarget(b)} />
+                    ) : (<>
                     <Tooltip title="Edit">
                       <IconButton size="small" onClick={() => setEditTarget(b)}>
                         <EditIcon fontSize="small" />
@@ -123,12 +115,13 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
                         </IconButton>
                       </Tooltip>
                     )}
+                    </>)}
                   </TableCell>
                 </TableRow>
               ))}
               {branchesQ.data?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 3, color: tokens.muted }}>
+                  <TableCell colSpan={adminView ? 6 : 5} align="center" sx={{ py: 3, color: tokens.muted }}>
                     No branches yet.
                   </TableCell>
                 </TableRow>
@@ -141,6 +134,43 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
       <BranchDialog mode="create" firmRef={firmRef} open={createOpen} onClose={() => setCreateOpen(false)} />
       <BranchDialog mode="edit" firmRef={firmRef} branch={editTarget} onClose={() => setEditTarget(null)} />
     </Card>
+  );
+}
+
+/**
+ * ROOT's per-branch actions behind one ⋯ button. Edit opens the branch dialog; Deactivate and
+ * Delete are placed now and wired up in the next phase.
+ */
+function BranchActionsMenu({ branch, onEdit }) {
+  const [anchor, setAnchor] = useState(null);
+  const close = () => setAnchor(null);
+
+  return (
+    <>
+      <IconButton size="small" aria-label={`Actions for ${branch.name}`}
+                  onClick={(e) => setAnchor(e.currentTarget)}>
+        <MoreVertRoundedIcon fontSize="small" />
+      </IconButton>
+      <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={close}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+        <MenuItem onClick={() => { close(); onEdit(); }}>
+          <ListItemIcon><EditOutlinedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Edit</ListItemText>
+        </MenuItem>
+        {/* Next phase: deactivate the branch. */}
+        <MenuItem onClick={close}>
+          {/* Amber: a step short of Delete's red — it can be undone. */}
+          <ListItemIcon><BlockRoundedIcon fontSize="small" sx={{ color: tokens.review }} /></ListItemIcon>
+          <ListItemText>Deactivate</ListItemText>
+        </MenuItem>
+        {/* Next phase: delete the branch. */}
+        <MenuItem onClick={close} sx={{ color: tokens.rejected }}>
+          <ListItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: tokens.rejected }} /></ListItemIcon>
+          <ListItemText>Delete</ListItemText>
+        </MenuItem>
+      </Menu>
+    </>
   );
 }
 

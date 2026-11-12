@@ -4,12 +4,14 @@ import { getFirm } from '../../api/firms.js';
 import { FirmDetailsCard } from './FirmDetailsCard.jsx';
 import { FirmUsersCard } from './FirmUsersCard.jsx';
 import { FirmBranchesCard } from './FirmBranchesCard.jsx';
+import { FirmDeactivateCard } from './FirmDeactivateCard.jsx';
 
 /**
  * Full management surface for a single reporting entity: details + users + branches. `firmId` is
  * the entity's public id. Shared by Settings › Reporting Entity (compliance officers, senior
  * managers, audit) and ROOT's per-entity page.
- *   - editableIdentity: ROOT may edit firm name / NZBN / active.
+ *   - editableIdentity: ROOT's page — name / NZBN / country / branch count editable, branch status
+ *     and actions menu, and the deactivate box at the bottom.
  *   - showUsers: firm users are managed in the dedicated Settings › Users section, so the
  *     reporting-entities view hides this card to avoid duplicating it.
  *   - branch deactivate is limited to ROOT and senior managers (the delete-capable roles).
@@ -35,7 +37,10 @@ export function FirmManageView({ firmId, currentUser, editableIdentity = false, 
       {/* Users filter by the numeric id, which the loaded entity carries. */}
       {showUsers && <FirmUsersCard firmId={firmQ.data.id} currentUser={currentUser} />}
       <FirmBranchesCard firmRef={firmId} canDeactivate={canDeactivateBranch}
-                        maxBranches={firmQ.data?.numberOfBranches ?? null} />
+                        maxBranches={firmQ.data?.numberOfBranches ?? null}
+                        adminView={editableIdentity} />
+      {/* ROOT's page only, and last: the one action here that takes the entity out of service. */}
+      {editableIdentity && <FirmDeactivateCard firm={firmQ.data} />}
     </Stack>
   );
 }

@@ -6,9 +6,9 @@ import {
   Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TextField, Typography,
 } from '@mui/material';
-import { createFirm, listFirms, updateFirm } from '../../api/firms.js';
+import { createFirm, listFirms } from '../../api/firms.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { InstantSwitch } from '../../components/InstantSwitch.jsx';
+import { ActiveStatusChip } from '../../features/firm/ActiveStatusChip.jsx';
 import { canWrite } from '../../auth/roles.js';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { useToast } from '../../components/ToastProvider.jsx';
@@ -19,36 +19,16 @@ import { tokens } from '../../theme/theme.js';
 import { emailFieldProps, isBadEmail } from '../../utils/email.js';
 
 export function FirmsAdminPage() {
-  const qc = useQueryClient();
-  const { showToast } = useToast();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   // The API returns every entity to ROOT and only their own to firm-level staff, so the table
-  // needs no filtering here — but creating entities and the active toggle stay platform-only.
-  // AUDIT reaches this screen to read the register; only ROOT creates entities, and the active
-  // switch additionally needs write.
+  // needs no filtering here — but creating entities stays platform-only. AUDIT reaches this screen
+  // to read the register; only ROOT creates entities. Status is read-only here: deactivating is
+  // done from the entity's own page.
   const isRoot = currentUser?.role === 'ROOT';
   const mayWrite = canWrite(currentUser?.role);
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
   const [createOpen, setCreateOpen] = useState(false);
-
-  const toggleActive = useMutation({
-    mutationFn: ({ ref, active }) => updateFirm(ref, { active }),
-  });
-
-  // Awaited through the invalidation, not just the PATCH — see InstantSwitch on why the optimistic
-  // position must outlive the refetch.
-  // A refusal is toasted and rethrown, so the switch still snaps back.
-  const setActive = async (firm, active) => {
-    try {
-      await toggleActive.mutateAsync({ ref: firm.publicId, active });
-    } catch (e) {
-      showToast({ severity: 'error', message: e.response?.data?.message || 'That didn’t go through. Try again.' });
-      throw e;
-    }
-    await qc.invalidateQueries({ queryKey: ['firms'] });
-    showToast({ severity: 'success', message: `${firm.name} ${active ? 'activated' : 'deactivated'}` });
-  };
 
   return (
     <Stack spacing={3}>
@@ -76,7 +56,7 @@ export function FirmsAdminPage() {
               <TableCell>Entity name</TableCell>
               <TableCell>NZBN/ABN</TableCell>
               <TableCell>Compliance officer</TableCell>
-              <TableCell>Active</TableCell>
+              <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -93,15 +73,7 @@ export function FirmsAdminPage() {
                 </TableCell>
                 <TableCell>{firm.nzbn ? <Chip size="small" label={firm.nzbn} /> : '—'}</TableCell>
                 <TableCell>{firm.complianceOfficerEmail ?? '—'}</TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  {/* Suspending an entity is platform-only — the API ignores `active` from
-                      firm-level staff, so don't offer a switch that would silently do nothing. */}
-                  <InstantSwitch
-                    checked={firm.active}
-                    disabled={!isRoot || !mayWrite}
-                    onToggle={(active) => setActive(firm, active)}
-                  />
-                </TableCell>
+                <TableCell><ActiveStatusChip active={firm.active} /></TableCell>
                 <TableCell align="right">
                   <Button size="small" variant="outlined"
                           onClick={() => navigate(`/settings/reporting-entities/${firm.publicId}`)}>
