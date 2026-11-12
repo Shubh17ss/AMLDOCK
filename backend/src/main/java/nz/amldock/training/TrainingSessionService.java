@@ -14,6 +14,7 @@ import nz.amldock.training.dto.UpdateTrainingSessionRequest;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
+import nz.amldock.user.FirmMembershipRepository;
 import nz.amldock.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,7 @@ public class TrainingSessionService {
     private final TrainingSessionAttendeeRepository attendees;
     private final TrainingProviderRepository providers;
     private final UserRepository users;
+    private final FirmMembershipRepository memberships;
     private final FirmBranchRepository branches;
     private final AuditService audit;
     private final TrainingNotifier notifier;
@@ -57,6 +59,7 @@ public class TrainingSessionService {
                                   TrainingSessionAttendeeRepository attendees,
                                   TrainingProviderRepository providers,
                                   UserRepository users,
+                                  FirmMembershipRepository memberships,
                                   FirmBranchRepository branches,
                                   AuditService audit,
                                   TrainingNotifier notifier) {
@@ -64,6 +67,7 @@ public class TrainingSessionService {
         this.attendees = attendees;
         this.providers = providers;
         this.users = users;
+        this.memberships = memberships;
         this.branches = branches;
         this.audit = audit;
         this.notifier = notifier;
@@ -263,7 +267,7 @@ public class TrainingSessionService {
                 ? Set.of()
                 : new LinkedHashSet<>(requestedUserIds.stream().filter(java.util.Objects::nonNull).toList());
 
-        TrainingScope.assertAssignable(users, session.getRealEstateFirmId(),
+        TrainingScope.assertAssignable(users, memberships, session.getRealEstateFirmId(),
                 session.getFirmBranchId(), wanted);
 
         List<TrainingSessionAttendee> existing = attendees.findAllByTrainingSessionId(session.getId());

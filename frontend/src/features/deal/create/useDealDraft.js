@@ -39,8 +39,12 @@ export function useDealDraft({ resumeDealId = null } = {}) {
   // saveNow/ensureDraft hang off its identity, so closing over the value — or adding it to the
   // dep array — would rebuild the whole chain and re-arm the autosave effect every time the
   // scope changed.
+  //
+  // Pinned to the first branch seen rather than tracking the scope: a form begun in one branch
+  // must not create its deal in another because the scope moved underneath it. A scope switch
+  // leaves this page anyway (ScopeSelector), so tracking could only ever pick up the wrong one.
   const branchIdRef = useRef(null);
-  branchIdRef.current = branch?.id ?? null;
+  if (branchIdRef.current == null) branchIdRef.current = branch?.id ?? null;
   // Serialises saves: a debounced autosave and a section advance can fire together, and two
   // concurrent PATCH sequences would race to decide which response is "current".
   const inFlightRef = useRef(Promise.resolve());

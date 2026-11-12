@@ -13,6 +13,10 @@ public enum AuditAction {
     // takes someone's access away, so it earns its own name in the trail.
     USER_ACTIVATED,
     USER_DEACTIVATED,
+    // An existing account given a membership in another reporting entity, and a session moved
+    // between entities. See MembershipService.
+    USER_ADDED_TO_ENTITY,
+    ENTITY_SWITCHED,
     // An email is the sign-in credential here, so a change of one is a change of credential.
     // Split three ways because they answer different questions: who asked, who confirmed it from
     // the new address, and who set one administratively without that confirmation.

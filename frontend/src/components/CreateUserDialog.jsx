@@ -51,6 +51,7 @@ export function CreateUserDialog({ open, onClose, currentUser, lockedFirmId, loc
  */
 function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, lockedBranch }) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   const creatorRole = currentUser?.role;
   const allowedRoles = creatableRoles(creatorRole);
   const isRoot = creatorRole === 'ROOT';
@@ -111,8 +112,17 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, 
       realEstateFirmId: needsFirm && firmId ? Number(firmId) : null,
       firmBranchId: resolvedBranchId(),
     }),
-    onSuccess: () => {
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['users'] });
+      // The address already had an account (a compliance officer or senior manager elsewhere, or
+      // someone switched off where they were), so it joined this entity instead — say so, since
+      // the name on it is theirs and may not be the one just typed.
+      if (created?.existingAccount) {
+        showToast({
+          severity: 'success',
+          message: `${created.email} already had an AMLDOCK account — added to this reporting entity`,
+        });
+      }
       setForm(emptyForm());
       setError(null);
       onClose();

@@ -52,6 +52,9 @@ class FirmPublicIdAndBranchCountTest {
         lenient().when(firms.findById(FIRM_ID)).thenReturn(Optional.of(firm));
         lenient().when(firms.findByPublicId(FIRM_REF)).thenReturn(Optional.of(firm));
         lenient().when(branches.findAllByRealEstateFirmIdOrderByNameAsc(FIRM_ID)).thenReturn(List.of());
+        // Onboarding provisions the compliance officer through UserService.create; a new account.
+        lenient().when(userService.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new UserService.Created(new UserService.Member(new nz.amldock.user.User(), null), false));
     }
 
     @AfterEach

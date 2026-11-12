@@ -26,6 +26,7 @@ import nz.amldock.training.dto.UpdateTrainingCourseRequest;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
+import nz.amldock.user.FirmMembershipRepository;
 import nz.amldock.user.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -68,6 +69,7 @@ public class TrainingCourseService {
     private final TrainingCourseQuestionOptionRepository options;
     private final TrainingCourseAssigneeRepository assignees;
     private final UserRepository users;
+    private final FirmMembershipRepository memberships;
     private final FirmBranchRepository branches;
     private final FileStorageService storage;
     private final AuditService audit;
@@ -82,6 +84,7 @@ public class TrainingCourseService {
                                  TrainingCourseQuestionOptionRepository options,
                                  TrainingCourseAssigneeRepository assignees,
                                  UserRepository users,
+                                 FirmMembershipRepository memberships,
                                  FirmBranchRepository branches,
                                  FileStorageService storage,
                                  AuditService audit,
@@ -95,6 +98,7 @@ public class TrainingCourseService {
         this.options = options;
         this.assignees = assignees;
         this.users = users;
+        this.memberships = memberships;
         this.branches = branches;
         this.storage = storage;
         this.audit = audit;
@@ -544,7 +548,7 @@ public class TrainingCourseService {
                 ? Set.of()
                 : new LinkedHashSet<>(requestedUserIds.stream().filter(Objects::nonNull).toList());
 
-        TrainingScope.assertAssignable(users, course.getRealEstateFirmId(),
+        TrainingScope.assertAssignable(users, memberships, course.getRealEstateFirmId(),
                 course.getFirmBranchId(), wanted);
 
         List<TrainingCourseAssignee> existing = assignees.findAllByTrainingCourseId(course.getId());

@@ -46,6 +46,7 @@ class AuditServiceScopeTest {
     @Mock UserRepository users;
 
     AuditService service;
+    final nz.amldock.user.MembershipFixture memberships = new nz.amldock.user.MembershipFixture();
 
     // Firm 1's compliance officer. Deal 500 lives in branch 10, which belongs to firm 2.
     final UserPrincipal firmOneOfficer =
@@ -53,7 +54,8 @@ class AuditServiceScopeTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuditService(repo, deals, branches, new DealLifecycleService(mock(DealUserRepository.class)), users);
+        service = new AuditService(repo, deals, branches, new DealLifecycleService(mock(DealUserRepository.class)), users,
+                memberships.repo);
     }
 
     @AfterEach

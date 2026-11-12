@@ -72,6 +72,13 @@ export function DashboardScopeProvider({ children }) {
 
   const currentFirmId = isRoot ? (firm?.id ?? null) : user?.realEstateFirmId;
 
+  // The entities this account is active in. More than one only for a compliance officer or senior
+  // manager serving several; for them the entity becomes a choice too, made by switching the
+  // session (AuthContext.switchEntity) rather than by setting state here — the server authorises
+  // by the session's entity, so the scope cannot get ahead of it.
+  const memberships = useMemo(() => user?.memberships ?? [], [user]);
+  const multiEntity = !isRoot && memberships.length > 1;
+
   // These three live here rather than in ScopeSelector because the selector is a presentational
   // sidebar component, and the dialog that blocks the shell must not depend on it having mounted:
   // seeding would never run and a firm-level user would face a chooser with nothing pre-filled.
@@ -225,14 +232,16 @@ export function DashboardScopeProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      firm, setFirm, branch, setBranch,
+      // No raw setters: a scope change from outside goes through selectScope, or better
+      // useScopeSwitch, which checks the branch with the server first.
+      firm, branch,
       firmOptions, activeBranches, selectFirm, selectBranch, selectScope,
       isRoot, branchLevel, branchSelectable, currentFirmId, currentFirmRef,
-      optionsLoading, scopeComplete, scopeSettled,
+      optionsLoading, scopeComplete, scopeSettled, memberships, multiEntity,
     }),
     [firm, branch, firmOptions, activeBranches, selectFirm, selectBranch, selectScope,
      isRoot, branchLevel, branchSelectable, currentFirmId, currentFirmRef,
-     optionsLoading, scopeComplete, scopeSettled],
+     optionsLoading, scopeComplete, scopeSettled, memberships, multiEntity],
   );
 
   return <DashboardScopeContext.Provider value={value}>{children}</DashboardScopeContext.Provider>;

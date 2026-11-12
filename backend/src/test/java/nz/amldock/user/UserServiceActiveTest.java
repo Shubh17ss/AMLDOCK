@@ -4,6 +4,7 @@ import nz.amldock.auth.RefreshTokenRepository;
 import nz.amldock.auth.TokenStateCache;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
+import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
@@ -54,6 +55,7 @@ class UserServiceActiveTest {
     @Mock TokenStateCache tokenStates;
 
     UserService service;
+    MembershipFixture memberships;
 
     final UserPrincipal root =
             new UserPrincipal(1L, "root@amldock.com", null, Role.ROOT, null, null, true);
@@ -66,7 +68,9 @@ class UserServiceActiveTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates);
+        memberships = new MembershipFixture();
+        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates,
+                memberships.repo, new MembershipService(memberships.repo, users, firms));
 
         // update() finishes with validateFirmLinkage, which re-checks that the firm and branch on
         // the row still exist and are active — it runs whatever field was actually changed.
@@ -97,7 +101,14 @@ class UserServiceActiveTest {
         u.setFirmBranchId(branchId);
         u.setActive(true);
         lenient().when(users.findById(id)).thenReturn(Optional.of(u));
+        memberships.addHome(u);
         return u;
+    }
+
+    /** Switched off in their entity, as a deactivation leaves them. */
+    private void deactivate(User u) {
+        memberships.in(u.getId(), u.getRealEstateFirmId()).orElseThrow().setActive(false);
+        u.setActive(false);
     }
 
     private static UpdateUserRequest setActive(boolean active) {
@@ -110,7 +121,7 @@ class UserServiceActiveTest {
     void aComplianceOfficerMaySuspendAnAgentInTheirOwnFirm() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(amlco, 50L, setActive(false));
+        service.update(amlco, 50L, null, setActive(false));
 
         assertThat(agent.isActive()).isFalse();
     }
@@ -118,9 +129,9 @@ class UserServiceActiveTest {
     @Test
     void andMayRestoreThemAgain() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
-        agent.setActive(false);
+        deactivate(agent);
 
-        service.update(amlco, 50L, setActive(true));
+        service.update(amlco, 50L, null, setActive(true));
 
         assertThat(agent.isActive()).isTrue();
     }
@@ -129,20 +140,23 @@ class UserServiceActiveTest {
     void rootMaySuspendAnyone() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(root, 50L, setActive(false));
+        service.update(root, 50L, null, setActive(false));
 
         assertThat(agent.isActive()).isFalse();
     }
 
     /* ---------- the limits ---------- */
 
+    /**
+     * Another entity's user is not a member of this one, so from here there is nobody to update —
+     * a 404, as the single-user read gives, rather than a 403 that would confirm the id exists.
+     */
     @Test
     void anotherFirmsUserIsOutOfReach() {
         target(50L, Role.AGENT, FIRM_B, BRANCH_20);
 
-        assertThatThrownBy(() -> service.update(amlco, 50L, setActive(false)))
-                .isInstanceOf(ForbiddenException.class)
-                .hasMessageContaining("not in your firm");
+        assertThatThrownBy(() -> service.update(amlco, 50L, null, setActive(false)))
+                .isInstanceOf(NotFoundException.class);
     }
 
     /** And the reverse, so the check is a firm boundary rather than a fact about firm A. */
@@ -150,9 +164,8 @@ class UserServiceActiveTest {
     void theBoundaryHoldsInBothDirections() {
         target(53L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        assertThatThrownBy(() -> service.update(foreignAmlco, 53L, setActive(false)))
-                .isInstanceOf(ForbiddenException.class)
-                .hasMessageContaining("not in your firm");
+        assertThatThrownBy(() -> service.update(foreignAmlco, 53L, null, setActive(false)))
+                .isInstanceOf(NotFoundException.class);
     }
 
     /**
@@ -164,7 +177,7 @@ class UserServiceActiveTest {
     void aFirmLevelPeerCannotBeSuspended() {
         target(51L, Role.SENIOR_MANAGER, FIRM_A, null);
 
-        assertThatThrownBy(() -> service.update(amlco, 51L, setActive(false)))
+        assertThatThrownBy(() -> service.update(amlco, 51L, null, setActive(false)))
                 .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining("can't be edited or deleted");
     }
@@ -178,7 +191,7 @@ class UserServiceActiveTest {
     void nobodyMaySuspendTheirOwnAccount() {
         User self = target(2L, Role.AML_COMPLIANCE_OFFICER, FIRM_A, null);
 
-        assertThatThrownBy(() -> service.update(amlco, 2L, setActive(false)))
+        assertThatThrownBy(() -> service.update(amlco, 2L, null, setActive(false)))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("your own account's status");
 
@@ -190,7 +203,7 @@ class UserServiceActiveTest {
     void youMayStillEditYourOwnName() {
         User self = target(2L, Role.AML_COMPLIANCE_OFFICER, FIRM_A, null);
 
-        assertThatCode(() -> service.update(amlco, 2L,
+        assertThatCode(() -> service.update(amlco, 2L, null,
                 new UpdateUserRequest("New Name", null, null, null, null, null)))
                 .doesNotThrowAnyException();
 
@@ -205,7 +218,7 @@ class UserServiceActiveTest {
     void restatingYourOwnCurrentStatusIsNotASuspension() {
         User self = target(2L, Role.AML_COMPLIANCE_OFFICER, FIRM_A, null);
 
-        assertThatCode(() -> service.update(amlco, 2L, setActive(true))).doesNotThrowAnyException();
+        assertThatCode(() -> service.update(amlco, 2L, null, setActive(true))).doesNotThrowAnyException();
 
         assertThat(self.isActive()).isTrue();
     }
@@ -216,7 +229,7 @@ class UserServiceActiveTest {
     void aSalesManagerMaySuspendAnAgentInTheirOwnBranch() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(salesManager, 50L, setActive(false));
+        service.update(salesManager, 50L, null, setActive(false));
 
         assertThat(agent.isActive()).isFalse();
     }
@@ -225,7 +238,7 @@ class UserServiceActiveTest {
     void aSalesManagerCannotReachAnotherBranch() {
         target(52L, Role.AGENT, FIRM_A, BRANCH_20);
 
-        assertThatThrownBy(() -> service.update(salesManager, 52L, setActive(false)))
+        assertThatThrownBy(() -> service.update(salesManager, 52L, null, setActive(false)))
                 .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining("not in your branch");
     }
@@ -241,7 +254,7 @@ class UserServiceActiveTest {
     void aComplianceOfficerStillCannotChangeARole() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(amlco, 50L,
+        service.update(amlco, 50L, null,
                 new UpdateUserRequest(null, null, Role.SENIOR_MANAGER, FIRM_A, null, null));
 
         assertThat(agent.getRole()).isEqualTo(Role.AGENT);
@@ -256,7 +269,7 @@ class UserServiceActiveTest {
     void suspendingEndsTheUsersSessions() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(amlco, 50L, setActive(false));
+        service.update(amlco, 50L, null, setActive(false));
 
         assertThat(agent.getTokenVersion()).isEqualTo(1);
         verify(refreshTokens).revokeAllForUser(eq(50L), any());
@@ -266,9 +279,9 @@ class UserServiceActiveTest {
     @Test
     void reactivatingDoesNot() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
-        agent.setActive(false);
+        deactivate(agent);
 
-        service.update(amlco, 50L, setActive(true));
+        service.update(amlco, 50L, null, setActive(true));
 
         assertThat(agent.getTokenVersion()).isZero();
         verifyNoInteractions(refreshTokens, tokenStates);
@@ -278,7 +291,7 @@ class UserServiceActiveTest {
     void aRoleChangeEndsTheUsersSessions() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(root, 50L, new UpdateUserRequest(null, null, Role.ADMIN, FIRM_A, BRANCH_10, null));
+        service.update(root, 50L, null, new UpdateUserRequest(null, null, Role.ADMIN, FIRM_A, BRANCH_10, null));
 
         assertThat(agent.getRole()).isEqualTo(Role.ADMIN);
         assertThat(agent.getTokenVersion()).isEqualTo(1);
@@ -289,7 +302,7 @@ class UserServiceActiveTest {
     void aBranchMoveEndsTheUsersSessions() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(root, 50L, new UpdateUserRequest(null, null, null, null, BRANCH_20, null));
+        service.update(root, 50L, null, new UpdateUserRequest(null, null, null, null, BRANCH_20, null));
 
         assertThat(agent.getFirmBranchId()).isEqualTo(BRANCH_20);
         assertThat(agent.getTokenVersion()).isEqualTo(1);
@@ -299,7 +312,7 @@ class UserServiceActiveTest {
     void aNameChangeDoesNot() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(amlco, 50L, new UpdateUserRequest("Renamed", null, null, null, null, null));
+        service.update(amlco, 50L, null, new UpdateUserRequest("Renamed", null, null, null, null, null));
 
         assertThat(agent.getTokenVersion()).isZero();
         verifyNoInteractions(refreshTokens, tokenStates);

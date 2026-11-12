@@ -8,7 +8,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { delayCdd, getDeal, undoCddDelay } from '../api/deals.js';
 import { getDealVersion, listDealVersions } from '../api/dealVersions.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import { useDealScopeGuard } from '../dashboard/useDealScopeGuard.jsx';
 import { NotFoundPage } from './NotFoundPage.jsx';
 import {
   canDelayCdd, canManageDealAccess, canOverride, canWrite, isDealAuthor, isDealReviewer,
@@ -158,30 +158,8 @@ export function DealReviewScreen() {
     retry: (count, err) => ![403, 404].includes(err?.response?.status) && count < 3,
   });
 
-  /*
-   * Follow the deal into its branch.
-   *
-   * A link can lead here from anywhere — another deal's verification trail, a register, a
-   * notification — and the scope selector should say where the deal on screen lives. Only for a
-   * viewer who can switch: a branch-pinned role can only ever open its own branch's deals. ROOT
-   * and AUDIT may need the entity changed as well; its country is filled in by the scope's own
-   * reconciliation once the entity list has it.
-   */
-  const scope = useDashboardScope();
-  const liveForScope = dealQ.data;
-  useEffect(() => {
-    const d = liveForScope;
-    if (!d?.firmBranchId || !scope.branchSelectable) return;
-    if (scope.isRoot && d.firmId && scope.firm?.id !== d.firmId) {
-      scope.setFirm({ id: d.firmId, name: d.firmName, country: null });
-    }
-    if (scope.branch?.id !== d.firmBranchId) {
-      scope.setBranch({ id: d.firmBranchId, name: d.branchName });
-    }
-    // Keyed on the deal: once it has been followed, a viewer changing the selector by hand is not
-    // pulled back.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveForScope?.id]);
+  // A deal outside the current scope is not shown under it — see useDealScopeGuard.
+  const scopeGuard = useDealScopeGuard(dealQ.data);
   const liveTree = useOwnershipTree(dealId);
 
   const versionsQ = useQuery({
@@ -251,6 +229,7 @@ export function DealReviewScreen() {
     }
     return <Alert severity="error">Failed to load deal.</Alert>;
   }
+  if (scopeGuard.blocked) return scopeGuard.element;
 
   const liveDeal    = dealQ.data;
   const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === liveDeal.createdByUserId;
@@ -699,6 +678,8 @@ export function DealReviewScreen() {
           setDeleteNodeId(null);
         }}
       />
+      {/* The switch overlay, so a switch made from the guard's panel finishes on screen. */}
+      {scopeGuard.element}
     </Stack>
   );
 }

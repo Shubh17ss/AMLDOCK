@@ -56,6 +56,42 @@ public class WelcomeEmail {
         return EmailMessage.of(recipientEmail, SUBJECT, html, text);
     }
 
+    /**
+     * For an existing account given a place in another reporting entity. No new account, nothing
+     * to set up: it says where they now also belong and how to get there — the entity picker in
+     * the sidebar, once signed in.
+     */
+    public EmailMessage renderAddedToEntity(String recipientEmail, String fullName, Role role, String entityName) {
+        String loginUrl = appBaseUrl + "/login";
+        String roleLabel = prettyRole(role);
+        String subject = "You've been added to " + entityName + " on AMLDOCK";
+
+        String text = """
+                Hi %s,
+
+                Your AMLDOCK account has been added to %s with the role: %s.
+
+                Sign in as usual at %s with %s, then choose %s from the reporting entity
+                picker in the sidebar.
+
+                If you weren't expecting this email, please contact your administrator.
+
+                — AMLDOCK
+                """.formatted(fullName, entityName, roleLabel, loginUrl, recipientEmail, entityName);
+
+        String body = EmailLayout.paragraph("Hi " + escape(fullName) + ",")
+                + EmailLayout.paragraph("Your AMLDOCK account has been added to <strong>" + escape(entityName)
+                        + "</strong> as <strong>" + escape(roleLabel) + "</strong>.")
+                + EmailLayout.paragraph("Sign in as usual with <strong>" + escape(recipientEmail)
+                        + "</strong>, then choose " + escape(entityName)
+                        + " from the reporting entity picker in the sidebar.")
+                + EmailLayout.button(loginUrl, "Sign in")
+                + EmailLayout.finePrint("If you weren't expecting this email, contact your administrator.");
+        String html = EmailLayout.page(EmailLayout.logoUrl(appBaseUrl), "New reporting entity", body);
+
+        return EmailMessage.of(recipientEmail, subject, html, text);
+    }
+
     private static String prettyRole(Role role) {
         return switch (role) {
             case ROOT -> "Platform Administrator";

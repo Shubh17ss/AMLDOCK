@@ -45,6 +45,7 @@ class UserServiceBulkTest {
     @Mock TokenStateCache tokenStates;
 
     UserService service;
+    MembershipFixture memberships;
 
     // A sales manager in firm 1, branch 10 — creates agents in their own branch.
     final UserPrincipal salesManager =
@@ -52,7 +53,19 @@ class UserServiceBulkTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates);
+        memberships = new MembershipFixture();
+        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates,
+                memberships.repo, new MembershipService(memberships.repo, users, firms));
+    }
+
+    /** Rows are saved one by one now, through the single-create path; hand out ids as Postgres would. */
+    private void stubSave() {
+        java.util.concurrent.atomic.AtomicLong ids = new java.util.concurrent.atomic.AtomicLong(500);
+        lenient().when(users.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(u, "id", ids.incrementAndGet());
+            return u;
+        });
     }
 
     private void stubActiveFirmAndBranch() {
@@ -69,28 +82,30 @@ class UserServiceBulkTest {
     @Test
     void importsValidRows() {
         stubActiveFirmAndBranch();
-        when(users.existsByEmailIgnoreCase(anyString())).thenReturn(false);
-        when(users.saveAll(any())).thenAnswer(inv -> {
-            List<User> arg = inv.getArgument(0);
-            return arg;
-        });
+        stubSave();
 
         var req = new BulkCreateUsersRequest(1L, List.of(
                 new Row("Alice", "alice@firm.com", "AGENT", ""),
                 new Row("Bob", "bob@firm.com", "agent_pa", "ignored")
         ));
 
-        List<User> created = service.createBulk(salesManager, req);
+        List<UserService.Member> created = service.createBulk(salesManager, req);
 
         assertThat(created).hasSize(2);
-        assertThat(created).allMatch(u -> u.getFirmBranchId().equals(10L) && u.getRealEstateFirmId().equals(1L));
-        assertThat(created.get(0).getEmail()).isEqualTo("alice@firm.com");
+        assertThat(created).allMatch(m -> m.branchId().equals(10L) && m.firmId().equals(1L));
+        assertThat(created.get(0).user().getEmail()).isEqualTo("alice@firm.com");
+        // Each one a member of the entity, not just an account.
+        assertThat(memberships.all()).hasSize(2);
     }
 
+    /**
+     * Valid rows are written as they pass, so "saves nothing" is now the transaction's doing: the
+     * exception rolls back every row the import wrote. What this pins is that it does throw.
+     */
     @Test
-    void rejectsWholeBatchWhenAnyRowFails_andSavesNothing() {
+    void rejectsWholeBatchWhenAnyRowFails() {
         stubActiveFirmAndBranch();
-        lenient().when(users.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+        stubSave();
 
         var req = new BulkCreateUsersRequest(1L, List.of(
                 new Row("Alice", "alice@firm.com", "AGENT", ""),
@@ -105,14 +120,12 @@ class UserServiceBulkTest {
                     assertThat(errors).hasSize(2);
                     assertThat(errors).extracting("field").containsExactly("row 2", "row 3");
                 });
-
-        verify(users, never()).saveAll(any());
     }
 
     @Test
     void rejectsDuplicateEmailWithinFile() {
         stubActiveFirmAndBranch();
-        lenient().when(users.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+        stubSave();
 
         var req = new BulkCreateUsersRequest(1L, List.of(
                 new Row("Alice", "dup@firm.com", "AGENT", ""),
@@ -123,22 +136,32 @@ class UserServiceBulkTest {
                 .isInstanceOf(BulkValidationException.class)
                 .satisfies(ex -> assertThat(((BulkValidationException) ex).getErrors())
                         .extracting("field").containsExactly("row 2"));
-
-        verify(users, never()).saveAll(any());
     }
 
+    /** An agent still active in another entity can't be imported here until they're switched off there. */
     @Test
-    void rejectsEmailAlreadyInDatabase() {
+    void rejectsAnAddressStillActiveInAnotherEntity() {
         stubActiveFirmAndBranch();
-        when(users.existsByEmailIgnoreCase("taken@firm.com")).thenReturn(true);
+        User taken = new User();
+        org.springframework.test.util.ReflectionTestUtils.setField(taken, "id", 7L);
+        taken.setEmail("taken@firm.com");
+        taken.setRole(Role.AGENT);
+        taken.setRealEstateFirmId(2L);
+        taken.setFirmBranchId(20L);
+        taken.setActive(true);
+        when(users.findByEmailIgnoreCase("taken@firm.com")).thenReturn(Optional.of(taken));
+        memberships.addHome(taken);
 
         var req = new BulkCreateUsersRequest(1L, List.of(
                 new Row("Taken", "taken@firm.com", "AGENT", "")
         ));
 
         assertThatThrownBy(() -> service.createBulk(salesManager, req))
-                .isInstanceOf(BulkValidationException.class);
-        verify(users, never()).saveAll(any());
+                .isInstanceOf(BulkValidationException.class)
+                .satisfies(ex -> assertThat(((BulkValidationException) ex).getErrors())
+                        .extracting("message").singleElement().asString()
+                        .contains("Deactivate them there"));
+        assertThat(memberships.in(7L, 1L)).isEmpty();
     }
 
     /* ---------- F1: size bounds and ReDoS ---------- */
@@ -162,8 +185,7 @@ class UserServiceBulkTest {
     @Test
     void acceptsExactlyFiftyRows() {
         stubActiveFirmAndBranch();
-        when(users.existsByEmailIgnoreCase(anyString())).thenReturn(false);
-        when(users.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        stubSave();
 
         var req = new BulkCreateUsersRequest(1L, agentRows(UserService.MAX_BULK_ROWS));
 
@@ -207,8 +229,7 @@ class UserServiceBulkTest {
     @Test
     void emailPatternStillAcceptsNormalAddresses() {
         stubActiveFirmAndBranch();
-        when(users.existsByEmailIgnoreCase(anyString())).thenReturn(false);
-        when(users.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        stubSave();
 
         var req = new BulkCreateUsersRequest(1L, List.of(
                 new Row("Jane", "jane.doe+aml@sub.example.co.nz", "AGENT", ""),

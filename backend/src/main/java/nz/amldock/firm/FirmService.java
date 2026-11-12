@@ -153,8 +153,14 @@ public class FirmService {
         String fullName = (name == null || name.isBlank()) ? email : name;
         CreateUserRequest coReq = new CreateUserRequest(
                 email, fullName, Role.AML_COMPLIANCE_OFFICER, firmId, null);
-        User co = userService.create(currentPrincipal(), coReq);
-        onboarding.sendWelcome(co);
+        // An address that already serves another entity as a compliance officer or senior manager
+        // is added to this one rather than refused; see UserService.create.
+        UserService.Created created = userService.create(currentPrincipal(), coReq);
+        if (created.existingAccount()) {
+            onboarding.sendAddedToEntity(created.member().user(), firmId, Role.AML_COMPLIANCE_OFFICER);
+        } else {
+            onboarding.sendWelcome(created.member().user());
+        }
     }
 
     @Transactional

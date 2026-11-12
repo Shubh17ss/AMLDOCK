@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,7 +40,8 @@ class UserServicePasswordTest {
 
     @BeforeEach
     void setUp() {
-        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates);
+        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates,
+                mock(FirmMembershipRepository.class), mock(MembershipService.class));
         root = new User();
         ReflectionTestUtils.setField(root, "id", 1L);
         root.setRole(Role.ROOT);

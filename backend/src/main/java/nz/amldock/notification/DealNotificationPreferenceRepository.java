@@ -37,6 +37,9 @@ public interface DealNotificationPreferenceRepository
      * added to ({@code deal_user}), exactly as {@code assertCanRead} grants. Added agents are always
      * from the deal's own branch ({@code DealUserService}), so the branch predicate still holds.
      *
+     * <p>Role and placement are the recipient's membership in the deal's entity, not their account's
+     * home: an officer serving two entities is mailed about both, each as what they are there.
+     *
      * <p>{@code b.is_active} and {@code f.is_active} matter: neither branch nor firm deactivation
      * cascades anywhere today, so without them a dormant branch would keep sending mail.
      */
@@ -44,11 +47,14 @@ public interface DealNotificationPreferenceRepository
             SELECT u.id        AS userId,
                    u.email     AS email,
                    u.full_name AS fullName,
-                   u.role      AS role,
+                   m.role      AS role,
                    p.enabled   AS enabled
               FROM app_user u
               JOIN firm_branch b      ON b.id = :branchId
               JOIN real_estate_firm f ON f.id = b.real_estate_firm_id
+              JOIN firm_membership m  ON m.app_user_id = u.id
+                                     AND m.real_estate_firm_id = f.id
+                                     AND m.is_active
               LEFT JOIN deal_notification_preference p
                      ON p.app_user_id = u.id
                     AND p.firm_branch_id = b.id
@@ -56,15 +62,14 @@ public interface DealNotificationPreferenceRepository
              WHERE u.is_active
                AND b.is_active
                AND f.is_active
-               AND u.role IN ('AGENT','AGENT_PA','ADMIN','SALES_MANAGER',
+               AND m.role IN ('AGENT','AGENT_PA','ADMIN','SALES_MANAGER',
                               'AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')
                AND (
-                     (u.role IN ('ADMIN','SALES_MANAGER','AGENT','AGENT_PA')
-                        AND u.firm_branch_id = b.id)
-                  OR (u.role IN ('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')
-                        AND u.real_estate_firm_id = f.id)
+                     (m.role IN ('ADMIN','SALES_MANAGER','AGENT','AGENT_PA')
+                        AND m.firm_branch_id = b.id)
+                  OR m.role IN ('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')
                    )
-               AND (u.role NOT IN ('AGENT','AGENT_PA')
+               AND (m.role NOT IN ('AGENT','AGENT_PA')
                     OR u.id = :dealCreatorId
                     OR EXISTS (SELECT 1 FROM deal_user du
                                 WHERE du.deal_id = :dealId AND du.user_id = u.id))

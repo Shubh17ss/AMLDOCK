@@ -64,7 +64,7 @@ class TrainingCourseDownloadTest {
     @BeforeEach
     void setUp() {
         service = new TrainingCourseService(courses, files, questions, options, assignees, users,
-                branches, storage, audit, notifier, 26214400L, 5L, 5L);
+                org.mockito.Mockito.mock(nz.amldock.user.FirmMembershipRepository.class), branches, storage, audit, notifier, 26214400L, 5L, 5L);
 
         lenient().when(courses.findById(COURSE)).thenReturn(Optional.of(course(COURSE, FIRM)));
         lenient().when(courses.findById(OTHER_COURSE)).thenReturn(Optional.of(course(OTHER_COURSE, OTHER_FIRM)));

@@ -17,13 +17,18 @@ export async function bulkCreateUsers(payload) {
   return data;
 }
 
-export async function updateUser(id, payload) {
-  const { data } = await apiClient.patch(`/users/${id}`, payload);
+// `firmId` names the reporting entity the user is being managed in — the row's own
+// `realEstateFirmId`. Someone can belong to several, and role, branch and status are per entity.
+// The server reads it for ROOT only; everyone else always manages within their own entity.
+export async function updateUser(id, payload, firmId) {
+  const { data } = await apiClient.patch(`/users/${id}`, payload, {
+    params: { firmId: firmId ?? undefined },
+  });
   return data;
 }
 
-export async function deleteUser(id) {
-  await apiClient.delete(`/users/${id}`);
+export async function deleteUser(id, firmId) {
+  await apiClient.delete(`/users/${id}`, { params: { firmId: firmId ?? undefined } });
 }
 
 export async function resetUserPassword(id, newPassword) {

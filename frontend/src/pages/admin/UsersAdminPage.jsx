@@ -58,7 +58,7 @@ export function UsersAdminPage() {
     : isFirmLevel(currentUser?.role) && !isFirmLevel(u.role));
 
   const updateMut = useMutation({
-    mutationFn: ({ id, payload }) => updateUser(id, payload),
+    mutationFn: ({ id, payload, firmId }) => updateUser(id, payload, firmId),
   });
 
   /**
@@ -68,9 +68,9 @@ export function UsersAdminPage() {
    * position the moment this settles — returning before the list has refetched would hand the
    * switch back a value it is about to replace, and the thumb would flick twice.
    */
-  const toggleActive = async (id, active) => {
+  const toggleActive = async (u, active) => {
     try {
-      await updateMut.mutateAsync({ id, payload: { active } });
+      await updateMut.mutateAsync({ id: u.id, payload: { active }, firmId: u.realEstateFirmId });
       await qc.invalidateQueries({ queryKey: ['users'] });
     } catch (err) {
       // Matching the delete handler on this page. The switch returns to the server's value on its
@@ -80,7 +80,7 @@ export function UsersAdminPage() {
     }
   };
   const deleteMut = useMutation({
-    mutationFn: (id) => deleteUser(id),
+    mutationFn: (u) => deleteUser(u.id, u.realEstateFirmId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
     onError: (err) => window.alert(err.response?.data?.message || 'Failed to delete user'),
   });
@@ -135,10 +135,10 @@ export function UsersAdminPage() {
                 firmName={u.realEstateFirmId
                   ? (firmsById.get(u.realEstateFirmId)?.name ?? `#${u.realEstateFirmId}`)
                   : null}
-                onToggleActive={(v) => toggleActive(u.id, v)}
+                onToggleActive={(v) => toggleActive(u, v)}
                 onResetPassword={() => setResetTarget(u)}
                 onDelete={() => {
-                  if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
+                  if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u);
                 }}
               />
             ))}
