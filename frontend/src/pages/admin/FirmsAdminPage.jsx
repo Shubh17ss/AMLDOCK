@@ -11,13 +11,16 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { InstantSwitch } from '../../components/InstantSwitch.jsx';
 import { canWrite } from '../../auth/roles.js';
 import { PageHeader } from '../../components/PageHeader.jsx';
+import { useToast } from '../../components/ToastProvider.jsx';
 import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
 import { flagClass } from '../../data/countries.js';
 import AddBusinessIcon from '@mui/icons-material/AddBusiness';
 import { tokens } from '../../theme/theme.js';
+import { emailFieldProps, isBadEmail } from '../../utils/email.js';
 
 export function FirmsAdminPage() {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   // The API returns every entity to ROOT and only their own to firm-level staff, so the table
@@ -30,14 +33,21 @@ export function FirmsAdminPage() {
   const [createOpen, setCreateOpen] = useState(false);
 
   const toggleActive = useMutation({
-    mutationFn: ({ id, active }) => updateFirm(id, { active }),
+    mutationFn: ({ ref, active }) => updateFirm(ref, { active }),
   });
 
   // Awaited through the invalidation, not just the PATCH — see InstantSwitch on why the optimistic
   // position must outlive the refetch.
-  const setActive = async (id, active) => {
-    await toggleActive.mutateAsync({ id, active });
+  // A refusal is toasted and rethrown, so the switch still snaps back.
+  const setActive = async (firm, active) => {
+    try {
+      await toggleActive.mutateAsync({ ref: firm.publicId, active });
+    } catch (e) {
+      showToast({ severity: 'error', message: e.response?.data?.message || 'That didn’t go through. Try again.' });
+      throw e;
+    }
     await qc.invalidateQueries({ queryKey: ['firms'] });
+    showToast({ severity: 'success', message: `${firm.name} ${active ? 'activated' : 'deactivated'}` });
   };
 
   return (
@@ -89,12 +99,12 @@ export function FirmsAdminPage() {
                   <InstantSwitch
                     checked={firm.active}
                     disabled={!isRoot || !mayWrite}
-                    onToggle={(active) => setActive(firm.id, active)}
+                    onToggle={(active) => setActive(firm, active)}
                   />
                 </TableCell>
                 <TableCell align="right">
                   <Button size="small" variant="outlined"
-                          onClick={() => navigate(`/settings/reporting-entities/${firm.id}`)}>
+                          onClick={() => navigate(`/settings/reporting-entities/${firm.publicId}`)}>
                     Manage
                   </Button>
                 </TableCell>
@@ -119,15 +129,23 @@ const EMPTY_FIRM = {
 
 function CreateFirmDialog({ open, onClose }) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   const [form, setForm] = useState(EMPTY_FIRM);
   const [error, setError] = useState(null);
+  // NZBN/ABN is unique within a country. Checked here against the register already on screen so
+  // the clash shows while typing; the server holds the same rule (FirmService.create).
+  const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms, enabled: open });
+  const nzbnTaken = Boolean(form.nzbn.trim()) && (firmsQ.data ?? []).some((f) =>
+    f.country === form.country && f.nzbn?.trim().toLowerCase() === form.nzbn.trim().toLowerCase());
+  const nzbnLabel = form.country === 'AU' ? 'ABN' : 'NZBN';
   const mut = useMutation({
     mutationFn: () => createFirm({
       ...form,
       numberOfBranches: form.numberOfBranches === '' ? null : Number(form.numberOfBranches),
     }),
-    onSuccess: () => {
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['firms'] });
+      showToast({ severity: 'success', message: `Reporting entity ${created?.name ?? form.name} created` });
       setForm(EMPTY_FIRM);
       setError(null);
       onClose();
@@ -137,7 +155,8 @@ function CreateFirmDialog({ open, onClose }) {
   const submit = (e) => { e.preventDefault(); mut.mutate(); };
   const ch = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const submittable = form.name && form.country && form.liaisonEmail && form.complianceOfficerEmail;
+  const submittable = form.name && form.country && form.liaisonEmail && form.complianceOfficerEmail
+    && !nzbnTaken && !isBadEmail(form.liaisonEmail) && !isBadEmail(form.complianceOfficerEmail);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -151,12 +170,16 @@ function CreateFirmDialog({ open, onClose }) {
               onChange={(code) => setForm((f) => ({ ...f, country: code }))}
               required
             />
-            <TextField label="NZBN/ABN" value={form.nzbn} onChange={ch('nzbn')} />
+            <TextField label="NZBN/ABN" value={form.nzbn} onChange={ch('nzbn')}
+                       error={nzbnTaken}
+                       helperText={nzbnTaken
+                         ? `Another ${form.country} reporting entity already uses this ${nzbnLabel}.`
+                         : 'Must be unique among reporting entities in the same country.'} />
 
             <Typography variant="subtitle2" sx={{ color: tokens.muted, mt: 1 }}>Liaison</Typography>
             <TextField label="Liaison name" value={form.liaisonName} onChange={ch('liaisonName')} />
             <TextField label="Liaison email" type="email" value={form.liaisonEmail}
-                       onChange={ch('liaisonEmail')} required />
+                       onChange={ch('liaisonEmail')} required {...emailFieldProps(form.liaisonEmail)} />
             <TextField label="Liaison contact number" value={form.liaisonContactNumber}
                        onChange={ch('liaisonContactNumber')} />
 
@@ -165,7 +188,8 @@ function CreateFirmDialog({ open, onClose }) {
                        onChange={ch('complianceOfficerName')} />
             <TextField label="Compliance officer email" type="email" value={form.complianceOfficerEmail}
                        onChange={ch('complianceOfficerEmail')} required
-                       helperText="A passwordless AML Compliance Officer login is created with this email." />
+                       {...emailFieldProps(form.complianceOfficerEmail,
+                         'A passwordless AML Compliance Officer login is created with this email.')} />
             <TextField label="Compliance officer contact number" value={form.complianceOfficerContactNumber}
                        onChange={ch('complianceOfficerContactNumber')} />
 

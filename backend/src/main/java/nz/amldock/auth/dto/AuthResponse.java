@@ -8,5 +8,7 @@ public record AuthResponse(
         String fullName,
         Role role,
         Long realEstateFirmId,
+        /** The firm's public id: what URLs and the /firms endpoints name it by. */
+        String realEstateFirmPublicId,
         Long firmBranchId
 ) {}

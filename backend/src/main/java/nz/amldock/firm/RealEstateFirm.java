@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import nz.amldock.common.audit.BaseEntity;
 
@@ -15,6 +16,10 @@ public class RealEstateFirm extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** What URLs and the /firms and /branches endpoints name this row by. See FirmPublicIds. */
+    @Column(name = "public_id", nullable = false, unique = true, length = 12, updatable = false)
+    private String publicId;
 
     @Column(nullable = false, unique = true)
     private String name;
@@ -52,6 +57,12 @@ public class RealEstateFirm extends BaseEntity {
     private boolean active = true;
 
     public Long getId() { return id; }
+    public String getPublicId() { return publicId; }
+
+    @PrePersist
+    void assignPublicId() {
+        if (publicId == null) publicId = FirmPublicIds.newId();
+    }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getNzbn() { return nzbn; }

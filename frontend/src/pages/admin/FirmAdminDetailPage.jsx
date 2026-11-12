@@ -9,7 +9,6 @@ import { PageHeader } from '../../components/PageHeader.jsx';
 export function FirmAdminDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
-  const firmId = Number(id);
 
   return (
     <Stack spacing={3}>
@@ -20,7 +19,7 @@ export function FirmAdminDetailPage() {
       </Box>
       <PageHeader eyebrow="reporting entity · manage" title="Manage reporting entity" />
       {/* Users are managed in the dedicated Settings › Users section, so they're omitted here. */}
-      <FirmManageView firmId={firmId} currentUser={user} editableIdentity showUsers={false} />
+      <FirmManageView firmId={id} currentUser={user} editableIdentity showUsers={false} />
     </Stack>
   );
 }

@@ -10,6 +10,8 @@ import { InstantSwitch } from '../../components/InstantSwitch.jsx';
 import EditIcon from '@mui/icons-material/Edit';
 import { createBranch, deactivateBranch, listBranches, updateBranch } from '../../api/firms.js';
 import { tokens } from '../../theme/theme.js';
+import { useToast } from '../../components/ToastProvider.jsx';
+import { emailFieldProps, isBadEmail } from '../../utils/email.js';
 
 const EMPTY_BRANCH = {
   name: '', addressLine1: '', suburb: '', city: '', postcode: '',
@@ -18,15 +20,17 @@ const EMPTY_BRANCH = {
 
 /**
  * Branches of a firm with add / edit, and (for ROOT / senior managers) deactivate.
- * `maxBranches` is the count declared in Firm details — adding beyond it is blocked here
+ * `firmRef` is the reporting entity's public id. `maxBranches` is the count declared in the
+ * reporting entity's details (set by ROOT) — adding beyond it is blocked here
  * and, authoritatively, by the API.
  */
-export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = null }) {
+export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches = null }) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   const branchesQ = useQuery({
-    queryKey: ['firms', firmId, 'branches'],
-    queryFn: () => listBranches(firmId),
-    enabled: Boolean(firmId),
+    queryKey: ['firms', firmRef, 'branches'],
+    queryFn: () => listBranches(firmRef),
+    enabled: Boolean(firmRef),
   });
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -39,14 +43,24 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
   });
 
   // Resolves only once the branch list has refetched — see InstantSwitch.
-  const setActive = async (id, active) => {
-    await toggleActive.mutateAsync({ id, active });
-    await qc.invalidateQueries({ queryKey: ['firms', firmId, 'branches'] });
+  // A refusal is toasted and rethrown, so the switch still snaps back.
+  const setActive = async (branch, active) => {
+    try {
+      await toggleActive.mutateAsync({ id: branch.publicId, active });
+    } catch (e) {
+      showToast({ severity: 'error', message: e.response?.data?.message || 'That didn’t go through. Try again.' });
+      throw e;
+    }
+    await qc.invalidateQueries({ queryKey: ['firms', firmRef, 'branches'] });
+    showToast({ severity: 'success', message: `${branch.name} ${active ? 'activated' : 'deactivated'}` });
   };
   const deleteMut = useMutation({
-    mutationFn: (id) => deactivateBranch(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['firms', firmId, 'branches'] }),
-    onError: (err) => window.alert(err.response?.data?.message || 'Failed to deactivate branch'),
+    mutationFn: (branch) => deactivateBranch(branch.publicId),
+    onSuccess: (_, branch) => {
+      qc.invalidateQueries({ queryKey: ['firms', firmRef, 'branches'] });
+      showToast({ severity: 'success', message: `${branch.name} deactivated` });
+    },
+    onError: (e) => showToast({ severity: 'error', message: e.response?.data?.message || 'That didn’t go through. Try again.' }),
   });
 
   return (
@@ -61,7 +75,7 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
               </Typography>
             )}
           </Stack>
-          <Tooltip title={atLimit ? `This firm declares ${maxBranches} branch(es). Deactivate one or raise the branch count in Firm details.` : ''}>
+          <Tooltip title={atLimit ? `This reporting entity has ${maxBranches} branch(es). Deactivate one or ask ROOT to raise the count.` : ''}>
             <span>
               <Button variant="contained" disabled={atLimit} onClick={() => setCreateOpen(true)}>
                 + Add branch
@@ -93,7 +107,7 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
                   <TableCell>
                     <InstantSwitch size="small" checked={b.active}
                                    disabled={!canDeactivate}
-                                   onToggle={(active) => setActive(b.id, active)} />
+                                   onToggle={(active) => setActive(b, active)} />
                   </TableCell>
                   <TableCell align="right">
                     <Tooltip title="Edit">
@@ -104,7 +118,7 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
                     {canDeactivate && (
                       <Tooltip title="Deactivate">
                         <IconButton size="small" color="error"
-                                    onClick={() => deleteMut.mutate(b.id)} disabled={!b.active}>
+                                    onClick={() => deleteMut.mutate(b)} disabled={!b.active}>
                           <DeleteOutlineIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -124,14 +138,15 @@ export function FirmBranchesCard({ firmId, canDeactivate = false, maxBranches = 
         </TableContainer>
       </CardContent>
 
-      <BranchDialog mode="create" firmId={firmId} open={createOpen} onClose={() => setCreateOpen(false)} />
-      <BranchDialog mode="edit" firmId={firmId} branch={editTarget} onClose={() => setEditTarget(null)} />
+      <BranchDialog mode="create" firmRef={firmRef} open={createOpen} onClose={() => setCreateOpen(false)} />
+      <BranchDialog mode="edit" firmRef={firmRef} branch={editTarget} onClose={() => setEditTarget(null)} />
     </Card>
   );
 }
 
-function BranchDialog({ mode, firmId, open: openProp, branch, onClose }) {
+function BranchDialog({ mode, firmRef, open: openProp, branch, onClose }) {
   const qc = useQueryClient();
+  const { showToast } = useToast();
   const isEdit = mode === 'edit';
   const open = isEdit ? Boolean(branch) : openProp;
   const [form, setForm] = useState(EMPTY_BRANCH);
@@ -144,9 +159,13 @@ function BranchDialog({ mode, firmId, open: openProp, branch, onClose }) {
   }, [isEdit ? branch?.id : open]);
 
   const mut = useMutation({
-    mutationFn: () => (isEdit ? updateBranch(branch.id, form) : createBranch(firmId, form)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['firms', firmId, 'branches'] });
+    mutationFn: () => (isEdit ? updateBranch(branch.publicId, form) : createBranch(firmRef, form)),
+    onSuccess: (saved) => {
+      qc.invalidateQueries({ queryKey: ['firms', firmRef, 'branches'] });
+      showToast({
+        severity: 'success',
+        message: isEdit ? `Branch ${saved?.name ?? form.name} updated` : `Branch ${saved?.name ?? form.name} added`,
+      });
       setError(null);
       onClose();
     },
@@ -172,14 +191,15 @@ function BranchDialog({ mode, firmId, open: openProp, branch, onClose }) {
             <TextField label="Phone" value={form.phone ?? ''} onChange={ch('phone')} fullWidth />
             <Stack direction="row" spacing={2}>
               <TextField label="Liaison name" value={form.managerName ?? ''} onChange={ch('managerName')} fullWidth />
-              <TextField label="Liaison email" type="email" value={form.managerEmail ?? ''} onChange={ch('managerEmail')} fullWidth required />
+              <TextField label="Liaison email" type="email" value={form.managerEmail ?? ''} onChange={ch('managerEmail')} fullWidth required
+                         {...emailFieldProps(form.managerEmail)} />
             </Stack>
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained" disabled={mut.isPending || !form.name || !form.managerEmail}>
+          <Button type="submit" variant="contained" disabled={mut.isPending || !form.name || !form.managerEmail || isBadEmail(form.managerEmail)}>
             {mut.isPending ? 'Saving…' : (isEdit ? 'Save' : 'Create')}
           </Button>
         </DialogActions>

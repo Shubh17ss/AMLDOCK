@@ -107,6 +107,16 @@ export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MAN
 // see the same screens scoped by the API to their own reporting entity. AUDIT opens them too but
 // every control inside is gated by canWrite / canManageUsers, so it only reads.
 export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
+// Settings › Reporting Entities — the register of every entity, and each one's full edit. ROOT only.
+export const ENTITY_ADMIN_ROLES = ['ROOT'];
+// Settings › Reporting Entity — everyone else who could read entity and branch details, on their
+// own entity only: identity and branch count read-only, contacts and branches editable (AUDIT
+// reads only). The server holds the same lines in FirmService.update and assertVisible.
+export const REPORTING_ENTITY_ROLES = SETTINGS_ROLES.filter((r) => r !== 'ROOT');
+// Workspace › Queries. Who may ask the AMLDOCK admin team for a change to their entity's locked
+// details (AUDIT reads only, so it may not), and who works through what they ask.
+export const QUERY_RAISER_ROLES = ['AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+export const QUERY_ADMIN_ROLES = ['ROOT'];
 // Who can repair a dead-ended dashboard scope themselves, as opposed to merely reading the screen
 // where it is repaired. SETTINGS_ROLES opens Settings › Reporting Entities; only these three may
 // write there — FirmController gates POST /firms on ROOT and POST /firms/{id}/branches on all

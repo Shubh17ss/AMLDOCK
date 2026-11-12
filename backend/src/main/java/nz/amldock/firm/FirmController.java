@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * Firms are named in paths by their public id ({@link FirmPublicIds}); the numeric id stays in the
+ * DTOs because the other APIs still filter by it.
+ */
 @RestController
 @RequestMapping("/api/firms")
 public class FirmController {
@@ -38,9 +42,9 @@ public class FirmController {
         return firms.listVisible().stream().map(FirmDto::from).toList();
     }
 
-    @GetMapping("/{id}")
-    public FirmDto get(@PathVariable Long id) {
-        return FirmDto.from(firms.findById(id));
+    @GetMapping("/{ref}")
+    public FirmDto get(@PathVariable String ref) {
+        return FirmDto.from(firms.findById(firms.resolve(ref)));
     }
 
     @PostMapping
@@ -51,25 +55,25 @@ public class FirmController {
         return FirmDto.from(f);
     }
 
-    @PatchMapping("/{id}")
+    @PatchMapping("/{ref}")
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public FirmDto update(@PathVariable Long id, @RequestBody UpdateFirmRequest req) {
-        RealEstateFirm f = firms.update(id, req);
+    public FirmDto update(@PathVariable String ref, @RequestBody UpdateFirmRequest req) {
+        RealEstateFirm f = firms.update(firms.resolve(ref), req);
         audit.record(AuditAction.FIRM_UPDATED, "RealEstateFirm", f.getId(), "Updated firm " + f.getName());
         return FirmDto.from(f);
     }
 
-    @GetMapping("/{id}/branches")
-    public List<BranchDto> listBranches(@PathVariable Long id) {
-        return branches.listByFirm(id).stream().map(BranchDto::from).toList();
+    @GetMapping("/{ref}/branches")
+    public List<BranchDto> listBranches(@PathVariable String ref) {
+        return branches.listByFirm(firms.resolve(ref)).stream().map(BranchDto::from).toList();
     }
 
-    @PostMapping("/{id}/branches")
+    @PostMapping("/{ref}/branches")
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public BranchDto createBranch(@PathVariable Long id, @Valid @RequestBody CreateBranchRequest req) {
-        FirmBranch b = branches.create(id, req);
+    public BranchDto createBranch(@PathVariable String ref, @Valid @RequestBody CreateBranchRequest req) {
+        FirmBranch b = branches.create(firms.resolve(ref), req);
         audit.record(AuditAction.BRANCH_CREATED, "FirmBranch", b.getId(),
-                "Created branch " + b.getName() + " for firm " + id);
+                "Created branch " + b.getName() + " for firm " + ref);
         return BranchDto.from(b);
     }
 }

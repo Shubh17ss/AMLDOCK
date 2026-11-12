@@ -11,6 +11,7 @@ import { deleteUser, listUsers, updateUser } from '../../api/users.js';
 import { roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
 import { tokens } from '../../theme/theme.js';
+import { emailFieldProps, isBadEmail } from '../../utils/email.js';
 
 // Firm-level peers can't be edited or deleted from a firm view (matches the backend rule).
 const PROTECTED_ROLES = new Set(['SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER']);
@@ -146,15 +147,15 @@ function EditUserDialog({ target, onClose }) {
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField label="Full name" value={form.fullName} onChange={ch('fullName')} required />
             <TextField label="Email" type="email" value={form.email} onChange={ch('email')} required
-                       helperText={'Applied immediately, without a code sent to the new address — '
+                       {...emailFieldProps(form.email, 'Applied immediately, without a code sent to the new address — '
                          + 'this is the way to repair a mistyped email, since that person cannot '
-                         + 'receive one. Their current address is notified of the change.'} />
+                         + 'receive one. Their current address is notified of the change.')} />
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained" disabled={mut.isPending || !form.fullName || !form.email}>
+          <Button type="submit" variant="contained" disabled={mut.isPending || !form.fullName || !form.email || isBadEmail(form.email)}>
             {mut.isPending ? 'Saving…' : 'Save'}
           </Button>
         </DialogActions>

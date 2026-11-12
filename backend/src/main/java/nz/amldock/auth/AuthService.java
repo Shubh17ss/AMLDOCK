@@ -9,6 +9,8 @@ import nz.amldock.auth.dto.MobileAuthResponse;
 import nz.amldock.auth.otp.OtpPurpose;
 import nz.amldock.auth.otp.OtpService;
 import nz.amldock.common.exception.ApiException;
+import nz.amldock.firm.RealEstateFirm;
+import nz.amldock.firm.RealEstateFirmRepository;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserRepository;
@@ -44,6 +46,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshRepo;
     private final AuditService audit;
     private final OtpService otp;
+    private final RealEstateFirmRepository firms;
     private final Duration refreshTtl;
     private final SecureRandom rng = new SecureRandom();
 
@@ -56,6 +59,7 @@ public class AuthService {
                        RefreshTokenRepository refreshRepo,
                        AuditService audit,
                        OtpService otp,
+                       RealEstateFirmRepository firms,
                        @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays,
                        @Value("${COOKIE_SECURE:true}") boolean secureCookies,
                        @Value("${COOKIE_SAME_SITE:Lax}") String sameSite) {
@@ -67,6 +71,7 @@ public class AuthService {
         this.sameSite = sameSite;
         this.audit = audit;
         this.otp = otp;
+        this.firms = firms;
         this.refreshTtl = Duration.ofDays(refreshTtlDays);
     }
 
@@ -373,8 +378,12 @@ public class AuthService {
     }
 
     private AuthResponse toAuthResponse(User u) {
+        // The firm's public id rides along so a client can name the firm in a URL or call
+        // /firms/{ref} without first listing firms to find it.
+        String firmPublicId = u.getRealEstateFirmId() == null ? null
+                : firms.findById(u.getRealEstateFirmId()).map(RealEstateFirm::getPublicId).orElse(null);
         return new AuthResponse(u.getId(), u.getEmail(), u.getFullName(), u.getRole(),
-                u.getRealEstateFirmId(), u.getFirmBranchId());
+                u.getRealEstateFirmId(), firmPublicId, u.getFirmBranchId());
     }
 
     /** An unauthenticated caller chooses this value; an email address is at most 254 characters. */

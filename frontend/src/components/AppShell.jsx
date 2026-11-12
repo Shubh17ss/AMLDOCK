@@ -153,14 +153,7 @@ export function AppShell() {
               view, and every register writes into whatever is selected here. The account details
               and sign-out it replaced are in the app-bar avatar menu. */}
           {user && (
-            <Box sx={{ p: 1.5, borderTop: `1px solid ${tokens.hairline}` }}>
-              <Typography sx={{
-                fontFamily: fonts.mono, fontSize: '0.6rem', fontWeight: 700,
-                letterSpacing: '0.13em', textTransform: 'uppercase',
-                color: tokens.muted, mb: 0.75, px: 1.25,
-              }}>
-                Scope
-              </Typography>
+            <Box sx={{ p: 1.5 }}>
               <ScopeSelector stacked />
             </Box>
           )}

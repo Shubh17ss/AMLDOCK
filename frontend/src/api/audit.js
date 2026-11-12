@@ -13,11 +13,12 @@ export const AUDIT_ACTIONS = [
   'OCR_COMPLETED', 'OCR_FAILED', 'VERIFICATION_TRIGGERED',
   'FIRM_CREATED', 'FIRM_UPDATED',
   'BRANCH_CREATED', 'BRANCH_UPDATED', 'BRANCH_DELETED',
+  'ENTITY_QUERY_RAISED', 'ENTITY_QUERY_RESOLVED', 'ENTITY_QUERY_DELETED',
 ];
 
 export const AUDIT_ENTITY_TYPES = [
   'User', 'Deal', 'Document', 'ComplianceDocument', 'DocumentReview',
-  'OwnershipNode', 'OwnershipEdge', 'RealEstateFirm', 'FirmBranch',
+  'OwnershipNode', 'OwnershipEdge', 'RealEstateFirm', 'FirmBranch', 'EntityQuery',
 ];
 
 export async function searchAudit(params = {}) {

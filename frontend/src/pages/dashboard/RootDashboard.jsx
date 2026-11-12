@@ -6,6 +6,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import HistoryIcon from '@mui/icons-material/History';
 import InboxIcon from '@mui/icons-material/Inbox';
 import { countOf, useDealSummary } from '../../dashboard/dealSummary.js';
+import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { listFirms } from '../../api/firms.js';
 import { listUsers } from '../../api/users.js';
 import { searchAudit } from '../../api/audit.js';
@@ -17,22 +18,31 @@ import { timeAgo } from '../../utils/formatters.js';
 import { tokens, fonts } from '../../theme/theme.js';
 
 export function RootDashboard() {
-  const dealsQ = useDealSummary({ scoped: false });
+  // Follows the scope picker like every other dashboard: the deal figures (hero, status mix, in
+  // review) are the selected branch's, and the user count is the selected entity's — entity-wide
+  // rather than branch-wide, since compliance officers and senior managers belong to no branch and
+  // would drop out of a branch count. The entity register tiles and the activity feed stay
+  // platform-wide: they describe the platform itself, and the audit log has no entity filter.
+  const { firm, branch } = useDashboardScope();
+  const firmId = firm?.id ?? null;
+  const dealsQ = useDealSummary();
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms });
-  const usersQ = useQuery({ queryKey: ['users'], queryFn: listUsers });
+  const usersQ = useQuery({
+    queryKey: ['users', { firmId }],
+    queryFn: () => listUsers({ firmId }),
+    enabled: Boolean(firmId),
+  });
   const auditQ = useQuery({ queryKey: ['audit', { size: 8 }], queryFn: () => searchAudit({ size: 8 }) });
 
-  // Deliberately NOT scoped. Every other dashboard narrows to the selected branch, but this one
-  // is the platform view: its hero counts "deals on the platform" and captions that with the firm
-  // and user totals. Narrowing the numerator to one branch while the caption still spans every
-  // entity would not be a filter, it would be a wrong number.
   const summary = dealsQ.data;
 
   if (dealsQ.isError) return <Alert severity="error">We couldn’t load platform data. Refresh to try again.</Alert>;
-  if (dealsQ.isLoading || firmsQ.isLoading || usersQ.isLoading) return <Bento><SkeletonTiles /></Bento>;
+  if (dealsQ.isLoading || firmsQ.isLoading || (firmId && usersQ.isLoading)) return <Bento><SkeletonTiles /></Bento>;
 
   const firms = firmsQ.data ?? [];
-  const users = usersQ.data ?? [];
+  // The server's entity filter keeps platform accounts (ROOT, AUDIT) that belong to no entity, as
+  // the overseers of every one; this tile counts the entity's own people only.
+  const users = (usersQ.data ?? []).filter((u) => u.realEstateFirmId === firmId);
   const activity = auditQ.data?.items ?? [];
 
   const count = (s) => countOf(summary, s);
@@ -46,10 +56,10 @@ export function RootDashboard() {
     <Bento>
       <HeroTile
         index={0}
-        eyebrow="PLATFORM · LIVE"
+        eyebrow={`${(firm?.name ?? 'Platform').toUpperCase()} · LIVE`}
         value={total}
-        label={total === 1 ? 'deal on the platform' : 'deals on the platform'}
-        caption={`${firms.length} reporting entities · ${users.length} users`}
+        label={`${total === 1 ? 'deal' : 'deals'} in ${branch?.name ?? 'this branch'}`}
+        caption={[firm?.name, branch?.name].filter(Boolean).join(' · ')}
         action={
           <Button component={RouterLink} to="/cdd/deals" startIcon={<InboxIcon />}
                   sx={{ bgcolor: '#fff', color: tokens.blue, fontWeight: 700, '&:hover': { bgcolor: '#EEF3FF' } }}>
@@ -59,7 +69,7 @@ export function RootDashboard() {
       />
 
       <StatTile index={1} eyebrow="REPORTING ENTITIES" value={firms.length} label="Registered" to="/settings/reporting-entities" />
-      <StatTile index={2} eyebrow="USERS" value={users.length} label="Across all firms" to="/settings/users" />
+      <StatTile index={2} eyebrow="USERS" value={users.length} label={`In ${firm?.name ?? 'this entity'}`} to="/settings/users" />
       <DistributionTile
         index={3}
         eyebrow="DEAL STATUS · MIX"

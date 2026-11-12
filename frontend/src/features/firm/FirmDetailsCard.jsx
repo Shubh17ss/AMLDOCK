@@ -9,19 +9,21 @@ import { FirmCountrySelect } from '../../components/FirmCountrySelect.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { canWrite } from '../../auth/roles.js';
 import { tokens } from '../../theme/theme.js';
+import { useToast } from '../../components/ToastProvider.jsx';
+import { emailFieldProps, isBadEmail } from '../../utils/email.js';
 
 /**
- * Firm metadata form. `editableIdentity` (ROOT) unlocks firm name, NZBN/ABN, country and the
- * active flag; otherwise those are read-only and only the contact blocks + branch count are
- * editable.
+ * Reporting entity details form. `editableIdentity` (ROOT) unlocks the name, NZBN/ABN, country,
+ * active flag and branch count; otherwise those are read-only and only the liaison and compliance
+ * officer blocks are editable. The server refuses a branch count from anyone but ROOT.
  */
 export function FirmDetailsCard({ firm, editableIdentity = false }) {
   const qc = useQueryClient();
   const { user } = useAuth();
   const mayWrite = canWrite(user?.role);
   const [form, setForm] = useState(firm);
+  const { showToast } = useToast();
   const [error, setError] = useState(null);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => { setForm(firm); }, [firm]);
 
@@ -34,42 +36,42 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
         complianceOfficerName: form.complianceOfficerName,
         complianceOfficerEmail: form.complianceOfficerEmail,
         complianceOfficerContactNumber: form.complianceOfficerContactNumber,
-        numberOfBranches: form.numberOfBranches === '' || form.numberOfBranches == null
-          ? null : Number(form.numberOfBranches),
       };
       if (editableIdentity) {
+        payload.numberOfBranches = form.numberOfBranches === '' || form.numberOfBranches == null
+          ? null : Number(form.numberOfBranches);
         payload.name = form.name;
         payload.nzbn = form.nzbn;
         payload.country = form.country;
         payload.active = form.active;
       }
-      return updateFirm(firm.id, payload);
+      return updateFirm(firm.publicId, payload);
     },
     onSuccess: (data) => {
-      qc.setQueryData(['firm', firm.id], data);
+      qc.setQueryData(['firm', firm.publicId], data);
       qc.invalidateQueries({ queryKey: ['firms'] });
       setError(null);
-      setSaved(true);
+      showToast({ severity: 'success', message: 'Reporting entity updated' });
     },
-    onError: (err) => { setSaved(false); setError(err.response?.data?.message || 'Failed to save'); },
+    onError: (err) => setError(err.response?.data?.message || 'Failed to save'),
   });
 
-  const ch = (k) => (e) => { setSaved(false); setForm((f) => ({ ...f, [k]: e.target.value })); };
+  const ch = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const submit = (e) => { e.preventDefault(); mut.mutate(); };
 
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" gutterBottom>Firm details</Typography>
+        <Typography variant="h6" gutterBottom>Reporting Entity details</Typography>
         <Divider sx={{ mb: 2 }} />
         <Box component="form" onSubmit={submit}>
           <Stack spacing={2} sx={{ maxWidth: 520 }}>
             <TextField label="Firm name" value={form.name ?? ''} onChange={ch('name')}
                        InputProps={{ readOnly: !editableIdentity }} disabled={!editableIdentity}
-                       helperText={editableIdentity ? undefined : "Firm name can't be changed."} />
+                       helperText={editableIdentity ? undefined : "Reporting entity name can't be changed."} />
             <FirmCountrySelect
               value={form.country ?? ''}
-              onChange={(code) => { setSaved(false); setForm((f) => ({ ...f, country: code })); }}
+              onChange={(code) => setForm((f) => ({ ...f, country: code }))}
               disabled={!editableIdentity}
               helperText={editableIdentity ? undefined : "Country can't be changed."}
             />
@@ -79,28 +81,33 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
             {editableIdentity && (
               <FormControlLabel
                 control={<Switch checked={Boolean(form.active)}
-                                 onChange={(e) => { setSaved(false); setForm((f) => ({ ...f, active: e.target.checked })); }} />}
+                                 onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} />}
                 label="Active"
               />
             )}
 
             <Typography variant="subtitle2" sx={{ color: tokens.muted }}>Liaison</Typography>
             <TextField label="Liaison name" value={form.liaisonName ?? ''} onChange={ch('liaisonName')} />
-            <TextField label="Liaison email" type="email" value={form.liaisonEmail ?? ''} onChange={ch('liaisonEmail')} />
+            <TextField label="Liaison email" type="email" value={form.liaisonEmail ?? ''} onChange={ch('liaisonEmail')}
+                       {...emailFieldProps(form.liaisonEmail)} />
             <TextField label="Liaison contact number" value={form.liaisonContactNumber ?? ''} onChange={ch('liaisonContactNumber')} />
 
             <Typography variant="subtitle2" sx={{ color: tokens.muted }}>Compliance officer</Typography>
             <TextField label="Compliance officer name" value={form.complianceOfficerName ?? ''} onChange={ch('complianceOfficerName')} />
-            <TextField label="Compliance officer email" type="email" value={form.complianceOfficerEmail ?? ''} onChange={ch('complianceOfficerEmail')} />
+            <TextField label="Compliance officer email" type="email" value={form.complianceOfficerEmail ?? ''} onChange={ch('complianceOfficerEmail')}
+                       {...emailFieldProps(form.complianceOfficerEmail)} />
             <TextField label="Compliance officer contact number" value={form.complianceOfficerContactNumber ?? ''} onChange={ch('complianceOfficerContactNumber')} />
 
             <TextField label="Number of branches" type="number" value={form.numberOfBranches ?? ''}
-                       onChange={ch('numberOfBranches')} inputProps={{ min: 0, max: 100 }} />
+                       onChange={ch('numberOfBranches')} inputProps={{ min: 0, max: 100 }}
+                       InputProps={{ readOnly: !editableIdentity }} disabled={!editableIdentity}
+                       helperText={editableIdentity ? undefined : ''} />
 
             {error && <Alert severity="error">{error}</Alert>}
-            {saved && <Alert severity="success">Saved.</Alert>}
             <Box>
-              <Button type="submit" variant="contained" disabled={mut.isPending || !mayWrite}>
+              <Button type="submit" variant="contained"
+                      disabled={mut.isPending || !mayWrite
+                        || isBadEmail(form.liaisonEmail) || isBadEmail(form.complianceOfficerEmail)}>
                 {mut.isPending ? 'Saving…' : 'Save changes'}
               </Button>
             </Box>
