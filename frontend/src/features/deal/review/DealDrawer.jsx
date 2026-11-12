@@ -41,7 +41,7 @@ const TABS = [
  * dismissed with unsaved work.
  */
 export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canUpload, canComment = true,
-                            frozenNotes = null, version = null, individuals = [], owners = [] }) {
+                            canManageAccess = false, frozenNotes = null, version = null, individuals = [], owners = [] }) {
   const [tab, setTab] = useState('details');
 
   // The user list is not part of a snapshot: it is who can reach the deal today, which would
@@ -139,7 +139,7 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
               color: tokens.blue,
             }}
           >
-            {deal?.reference ?? 'This deal'}
+            This deal
           </Typography>
           <Typography
             sx={{
@@ -224,13 +224,13 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
                              owners={owners} />
         )}
         {deal && current === 'users' && (
-          <DealUsersPanel dealId={dealId} readOnly={readOnly} />
+          // Access follows its own role rule, not the deal's status (see canManageDealAccess).
+          <DealUsersPanel dealId={dealId} readOnly={!canManageAccess} />
         )}
         {deal && current === 'notes' && (
           // No status chip: the page header already carries one a couple of inches away.
           <DealNotesTimeline
             dealId={dealId}
-            dealStatus={deal.status}
             canComment={canComment}
             frozenEntries={frozenNotes}
             embedded

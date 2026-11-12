@@ -88,14 +88,14 @@ export function OverseasResidentsPage() {
         <Alert severity="error">Failed to load the register. Refresh to try again.</Alert>
       )}
 
-      {/* Says what the register cannot see, so an empty table is not mistaken for a clean one. */}
+      {/* Says what the register cannot see, so an empty table is not mistaken for a clean one.
       {!unansweredQ.isLoading && unanswered > 0 && (
         <Alert severity="info">
           {countText(unansweredQ.data)} {unanswered === 1 ? 'person has' : 'people have'} no country of residence
           recorded and {unanswered === 1 ? 'is' : 'are'} not counted here. Set it on the owner’s
           Details tab.
         </Alert>
-      )}
+      )} */}
 
       {q.isLoading
         ? <SkeletonTable rows={6} columns={5} />

@@ -20,11 +20,12 @@ import { useAuth } from '../auth/AuthContext.jsx';
 export function useFirmCountry() {
   const { user } = useAuth();
   const firmId = user?.realEstateFirmId ?? null;
+  const firmRef = user?.realEstateFirmPublicId ?? null;
 
   const q = useQuery({
-    queryKey: ['firm', firmId],
-    queryFn: () => getFirm(firmId),
-    enabled: Boolean(firmId),
+    queryKey: ['firm', firmRef],
+    queryFn: () => getFirm(firmRef),
+    enabled: Boolean(firmRef),
     staleTime: Infinity,   // a reporting entity does not change jurisdiction
   });
 

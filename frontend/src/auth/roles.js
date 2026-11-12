@@ -107,15 +107,24 @@ export const USER_MANAGER_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MAN
 // see the same screens scoped by the API to their own reporting entity. AUDIT opens them too but
 // every control inside is gated by canWrite / canManageUsers, so it only reads.
 export const SETTINGS_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER', 'AUDIT'];
+// Settings › Reporting Entities — the register of every entity, and each one's full edit. ROOT only.
+export const ENTITY_ADMIN_ROLES = ['ROOT'];
+// Settings › Reporting Entity — everyone else who could read entity and branch details, on their
+// own entity only: identity and branch count read-only, contacts and branches editable (AUDIT
+// reads only). The server holds the same lines in FirmService.update and assertVisible.
+export const REPORTING_ENTITY_ROLES = SETTINGS_ROLES.filter((r) => r !== 'ROOT');
+// Workspace › Queries. Who may ask the AMLDOCK admin team for a change to their entity's locked
+// details (AUDIT reads only, so it may not), and who works through what they ask.
+export const QUERY_RAISER_ROLES = ['AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+export const QUERY_ADMIN_ROLES = ['ROOT'];
 // Who can repair a dead-ended dashboard scope themselves, as opposed to merely reading the screen
 // where it is repaired. SETTINGS_ROLES opens Settings › Reporting Entities; only these three may
 // write there — FirmController gates POST /firms on ROOT and POST /firms/{id}/branches on all
 // three, and AuditReadOnlyFilter refuses AUDIT's writes everywhere regardless. Derived rather than
 // listed so it cannot drift from SETTINGS_ROLES or from the read-only set.
 export const SCOPE_SETUP_ROLES = SETTINGS_ROLES.filter((r) => canWrite(r));
-// Settings › Audit Log. ROOT sees the platform trail; a compliance officer or senior manager
-// sees their own entity's, scoped server-side by actor in AuditService.search.
-export const AUDIT_LOG_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
+// Settings › Audit Log. ROOT only — the server enforces the same on /api/audit.
+export const AUDIT_LOG_ROLES = ['ROOT'];
 // CDD › Assurance. Compliance's second look at its own sign-offs, so it is theirs to work; ROOT and
 // AUDIT read it, because checking that assurance is being done is what they are there for. Who may
 // actually mark a version is narrower again — isDealReviewer — and the server holds that line.
@@ -230,4 +239,29 @@ export function navProfileFor(role) {
   if (isFirmLevel(role)) return 'firmReviewer';
   if (role === 'ROOT') return 'root';
   return 'agent';
+}
+
+/** Who may delay CDD on a deal: every role that writes, except finance. Mirrors DealService.setCddDelayed. */
+export const canDelayCdd = (role) => canWrite(role) && role !== 'FINANCE';
+
+/**
+ * Who may grant or revoke access to a deal. Mirrors DealUserService.mustManage, and like it does
+ * not depend on the deal's status: access can change whether the deal is new or closed.
+ */
+export function canManageDealAccess(user, deal) {
+  if (!user || !deal) return false;
+  switch (user.role) {
+    case 'ROOT':
+    case 'AML_COMPLIANCE_OFFICER':
+    case 'SENIOR_MANAGER':
+      return true;
+    case 'SALES_MANAGER':
+      return user.firmBranchId != null && user.firmBranchId === deal.firmBranchId;
+    case 'AGENT':
+    case 'AGENT_PA':
+    case 'ADMIN':
+      return user.userId === deal.createdByUserId;
+    default:
+      return false;
+  }
 }

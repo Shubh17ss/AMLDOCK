@@ -119,9 +119,9 @@ public class IndividualService {
             return new IndividualRowDto(
                     n.getId(),
                     n.getNodeType(),
-                    deal.getId(),
+                    deal.getPublicId(),
                     // Matches how the deals list renders a reference that was never generated.
-                    deal.getReference() != null ? deal.getReference() : "#" + deal.getId(),
+                    deal.getReference() != null ? deal.getReference() : "#" + deal.getPublicId(),
                     property == null ? null : DealService.formatAddress(property),
                     n.getDisplayName(),
                     // The node's copy first: extraction writes the person's and pushes it down, so

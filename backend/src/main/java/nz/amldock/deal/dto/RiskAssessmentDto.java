@@ -22,7 +22,8 @@ import java.util.List;
  * number printed beside it.
  */
 public record RiskAssessmentDto(
-        Long dealId,
+        // The internal id — kept off the wire, where deals are named by their public id.
+        @com.fasterxml.jackson.annotation.JsonIgnore Long dealId,
         int riskValue,
         /** The band the score falls in, ignoring any override. */
         RiskRating calculatedRating,

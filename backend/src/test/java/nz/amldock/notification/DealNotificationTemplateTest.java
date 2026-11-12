@@ -61,6 +61,8 @@ class DealNotificationTemplateTest {
                 .collect(Collectors.toSet());
         Set<String> escapedNames = AVAILABLE.stream()
                 .filter(n -> !n.endsWith(DealNotificationPayload.PLAIN_SUFFIX))
+                // Derived from dealUrl rather than stored on the payload.
+                .filter(n -> !n.equals("logoUrl"))
                 .collect(Collectors.toSet());
         assertThat(escapedNames).containsExactlyInAnyOrderElementsOf(components);
     }
@@ -73,7 +75,9 @@ class DealNotificationTemplateTest {
     @Test
     void everyFreeTextFieldHasBothAnEscapedAndAPlainForm() {
         for (String name : AVAILABLE) {
-            if (name.endsWith(DealNotificationPayload.PLAIN_SUFFIX) || name.equals("dealUrl")) continue;
+            // Built by us from APP_BASE_URL, not typed by anyone: one form serves every part.
+            if (name.endsWith(DealNotificationPayload.PLAIN_SUFFIX)
+                    || name.equals("dealUrl") || name.equals("logoUrl")) continue;
             assertThat(AVAILABLE)
                     .as("%s needs a plain counterpart", name)
                     .contains(name + DealNotificationPayload.PLAIN_SUFFIX);
@@ -154,9 +158,21 @@ class DealNotificationTemplateTest {
 
         assertThat(html).doesNotContain("<script>x</script>");
         assertThat(html).contains("&lt;script&gt;");
-        assertThat(html).contains("DEAL-2026-0001");
+        assertThat(html).contains("1 High St");
         // A null field renders as nothing rather than the literal word "null".
         assertThat(html).doesNotContain("null");
+    }
+
+    @Test
+    void theLogoComesFromTheSameAppTheDealLinkPointsInto() {
+        Map<String, String> data = new DealNotificationPayload(
+                1L, "r", "b", "f", "p", "c", "NEW", "REVIEW", "a", "n",
+                "https://app.amldock.nz/deals/k7m2x9qa4tbe").toTemplateData();
+        assertThat(data.get("logoUrl")).isEqualTo("https://app.amldock.nz/email/amldock-logo.png");
+
+        String html = EmailTemplateStore.render(
+                templates.get(DealNotificationEvent.DEAL_CREATED.templateName()).html(), data);
+        assertThat(html).contains("src=\"https://app.amldock.nz/email/amldock-logo.png\"");
     }
 
     @Test

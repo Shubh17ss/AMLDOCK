@@ -18,4 +18,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmailIgnoreCaseAndIdNot(String email, Long id);
     List<User> findByRealEstateFirmIdOrderByIdAsc(Long realEstateFirmId);
     List<User> findByFirmBranchIdOrderByIdAsc(Long firmBranchId);
+
+    /** Everyone active in a role — the recipients of a platform-wide notice such as a new query. */
+    List<User> findByRoleAndActiveTrue(Role role);
 }

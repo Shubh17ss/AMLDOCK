@@ -237,10 +237,8 @@ export function NodeEditorPane({
             dealId={dealId}
             ownershipNodeId={selected.id}
             allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
-            compact
             canUpload={canUpload ?? !readOnly}
             frozenDocuments={versionNodeDocs}
-            title={`Documents on ${selected.displayName}`}
             onViewDocument={setViewingDoc}
             // Every other owner on this deal; the uploader narrows it to those whose type takes
             // the document. Not on a version, which already turns off every write.

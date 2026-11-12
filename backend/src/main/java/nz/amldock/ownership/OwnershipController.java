@@ -1,5 +1,6 @@
 package nz.amldock.ownership;
 
+import nz.amldock.deal.DealRef;
 import jakarta.validation.Valid;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
@@ -40,7 +41,7 @@ public class OwnershipController {
     }
 
     @GetMapping
-    public TreeDto getTree(@PathVariable Long dealId) {
+    public TreeDto getTree(@DealRef Long dealId) {
         return ownership.getTree(dealId);
     }
 
@@ -48,7 +49,7 @@ public class OwnershipController {
 
     @PostMapping("/nodes")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public NodeDto createNode(@PathVariable Long dealId, @Valid @RequestBody CreateNodeRequest req) {
+    public NodeDto createNode(@DealRef Long dealId, @Valid @RequestBody CreateNodeRequest req) {
         NodeDto node = ownership.createNode(dealId, req);
         audit.record(AuditAction.NODE_CREATED, "OwnershipNode", node.id(),
                 "Created " + node.nodeType() + " node \"" + node.displayName() + "\" on deal " + dealId);
@@ -57,7 +58,7 @@ public class OwnershipController {
 
     @PatchMapping("/nodes/{nodeId}")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public NodeDto updateNode(@PathVariable Long dealId, @PathVariable Long nodeId,
+    public NodeDto updateNode(@DealRef Long dealId, @PathVariable Long nodeId,
                               @RequestBody UpdateNodeRequest req) {
         NodeDto node = ownership.updateNode(dealId, nodeId, req);
         audit.record(AuditAction.NODE_UPDATED, "OwnershipNode", node.id(),
@@ -74,7 +75,7 @@ public class OwnershipController {
      */
     @PostMapping("/nodes/{nodeId}/verification")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public NodeDto verifyNode(@PathVariable Long dealId, @PathVariable Long nodeId,
+    public NodeDto verifyNode(@DealRef Long dealId, @PathVariable Long nodeId,
                               @Valid @RequestBody VerifyNodeRequest req) {
         NodeDto node = ownership.verifyNode(dealId, nodeId, req);
         audit.record(AuditAction.NODE_VERIFIED, "OwnershipNode", node.id(),
@@ -90,7 +91,7 @@ public class OwnershipController {
     // correct it, which is not a permission boundary so much as a dead end.
     @DeleteMapping("/nodes/{nodeId}")
     @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
-    public ResponseEntity<Void> deleteNode(@PathVariable Long dealId, @PathVariable Long nodeId,
+    public ResponseEntity<Void> deleteNode(@DealRef Long dealId, @PathVariable Long nodeId,
                                            @RequestParam(defaultValue = "false") boolean force) {
         List<Long> removed = ownership.deleteNode(dealId, nodeId, force);
         // The ids rather than a count: a cascade can take nodes the caller never named, and the
@@ -108,7 +109,7 @@ public class OwnershipController {
 
     @PostMapping("/edges")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public EdgeDto createEdge(@PathVariable Long dealId, @Valid @RequestBody CreateEdgeRequest req) {
+    public EdgeDto createEdge(@DealRef Long dealId, @Valid @RequestBody CreateEdgeRequest req) {
         EdgeDto edge = ownership.createEdge(dealId, req);
         audit.record(AuditAction.EDGE_CREATED, "OwnershipEdge", edge.id(),
                 "Linked node " + edge.parentNodeId() + " → " + edge.childNodeId()
@@ -119,7 +120,7 @@ public class OwnershipController {
 
     @PatchMapping("/edges/{edgeId}")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public EdgeDto updateEdge(@PathVariable Long dealId, @PathVariable Long edgeId,
+    public EdgeDto updateEdge(@DealRef Long dealId, @PathVariable Long edgeId,
                               @Valid @RequestBody UpdateEdgeRequest req) {
         EdgeDto edge = ownership.updateEdge(dealId, edgeId, req);
         audit.record(AuditAction.EDGE_UPDATED, "OwnershipEdge", edge.id(),
@@ -129,7 +130,7 @@ public class OwnershipController {
 
     @DeleteMapping("/edges/{edgeId}")
     @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER')")
-    public ResponseEntity<Void> deleteEdge(@PathVariable Long dealId, @PathVariable Long edgeId) {
+    public ResponseEntity<Void> deleteEdge(@DealRef Long dealId, @PathVariable Long edgeId) {
         ownership.deleteEdge(dealId, edgeId);
         audit.record(AuditAction.EDGE_DELETED, "OwnershipEdge", edgeId, "Removed edge " + edgeId);
         return ResponseEntity.noContent().build();
@@ -147,7 +148,7 @@ public class OwnershipController {
      */
     @PostMapping("/order")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public TreeDto reorder(@PathVariable Long dealId, @Valid @RequestBody ReorderRequest req) {
+    public TreeDto reorder(@DealRef Long dealId, @Valid @RequestBody ReorderRequest req) {
         TreeDto tree = ownership.reorderSiblings(dealId, req);
         audit.record(AuditAction.STRUCTURE_REORDERED, "OwnershipStructure", tree.ownershipStructureId(),
                 req.parentNodeId() == null
@@ -161,7 +162,7 @@ public class OwnershipController {
 
     @PostMapping("/root")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public TreeDto setRoot(@PathVariable Long dealId, @RequestBody SetRootRequest req) {
+    public TreeDto setRoot(@DealRef Long dealId, @RequestBody SetRootRequest req) {
         return ownership.setRoot(dealId, req.nodeId());
     }
 }

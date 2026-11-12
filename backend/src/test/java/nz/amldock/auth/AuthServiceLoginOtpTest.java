@@ -44,7 +44,8 @@ class AuthServiceLoginOtpTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(authManager, users, jwt, refreshRepo, audit, otp, 7, false, "Lax");
+        service = new AuthService(authManager, users, jwt, refreshRepo, audit, otp,
+                org.mockito.Mockito.mock(nz.amldock.firm.RealEstateFirmRepository.class), 7, false, "Lax");
     }
 
     private User user(Role role, boolean active) {

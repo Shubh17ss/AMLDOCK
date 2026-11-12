@@ -17,7 +17,8 @@ public record DocumentDto(
         long sizeBytes,
         DocumentType documentType,
         DocumentStatus status,
-        Long dealId,
+        // The internal id — kept off the wire, where deals are named by their public id.
+        @com.fasterxml.jackson.annotation.JsonIgnore Long dealId,
         Long ownershipNodeId,
         Long beneficialOwnerId,
         IdSide idSide,

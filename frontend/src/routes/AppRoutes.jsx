@@ -9,11 +9,13 @@ import { AdminLoginPage } from '../pages/AdminLoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
 import { BranchUsersPage } from '../pages/BranchUsersPage.jsx';
 import { FirmAdminDetailPage } from '../pages/admin/FirmAdminDetailPage.jsx';
+import { ReportingEntityPage, ReportingEntityRedirect } from '../pages/ReportingEntityPage.jsx';
+import { QueriesAdminPage } from '../pages/admin/QueriesAdminPage.jsx';
 import {
   DEAL_AUTHOR_ROLES, DEAL_CREATOR_ROLES, DEAL_REVIEWER_ROLES, SETTINGS_ROLES, SECTION_READ_ROLES,
   NOTIFICATION_ADMIN_ROLES,
   FINANCE_SECTION_ROLES, AUDIT_LOG_ROLES, ASSURANCE_ROLES,
-  TRAINING_ASSIGNABLE_ROLES,
+  TRAINING_ASSIGNABLE_ROLES, ENTITY_ADMIN_ROLES, REPORTING_ENTITY_ROLES, QUERY_ADMIN_ROLES,
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
@@ -23,7 +25,7 @@ import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
   BENEFICIAL_OWNERS_PATH, OVERSEAS_RESIDENTS_PATH, CDD_EXCEPTIONS_PATH, CDD_ASSURANCE_PATH,
   SUSPICIOUS_ACTIVITIES_PATH, STAFF_TRAINING_PATH, MY_TRAINING_PATH, SECTION_LANDING_GROUPS,
-  FINANCE_PATHS, AUDIT_LOG_PATH,
+  FINANCE_PATHS, AUDIT_LOG_PATH, WORKSPACE_PATH, QUERIES_PATH,
 } from '../navigation/moduleRegistry.jsx';
 import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/DocumentModulePage.jsx';
 import { SectionLandingPage } from '../pages/SectionLandingPage.jsx';
@@ -48,10 +50,13 @@ import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 
 /**
  * Who may open a section landing or module route. Everything is section-read except the two
- * Reporting modules FINANCE works in, plus the landing they sit under.
+ * Reporting modules FINANCE works in, plus the landing they sit under, and the Workspace section,
+ * which is ROOT's.
  */
-const rolesFor = (path) =>
-  (FINANCE_PATHS.includes(path) ? FINANCE_SECTION_ROLES : SECTION_READ_ROLES);
+const rolesFor = (path) => {
+  if (path === WORKSPACE_PATH || path.startsWith(`${WORKSPACE_PATH}/`)) return QUERY_ADMIN_ROLES;
+  return FINANCE_PATHS.includes(path) ? FINANCE_SECTION_ROLES : SECTION_READ_ROLES;
+};
 
 export function AppRoutes() {
   return (
@@ -163,15 +168,33 @@ export function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        {/* Settings › Reporting Entities — entity admin, same firm scoping as above. */}
+        {/* Settings › Reporting Entities — the register of every entity. ROOT only. */}
         <Route path="/settings/reporting-entities" element={
-          <ProtectedRoute roles={SETTINGS_ROLES}>
+          <ProtectedRoute roles={ENTITY_ADMIN_ROLES}>
             <FirmsAdminPage />
           </ProtectedRoute>
         } />
         <Route path="/settings/reporting-entities/:id" element={
-          <ProtectedRoute roles={SETTINGS_ROLES}>
+          <ProtectedRoute roles={ENTITY_ADMIN_ROLES}>
             <FirmAdminDetailPage />
+          </ProtectedRoute>
+        } />
+        {/* Settings › Reporting Entity — everyone else's view of their own entity. The bare path
+            is what the menu links to; it forwards to the entity's own address. */}
+        <Route path="/reporting-entity" element={
+          <ProtectedRoute roles={REPORTING_ENTITY_ROLES}>
+            <ReportingEntityRedirect />
+          </ProtectedRoute>
+        } />
+        <Route path="/reporting-entity/:id" element={
+          <ProtectedRoute roles={REPORTING_ENTITY_ROLES}>
+            <ReportingEntityPage />
+          </ProtectedRoute>
+        } />
+        {/* Workspace › Queries — change requests raised from Settings › Reporting Entity. */}
+        <Route path={QUERIES_PATH} element={
+          <ProtectedRoute roles={QUERY_ADMIN_ROLES}>
+            <QueriesAdminPage />
           </ProtectedRoute>
         } />
 

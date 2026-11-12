@@ -10,6 +10,7 @@ import { SectionOverlay } from '../components/dashboard/SectionOverlay.jsx';
 import { ScopeSelector } from '../components/dashboard/ScopeSelector.jsx';
 import { ReviewDialog } from '../components/documents/ReviewDialog.jsx';
 import { listDocumentReviews, reviewStatusOf } from '../api/documentReviews.js';
+import { REVIEW_META } from '../components/documents/reviewStatus.jsx';
 import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
 import { greeting, stamp } from './dashboard/greeting.js';
 import { tokens, fonts } from '../theme/theme.js';
@@ -33,7 +34,7 @@ const cardDateFmt = (iso) =>
  * frosted page. The sections used to be full-width stacked panels, which meant scrolling past
  * four of them to reach Settings and a card row that clipped its own last card.
  *
- * <p>A tile carries a dot when something inside wants attention. Everything else it might say —
+ * <p>A tile carries an alert sign when something inside wants attention. Everything else it might say —
  * counts, review dates, which section number it is — belongs to the modules and waits inside.
  */
 export function DashboardPage() {
@@ -72,14 +73,19 @@ export function DashboardPage() {
   const [open, setOpen] = useState(null);
   const openSection = (group, el) => setOpen({ group, rect: el?.getBoundingClientRect() ?? null });
 
-  // One dot per section, drawn only when it means something. The three states are the ones
+  // One alert sign per section, drawn only when it means something. The three states are the ones
   // reviewStatusOf already returns; there is no fourth "due soon" to invent.
   const attentionOf = (group) => {
     const states = group.items
       .filter((i) => isReviewableModule(i.id))
       .map((i) => reviewStatusOf(reviewByModule[i.id] ?? null));
-    if (states.includes('OVERDUE')) return { color: tokens.rejected, label: 'A review is overdue' };
-    if (states.includes('UNSET')) return { color: tokens.review, label: 'A review date is not set' };
+    // The same glyph and colour the module cards inside use for that state.
+    if (states.includes('OVERDUE')) {
+      return { Icon: REVIEW_META.OVERDUE.Icon, color: REVIEW_META.OVERDUE.color, label: 'A review is overdue' };
+    }
+    if (states.includes('UNSET')) {
+      return { Icon: REVIEW_META.UNSET.Icon, color: REVIEW_META.UNSET.color, label: 'A review date is not set' };
+    }
     return null;
   };
 

@@ -10,14 +10,14 @@ export function PageHeader({ eyebrow, title, subtitle, actions }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
       <Box sx={{ minWidth: 0 }}>
-        {eyebrow && (
+        {/* {eyebrow && (
           <Typography sx={{
             fontFamily: fonts.mono, fontSize: '0.68rem', letterSpacing: '0.16em',
             color: tokens.muted, textTransform: 'uppercase', mb: 0.75,
           }}>
             {eyebrow}
           </Typography>
-        )}
+        )} */}
         <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.03em', color: tokens.ink }}>
           {title}
         </Typography>

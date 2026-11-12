@@ -4,6 +4,8 @@ import nz.amldock.firm.FirmBranch;
 
 public record BranchDto(
         Long id,
+        /** What URLs and the /branches endpoints name the branch by. */
+        String publicId,
         Long realEstateFirmId,
         String name,
         String addressLine1,
@@ -18,7 +20,7 @@ public record BranchDto(
         boolean active
 ) {
     public static BranchDto from(FirmBranch b) {
-        return new BranchDto(b.getId(), b.getRealEstateFirmId(), b.getName(), b.getAddressLine1(),
+        return new BranchDto(b.getId(), b.getPublicId(), b.getRealEstateFirmId(), b.getName(), b.getAddressLine1(),
                 b.getAddressLine2(), b.getSuburb(), b.getCity(), b.getPostcode(), b.getPhone(),
                 b.getEmail(), b.getManagerName(), b.getManagerEmail(), b.isActive());
     }

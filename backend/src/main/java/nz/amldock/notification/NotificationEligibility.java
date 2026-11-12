@@ -38,7 +38,10 @@ public final class NotificationEligibility {
         };
     }
 
-    /** Hears only about deals they authored. Ownership is authorship — there is no assignee field. */
+    /**
+     * Hears only about deals they authored or were added to through the deal's Users tab
+     * ({@code deal_user}) — the same two routes {@code assertCanRead} lets them in by.
+     */
     public static boolean isOwnDealsOnly(Role role) {
         return switch (role) {
             case AGENT, AGENT_PA -> true;

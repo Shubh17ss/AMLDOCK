@@ -29,18 +29,18 @@ import { readSavedScope, writeSavedScope } from './scopeStorage.js';
 // trap the very person meant to satisfy it. A ROOT account on a fresh platform has no reporting
 // entity to choose; an entity whose branches are all inactive offers no branch. Neither dead end is
 // resolvable from a modal that only offers dropdowns, and both are repaired on exactly these
-// screens — which read no scope of their own (FirmAdminDetailPage takes its firm id from the URL,
-// FirmsAdminPage lists whatever the API returns).
+// screens — which read no scope of their own (FirmAdminDetailPage and ReportingEntityPage take the
+// entity from the URL, FirmsAdminPage lists whatever the API returns).
 //
 // Path-based rather than a dismiss button on the dialog: it survives a refresh, it is declarative,
-// and it cannot be arrived at by accident. Authorisation is not this list's job — both routes sit
-// behind `ProtectedRoute roles={SETTINGS_ROLES}` in AppRoutes, so anyone else who types the URL is
+// and it cannot be arrived at by accident. Authorisation is not this list's job — the routes sit
+// behind `ProtectedRoute` in AppRoutes, so anyone else who types the URL is
 // redirected to /app and simply meets the dialog again.
 //
 // A pure function of the pathname rather than a member of the context value: putting it in the
 // value would force this provider to call useLocation(), re-creating the value memo on every
 // navigation and re-rendering every scope consumer in the app for a fact only two of them need.
-const SCOPE_EXEMPT_PREFIXES = ['/settings/reporting-entities'];
+const SCOPE_EXEMPT_PREFIXES = ['/settings/reporting-entities', '/reporting-entity'];
 
 /** Whether `pathname` is a route allowed to render with an incomplete scope. */
 export function isScopeExemptPath(pathname) {
@@ -77,14 +77,19 @@ export function DashboardScopeProvider({ children }) {
   // seeding would never run and a firm-level user would face a chooser with nothing pre-filled.
   const firmsQ = useQuery({ queryKey: ['firms'], queryFn: listFirms, enabled: isRoot });
   const firmQ = useQuery({
-    queryKey: ['firm', user?.realEstateFirmId],
-    queryFn: () => getFirm(user.realEstateFirmId),
-    enabled: !isRoot && Boolean(user?.realEstateFirmId),
+    queryKey: ['firm', user?.realEstateFirmPublicId],
+    queryFn: () => getFirm(user.realEstateFirmPublicId),
+    enabled: !isRoot && Boolean(user?.realEstateFirmPublicId),
   });
+  // Branches are listed by the entity's public id. ROOT's pick is looked up rather than read off
+  // the saved scope, which may predate public ids.
+  const currentFirmRef = isRoot
+    ? ((firmsQ.data ?? []).find((f) => f.id === currentFirmId)?.publicId ?? null)
+    : (user?.realEstateFirmPublicId ?? null);
   const branchesQ = useQuery({
-    queryKey: ['firms', currentFirmId, 'branches'],
-    queryFn: () => listBranches(currentFirmId),
-    enabled: Boolean(currentFirmId),
+    queryKey: ['firms', currentFirmRef, 'branches'],
+    queryFn: () => listBranches(currentFirmRef),
+    enabled: Boolean(currentFirmRef),
   });
 
   // Memoised because the reconciliation effect below depends on them; a fresh array each render
@@ -194,6 +199,14 @@ export function DashboardScopeProvider({ children }) {
     setBranch(b ? { id: b.id, name: b.name } : null);
   }, [activeBranches]);
 
+  // Entity and branch in one step, from the rows themselves — the scope picker lists every
+  // entity's branches at once, so the branch it hands over need not be in `activeBranches`, which
+  // only holds the current entity's. Reconciliation below still checks it once that list loads.
+  const selectScope = useCallback((f, b) => {
+    setFirm({ id: f.id, name: f.name, country: f.country });
+    setBranch(b ? { id: b.id, name: b.name } : null);
+  }, []);
+
   // What the two choosers offer. A non-ROOT user's entity is their own and nothing else.
   const firmOptions = isRoot ? activeFirms : (firmQ.data ? [firmQ.data] : []);
 
@@ -213,12 +226,12 @@ export function DashboardScopeProvider({ children }) {
   const value = useMemo(
     () => ({
       firm, setFirm, branch, setBranch,
-      firmOptions, activeBranches, selectFirm, selectBranch,
-      isRoot, branchLevel, branchSelectable, currentFirmId,
+      firmOptions, activeBranches, selectFirm, selectBranch, selectScope,
+      isRoot, branchLevel, branchSelectable, currentFirmId, currentFirmRef,
       optionsLoading, scopeComplete, scopeSettled,
     }),
-    [firm, branch, firmOptions, activeBranches, selectFirm, selectBranch,
-     isRoot, branchLevel, branchSelectable, currentFirmId,
+    [firm, branch, firmOptions, activeBranches, selectFirm, selectBranch, selectScope,
+     isRoot, branchLevel, branchSelectable, currentFirmId, currentFirmRef,
      optionsLoading, scopeComplete, scopeSettled],
   );
 

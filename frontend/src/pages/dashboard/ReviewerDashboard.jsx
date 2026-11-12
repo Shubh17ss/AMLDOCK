@@ -82,7 +82,7 @@ export function ReviewerDashboard() {
         index={7}
         actions={[
           { to: '/cdd/deals', label: 'Review deals', icon: <InboxIcon fontSize="small" />, primary: true },
-          { to: '/settings/reporting-entities', label: 'Your firm', icon: <BusinessIcon fontSize="small" /> },
+          { to: '/reporting-entity', label: 'Your reporting entity', icon: <BusinessIcon fontSize="small" /> },
         ]}
       />
     </Bento>

@@ -21,18 +21,39 @@ const withCommas = (digits) => String(digits ?? '').replace(/\B(?=(\d{3})+(?!\d)
 
 const digitsOnly = (text) => text.replace(/\D/g, '');
 
+/**
+ * Digits with at most one point and two places after it: "1,234.567" → "1234.56". A trailing
+ * point survives, so "12." can be typed on the way to "12.5".
+ */
+const decimalOnly = (text) => {
+  const cleaned = text.replace(/[^\d.]/g, '');
+  const dot = cleaned.indexOf('.');
+  if (dot === -1) return cleaned;
+  return cleaned.slice(0, dot) + '.' + cleaned.slice(dot + 1).replace(/\./g, '').slice(0, 2);
+};
+
+/** Groups the whole part only: "1234567.5" → "1,234,567.5". */
+const withCommasDecimal = (value) => {
+  const text = String(value ?? '');
+  const dot = text.indexOf('.');
+  return dot === -1 ? withCommas(text) : withCommas(text.slice(0, dot)) + text.slice(dot);
+};
+
 export function MoneyField({ label, value, onChange, currencyLabel, helperText,
-                            required = false, disabled = false, autoFocus = false }) {
+                            required = false, disabled = false, autoFocus = false,
+                            /** Accept cents. Off by default: property values are whole dollars. */
+                            allowDecimals = false }) {
   // onChange is a plain setter from the draft form, so hand back an event-shaped object carrying
   // the cleaned value — the same contract every other field in the wizard uses.
-  const handleChange = (e) => onChange({ target: { value: digitsOnly(e.target.value) } });
+  const clean = allowDecimals ? decimalOnly : digitsOnly;
+  const handleChange = (e) => onChange({ target: { value: clean(e.target.value) } });
 
   return (
     <TextField
       label={label}
       type="text"
-      inputMode="numeric"
-      value={withCommas(value)}
+      inputMode={allowDecimals ? 'decimal' : 'numeric'}
+      value={allowDecimals ? withCommasDecimal(value) : withCommas(value)}
       onChange={handleChange}
       fullWidth
       required={required}

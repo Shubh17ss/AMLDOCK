@@ -3,10 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
   IconButton, InputLabel, LinearProgress, ListItemIcon, ListItemText, Menu, MenuItem, Paper,
-  Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip,
-  Typography,
+  InputAdornment, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  TextField, Tooltip, Typography,
 } from '@mui/material';
-import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -17,9 +16,12 @@ import {
   AUDIO_DOCUMENT_TYPES, DEAL_DOCUMENT_TYPES, DOCUMENT_TYPES, deleteDocument, documentTypeLabel, fetchDownloadUrl,
   listDealDocuments, listNodeDocuments, moveDocument, uploadToS3,
 } from '../api/documents.js';
-import { ACCEPTED_DOCUMENT_TYPES, nodeTypeLabel } from '../api/ownership.js';
+import { ACCEPTED_DOCUMENT_TYPES } from '../api/ownership.js';
+import { getDeal } from '../api/deals.js';
+import { formatPropertyAddressShort } from '../data/addressFinderMeta.js';
 import { useToast } from './ToastProvider.jsx';
-import { CameraCaptureDialog } from './CameraCaptureDialog.jsx';
+import { EmptyState } from './EmptyState.jsx';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { tokens } from '../theme/theme.js';
 import { formatBytes, formatDateTime } from '../utils/formatters.js';
 
@@ -34,12 +36,6 @@ export function DocumentUploader({
    * that lives in a dropdown is a suggestion.
    */
   allowedTypes = undefined,
-  /**
-   * Lay out for a narrow container. MUI's breakpoints watch the viewport, so inside a 480px
-   * drawer on a 1500px screen every `sm:` rule still fires and the table runs off the edge.
-   * This is the container query the component cannot ask for itself.
-   */
-  compact = false,
   canUpload = true,
   /**
    * Show only the deal's own files — those with no ownership node behind them. The server's
@@ -52,7 +48,6 @@ export function DocumentUploader({
    * Ignored when the uploader is node-scoped, where the question does not arise.
    */
   dealOnly = false,
-  title = 'Documents',
   /** Receives the whole document row, ready to hand to DocumentViewerDialog. */
   onViewDocument = null,
   hideVoiceNotes = false,
@@ -79,7 +74,6 @@ export function DocumentUploader({
     : DOCUMENT_TYPES;
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(null); // { name, phase, percent }
-  const [cameraOpen, setCameraOpen] = useState(false);
   const [moving, setMoving] = useState(null); // the document row being moved
 
   const isNodeScoped = ownershipNodeId != null;
@@ -144,10 +138,6 @@ export function DocumentUploader({
     if (file && file.size > MAX_BYTES) e.target.value = '';
   };
 
-  const handleCameraCapture = (file) => {
-    validateAndUpload(file);
-  };
-
   // Optionally drop voice notes — some screens surface them separately (e.g. a Broker
   // notes card) and don't want them repeated in the document table.
   const rows = (source ?? [])
@@ -165,20 +155,28 @@ export function DocumentUploader({
   const isDeletableHere = (d) =>
     !isNodeScoped || d.ownershipNodeId === ownershipNodeId;
 
-  // Owners this document could go to: the node's type has to take that document, the same rule
-  // the server applies on upload and on a move.
+  // The property is named by its address, as the app bar names it. The deal page already holds
+  // this query, so it comes from cache.
+  const dealQ = useQuery({
+    queryKey: ['deals', dealId],
+    queryFn: () => getDeal(dealId),
+    enabled: canMoveToProperty && Boolean(dealId),
+  });
+  const propertyLabel = formatPropertyAddressShort(dealQ.data?.property) || 'Property';
+
+  // Every place this document could go. Not narrowed by its current type: the move dialog asks
+  // for the type after the place, from what that place takes, and the server checks the new type
+  // — so a passport can still reach the property, refiled as something the property holds.
   //
   // Each target carries a string key, because a Select cannot hold null: 'property' for the deal,
-  // otherwise the node id.
-  const targetsFor = (d) => {
-    const owners = (moveTargets ?? [])
-      .filter((n) => {
-        const accepted = ACCEPTED_DOCUMENT_TYPES[n.nodeType];
-        return !accepted || accepted.includes(d.documentType);
-      })
-      .map((n) => ({ key: String(n.id), nodeId: n.id, label: n.displayName, sub: nodeTypeLabel(n.nodeType) }));
-    const property = canMoveToProperty && DEAL_DOCUMENT_TYPES.includes(d.documentType)
-      ? [{ key: 'property', nodeId: null, label: 'Property — deal documents', sub: 'The deal itself' }]
+  // otherwise the node id. `acceptedTypes` undefined means no restriction.
+  const targetsFor = () => {
+    const owners = (moveTargets ?? []).map((n) => ({
+      key: String(n.id), nodeId: n.id, label: n.displayName,
+      acceptedTypes: ACCEPTED_DOCUMENT_TYPES[n.nodeType],
+    }));
+    const property = canMoveToProperty
+      ? [{ key: 'property', nodeId: null, label: propertyLabel, acceptedTypes: DEAL_DOCUMENT_TYPES }]
       : [];
     return [...property, ...owners];
   };
@@ -199,56 +197,32 @@ export function DocumentUploader({
   };
 
   return (
-    <Stack spacing={2}>
-      <Stack
-        direction={compact ? 'column' : { xs: 'column', sm: 'row' }}
-        justifyContent={compact ? undefined : { sm: 'space-between' }}
-        alignItems={compact ? 'stretch' : { sm: 'center' }}
-        spacing={compact ? 1.5 : { xs: 1.5, sm: 0 }}
-      >
-        <Typography variant="subtitle1">{title}</Typography>
-        {mayUpload && (
-          <Stack
-            direction={compact ? 'column' : { xs: 'column', sm: 'row' }}
-            spacing={1.5}
-            alignItems={compact ? 'stretch' : { sm: 'center' }}
-            sx={{ width: compact ? '100%' : { xs: '100%', sm: 'auto' } }}
+    <Stack spacing={5}>
+
+      {/* Type and Upload on one line: the type is what the file is filed as, so it is chosen
+          right beside the button that files it. */}
+      {mayUpload && (
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          {/* Two equal halves. */}
+          <FormControl size="small" sx={{ flex: 1, minWidth: 0 }}>
+            <InputLabel id="doc-type-label">Document type</InputLabel>
+            <Select labelId="doc-type-label" label="Document type"
+                    value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
+              {typeOptions.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            startIcon={<CloudUploadIcon />}
+            onClick={() => inputRef.current?.click()}
+            disabled={uploadMut.isPending || !dealId}
+            sx={{ flex: 1, minWidth: 0, height: 40 }}
           >
-            <FormControl size="small"
-                         sx={{ minWidth: compact ? 0 : { sm: 200 },
-                               width: compact ? '100%' : { xs: '100%', sm: 'auto' } }}>
-              <InputLabel id="doc-type-label">Document type</InputLabel>
-              <Select labelId="doc-type-label" label="Document type"
-                      value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
-                {typeOptions.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <Button
-              variant="contained"
-              startIcon={<CloudUploadIcon />}
-              onClick={() => inputRef.current?.click()}
-              disabled={uploadMut.isPending || !dealId}
-              sx={{ width: { xs: '100%', sm: 'auto' } }}
-            >
-              {uploadMut.isPending ? 'Uploading…' : 'Upload'}
-            </Button>
-            <Tooltip title="Capture with camera">
-              <span style={{ width: 'inherit' }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<CameraAltIcon />}
-                  onClick={() => setCameraOpen(true)}
-                  disabled={uploadMut.isPending || !dealId}
-                  sx={{ width: { xs: '100%', sm: 'auto' } }}
-                >
-                  Camera
-                </Button>
-              </span>
-            </Tooltip>
-            <input ref={inputRef} type="file" hidden onChange={handleFile} />
-          </Stack>
-        )}
-      </Stack>
+            {uploadMut.isPending ? 'Uploading…' : 'Upload'}
+          </Button>
+          <input ref={inputRef} type="file" hidden onChange={handleFile} />
+        </Stack>
+      )}
 
       {!dealId && (
         <Alert severity="info">Save the deal as a draft before uploading documents.</Alert>
@@ -276,76 +250,78 @@ export function DocumentUploader({
         </Paper>
       )}
 
-      <TableContainer
-        component={Paper}
-        variant="outlined"
-        sx={{
-          ...(scrollTable ? { maxHeight: 420 } : null),
-          // Wide content scrolls inside its own box; the panel around it never does.
-          overflowX: 'auto',
-        }}
-      >
-        {/* One line per document. A narrow drawer scrolls the table sideways rather than
-            folding a filename or a date onto three lines. */}
-        <Table size="small" stickyHeader={scrollTable}
-               sx={{ '& td, & th': { whiteSpace: 'nowrap' } }}>
-          <TableHead>
-            <TableRow>
-              <TableCell>File</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Size</TableCell>
-              <TableCell>Uploaded by</TableCell>
-              <TableCell>Uploaded</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map((d) => (
-              <TableRow key={d.id}>
-                <TableCell>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Tooltip title={d.originalFilename}>
-                      <Box component="span" sx={{
-                        display: 'inline-block', maxWidth: 220, verticalAlign: 'bottom',
-                        overflow: 'hidden', textOverflow: 'ellipsis',
-                      }}>
-                        {d.originalFilename}
-                      </Box>
-                    </Tooltip>
-                    {d.idSide && (
-                      <Chip size="small" variant="outlined"
-                            label={d.idSide === 'BACK' ? 'back' : 'front'} />
-                    )}
-                  </Stack>
-                </TableCell>
-                <TableCell><Chip size="small" label={documentTypeLabel(d.documentType)} /></TableCell>
-                <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
-                <TableCell>{d.uploadedByName || d.uploadedByEmail || '—'}</TableCell>
-                <TableCell>{formatDateTime(d.createdAt) ?? '—'}</TableCell>
-                <TableCell align="right">
-                  <DocumentRowMenu
-                    doc={d}
-                    onView={onViewDocument ? () => onViewDocument(d) : null}
-                    onDownload={() => handleDownload(d.id)}
-                    onMove={mayUpload && isMovableHere(d) && targetsFor(d).length > 0
-                      ? () => setMoving(d) : null}
-                    onDelete={mayUpload && isDeletableHere(d) ? () => deleteMut.mutate(d.id) : null}
-                    deleteBlocked={mayUpload && !isDeletableHere(d)}
-                    deleting={deleteMut.isPending}
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-            {rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3, color: tokens.muted }}>
-                  No documents yet.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {/* With no upload row (a verified or closed deal, a version, a read-only viewer) an empty
+          list would otherwise leave the tab blank. Waits for the list, so it never flashes. */}
+      {!mayUpload && rows.length === 0 && (frozenDocuments || listQ.isSuccess) && (
+        <Alert severity="info">No documents attached</Alert>)}
+        {rows.length > 0 && (
+        <Stack spacing={1}>
+          <Typography variant="subtitle2" sx={{ color: tokens.ink }}>Attached documents</Typography>
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{
+              ...(scrollTable ? { maxHeight: 420 } : null),
+              // Wide content scrolls inside its own box; the panel around it never does.
+              overflowX: 'auto',
+            }}
+          >
+            {/* One line per document. A narrow drawer scrolls the table sideways rather than
+                folding a filename or a date onto three lines. */}
+            <Table size="small" stickyHeader={scrollTable}
+                   sx={{ '& td, & th': { whiteSpace: 'nowrap' } }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>File</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Size</TableCell>
+                  <TableCell>Uploaded by</TableCell>
+                  <TableCell>Uploaded</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Tooltip title={d.originalFilename}>
+                          <Box component="span" sx={{
+                            display: 'inline-block', maxWidth: 220, verticalAlign: 'bottom',
+                            overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>
+                            {d.originalFilename}
+                          </Box>
+                        </Tooltip>
+                        {d.idSide && (
+                          <Chip size="small" variant="outlined"
+                                label={d.idSide === 'BACK' ? 'back' : 'front'} />
+                        )}
+                      </Stack>
+                    </TableCell>
+                    <TableCell><Chip size="small" label={documentTypeLabel(d.documentType)} /></TableCell>
+                    <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
+                    <TableCell>{d.uploadedByName || d.uploadedByEmail || '—'}</TableCell>
+                    <TableCell>{formatDateTime(d.createdAt) ?? '—'}</TableCell>
+                    <TableCell align="right">
+                      <DocumentRowMenu
+                        doc={d}
+                        onView={onViewDocument ? () => onViewDocument(d) : null}
+                        onDownload={() => handleDownload(d.id)}
+                        onMove={mayUpload && isMovableHere(d) && targetsFor(d).length > 0
+                          ? () => setMoving(d) : null}
+                        onDelete={mayUpload && isDeletableHere(d) ? () => deleteMut.mutate(d.id) : null}
+                        deleteBlocked={mayUpload && !isDeletableHere(d)}
+                        deleting={deleteMut.isPending}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
+      )}
 
       {moving && (
         <MoveDocumentDialog
@@ -361,13 +337,6 @@ export function DocumentUploader({
           }}
         />
       )}
-
-      <CameraCaptureDialog
-        open={cameraOpen}
-        onClose={() => setCameraOpen(false)}
-        onCapture={handleCameraCapture}
-        suggestedName={documentType?.toLowerCase()}
-      />
     </Stack>
   );
 }
@@ -429,19 +398,56 @@ function DocumentRowMenu({ doc, onView, onDownload, onMove, onDelete, deleteBloc
   );
 }
 
-/** Moves one document to one other owner on the deal. */
+/** Splits a filename into the part a person edits and the extension that stays. */
+const splitExtension = (filename = '') => {
+  const dot = filename.lastIndexOf('.');
+  return dot > 0 ? [filename.slice(0, dot), filename.slice(dot)] : [filename, ''];
+};
+
+/**
+ * Moves one document to one other place on the deal, and may refile it as another type and rename
+ * it on the way. The type is asked after the place, from what that place takes.
+ */
 function MoveDocumentDialog({ doc, targets, onClose, onMoved }) {
   const { showToast } = useToast();
+  const [stem, extension] = splitExtension(doc.originalFilename);
   const [targetKey, setTargetKey] = useState('');
+  const [documentType, setDocumentType] = useState('');
+  const [name, setName] = useState(stem);
   const [error, setError] = useState(null);
   const target = targets.find((t) => t.key === targetKey) ?? null;
 
+  // A voice note stays a voice note and a file stays a file — the server holds the same line.
+  const isAudio = AUDIO_DOCUMENT_TYPES.includes(doc.documentType);
+  const typesFor = (t) => DOCUMENT_TYPES.filter((o) =>
+    (!t?.acceptedTypes || t.acceptedTypes.includes(o.value))
+    && AUDIO_DOCUMENT_TYPES.includes(o.value) === isAudio);
+  const typeOptions = target ? typesFor(target) : [];
+
+  const chooseTarget = (key) => {
+    setTargetKey(key);
+    setError(null);
+    // Keep the type while the new place still takes it; otherwise make the person choose.
+    const next = targets.find((t) => t.key === key);
+    const valid = typesFor(next).map((o) => o.value);
+    const keep = valid.includes(documentType) ? documentType : '';
+    setDocumentType(keep || (valid.includes(doc.documentType) ? doc.documentType : ''));
+  };
+
+  const trimmed = name.trim();
+  const filename = trimmed + extension;
+  const typeChanged = documentType && documentType !== doc.documentType;
+  const renamed = trimmed && filename !== doc.originalFilename;
+
   const mut = useMutation({
-    mutationFn: () => moveDocument(doc.id, target.nodeId),
+    mutationFn: () => moveDocument(doc.id, target.nodeId, {
+      documentType: typeChanged ? documentType : undefined,
+      filename: renamed ? filename : undefined,
+    }),
     onSuccess: () => {
       showToast({
         severity: 'success',
-        message: `Moved to ${target.nodeId == null ? 'the property' : target.label}`,
+        message: `Moved to ${target.label}${typeChanged ? ` as ${documentTypeLabel(documentType)}` : ''}`,
       });
       onMoved(target);
     },
@@ -453,34 +459,64 @@ function MoveDocumentDialog({ doc, targets, onClose, onMoved }) {
       <DialogTitle component="div" sx={{ pb: 1 }}>
         <Typography variant="h6" component="h2">Move document</Typography>
         <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5, overflowWrap: 'anywhere' }}>
-          {doc.originalFilename}
+          {doc.originalFilename} · {documentTypeLabel(doc.documentType)}
         </Typography>
       </DialogTitle>
       <DialogContent>
-        <FormControl fullWidth sx={{ mt: 1 }}>
-          <InputLabel id="move-target-label">Move to</InputLabel>
-          <Select
-            labelId="move-target-label"
-            label="Move to"
-            value={targetKey}
-            onChange={(e) => { setTargetKey(e.target.value); setError(null); }}
-          >
-            {targets.map((t) => (
-              <MenuItem key={t.key} value={t.key}>
-                <ListItemText primary={t.label} secondary={t.sub} />
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <FormControl fullWidth>
+            <InputLabel id="move-target-label">Move to</InputLabel>
+            <Select
+              labelId="move-target-label"
+              label="Move to"
+              value={targetKey}
+              onChange={(e) => chooseTarget(e.target.value)}
+            >
+              {targets.map((t) => (
+                <MenuItem key={t.key} value={t.key}>
+                  {t.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {target && (
+            <FormControl fullWidth>
+              <InputLabel id="move-type-label">Document type</InputLabel>
+              <Select
+                labelId="move-type-label"
+                label="Document type"
+                value={documentType}
+                onChange={(e) => { setDocumentType(e.target.value); setError(null); }}
+              >
+                {typeOptions.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+              </Select>
+            </FormControl>
+          )}
+          <TextField
+            fullWidth
+            label="File name"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(null); }}
+            error={!trimmed}
+            helperText={!trimmed ? 'Give the document a name' : undefined}
+            slotProps={extension
+              ? { input: { endAdornment: <InputAdornment position="end">{extension}</InputAdornment> } }
+              : undefined}
+          />
+        </Stack>
         <Typography variant="caption" sx={{ display: 'block', color: tokens.muted, mt: 1.5 }}>
-          Only places that can hold a {documentTypeLabel(doc.documentType).toLowerCase()} are listed.
+          Only the types the chosen place can hold are listed.
           Moving it clears the verification on any owner involved, if they&apos;re verified.
         </Typography>
         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5 }}>
         <Button onClick={onClose} disabled={mut.isPending}>Cancel</Button>
-        <Button variant="contained" disabled={!target || mut.isPending} onClick={() => mut.mutate()}>
+        <Button
+          variant="contained"
+          disabled={!target || !documentType || !trimmed || mut.isPending}
+          onClick={() => mut.mutate()}
+        >
           {mut.isPending ? 'Moving…' : 'Move'}
         </Button>
       </DialogActions>

@@ -90,6 +90,7 @@ class IndividualServiceTest {
         Deal deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
         deal.setReference(null);
+        deal.setPublicId("abcdefghjkmn");
 
         when(dealList.scopeForCurrentUser(null, null)).thenReturn(new nz.amldock.deal.DealScope(null, 1L, null));
         when(query.page(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
@@ -109,7 +110,7 @@ class IndividualServiceTest {
         assertThat(page.items()).extracting(IndividualRowDto::nodeId).containsExactly(6L, NODE_ID);
         assertThat(page.items().get(0).countryOfResidence()).isNull();
         assertThat(page.items().get(1).countryOfResidence()).isEqualTo("NZ");
-        assertThat(page.items().get(0).dealReference()).isEqualTo("#" + DEAL_ID);
+        assertThat(page.items().get(0).dealReference()).isEqualTo("#abcdefghjkmn");
     }
 
     @Test
@@ -205,7 +206,7 @@ class IndividualServiceTest {
         when(documentService.listForNode(NODE_ID)).thenReturn(List.of());
 
         // Same fallback the register uses, so one person reads the same in both places.
-        assertThat(service.detail(NODE_ID).dealReference()).isEqualTo("#" + DEAL_ID);
+        assertThat(service.detail(NODE_ID).dealReference()).isEqualTo("#abcdefghjkmn");
     }
 
     /* ---------- fixtures ---------- */
@@ -236,7 +237,7 @@ class IndividualServiceTest {
         ReflectionTestUtils.setField(deal, "reference", reference);
         PropertyDto p = new PropertyDto(PROPERTY_ID, "14 Ridgeway Rd", null, "Remuera",
                 "Auckland", null, "NZ", null, null, null, null, null, null);
-        return DealDto.from(deal, 100L, "Bayleys", "Remuera", p, null, "agent@example.com");
+        return DealDto.from(deal, "abcdefghjkmn", 100L, "Bayleys", "Remuera", p, null, "agent@example.com");
     }
 
     private static Property property() {

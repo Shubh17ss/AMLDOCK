@@ -13,7 +13,8 @@ import java.time.Instant;
  */
 public record VerificationTrailEntryDto(
         Long nodeId,
-        Long dealId,
+        /** The deal's public id — what the client opens it by. */
+        String dealId,
         String dealReference,
         String propertyAddress,
         Long branchId,

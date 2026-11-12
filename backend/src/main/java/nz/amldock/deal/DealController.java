@@ -94,7 +94,7 @@ public class DealController {
     }
 
     @GetMapping("/{id}")
-    public DealDto get(@PathVariable Long id) {
+    public DealDto get(@DealRef("id") Long id) {
         return deals.get(id);
     }
 
@@ -114,21 +114,21 @@ public class DealController {
 
     @PatchMapping("/{id}")
     @PreAuthorize(EDITOR_ROLES)
-    public DealDto update(@PathVariable Long id, @Valid @RequestBody UpdateDealRequest req) {
+    public DealDto update(@DealRef("id") Long id, @Valid @RequestBody UpdateDealRequest req) {
         Deal d = deals.update(id, req);
         return deals.toDtoAfterMutation(d);
     }
 
     @PatchMapping("/{id}/property")
     @PreAuthorize(EDITOR_ROLES)
-    public DealDto updateProperty(@PathVariable Long id, @RequestBody PropertyInput input) {
+    public DealDto updateProperty(@DealRef("id") Long id, @RequestBody PropertyInput input) {
         deals.updateProperty(id, input);
         return deals.get(id);
     }
 
     @PatchMapping("/{id}/client")
     @PreAuthorize(EDITOR_ROLES)
-    public DealDto updateClient(@PathVariable Long id, @Valid @RequestBody ClientInput input) {
+    public DealDto updateClient(@DealRef("id") Long id, @Valid @RequestBody ClientInput input) {
         deals.updateClient(id, input);
         return deals.get(id);
     }
@@ -141,7 +141,7 @@ public class DealController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER','AML_COMPLIANCE_OFFICER','AGENT','AGENT_PA','ADMIN')")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@DealRef("id") Long id) {
         deals.delete(id);
         return ResponseEntity.noContent().build();
     }
@@ -155,7 +155,7 @@ public class DealController {
 
     @PostMapping("/{id}/submit")
     @PreAuthorize(EDITOR_ROLES)
-    public DealDto submit(@PathVariable Long id) {
+    public DealDto submit(@DealRef("id") Long id) {
         var r = deals.act(id, DealAction.SUBMIT, null);
         audit.record(AuditAction.DEAL_SUBMITTED_FOR_REVIEW, "Deal", r.deal().getId(),
                 "Deal " + r.deal().getReference() + " submitted to compliance for review");
@@ -164,7 +164,7 @@ public class DealController {
 
     @PostMapping("/{id}/hold")
     @PreAuthorize(REVIEWER_ROLES)
-    public DealDto hold(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+    public DealDto hold(@DealRef("id") Long id, @Valid @RequestBody NoteRequest req) {
         var r = deals.act(id, DealAction.HOLD, req.note());
         audit.record(AuditAction.DEAL_PUT_ON_HOLD, "Deal", r.deal().getId(),
                 "Deal " + r.deal().getReference() + " put on hold from " + r.previousStatus());
@@ -174,7 +174,7 @@ public class DealController {
     /** Takes an on-hold deal back into review, without sending it to the broker. */
     @PostMapping("/{id}/resume")
     @PreAuthorize(REVIEWER_ROLES)
-    public DealDto resume(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+    public DealDto resume(@DealRef("id") Long id, @Valid @RequestBody NoteRequest req) {
         var r = deals.act(id, DealAction.RESUME, req.note());
         audit.record(AuditAction.DEAL_RESUMED, "Deal", r.deal().getId(),
                 "Deal " + r.deal().getReference() + " resumed for review from " + r.previousStatus());
@@ -183,7 +183,7 @@ public class DealController {
 
     @PostMapping("/{id}/verify")
     @PreAuthorize(REVIEWER_ROLES)
-    public DealDto verify(@PathVariable Long id,
+    public DealDto verify(@DealRef("id") Long id,
                           @Valid @RequestBody(required = false) OptionalNoteRequest req) {
         // The note is optional: no body, a null note and a blank one all verify without one.
         String note = req == null || req.note() == null || req.note().isBlank() ? null : req.note().trim();
@@ -202,7 +202,7 @@ public class DealController {
      */
     @PostMapping("/{id}/close")
     @PreAuthorize(REVIEWER_ROLES)
-    public DealDto close(@PathVariable Long id, @Valid @RequestBody CloseDealRequest req) {
+    public DealDto close(@DealRef("id") Long id, @Valid @RequestBody CloseDealRequest req) {
         var r = deals.closeWithSale(id, req);
         audit.record(AuditAction.DEAL_CLOSED, "Deal", r.deal().getId(),
                 "Deal " + r.deal().getReference() + " closed — "
@@ -219,7 +219,7 @@ public class DealController {
      */
     @PostMapping("/{id}/unclose")
     @PreAuthorize(REVIEWER_ROLES)
-    public DealDto unclose(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+    public DealDto unclose(@DealRef("id") Long id, @Valid @RequestBody NoteRequest req) {
         var r = deals.act(id, DealAction.UNCLOSE, req.note());
         audit.record(AuditAction.DEAL_UNCLOSED, "Deal", r.deal().getId(),
                 "Deal " + r.deal().getReference() + " reopened from closed");
@@ -228,7 +228,7 @@ public class DealController {
 
     /** What the deal finished as. Readable by anyone who may read the deal. */
     @GetMapping("/{id}/sale")
-    public SaleDto sale(@PathVariable Long id) {
+    public SaleDto sale(@DealRef("id") Long id) {
         return deals.sale(id);
     }
 
@@ -241,7 +241,7 @@ public class DealController {
      */
     @PostMapping("/{id}/revert")
     @PreAuthorize(EDITOR_ROLES)
-    public DealDto revert(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+    public DealDto revert(@DealRef("id") Long id, @Valid @RequestBody NoteRequest req) {
         var r = deals.act(id, DealAction.REVERT, req.note());
         audit.record(AuditAction.DEAL_REVERTED, "Deal", r.deal().getId(),
                 "Deal " + r.deal().getReference() + " reverted to NEW from " + r.previousStatus());
@@ -260,7 +260,7 @@ public class DealController {
      */
     @PostMapping("/{id}/reopen")
     @PreAuthorize(REVIEWER_ROLES)
-    public DealDto reopen(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+    public DealDto reopen(@DealRef("id") Long id, @Valid @RequestBody NoteRequest req) {
         var r = deals.act(id, DealAction.REOPEN, req.note());
         audit.record(AuditAction.DEAL_REOPENED, "Deal", r.deal().getId(),
                 "Deal " + r.deal().getReference() + " reopened for changes from " + r.previousStatus());
@@ -269,7 +269,7 @@ public class DealController {
 
     @PostMapping("/{id}/override")
     @PreAuthorize("hasRole('SENIOR_MANAGER')")
-    public DealDto override(@PathVariable Long id, @Valid @RequestBody OverrideRequest req) {
+    public DealDto override(@DealRef("id") Long id, @Valid @RequestBody OverrideRequest req) {
         DealService.OverrideResult result = deals.override(id, req.targetStatus(), req.reason());
         audit.record(AuditAction.DEAL_OVERRIDDEN, "Deal", result.deal().getId(),
                 "Deal " + result.deal().getReference()
@@ -285,13 +285,13 @@ public class DealController {
     // compliance officer of one firm rate another's deals.
 
     @GetMapping("/{id}/risk")
-    public RiskAssessmentDto risk(@PathVariable Long id) {
+    public RiskAssessmentDto risk(@DealRef("id") Long id) {
         return deals.risk(id);
     }
 
     @PostMapping("/{id}/risk/approve")
     @PreAuthorize(REVIEWER_ROLES)
-    public RiskAssessmentDto approveRisk(@PathVariable Long id) {
+    public RiskAssessmentDto approveRisk(@DealRef("id") Long id) {
         return deals.approveRisk(id);
     }
 
@@ -305,9 +305,25 @@ public class DealController {
      */
     @PostMapping("/{id}/risk/override")
     @PreAuthorize(REVIEWER_ROLES)
-    public RiskAssessmentDto overrideRisk(@PathVariable Long id,
+    public RiskAssessmentDto overrideRisk(@DealRef("id") Long id,
                                           @Valid @RequestBody RiskOverrideRequest req) {
         return deals.overrideRisk(id, req.rating(), req.comment());
+    }
+
+    /* ---------- delay CDD ---------- */
+    // Every role but the auditor and finance. DealService repeats the check against the deal's
+    // own branch and refuses a verified or closed deal.
+
+    @PostMapping("/{id}/cdd-delay")
+    @PreAuthorize("!hasAnyRole('AUDIT','FINANCE')")
+    public DealDto delayCdd(@DealRef("id") Long id) {
+        return deals.toDtoAfterMutation(deals.setCddDelayed(id, true));
+    }
+
+    @DeleteMapping("/{id}/cdd-delay")
+    @PreAuthorize("!hasAnyRole('AUDIT','FINANCE')")
+    public DealDto undoCddDelay(@DealRef("id") Long id) {
+        return deals.toDtoAfterMutation(deals.setCddDelayed(id, false));
     }
 
     /* ---------- notes timeline ---------- */
@@ -316,7 +332,7 @@ public class DealController {
     // coarser rule that could only disagree with the first.
 
     @GetMapping("/{id}/notes")
-    public List<DealNoteDto> notes(@PathVariable Long id) {
+    public List<DealNoteDto> notes(@DealRef("id") Long id) {
         return deals.notes(id);
     }
 
@@ -330,17 +346,17 @@ public class DealController {
      * Unannotated like the notes: DealService runs assertCanRead.
      */
     @GetMapping("/{id}/transaction-monitoring")
-    public List<StatusMoveDto> transactionMonitoring(@PathVariable Long id) {
+    public List<StatusMoveDto> transactionMonitoring(@DealRef("id") Long id) {
         return deals.transactionMonitoring(id);
     }
 
     @GetMapping("/{id}/verification-readiness")
-    public Readiness verificationReadiness(@PathVariable Long id) {
+    public Readiness verificationReadiness(@DealRef("id") Long id) {
         return deals.verificationReadiness(id);
     }
 
     @PostMapping("/{id}/notes")
-    public List<DealNoteDto> addNote(@PathVariable Long id, @Valid @RequestBody NoteRequest req) {
+    public List<DealNoteDto> addNote(@DealRef("id") Long id, @Valid @RequestBody NoteRequest req) {
         Deal d = deals.comment(id, req.note());
         audit.record(AuditAction.DEAL_NOTE_ADDED, "Deal", d.getId(),
                 "Note added to deal " + d.getReference());

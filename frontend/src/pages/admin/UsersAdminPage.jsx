@@ -10,6 +10,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { deleteUser, listUsers, resetUserPassword, updateUser } from '../../api/users.js';
 import { listBranches, listFirms } from '../../api/firms.js';
+import { useFirmRef } from '../../hooks/useFirmRef.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { creatableRoles, isFirmLevel, roleLabel } from '../../auth/roles.js';
@@ -163,10 +164,11 @@ export function UsersAdminPage() {
 function UserRow({ user, firmName, canResetPassword, canDelete, canToggleActive,
                    onToggleActive, onResetPassword, onDelete }) {
   // Only brokers carry a branch; lazy-load just for those rows.
+  const firmRef = useFirmRef(user.firmBranchId ? user.realEstateFirmId : null);
   const branchesQ = useQuery({
-    queryKey: ['firms', user.realEstateFirmId, 'branches'],
-    queryFn: () => listBranches(user.realEstateFirmId),
-    enabled: Boolean(user.firmBranchId && user.realEstateFirmId),
+    queryKey: ['firms', firmRef, 'branches'],
+    queryFn: () => listBranches(firmRef),
+    enabled: Boolean(user.firmBranchId && firmRef),
   });
   const branchName = user.firmBranchId
     ? (branchesQ.data?.find((b) => b.id === user.firmBranchId)?.name ?? `#${user.firmBranchId}`)

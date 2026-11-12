@@ -57,15 +57,10 @@ export function DealUsersPanel({ dealId, readOnly = false }) {
 
   return (
     <Stack spacing={1.5}>
-      <Typography variant="caption" sx={{ color: tokens.muted }}>
-        Agents who can open this deal. Their sales manager and the firm’s compliance officers reach
-        every deal in scope and are not listed here.
-      </Typography>
-
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
       <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="subtitle1">Who can open this deal</Typography>
+        <Typography variant="subtitle1">Users having access to this transaction</Typography>
         {!readOnly && (
           <Button size="small" variant="contained" startIcon={<PersonAddAltIcon />}
                   onClick={() => setPickerOpen(true)}>

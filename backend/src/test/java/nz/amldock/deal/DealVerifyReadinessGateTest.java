@@ -172,15 +172,17 @@ class DealVerifyReadinessGateTest {
     }
 
     @Test
-    void aVerifiedOrClosedDealTakesNoMoreNotes() {
+    void aVerifiedOrClosedDealStillTakesNotes() {
+        // Notes are open in every status; a signed-off version keeps only the notes up to its
+        // sign-off, so a later note never becomes part of what was signed.
         asUser(complianceOfficer);
         for (DealStatus finished : new DealStatus[] {DealStatus.VERIFIED, DealStatus.CLOSED}) {
             deal.setStatus(finished);
 
-            assertThatThrownBy(() -> service.comment(DEAL_ID, "One more thing"))
-                    .isInstanceOf(BadRequestException.class);
+            service.comment(DEAL_ID, "One more thing");
         }
-        verify(dealNotes, never()).appendComment(any(), any(), any());
+        verify(dealNotes, org.mockito.Mockito.times(2))
+                .appendComment(deal, complianceOfficer, "One more thing");
     }
 
     private void asUser(UserPrincipal who) {

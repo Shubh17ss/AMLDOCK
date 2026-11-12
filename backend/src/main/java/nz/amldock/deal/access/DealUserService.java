@@ -37,6 +37,9 @@ import java.util.stream.Collectors;
  * <p>Reading the list is gated on being able to read the deal. Changing it is narrower: the author,
  * the branch's sales manager, or firm compliance. An agent added to someone else's deal can work it
  * but cannot go on to add a third — access is something you are given, not something you pass on.
+ *
+ * <p>Not tied to the deal's status: access can be granted and revoked whether the deal is new, in
+ * review, on hold, verified or closed. Who can see a deal is not part of what was signed off.
  */
 @Service
 public class DealUserService {

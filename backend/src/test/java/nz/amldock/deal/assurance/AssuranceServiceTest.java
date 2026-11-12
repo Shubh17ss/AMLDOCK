@@ -296,7 +296,7 @@ class AssuranceServiceTest {
     private void stubPage(AssuranceQuery.Row row, DealVersion... vs) {
         when(query.page(any(), any(), any())).thenReturn(new AssuranceQuery.RowPage(List.of(row), 1, true));
         DealListItemDto item = mock(DealListItemDto.class);
-        lenient().when(item.id()).thenReturn(DEAL_ID);
+        lenient().when(item.id()).thenReturn("pubdealid234");
         when(dealList.loadInOrder(List.of(DEAL_ID))).thenReturn(List.of(deal));
         when(dealList.toListItems(List.of(deal))).thenReturn(List.of(item));
         lenient().when(versions.findAllById(any())).thenReturn(List.of(vs));

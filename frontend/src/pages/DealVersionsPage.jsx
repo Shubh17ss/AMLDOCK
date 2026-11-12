@@ -19,7 +19,7 @@ import { formatDateTimeNumeric } from '../utils/formatters.js';
  */
 export function DealVersionsPage() {
   const { id } = useParams();
-  const dealId = Number(id);
+  const dealId = id;
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const dealPath = pathname.replace(/\/versions\/?$/, '');

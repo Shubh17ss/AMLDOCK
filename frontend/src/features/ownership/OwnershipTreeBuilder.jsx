@@ -431,8 +431,15 @@ function SiblingGap({ parentKey, index, drag, dragEnabled }) {
   );
 }
 
+// Connector geometry. The rail sits under the parent's chevron (row padding 10px + half of the
+// 24px button); a child card starts INDENT in, so its elbow is INDENT - RAIL_X wide.
+const RAIL_X = 20;
+const INDENT = 32;
+const ROW_GAP = 4;
+const CONNECTOR = `1px solid ${tokens.hairline2}`;
+
 function NodeBranch({
-  node, parentEdge, depth,
+  node, parentEdge, depth, isLast = false,
   nodesById, childrenByParent, selectedNodeId, onSelectNode, onAddChild,
   onAttachDetached, onChangeOwner, onDetachFromParent, onDeleteNode, readOnly,
   dragEnabled, drag, order,
@@ -508,25 +515,38 @@ function NodeBranch({
       <Box
         sx={{
           position: 'relative',
-          pl: depth === 0 ? 0 : 3.5,
-          // The rail: one hairline per level of depth, drawn as the row's left border rather
-          // than a stack of spacer divs.
-          '&::before': depth === 0 ? undefined : {
+          pl: depth === 0 ? 0 : `${INDENT}px`,
+          // A sibling with more siblings below carries the rail through its own subtree to the
+          // next one. The last sibling does not — its rail stops at its elbow, drawn below.
+          '&::before': depth === 0 || isLast ? undefined : {
             content: '""',
             position: 'absolute',
-            left: 10, top: 0, bottom: 0,
-            borderLeft: `1px solid ${tokens.hairline2}`,
-          },
-          // The elbow into this row.
-          '&::after': depth === 0 ? undefined : {
-            content: '""',
-            position: 'absolute',
-            left: 10, top: 26,
-            width: 16,
-            borderTop: `1px solid ${tokens.hairline2}`,
+            left: RAIL_X, top: -ROW_GAP, bottom: 0,
+            borderLeft: CONNECTOR,
           },
         }}
       >
+        {/* Wraps the row alone, not its subtree, so 50% is the row's own middle whatever its
+            height — the elbow lands on centre and the last rail ends exactly there. */}
+        <Box
+          sx={{
+            position: 'relative',
+            '&::before': depth === 0 || !isLast ? undefined : {
+              content: '""',
+              position: 'absolute',
+              left: RAIL_X - INDENT, top: -ROW_GAP,
+              height: `calc(50% + ${ROW_GAP}px)`,
+              borderLeft: CONNECTOR,
+            },
+            '&::after': depth === 0 ? undefined : {
+              content: '""',
+              position: 'absolute',
+              left: RAIL_X - INDENT, top: '50%',
+              width: INDENT - RAIL_X,
+              borderTop: CONNECTOR,
+            },
+          }}
+        >
         <Stack
           ref={setRowRef}
           direction="row"
@@ -543,7 +563,8 @@ function NodeBranch({
           sx={motion.respectful({
             px: 1.25,
             py: 1,
-            my: 0.4,
+            // Exactly ROW_GAP, so a rail that starts ROW_GAP above a row meets the card above it.
+            my: `${ROW_GAP}px`,
             borderRadius: '14px',
             cursor: 'pointer',
             // Stops a press-and-hold on touch turning into a text selection or a zoom while the
@@ -553,14 +574,15 @@ function NodeBranch({
             // type takes it back the moment they let go. A tint that competed with the blue would
             // make the tree harder to drag in, not easier.
             //
-            // 'transparent' rather than no border on an individual: a row that drops its 1px edge
-            // is 2px shorter than its siblings and the whole column stops lining up.
+            // An individual gets a light grey edge rather than none: the connector needs a card
+            // edge to end on, and a row without its 1px border would be 2px shorter than its
+            // siblings.
             backgroundColor: isDropTarget || isSelected
               ? tokens.blueWash
               : (tinted ? washOf(visual.hue) : 'transparent'),
             border: `1px solid ${isDropTarget || isSelected
               ? tokens.blue
-              : (tinted ? edgeOf(visual.hue) : 'transparent')}`,
+              : (tinted ? edgeOf(visual.hue) : tokens.hairline2)}`,
             // The row being carried stays in place and steps back; the copy under the pointer is
             // the one that moves. Nothing here is ever transformed.
             opacity: isDragging ? 0.35 : (isForbidden ? 0.4 : 1),
@@ -792,6 +814,7 @@ function NodeBranch({
             )}
           </Menu>
         </Stack>
+        </Box>
 
         {expanded && children.map((edge, i) => {
           const child = nodesById.get(edge.childNodeId);
@@ -808,6 +831,7 @@ function NodeBranch({
               node={child}
               parentEdge={edge}
               depth={depth + 1}
+              isLast={i === children.length - 1}
               nodesById={nodesById}
               childrenByParent={childrenByParent}
               selectedNodeId={selectedNodeId}

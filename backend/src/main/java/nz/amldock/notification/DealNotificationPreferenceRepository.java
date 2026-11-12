@@ -32,8 +32,10 @@ public interface DealNotificationPreferenceRepository
      * mirrored in {@link NotificationEligibility} and in {@code frontend/src/auth/roles.js}.
      *
      * <p>Preferences are already branch-keyed, so the branch column has done most of the scoping
-     * by the time this runs; the agents-hear-only-about-their-own-deals rule is the one piece that
-     * cannot be, and is the last predicate below.
+     * by the time this runs; the agents-hear-only-about-their-deals rule is the one piece that
+     * cannot be, and is the last predicate below. "Their deals" means the ones they created or were
+     * added to ({@code deal_user}), exactly as {@code assertCanRead} grants. Added agents are always
+     * from the deal's own branch ({@code DealUserService}), so the branch predicate still holds.
      *
      * <p>{@code b.is_active} and {@code f.is_active} matter: neither branch nor firm deactivation
      * cascades anywhere today, so without them a dormant branch would keep sending mail.
@@ -62,11 +64,15 @@ public interface DealNotificationPreferenceRepository
                   OR (u.role IN ('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')
                         AND u.real_estate_firm_id = f.id)
                    )
-               AND (u.role NOT IN ('AGENT','AGENT_PA') OR u.id = :dealCreatorId)
+               AND (u.role NOT IN ('AGENT','AGENT_PA')
+                    OR u.id = :dealCreatorId
+                    OR EXISTS (SELECT 1 FROM deal_user du
+                                WHERE du.deal_id = :dealId AND du.user_id = u.id))
                AND u.id <> :actorUserId
              ORDER BY u.id
             """, nativeQuery = true)
     List<RecipientCandidate> findRecipientCandidates(@Param("branchId") Long branchId,
+                                                     @Param("dealId") Long dealId,
                                                      @Param("eventType") String eventType,
                                                      @Param("dealCreatorId") Long dealCreatorId,
                                                      @Param("actorUserId") Long actorUserId);

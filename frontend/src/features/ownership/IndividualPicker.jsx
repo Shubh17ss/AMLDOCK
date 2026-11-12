@@ -14,6 +14,7 @@ import { formatBytes, formatDate } from '../../utils/formatters.js';
 import { verificationDisplay } from './verificationDisplay.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
 import { countText } from '../../components/ListPagination.jsx';
+import { dealName } from '../../utils/dealName.js';
 
 /** Past this many matches the list stops being a list and starts being a wall. */
 const MAX_ROWS = 8;
@@ -197,8 +198,7 @@ function PersonRow({ row, open, onToggle, onUse }) {
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}
           >
-            {formatDate(row.dateOfBirth)} · {row.dealReference}
-            {row.propertyAddress ? ` · ${row.propertyAddress}` : ''}
+            {formatDate(row.dateOfBirth)} · {dealName(row.propertyAddress)}
           </Typography>
         </Box>
       </Box>
@@ -259,7 +259,7 @@ function ChosenPerson({ person, onClear }) {
       <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
         <Typography variant="caption" sx={{ color: tokens.muted }}>
           These details are copied onto this deal. Changing them here leaves
-          {' '}{person.dealReference} untouched.
+          {' '}the record on {dealName(person.propertyAddress)} untouched.
         </Typography>
         <Button size="small" onClick={onClear} sx={{ flexShrink: 0 }}>Choose someone else</Button>
       </Stack>
@@ -288,8 +288,7 @@ function PersonFacts({ person }) {
       <Fact label="Type" value={personRolesLabel(person.personRoles)} />
       <Fact
         label="From"
-        value={person.dealReference
-          + (person.propertyAddress ? ` · ${person.propertyAddress}` : '')}
+        value={dealName(person.propertyAddress)}
       />
       <CopiedDocuments documents={person.documents ?? []} />
       {/* Carried across with the rest, and said out loud: a status reached on another file is

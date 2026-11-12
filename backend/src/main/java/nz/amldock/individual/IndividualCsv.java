@@ -14,8 +14,9 @@ import java.util.stream.Stream;
  */
 final class IndividualCsv {
 
-    static final String REGISTER_HEADERS = "Name,Type,Date of birth,Country of residence,Property,Deal";
-    static final String EXCEPTION_HEADERS = "Name,Type,Verified,Property,Deal";
+    // No deal reference column: deals are named by their property address, which is already here.
+    static final String REGISTER_HEADERS = "Name,Type,Date of birth,Country of residence,Property";
+    static final String EXCEPTION_HEADERS = "Name,Type,Verified,Property";
 
     private IndividualCsv() {}
 
@@ -23,13 +24,13 @@ final class IndividualCsv {
         return line(r.displayName(), typeLabel(r.nodeType()),
                 r.dateOfBirth() == null ? "" : r.dateOfBirth().toString(),
                 countryName(r.countryOfResidence()),
-                r.propertyAddress(), r.dealReference());
+                r.propertyAddress());
     }
 
     static String exceptionRow(IndividualRowDto r) {
         return line(r.displayName(), typeLabel(r.nodeType()),
                 r.verifiedAt() == null ? "" : r.verifiedAt().toString(),
-                r.propertyAddress(), r.dealReference());
+                r.propertyAddress());
     }
 
     /** Same labels as frontend/src/api/ownership.js: the enum in sentence case, OTHER as "Other entity". */

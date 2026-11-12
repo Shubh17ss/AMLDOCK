@@ -34,18 +34,17 @@ export function SectionTile({ group, index = 0, attention = null, onOpen }) {
         '&:hover .tile-glyph, &:focus-visible .tile-glyph': { color: tokens.blue },
       }}
     >
+      {/* An alert sign, top right, in the state's colour: red when a review is overdue, amber
+          when one has no date. The same glyphs the module cards use. */}
       {attention && (
         <Tooltip title={attention.label}>
           <Box
             aria-label={attention.label}
-            sx={{
-              position: 'absolute', top: 14, right: 14,
-              width: 9, height: 9, borderRadius: '50%',
-              backgroundColor: attention.color,
-              // Lifts the dot off the glass so it reads at a glance without a ring around it.
-              boxShadow: `0 0 0 3px color-mix(in srgb, ${attention.color} 18%, transparent)`,
-            }}
-          />
+            role="img"
+            sx={{ position: 'absolute', top: 10, right: 10, display: 'flex', lineHeight: 0 }}
+          >
+            <attention.Icon sx={{ fontSize: 20, color: attention.color }} />
+          </Box>
         </Tooltip>
       )}
 

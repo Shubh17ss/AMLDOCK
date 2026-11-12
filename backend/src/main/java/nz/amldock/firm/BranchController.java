@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Branches are named in paths by their public id ({@link FirmPublicIds}). */
 @RestController
 @RequestMapping("/api/branches")
 public class BranchController {
@@ -26,24 +27,25 @@ public class BranchController {
         this.audit = audit;
     }
 
-    @GetMapping("/{id}")
-    public BranchDto get(@PathVariable Long id) {
-        return BranchDto.from(branches.findById(id));
+    @GetMapping("/{ref}")
+    public BranchDto get(@PathVariable String ref) {
+        return BranchDto.from(branches.findById(branches.resolve(ref)));
     }
 
-    @PatchMapping("/{id}")
+    @PatchMapping("/{ref}")
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public BranchDto update(@PathVariable Long id, @RequestBody UpdateBranchRequest req) {
-        FirmBranch b = branches.update(id, req);
+    public BranchDto update(@PathVariable String ref, @RequestBody UpdateBranchRequest req) {
+        FirmBranch b = branches.update(branches.resolve(ref), req);
         audit.record(AuditAction.BRANCH_UPDATED, "FirmBranch", b.getId(), "Updated branch " + b.getName());
         return BranchDto.from(b);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{ref}")
     @PreAuthorize("hasAnyRole('ROOT','SENIOR_MANAGER')")
-    public ResponseEntity<Void> deactivate(@PathVariable Long id) {
+    public ResponseEntity<Void> deactivate(@PathVariable String ref) {
+        Long id = branches.resolve(ref);
         branches.deactivate(id);
-        audit.record(AuditAction.BRANCH_DELETED, "FirmBranch", id, "Deactivated branch " + id);
+        audit.record(AuditAction.BRANCH_DELETED, "FirmBranch", id, "Deactivated branch " + ref);
         return ResponseEntity.noContent().build();
     }
 }

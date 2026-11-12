@@ -97,7 +97,7 @@ class VerificationTrailServiceTest {
     void listsEachDealInTheFirmNewestFirstAndMarksThisOne() {
         List<VerificationTrailEntryDto> trail = service.trail(1L, 101L);
 
-        assertThat(trail).extracting(VerificationTrailEntryDto::dealId).containsExactly(1L, 2L);
+        assertThat(trail).extracting(VerificationTrailEntryDto::dealId).containsExactly("deal1", "deal2");
         assertThat(trail.get(0).currentDeal()).isTrue();
         assertThat(trail.get(1).currentDeal()).isFalse();
         assertThat(trail.get(1).branchName()).isEqualTo("Wellington");
@@ -130,6 +130,7 @@ class VerificationTrailServiceTest {
         ReflectionTestUtils.setField(d, "id", id);
         d.setFirmBranchId(branchId);
         d.setReference("D-" + id);
+        d.setPublicId("deal" + id);
         lenient().when(deals.findById(id)).thenReturn(Optional.of(d));
         return d;
     }

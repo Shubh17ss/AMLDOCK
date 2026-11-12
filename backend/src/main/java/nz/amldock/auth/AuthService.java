@@ -5,9 +5,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.auth.dto.AuthResponse;
+import nz.amldock.auth.dto.MobileAuthResponse;
 import nz.amldock.auth.otp.OtpPurpose;
 import nz.amldock.auth.otp.OtpService;
 import nz.amldock.common.exception.ApiException;
+import nz.amldock.firm.RealEstateFirm;
+import nz.amldock.firm.RealEstateFirmRepository;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserRepository;
@@ -43,6 +46,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshRepo;
     private final AuditService audit;
     private final OtpService otp;
+    private final RealEstateFirmRepository firms;
     private final Duration refreshTtl;
     private final SecureRandom rng = new SecureRandom();
 
@@ -55,6 +59,7 @@ public class AuthService {
                        RefreshTokenRepository refreshRepo,
                        AuditService audit,
                        OtpService otp,
+                       RealEstateFirmRepository firms,
                        @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays,
                        @Value("${COOKIE_SECURE:true}") boolean secureCookies,
                        @Value("${COOKIE_SAME_SITE:Lax}") String sameSite) {
@@ -66,6 +71,7 @@ public class AuthService {
         this.sameSite = sameSite;
         this.audit = audit;
         this.otp = otp;
+        this.firms = firms;
         this.refreshTtl = Duration.ofDays(refreshTtlDays);
     }
 
@@ -111,6 +117,26 @@ public class AuthService {
      * own and a request holds at most one connection at a time.
      */
     public AuthResponse verifyLoginOtp(String email, String code, HttpServletResponse response) {
+        User u = checkLoginOtp(email, code);
+        issueCookies(u, response);
+        audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
+                "User " + u.getEmail() + " logged in via OTP");
+        return toAuthResponse(u);
+    }
+
+    /**
+     * Step 2 for the native mobile app: same checks as {@link #verifyLoginOtp}, but the tokens go
+     * back in the body instead of cookies. Not {@code @Transactional}, for the same reason.
+     */
+    public MobileAuthResponse verifyLoginOtpMobile(String email, String code) {
+        User u = checkLoginOtp(email, code);
+        MobileAuthResponse tokens = mintMobileTokens(u);
+        audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
+                "User " + u.getEmail() + " logged in via OTP (mobile app)");
+        return tokens;
+    }
+
+    private User checkLoginOtp(String email, String code) {
         User u = activeNonRoot(email);
         try {
             otp.verify(u, code, OtpPurpose.LOGIN);
@@ -122,10 +148,7 @@ public class AuthService {
                     "Login OTP verification failed for " + u.getEmail());
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code");
         }
-        issueCookies(u, response);
-        audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
-                "User " + u.getEmail() + " logged in via OTP");
-        return toAuthResponse(u);
+        return u;
     }
 
     /* ---------- ROOT password + OTP login (dedicated route) ---------- */
@@ -199,6 +222,44 @@ public class AuthService {
 
     @Transactional
     public AuthResponse refresh(String rawRefresh, HttpServletResponse response) {
+        User u = rotateRefresh(rawRefresh);
+        issueCookies(u, response);
+        return toAuthResponse(u);
+    }
+
+    /** Mobile refresh: rotates the body-supplied token and returns the new pair in the body. */
+    @Transactional
+    public MobileAuthResponse refreshMobile(String rawRefresh) {
+        return mintMobileTokens(rotateRefresh(rawRefresh));
+    }
+
+    /**
+     * Mobile sign-out. Revokes the given refresh token, or every session of the signed-in user
+     * when none is sent. Holding the raw token is proof enough to revoke it, so this works even
+     * after the access token has expired.
+     */
+    @Transactional
+    public void logoutMobile(String rawRefresh, Long userId) {
+        Long actor = userId;
+        if (rawRefresh != null && !rawRefresh.isBlank()) {
+            RefreshToken rt = refreshRepo.findByTokenHash(sha256(rawRefresh)).orElse(null);
+            if (rt != null) {
+                rt.setRevokedAt(Instant.now());
+                if (actor == null) actor = rt.getUserId();
+            }
+        } else if (userId != null) {
+            refreshRepo.revokeAllForUser(userId, Instant.now());
+        }
+        // recordForUser, not record: with an expired access token there is no principal in the
+        // security context, so the actor comes from the revoked token's owner instead.
+        if (actor != null) {
+            users.findById(actor).ifPresent(u -> audit.recordForUser(u.getId(), u.getEmail(),
+                    AuditAction.USER_LOGOUT, "User", u.getId(), "User logged out (mobile app)"));
+        }
+    }
+
+    /** Validates and revokes a refresh token, returning its active owner. Caller issues the new pair. */
+    private User rotateRefresh(String rawRefresh) {
         if (rawRefresh == null || rawRefresh.isBlank()) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Missing refresh token");
         }
@@ -215,8 +276,7 @@ public class AuthService {
         }
         // rotate
         rt.setRevokedAt(Instant.now());
-        issueCookies(u, response);
-        return toAuthResponse(u);
+        return u;
     }
 
     @Transactional(readOnly = true)
@@ -259,7 +319,10 @@ public class AuthService {
         }
     }
 
-    private void issueCookies(User u, HttpServletResponse response) {
+    private record TokenPair(String access, String refresh) {}
+
+    /** Signs an access token and stores a new hashed refresh token for the user. */
+    private TokenPair mintTokens(User u) {
         String access = jwt.generateAccessToken(u.getId(), u.getEmail(), u.getRole(),
                 u.getRealEstateFirmId(), u.getFirmBranchId(), u.getTokenVersion());
         String rawRefresh = newRandomToken();
@@ -268,11 +331,20 @@ public class AuthService {
         rt.setTokenHash(sha256(rawRefresh));
         rt.setExpiresAt(Instant.now().plus(refreshTtl));
         refreshRepo.save(rt);
+        return new TokenPair(access, rawRefresh);
+    }
 
-        addCookie(response, JwtAuthenticationFilter.ACCESS_COOKIE, access,
+    private void issueCookies(User u, HttpServletResponse response) {
+        TokenPair t = mintTokens(u);
+        addCookie(response, JwtAuthenticationFilter.ACCESS_COOKIE, t.access(),
                 (int) jwt.accessTtl().toSeconds(), "/");
-        addCookie(response, REFRESH_COOKIE, rawRefresh,
+        addCookie(response, REFRESH_COOKIE, t.refresh(),
                 (int) refreshTtl.toSeconds(), "/api/auth");
+    }
+
+    private MobileAuthResponse mintMobileTokens(User u) {
+        TokenPair t = mintTokens(u);
+        return new MobileAuthResponse(t.access(), t.refresh(), jwt.accessTtl().toSeconds(), toAuthResponse(u));
     }
 
     private void clearCookies(HttpServletResponse response) {
@@ -306,8 +378,12 @@ public class AuthService {
     }
 
     private AuthResponse toAuthResponse(User u) {
+        // The firm's public id rides along so a client can name the firm in a URL or call
+        // /firms/{ref} without first listing firms to find it.
+        String firmPublicId = u.getRealEstateFirmId() == null ? null
+                : firms.findById(u.getRealEstateFirmId()).map(RealEstateFirm::getPublicId).orElse(null);
         return new AuthResponse(u.getId(), u.getEmail(), u.getFullName(), u.getRole(),
-                u.getRealEstateFirmId(), u.getFirmBranchId());
+                u.getRealEstateFirmId(), firmPublicId, u.getFirmBranchId());
     }
 
     /** An unauthenticated caller chooses this value; an email address is at most 254 characters. */

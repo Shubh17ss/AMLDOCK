@@ -50,7 +50,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/otp/request", "/api/auth/otp/verify",
                                 "/api/auth/admin/login", "/api/auth/admin/verify",
-                                "/api/auth/refresh").permitAll()
+                                "/api/auth/refresh",
+                                // Native mobile app. Logout is open so a token whose access JWT
+                                // has expired can still be revoked; holding it is the proof.
+                                "/api/auth/mobile/otp/verify", "/api/auth/mobile/refresh",
+                                "/api/auth/mobile/logout").permitAll()
                         // Load-balancer probes, plus the Prometheus scrape. Prometheus is exposed only
                         // by profiles that also move actuator to a separate management port, which
                         // is reachable inside the VPC/compose network only, never via the ALB.

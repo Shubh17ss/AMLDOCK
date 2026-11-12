@@ -74,7 +74,7 @@ class IndividualCsvTest {
     void registerRowSpellsOutTheCountry() {
         IndividualRowDto r = row("NZ", null);
         assertThat(IndividualCsv.registerRow(r))
-                .isEqualTo("\"Mei Chen\",\"Individual\",\"1980-02-01\",\"New Zealand\",\"1 Queen St, Auckland\",\"D-1\"");
+                .isEqualTo("\"Mei Chen\",\"Individual\",\"1980-02-01\",\"New Zealand\",\"1 Queen St, Auckland\"");
     }
 
     @Test
@@ -87,11 +87,11 @@ class IndividualCsvTest {
     void exceptionRowIsDatedByVerification() {
         IndividualRowDto r = row("NZ", Instant.parse("2026-09-01T10:00:00Z"));
         assertThat(IndividualCsv.exceptionRow(r))
-                .isEqualTo("\"Mei Chen\",\"Individual\",\"2026-09-01T10:00:00Z\",\"1 Queen St, Auckland\",\"D-1\"");
+                .isEqualTo("\"Mei Chen\",\"Individual\",\"2026-09-01T10:00:00Z\",\"1 Queen St, Auckland\"");
     }
 
     private static IndividualRowDto row(String country, Instant verifiedAt) {
-        return new IndividualRowDto(1L, NodeType.INDIVIDUAL, 2L, "D-1", "1 Queen St, Auckland", "Mei Chen",
+        return new IndividualRowDto(1L, NodeType.INDIVIDUAL, "pubdealid234", "D-1", "1 Queen St, Auckland", "Mei Chen",
                 LocalDate.of(1980, 2, 1), country, Set.of(), NodeVerificationStatus.VERIFIED_WITH_EXCEPTION,
                 verifiedAt, null);
     }

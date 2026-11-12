@@ -1,5 +1,6 @@
 package nz.amldock.deal.assurance;
 
+import nz.amldock.deal.DealRef;
 import jakarta.validation.Valid;
 import nz.amldock.common.web.PageRequests;
 import nz.amldock.common.web.PageResponse;
@@ -54,7 +55,7 @@ public class AssuranceController {
 
     @PutMapping("/api/deals/{dealId}/versions/{versionNo}/assurance")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public AssuranceVersionDto update(@PathVariable Long dealId, @PathVariable Integer versionNo,
+    public AssuranceVersionDto update(@DealRef Long dealId, @PathVariable Integer versionNo,
                                       @Valid @RequestBody UpdateAssuranceRequest req) {
         return assurance.update(dealId, versionNo, req);
     }

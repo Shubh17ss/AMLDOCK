@@ -5,6 +5,7 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import { getVerificationTrail } from '../../api/ownership.js';
 import { tokens, fonts } from '../../theme/theme.js';
 import { formatVerifiedAt, verificationDisplay } from './verificationDisplay.js';
+import { dealName } from '../../utils/dealName.js';
 
 /**
  * The verifications granted to this owner on every deal they have been picked onto.
@@ -27,9 +28,9 @@ export function VerificationTrail({ dealId, nodeId, onOpenDeal }) {
       <Typography sx={{ fontSize: '0.9rem', fontWeight: 600, color: tokens.ink, mb: 1 }}>
         Verification trail
       </Typography>
-      <Typography variant="caption" sx={{ display: 'block', color: tokens.muted, mb: 1.25 }}>
+      {/* <Typography variant="caption" sx={{ display: 'block', color: tokens.muted, mb: 1.25 }}>
         This owner has been verified on other deals too.
-      </Typography>
+      </Typography> */}
       <Stack spacing={1}>
         {entries.map((e) => (
           <TrailRow key={e.nodeId} entry={e} onOpen={() => onOpenDeal?.(e.dealId)} />
@@ -54,12 +55,9 @@ function TrailRow({ entry: e, onOpen }) {
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}
           >
-            {e.propertyAddress ?? e.dealReference}
+            {dealName(e.propertyAddress)}
           </Typography>
         </Stack>
-        <Typography variant="caption" sx={{ display: 'block', color: tokens.muted }}>
-          {[e.branchName, e.propertyAddress ? e.dealReference : null].filter(Boolean).join(' · ')}
-        </Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.5 }}>
           <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: display.text }}>
             {display.label}
@@ -86,7 +84,7 @@ function TrailRow({ entry: e, onOpen }) {
         border: `1px solid ${tokens.hairline}`,
         '&:hover': { borderColor: tokens.blue, backgroundColor: tokens.blueWash },
       }}
-      aria-label={`Open ${e.propertyAddress ?? e.dealReference}`}
+      aria-label={`Open ${dealName(e.propertyAddress)}`}
     >
       {body}
     </ButtonBase>

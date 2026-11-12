@@ -97,10 +97,13 @@ public class AssuranceService {
         AssuranceQuery.RowPage page = query.page(scope, filter, paging);
         if (page.rows().isEmpty()) return PageResponse.of(List.of(), paging, page.total(), page.exact());
 
-        List<DealListItemDto> dealRows = dealList.toListItems(
-                dealList.loadInOrder(page.rows().stream().map(AssuranceQuery.Row::dealId).toList()));
-        Map<Long, DealListItemDto> dealById = dealRows.stream()
-                .collect(Collectors.toMap(DealListItemDto::id, Function.identity()));
+        // Keyed by the internal id: the list rows carry the public one, and the query rows the
+        // numeric one. toListItems keeps the order it is given, so the two lists line up.
+        List<nz.amldock.deal.Deal> loaded = dealList.loadInOrder(
+                page.rows().stream().map(AssuranceQuery.Row::dealId).toList());
+        List<DealListItemDto> dealRows = dealList.toListItems(loaded);
+        Map<Long, DealListItemDto> dealById = new java.util.HashMap<>();
+        for (int i = 0; i < loaded.size(); i++) dealById.put(loaded.get(i).getId(), dealRows.get(i));
 
         List<Long> versionIds = page.rows().stream().map(AssuranceQuery.Row::versionId).filter(Objects::nonNull).toList();
         Map<Long, DealVersion> versionById = versionIds.isEmpty() ? Map.of()

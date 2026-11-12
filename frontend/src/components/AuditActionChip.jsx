@@ -40,6 +40,9 @@ const COLOR = {
   BRANCH_CREATED: 'info',
   BRANCH_UPDATED: 'default',
   BRANCH_DELETED: 'error',
+  ENTITY_QUERY_RAISED: 'info',
+  ENTITY_QUERY_RESOLVED: 'success',
+  ENTITY_QUERY_DELETED: 'error',
 };
 
 export function AuditActionChip({ action }) {

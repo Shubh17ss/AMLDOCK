@@ -11,6 +11,7 @@ import { useDashboardScope, isScopeExemptPath } from './DashboardScope.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 
 const FIRMS_ADMIN_PATH = '/settings/reporting-entities';
+const REPORTING_ENTITY_PATH = '/reporting-entity';
 
 /**
  * Blocks the app until a single reporting entity and a single branch are chosen.
@@ -40,7 +41,7 @@ export function ScopeRequiredDialog() {
   const { pathname } = useLocation();
   const {
     firm, branch, firmOptions, activeBranches, selectFirm, selectBranch,
-    isRoot, branchSelectable, currentFirmId, optionsLoading, scopeComplete, scopeSettled,
+    isRoot, branchSelectable, currentFirmId, currentFirmRef, optionsLoading, scopeComplete, scopeSettled,
   } = useDashboardScope();
 
   // `scopeSettled` keeps a branch-level user — whose scope pins itself the moment the branches
@@ -71,8 +72,10 @@ export function ScopeRequiredDialog() {
 
   // Where each dead end is repaired. A has no entity to deep-link to, so it goes to the register and
   // its create button; B goes straight to the entity's own page, whose branches card is the exact
-  // control needed.
-  const setupPath = noEntities ? FIRMS_ADMIN_PATH : `${FIRMS_ADMIN_PATH}/${currentFirmId}`;
+  // control needed — ROOT's per-entity page, or Settings › Reporting Entity for everyone else.
+  const setupPath = noEntities
+    ? FIRMS_ADMIN_PATH
+    : (isRoot ? `${FIRMS_ADMIN_PATH}/${currentFirmRef}` : `${REPORTING_ENTITY_PATH}/${currentFirmRef}`);
 
   return (
     <Dialog
@@ -106,8 +109,9 @@ export function ScopeRequiredDialog() {
             Choose where you're working
           </Typography>
           <Typography variant="body2" sx={{ color: tokens.muted, maxWidth: 360 }}>
-            Every register in AMLDOCK is kept per branch, so a reporting entity and a branch have to
-            be set before anything can be shown or changed.
+            {isRoot
+              ? 'Every register in AMLDOCK is kept per branch, so a reporting entity and a branch have to be set before anything can be shown or changed.'
+              : 'Every register in AMLDOCK is kept per branch, so a branch has to be chosen before anything can be shown or changed.'}
           </Typography>
         </Stack>
 
@@ -117,8 +121,9 @@ export function ScopeRequiredDialog() {
           </Box>
         ) : (
           <Stack spacing={2}>
-            {/* ROOT and AUDIT belong to no entity and pick one; everybody else has theirs. */}
-            {isRoot ? (
+            {/* ROOT and AUDIT belong to no entity and pick one. Everybody else has theirs from
+                their account, so it is not part of what they are asked for, or shown. */}
+            {isRoot && (
               // Disabled when empty, mirroring the branch control below. A required-looking select
               // that opens an empty popper is the visual signature of a broken screen.
               <FormControl fullWidth required disabled={noEntities}>
@@ -131,14 +136,6 @@ export function ScopeRequiredDialog() {
                   options={firmOptions}
                 />
               </FormControl>
-            ) : (
-              <TextField
-                label="Reporting entity"
-                value={firm?.name ?? '—'}
-                InputProps={{ readOnly: true }}
-                fullWidth
-                helperText="Your reporting entity, from your account."
-              />
             )}
 
             {branchSelectable ? (
@@ -172,7 +169,7 @@ export function ScopeRequiredDialog() {
 
             {noBranches && (
               <Alert severity="warning">
-                {firm?.name ?? 'This entity'} has no active branches.
+                {isRoot ? `${firm?.name ?? 'This entity'} has no active branches.` : 'There are no active branches.'}
                 {canFixScope
                   ? ' Add one to continue.'
                   : ' Ask an administrator to add one under Settings › Reporting entities.'}

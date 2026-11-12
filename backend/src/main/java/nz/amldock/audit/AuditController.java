@@ -3,9 +3,9 @@ package nz.amldock.audit;
 import nz.amldock.audit.dto.AuditLogDto;
 import nz.amldock.common.web.PageResponse;
 import org.springframework.format.annotation.DateTimeFormat;
+import nz.amldock.deal.DealRef;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,12 +24,11 @@ public class AuditController {
     }
 
     /**
-     * The trail. ROOT sees the platform; a compliance officer or senior manager sees their own
-     * reporting entity's activity — AuditService.search narrows by actor, since audit_log has
-     * no firm of its own.
+     * The platform's audit trail. ROOT only: the log records every user's actions across every
+     * reporting entity, and reading it is a platform-operator task, not a firm one.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
+    @PreAuthorize("hasRole('ROOT')")
     public PageResponse<AuditLogDto> search(
             @RequestParam(required = false) Long actorUserId,
             @RequestParam(required = false) AuditAction action,
@@ -42,9 +41,10 @@ public class AuditController {
         return audit.search(actorUserId, action, entityType, entityId, from, to, page, size);
     }
 
+    /** One deal's trail, by its public id. ROOT only, like the trail as a whole. */
     @GetMapping("/deal/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','AUDIT')")
-    public List<AuditLogDto> listForDeal(@PathVariable Long id) {
+    @PreAuthorize("hasRole('ROOT')")
+    public List<AuditLogDto> listForDeal(@DealRef("id") Long id) {
         return audit.listForDeal(id);
     }
 }

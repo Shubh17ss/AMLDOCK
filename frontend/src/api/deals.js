@@ -169,3 +169,15 @@ export async function addDealNote(id, note) {
   const { data } = await apiClient.post(`/deals/${id}/notes`, { note });
   return data;
 }
+
+/** Flags CDD on this transaction as delayed. NEW, REVIEW or ON_HOLD only; not AUDIT or FINANCE. */
+export async function delayCdd(id) {
+  const { data } = await apiClient.post(`/deals/${id}/cdd-delay`);
+  return data;
+}
+
+/** Undoes a CDD delay. Same rules as setting it. */
+export async function undoCddDelay(id) {
+  const { data } = await apiClient.delete(`/deals/${id}/cdd-delay`);
+  return data;
+}

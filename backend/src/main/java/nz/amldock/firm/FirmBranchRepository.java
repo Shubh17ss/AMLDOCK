@@ -8,4 +8,5 @@ import java.util.Optional;
 public interface FirmBranchRepository extends JpaRepository<FirmBranch, Long> {
     List<FirmBranch> findAllByRealEstateFirmIdOrderByNameAsc(Long firmId);
     Optional<FirmBranch> findByRealEstateFirmIdAndNameIgnoreCase(Long firmId, String name);
+    Optional<FirmBranch> findByPublicId(String publicId);
 }

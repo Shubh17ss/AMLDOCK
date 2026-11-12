@@ -17,6 +17,7 @@ import { useToast } from '../../components/ToastProvider.jsx';
 import { tokens, fonts } from '../../theme/theme.js';
 import { formatListDate } from './IndividualsTable.jsx';
 import { exportIndividualsCsv } from './BeneficialOwnersPage.jsx';
+import { dealName } from '../../utils/dealName.js';
 
 /**
  * Every owner cleared on an exception, across the deals in scope.
@@ -138,7 +139,7 @@ function ExceptionsTable({ rows, emptyMessage }) {
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}
                   >
-                    {r.propertyAddress ?? r.dealReference}
+                    {dealName(r.propertyAddress)}
                   </Box>
                 </Tooltip>
               </TableCell>

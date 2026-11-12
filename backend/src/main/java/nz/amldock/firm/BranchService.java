@@ -33,6 +33,15 @@ public class BranchService {
         return branches.findAllByRealEstateFirmIdOrderByNameAsc(firmId);
     }
 
+    /** The internal id for a branch's public id, or a 404. See {@link FirmService#resolve}. */
+    @Transactional(readOnly = true)
+    public Long resolve(String publicId) {
+        if (!FirmPublicIds.isWellFormed(publicId)) throw new NotFoundException("Branch " + publicId + " not found");
+        return branches.findByPublicId(publicId)
+                .map(FirmBranch::getId)
+                .orElseThrow(() -> new NotFoundException("Branch " + publicId + " not found"));
+    }
+
     @Transactional(readOnly = true)
     public FirmBranch findById(Long id) {
         FirmBranch b = branches.findById(id)

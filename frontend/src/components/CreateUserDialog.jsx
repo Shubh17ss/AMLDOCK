@@ -7,6 +7,8 @@ import {
 } from '@mui/material';
 import { bulkCreateUsers, createUser } from '../api/users.js';
 import { listBranches, listFirms } from '../api/firms.js';
+import { useFirmRef } from '../hooks/useFirmRef.js';
+import { emailFieldProps, isBadEmail, isValidEmail } from '../utils/email.js';
 import { creatableRoles, requiresFirm, requiresBranch, roleLabel } from '../auth/roles.js';
 import { buildCsv, parseUsersCsv } from '../utils/csv.js';
 import { useToast } from './ToastProvider.jsx';
@@ -82,10 +84,11 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, 
   const activeFirms = (firmsQ.data ?? []).filter((f) => f.active);
 
   const showBranchPicker = needsBranch && !isSalesManager && !branchPinned;
+  const firmRef = useFirmRef(firmId);
   const branchesQ = useQuery({
-    queryKey: ['firms', firmId, 'branches'],
-    queryFn: () => listBranches(firmId),
-    enabled: showBranchPicker && Boolean(firmId),
+    queryKey: ['firms', firmRef, 'branches'],
+    queryFn: () => listBranches(firmRef),
+    enabled: showBranchPicker && Boolean(firmRef),
   });
   const activeBranches = (branchesQ.data ?? []).filter((b) => b.active);
 
@@ -121,7 +124,7 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, 
   const ch = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const submittable =
-    form.email && form.fullName && form.role &&
+    form.email && !isBadEmail(form.email) && form.fullName && form.role &&
     (!needsFirm || firmId) &&
     (!needsBranch || isSalesManager || branchPinned || form.firmBranchId);
 
@@ -133,7 +136,8 @@ function ManualUserForm({ open, onClose, currentUser, lockedFirmId, lockedFirm, 
             New users sign in with their email and a one-time code — no password is set.
           </Typography>
           <TextField label="Full name" value={form.fullName} onChange={ch('fullName')} required />
-          <TextField label="Email" type="email" value={form.email} onChange={ch('email')} required />
+          <TextField label="Email" type="email" value={form.email} onChange={ch('email')} required
+                     {...emailFieldProps(form.email)} />
           <FormControl fullWidth required>
             <InputLabel id="role-label">Role</InputLabel>
             <Select labelId="role-label" label="Role" value={form.role} onChange={ch('role')}>
@@ -292,6 +296,7 @@ function CsvUserImport({ onClose, currentUser, firmId }) {
   const normRole = (r) => (r ?? '').trim().toUpperCase().replace(/[ -]/g, '_');
   const rowFlag = (r) => {
     if (!r.fullName || !r.email) return 'Missing name/email';
+    if (!isValidEmail(r.email)) return 'Invalid email';
     if (!allowedSet.has(normRole(r.role))) return 'Role not allowed';
     return null;
   };
