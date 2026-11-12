@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
   IconButton, InputLabel, LinearProgress, ListItemIcon, ListItemText, Menu, MenuItem, Paper,
-  Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip,
-  Typography,
+  InputAdornment, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  TextField, Tooltip, Typography,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -164,20 +164,19 @@ export function DocumentUploader({
   });
   const propertyLabel = formatPropertyAddressShort(dealQ.data?.property) || 'Property';
 
-  // Owners this document could go to: the node's type has to take that document, the same rule
-  // the server applies on upload and on a move.
+  // Every place this document could go. Not narrowed by its current type: the move dialog asks
+  // for the type after the place, from what that place takes, and the server checks the new type
+  // — so a passport can still reach the property, refiled as something the property holds.
   //
   // Each target carries a string key, because a Select cannot hold null: 'property' for the deal,
-  // otherwise the node id.
-  const targetsFor = (d) => {
-    const owners = (moveTargets ?? [])
-      .filter((n) => {
-        const accepted = ACCEPTED_DOCUMENT_TYPES[n.nodeType];
-        return !accepted || accepted.includes(d.documentType);
-      })
-      .map((n) => ({ key: String(n.id), nodeId: n.id, label: n.displayName }));
-    const property = canMoveToProperty && DEAL_DOCUMENT_TYPES.includes(d.documentType)
-      ? [{ key: 'property', nodeId: null, label: propertyLabel }]
+  // otherwise the node id. `acceptedTypes` undefined means no restriction.
+  const targetsFor = () => {
+    const owners = (moveTargets ?? []).map((n) => ({
+      key: String(n.id), nodeId: n.id, label: n.displayName,
+      acceptedTypes: ACCEPTED_DOCUMENT_TYPES[n.nodeType],
+    }));
+    const property = canMoveToProperty
+      ? [{ key: 'property', nodeId: null, label: propertyLabel, acceptedTypes: DEAL_DOCUMENT_TYPES }]
       : [];
     return [...property, ...owners];
   };
@@ -399,19 +398,56 @@ function DocumentRowMenu({ doc, onView, onDownload, onMove, onDelete, deleteBloc
   );
 }
 
-/** Moves one document to one other owner on the deal. */
+/** Splits a filename into the part a person edits and the extension that stays. */
+const splitExtension = (filename = '') => {
+  const dot = filename.lastIndexOf('.');
+  return dot > 0 ? [filename.slice(0, dot), filename.slice(dot)] : [filename, ''];
+};
+
+/**
+ * Moves one document to one other place on the deal, and may refile it as another type and rename
+ * it on the way. The type is asked after the place, from what that place takes.
+ */
 function MoveDocumentDialog({ doc, targets, onClose, onMoved }) {
   const { showToast } = useToast();
+  const [stem, extension] = splitExtension(doc.originalFilename);
   const [targetKey, setTargetKey] = useState('');
+  const [documentType, setDocumentType] = useState('');
+  const [name, setName] = useState(stem);
   const [error, setError] = useState(null);
   const target = targets.find((t) => t.key === targetKey) ?? null;
 
+  // A voice note stays a voice note and a file stays a file — the server holds the same line.
+  const isAudio = AUDIO_DOCUMENT_TYPES.includes(doc.documentType);
+  const typesFor = (t) => DOCUMENT_TYPES.filter((o) =>
+    (!t?.acceptedTypes || t.acceptedTypes.includes(o.value))
+    && AUDIO_DOCUMENT_TYPES.includes(o.value) === isAudio);
+  const typeOptions = target ? typesFor(target) : [];
+
+  const chooseTarget = (key) => {
+    setTargetKey(key);
+    setError(null);
+    // Keep the type while the new place still takes it; otherwise make the person choose.
+    const next = targets.find((t) => t.key === key);
+    const valid = typesFor(next).map((o) => o.value);
+    const keep = valid.includes(documentType) ? documentType : '';
+    setDocumentType(keep || (valid.includes(doc.documentType) ? doc.documentType : ''));
+  };
+
+  const trimmed = name.trim();
+  const filename = trimmed + extension;
+  const typeChanged = documentType && documentType !== doc.documentType;
+  const renamed = trimmed && filename !== doc.originalFilename;
+
   const mut = useMutation({
-    mutationFn: () => moveDocument(doc.id, target.nodeId),
+    mutationFn: () => moveDocument(doc.id, target.nodeId, {
+      documentType: typeChanged ? documentType : undefined,
+      filename: renamed ? filename : undefined,
+    }),
     onSuccess: () => {
       showToast({
         severity: 'success',
-        message: `Moved to ${target.label}`,
+        message: `Moved to ${target.label}${typeChanged ? ` as ${documentTypeLabel(documentType)}` : ''}`,
       });
       onMoved(target);
     },
@@ -423,34 +459,64 @@ function MoveDocumentDialog({ doc, targets, onClose, onMoved }) {
       <DialogTitle component="div" sx={{ pb: 1 }}>
         <Typography variant="h6" component="h2">Move document</Typography>
         <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5, overflowWrap: 'anywhere' }}>
-          {doc.originalFilename}
+          {doc.originalFilename} · {documentTypeLabel(doc.documentType)}
         </Typography>
       </DialogTitle>
       <DialogContent>
-        <FormControl fullWidth sx={{ mt: 1 }}>
-          <InputLabel id="move-target-label">Move to</InputLabel>
-          <Select
-            labelId="move-target-label"
-            label="Move to"
-            value={targetKey}
-            onChange={(e) => { setTargetKey(e.target.value); setError(null); }}
-          >
-            {targets.map((t) => (
-              <MenuItem key={t.key} value={t.key}>
-                {t.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <FormControl fullWidth>
+            <InputLabel id="move-target-label">Move to</InputLabel>
+            <Select
+              labelId="move-target-label"
+              label="Move to"
+              value={targetKey}
+              onChange={(e) => chooseTarget(e.target.value)}
+            >
+              {targets.map((t) => (
+                <MenuItem key={t.key} value={t.key}>
+                  {t.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {target && (
+            <FormControl fullWidth>
+              <InputLabel id="move-type-label">Document type</InputLabel>
+              <Select
+                labelId="move-type-label"
+                label="Document type"
+                value={documentType}
+                onChange={(e) => { setDocumentType(e.target.value); setError(null); }}
+              >
+                {typeOptions.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+              </Select>
+            </FormControl>
+          )}
+          <TextField
+            fullWidth
+            label="File name"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(null); }}
+            error={!trimmed}
+            helperText={!trimmed ? 'Give the document a name' : undefined}
+            slotProps={extension
+              ? { input: { endAdornment: <InputAdornment position="end">{extension}</InputAdornment> } }
+              : undefined}
+          />
+        </Stack>
         <Typography variant="caption" sx={{ display: 'block', color: tokens.muted, mt: 1.5 }}>
-          Only places that can hold a {documentTypeLabel(doc.documentType).toLowerCase()} are listed.
+          Only the types the chosen place can hold are listed.
           Moving it clears the verification on any owner involved, if they&apos;re verified.
         </Typography>
         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5 }}>
         <Button onClick={onClose} disabled={mut.isPending}>Cancel</Button>
-        <Button variant="contained" disabled={!target || mut.isPending} onClick={() => mut.mutate()}>
+        <Button
+          variant="contained"
+          disabled={!target || !documentType || !trimmed || mut.isPending}
+          onClick={() => mut.mutate()}
+        >
           {mut.isPending ? 'Moving…' : 'Move'}
         </Button>
       </DialogActions>

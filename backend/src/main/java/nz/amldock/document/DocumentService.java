@@ -329,6 +329,17 @@ public class DocumentService {
      */
     @Transactional
     public DocumentDto move(Long id, Long targetNodeId) {
+        return move(id, targetNodeId, null, null);
+    }
+
+    /**
+     * A move that may also refile the document as another type and rename it. The target's rules
+     * are checked against the new type, so a passport reaches the property only as something the
+     * property takes. Null keeps the current type or name. Audio stays audio and a file stays a
+     * file: the player and the viewer pick their path by type.
+     */
+    @Transactional
+    public DocumentDto move(Long id, Long targetNodeId, DocumentType newType, String newFilename) {
         Document d = documents.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
         if (d.getStatus() != DocumentStatus.ACTIVE) {
@@ -349,12 +360,22 @@ public class DocumentService {
                 ? (source == null ? "#" + d.getOwnershipNodeId() : "\"" + source.getDisplayName() + "\"")
                 : "the property";
 
+        DocumentType oldType = d.getDocumentType();
+        DocumentType type = newType != null ? newType : oldType;
+        if (type.isAudio() != oldType.isAudio()) {
+            throw new BadRequestException(oldType.isAudio()
+                    ? "A voice note can only be filed as a voice note"
+                    : "Only a recording can be filed as a voice note");
+        }
+        String oldName = d.getOriginalFilename();
+        String name = renamed(oldName, newFilename);
+
         OwnershipNode target = null;
         if (targetNodeId == null) {
             if (onProperty) throw new BadRequestException("The document is already on the property");
-            if (!DEAL_LEVEL_TYPES.contains(d.getDocumentType())) {
+            if (!DEAL_LEVEL_TYPES.contains(type)) {
                 throw new BadRequestException("The property does not take "
-                        + d.getDocumentType().name().replace('_', ' ').toLowerCase()
+                        + type.name().replace('_', ' ').toLowerCase()
                         + " documents; file it on an owner");
             }
         } else {
@@ -368,14 +389,20 @@ public class DocumentService {
             if (d.getDealId() == null || !d.getDealId().equals(structure.getDealId())) {
                 throw new BadRequestException("A document can only move to an owner on the same deal");
             }
-            assertAccepts(target, d.getDocumentType());
+            assertAccepts(target, type);
         }
 
         d.setOwnershipNodeId(target == null ? null : target.getId());
+        d.setDocumentType(type);
+        d.setOriginalFilename(name);
 
+        java.util.List<String> changes = new java.util.ArrayList<>();
+        if (type != oldType) changes.add("type " + oldType.name() + " \u2192 " + type.name());
+        if (!name.equals(oldName)) changes.add("renamed to " + name);
         audit.record(AuditAction.DOCUMENT_MOVED, "Document", d.getId(),
-                "Moved " + d.getOriginalFilename() + " from " + from + " to "
-                        + (target == null ? "the property" : "\"" + target.getDisplayName() + "\""));
+                "Moved " + oldName + " from " + from + " to "
+                        + (target == null ? "the property" : "\"" + target.getDisplayName() + "\"")
+                        + (changes.isEmpty() ? "" : " (" + String.join("; ", changes) + ")"));
         // Only owners carry a verification; the property has none to withdraw.
         if (source != null) verificationReset.clearIfVerified(source, "document moved away");
         if (target != null) verificationReset.clearIfVerified(target, "document added");
@@ -427,6 +454,21 @@ public class DocumentService {
                 lifecycle.assertCanUploadDocuments(deal, actor, firmId);
             }
         }
+    }
+
+    /**
+     * The name a move leaves a document with. Blank keeps the old one; a name typed without the
+     * old extension gets it back, since the download and the viewer go by it; path separators
+     * become underscores.
+     */
+    static String renamed(String oldName, String newName) {
+        if (newName == null) return oldName;
+        String name = newName.replaceAll("[\\\\/]", "_").trim();
+        if (name.isEmpty()) return oldName;
+        int dot = oldName == null ? -1 : oldName.lastIndexOf('.');
+        String ext = dot > 0 ? oldName.substring(dot) : "";
+        if (!ext.isEmpty() && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
+        return name.length() > 255 ? name.substring(0, 255) : name;
     }
 
     /** The upload rule, shared with a move: a node only holds the document types its type accepts. */

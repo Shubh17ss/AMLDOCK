@@ -68,7 +68,7 @@ public class DocumentController {
      */
     @PostMapping("/{id}/move")
     public DocumentDto move(@PathVariable Long id, @Valid @RequestBody MoveDocumentRequest req) {
-        return documents.move(id, req.targetNodeId());
+        return documents.move(id, req.targetNodeId(), req.documentType(), req.filename());
     }
 
     /**
