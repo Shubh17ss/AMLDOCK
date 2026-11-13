@@ -1080,7 +1080,12 @@ public class OwnershipService {
      */
     private Deal assertWritable(Long dealId) {
         UserPrincipal actor = currentPrincipal();
-        if (actor.role() == nz.amldock.user.Role.ROOT) return assertReadable(dealId);
+        if (actor.role() == nz.amldock.user.Role.ROOT) {
+            // ROOT skips assertEditable (it belongs to no firm) but not the branch's hold.
+            Deal deal = assertReadable(dealId);
+            lifecycle.assertBranchWritable(deal);
+            return deal;
+        }
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
         lifecycle.assertEditable(deal, actor, firmIdFor(deal));

@@ -133,6 +133,7 @@ public class DealVersionReadService {
                 firm == null ? null : firm.getId(),
                 firm == null ? null : firm.getName(),
                 branch == null ? null : branch.getName(),
+                branch == null || branch.isActive(),
                 versionProperties.findByDealVersionId(vid).map(p -> nz.amldock.property.dto.PropertyDto.from(p)).orElse(null),
                 versionClients.findByDealVersionId(vid).map(c -> nz.amldock.client.dto.ClientDto.from(c)).orElse(null),
                 creator == null ? null : creator.getEmail());

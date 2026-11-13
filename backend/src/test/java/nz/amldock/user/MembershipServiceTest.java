@@ -42,6 +42,9 @@ class MembershipServiceTest {
         RealEstateFirm a = new RealEstateFirm();
         a.setName("Entity A");
         lenient().when(firms.findById(FIRM_A)).thenReturn(Optional.of(a));
+        RealEstateFirm b = new RealEstateFirm();
+        b.setName("Entity B");
+        lenient().when(firms.findById(FIRM_B)).thenReturn(Optional.of(b));
     }
 
     private User account(Long id, Role role, Long firmId, Long branchId) {
@@ -211,6 +214,20 @@ class MembershipServiceTest {
         service.makeHome(u, rows.in(5L, FIRM_B).orElseThrow());
 
         assertThat(service.sessionStart(u)).get().extracting(FirmMembership::getRealEstateFirmId).isEqualTo(FIRM_B);
+    }
+
+    /** Off-boarding: home in a deactivated entity, the session opens in the one still running. */
+    @Test
+    void aNewSessionPrefersAnEntityThatIsStillActive() {
+        User u = account(5L, Role.AML_COMPLIANCE_OFFICER, FIRM_A, null);
+        service.join(u, Role.AML_COMPLIANCE_OFFICER, FIRM_B, null, false);
+        firms.findById(FIRM_A).orElseThrow().setActive(false);
+
+        assertThat(service.sessionStart(u)).get().extracting(FirmMembership::getRealEstateFirmId).isEqualTo(FIRM_B);
+
+        // With nowhere else to go, the deactivated home still opens, read-only.
+        firms.findById(FIRM_B).orElseThrow().setActive(false);
+        assertThat(service.sessionStart(u)).get().extracting(FirmMembership::getRealEstateFirmId).isEqualTo(FIRM_A);
     }
 
     @Test

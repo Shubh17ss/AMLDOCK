@@ -148,8 +148,9 @@ public class UserController {
         return UserDto.from(m);
     }
 
+    /** Off-boarding, like suspending: root, compliance officers and senior managers only. */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal UserPrincipal principal,
                                        @PathVariable Long id,
                                        @RequestParam(required = false) Long firmId) {

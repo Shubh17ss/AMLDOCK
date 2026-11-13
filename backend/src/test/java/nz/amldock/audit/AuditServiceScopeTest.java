@@ -1,5 +1,6 @@
 package nz.amldock.audit;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
@@ -54,7 +55,7 @@ class AuditServiceScopeTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuditService(repo, deals, branches, new DealLifecycleService(mock(DealUserRepository.class)), users,
+        service = new AuditService(repo, deals, branches, new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)), users,
                 memberships.repo);
     }
 

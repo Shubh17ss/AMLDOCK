@@ -40,7 +40,7 @@ export function ScopeRequiredDialog() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const {
-    firm, branch, firmOptions, activeBranches, selectFirm, selectBranch,
+    firm, branch, firmOptions, branchOptions, selectFirm, selectBranch,
     isRoot, branchSelectable, currentFirmId, currentFirmRef, optionsLoading, scopeComplete, scopeSettled,
   } = useDashboardScope();
 
@@ -62,7 +62,7 @@ export function ScopeRequiredDialog() {
   //                choose an entity at all; everyone else has theirs pinned from their account.
   //   noBranches — an entity whose branches are all inactive.
   const noEntities = !optionsLoading && firmOptions.length === 0;
-  const noBranches = Boolean(currentFirmId) && !optionsLoading && activeBranches.length === 0;
+  const noBranches = Boolean(currentFirmId) && !optionsLoading && branchOptions.length === 0;
   const deadEnd = noEntities || noBranches;
 
   // AUDIT reaches both screens — it is in SETTINGS_ROLES — but may create neither an entity nor a
@@ -146,7 +146,7 @@ export function ScopeRequiredDialog() {
                   label="Branch"
                   value={branch?.id ?? ''}
                   onChange={(e) => selectBranch(e.target.value)}
-                  options={activeBranches}
+                  options={branchOptions}
                 />
               </FormControl>
             ) : (
@@ -169,7 +169,7 @@ export function ScopeRequiredDialog() {
 
             {noBranches && (
               <Alert severity="warning">
-                {isRoot ? `${firm?.name ?? 'This entity'} has no active branches.` : 'There are no active branches.'}
+                {isRoot ? `${firm?.name ?? 'This entity'} has no branches.` : 'There are no branches.'}
                 {canFixScope
                   ? ' Add one to continue.'
                   : ' Ask an administrator to add one under Settings › Reporting entities.'}
@@ -216,7 +216,11 @@ export function ScopeRequiredDialog() {
 function SelectField({ labelId, label, value, onChange, options }) {
   return (
     <Select labelId={labelId} label={label} value={value} onChange={onChange}>
-      {options.map((o) => <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>)}
+      {options.map((o) => (
+        <MenuItem key={o.id} value={o.id}>
+          {o.name}{o.active === false ? ' — deactivated, read-only' : ''}
+        </MenuItem>
+      ))}
     </Select>
   );
 }

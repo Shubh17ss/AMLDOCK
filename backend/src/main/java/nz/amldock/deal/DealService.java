@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.document.storage.StoredFileReaper;
 import nz.amldock.client.Client;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
@@ -75,6 +76,7 @@ public class DealService {
     private final DealSaleUnitRepository saleUnits;
     private final VerificationReadinessService readiness;
     private final TransactionMonitoringService monitoring;
+    private final StoredFileReaper files;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -92,7 +94,8 @@ public class DealService {
                        DealVersionService versions,
                        DealSaleUnitRepository saleUnits,
                        VerificationReadinessService readiness,
-                       TransactionMonitoringService monitoring) {
+                       TransactionMonitoringService monitoring,
+                       StoredFileReaper files) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -110,6 +113,7 @@ public class DealService {
         this.saleUnits = saleUnits;
         this.readiness = readiness;
         this.monitoring = monitoring;
+        this.files = files;
     }
 
     /* ---------- queries ---------- */
@@ -129,6 +133,7 @@ public class DealService {
                 firm == null ? null : firm.getId(),
                 firm == null ? null : firm.getName(),
                 branch == null ? null : branch.getName(),
+                branch == null || branch.isActive(),
                 p == null ? null : PropertyDto.from(p),
                 c == null ? null : ClientDto.from(c),
                 creator == null ? null : creator.getEmail());
@@ -321,8 +326,14 @@ public class DealService {
     public void delete(Long id) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         assertCanDelete(d);
+        // ROOT too: a deactivated branch's deals are held until its retention period has run,
+        // and then go with the branch rather than one by one.
+        lifecycle.assertBranchWritable(d);
         Long propertyId = d.getPropertyId();
         Long clientId = d.getClientId();
+        // Read before the rows cascade away with the deal; deleted once this commits. Until this
+        // the objects were left behind in the bucket with nothing pointing at them.
+        files.deleteAfterCommit(files.keysOfDeal(d.getId()));
 
         // Before the deal row goes. deal_beneficial_owner cascades with it, so afterwards there
         // is no way to tell which people this deal held — and any left on no other deal would
@@ -546,6 +557,7 @@ public class DealService {
             throw new ForbiddenException("The audit role has read-only access");
         }
         lifecycle.assertCanRead(d, actor, firmIdOf(d));
+        lifecycle.assertBranchWritable(d);
         dealNotes.appendComment(d, actor, body);
         return d;
     }
@@ -715,6 +727,7 @@ public class DealService {
             throw new ForbiddenException("Your role can't delay CDD on a deal");
         }
         lifecycle.assertCanRead(d, actor, firmIdOf(d));
+        lifecycle.assertBranchWritable(d);
         if (isSignedOff(d)) {
             throw new BadRequestException("CDD delay can't be changed on a verified or closed deal");
         }
@@ -931,6 +944,7 @@ public class DealService {
                 f == null ? null : f.getId(),
                 f == null ? null : f.getName(),
                 b == null ? null : b.getName(),
+                b == null || b.isActive(),
                 p == null ? null : PropertyDto.from(p),
                 c == null ? null : ClientDto.from(c),
                 creator == null ? null : creator.getEmail());

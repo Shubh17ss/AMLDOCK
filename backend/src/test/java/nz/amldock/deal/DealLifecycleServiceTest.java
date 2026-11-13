@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.deal.access.DealUserRepository;
 import nz.amldock.common.exception.ForbiddenException;
@@ -35,7 +36,7 @@ class DealLifecycleServiceTest {
     static final Long BROKER_ID = 7L;
 
     final DealUserRepository dealUsers = mock(DealUserRepository.class);
-    final DealLifecycleService lifecycle = new DealLifecycleService(dealUsers);
+    final DealLifecycleService lifecycle = new DealLifecycleService(dealUsers, mock(ScopeStatusGuard.class));
 
     /** The agent who created the deal. */
     final UserPrincipal broker = new UserPrincipal(BROKER_ID, "broker@a.com", null, Role.AGENT, FIRM_A, 10L, true);

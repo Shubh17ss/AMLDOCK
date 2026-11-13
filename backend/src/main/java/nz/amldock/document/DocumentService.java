@@ -435,6 +435,10 @@ public class DocumentService {
             throw new ForbiddenException(
                     "Only the uploader, a compliance officer, a senior manager or ROOT may change this document");
         }
+        // ROOT included: the exemption below is from the firm check, not from the branch's hold.
+        if (actor.role() == Role.ROOT && d.getDealId() != null) {
+            deals.findById(d.getDealId()).ifPresent(lifecycle::assertBranchWritable);
+        }
         // Still status-checked for everyone firm-scoped: assertEditable is the codebase's
         // answer to "may this actor write to this deal", and it now admits reviewers through
         // REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the

@@ -38,6 +38,7 @@ import { formatPropertyAddressShort } from '../data/addressFinderMeta.js';
 import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
+import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
 import { canEditContent, canUploadDocuments, dealStatusLabel, isEditable, transitionsFrom } from '../data/dealStatus.js';
 
 /**
@@ -151,6 +152,7 @@ export function DealReviewScreen() {
     setParams(merged);
   };
 
+  const { branch: scopeBranch } = useDashboardScope();
   const dealQ = useQuery({
     queryKey: ['deals', dealId],
     queryFn: () => getDeal(dealId),
@@ -277,13 +279,21 @@ export function DealReviewScreen() {
    * that still allows content changes, and never the auditor, who reads every screen in the
    * product and writes to none.
    */
+  // A deactivated branch is read-only to everyone, platform administrators included, until its
+  // retention period has passed (ScopeStatusGuard on the server). Folded into every write
+  // predicate below rather than tested by each control.
+  const branchClosed = liveDeal.branchActive === false;
+  // The shell already says so when this deal's branch is the one in view (AppShell.ScopedOutlet).
+  const sayBranchClosed = branchClosed && scopeBranch?.id !== liveDeal.firmBranchId;
+
   const mayEdit = (isOwnerAgent || isDealReviewer(user?.role))
     && canEditContent(liveDeal.status, user?.role)
     && canWrite(user?.role)
     // A version is a record of a past moment, so nothing on it is editable by anyone — regardless
     // of what the live deal's status would otherwise allow. Folded into the one predicate the
     // whole screen already reads, rather than added as a second test each consumer must remember.
-    && !snapshot;
+    && !snapshot
+    && !branchClosed;
 
   // Adding evidence answers to a wider rule than editing (canUploadDocuments): the deal's own
   // agent while it is NEW, and branch staff or firm reviewers through REVIEW and ON_HOLD. The
@@ -293,7 +303,8 @@ export function DealReviewScreen() {
   const mayUpload = (isOwnerAgent || !isAgent)
     && canUploadDocuments(liveDeal.status, user?.role)
     && canWrite(user?.role)
-    && !snapshot;
+    && !snapshot
+    && !branchClosed;
 
   const showOverride = canOverride(user?.role);
 
@@ -310,6 +321,7 @@ export function DealReviewScreen() {
   // moves of the deal, and looking at v1 does not make them moves of v1.
   const canUpdateStatus = isDealReviewer(user?.role)
     && !snapshot
+    && !branchClosed
     && (transitionsFrom(liveDeal.status).length > 0 || showOverride);
 
   /*
@@ -325,18 +337,18 @@ export function DealReviewScreen() {
    */
   const signedOff = liveDeal.status === 'VERIFIED' || liveDeal.status === 'CLOSED';
   const canDecideRisk = isDealReviewer(user?.role) && canWrite(user?.role) && !snapshot
-    && !signedOff;
+    && !signedOff && !branchClosed;
 
   // Delay CDD: any role that writes except finance, while the deal is still being worked. The
   // flag itself stays visible after verify or close; only changing it is closed off.
-  const canToggleDelay = canDelayCdd(user?.role) && !snapshot && !signedOff;
+  const canToggleDelay = canDelayCdd(user?.role) && !snapshot && !signedOff && !branchClosed;
 
   const versions = versionsQ.data ?? [];
   // The version the deal stands on: newest first, and not yet worked past.
   const currentVersion = versions.find((v) => v.reopenedAt == null) ?? null;
   // Same gate as the Assurance register's menu; the server only accepts verified or closed deals.
   const canUpdateAssurance = isDealReviewer(user?.role) && canWrite(user?.role)
-    && !snapshot && currentVersion != null
+    && !snapshot && !branchClosed && currentVersion != null
     && (liveDeal.status === 'VERIFIED' || liveDeal.status === 'CLOSED');
   const showVersionLinks = versions.length > 0 && !showingTransactions;
 
@@ -448,7 +460,13 @@ export function DealReviewScreen() {
 
       {/* The version banner already says the page is read-only and why, so this one would be a
           second answer to a question the reader has stopped asking. */}
-      {!mayEdit && !snapshot && (
+      {sayBranchClosed && !snapshot && (
+        <Alert severity="warning" sx={{ py: 0.5 }}>
+          The <strong>{deal.branchName ?? 'branch'}</strong> branch is deactivated, so this deal is
+          read-only. It is kept unchanged for its retention period.
+        </Alert>
+      )}
+      {!mayEdit && !snapshot && !branchClosed && (
         <Alert severity="info" sx={{ py: 0.5 }}>
           This deal is <strong>{dealStatusLabel(deal.status)}</strong>.
           Move it back to in review to make changes.
@@ -563,9 +581,9 @@ export function DealReviewScreen() {
         canUpload={mayUpload}
         // Commenting is not editing — a reviewer may still add a note to a deal they can no
         // longer change. Only the auditor, who writes nothing anywhere, is kept out.
-        canComment={canWrite(user?.role)}
+        canComment={canWrite(user?.role) && !branchClosed}
         // Granting and revoking access is open in every status, to the roles the server allows.
-        canManageAccess={canManageDealAccess(user, liveDeal) && !snapshot}
+        canManageAccess={canManageDealAccess(user, liveDeal) && !snapshot && !branchClosed}
         // The thread as it stood at the sign-off, which also turns off the composer and the live
         // audit tab. Null on the live deal, where the drawer fetches its own.
         frozenNotes={snapshot?.notes ?? null}

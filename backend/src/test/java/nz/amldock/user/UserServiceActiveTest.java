@@ -2,9 +2,11 @@ package nz.amldock.user;
 
 import nz.amldock.auth.RefreshTokenRepository;
 import nz.amldock.auth.TokenStateCache;
+import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
+import nz.amldock.firm.DeactivationSource;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
@@ -225,13 +227,86 @@ class UserServiceActiveTest {
 
     /* ---------- branch scope ---------- */
 
+    /** Off-boarding is for root, the compliance officer and the senior manager. */
     @Test
-    void aSalesManagerMaySuspendAnAgentInTheirOwnBranch() {
+    void aSalesManagerCannotSuspendEvenInTheirOwnBranch() {
         User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
 
-        service.update(salesManager, 50L, null, setActive(false));
+        assertThatThrownBy(() -> service.update(salesManager, 50L, null, setActive(false)))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("activate or deactivate");
+        assertThat(agent.isActive()).isTrue();
+    }
 
+    @Test
+    void norRestoreThem() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+        deactivate(agent);
+
+        assertThatThrownBy(() -> service.update(salesManager, 50L, null, setActive(true)))
+                .isInstanceOf(ForbiddenException.class);
         assertThat(agent.isActive()).isFalse();
+    }
+
+    @Test
+    void norDeleteThem() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+
+        assertThatThrownBy(() -> service.delete(salesManager, 50L, null))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("delete users");
+        verify(users, org.mockito.Mockito.never()).delete(agent);
+    }
+
+    @Test
+    void aSalesManagerMayStillEditTheirAgentsName() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+
+        service.update(salesManager, 50L, null,
+                new UpdateUserRequest("New Name", null, null, null, null, null));
+
+        assertThat(agent.getFullName()).isEqualTo("New Name");
+    }
+
+    /* ---------- deactivated scope ---------- */
+
+    @Test
+    void nobodyIsRestoredInsideADeactivatedBranch() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+        deactivate(agent);
+        FirmBranch closed = branchIn(FIRM_A);
+        closed.setName("Ponsonby");
+        closed.setActive(false);
+        lenient().when(branches.findById(BRANCH_10)).thenReturn(Optional.of(closed));
+
+        assertThatThrownBy(() -> service.update(root, 50L, FIRM_A, setActive(true)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("reactivate the branch");
+        assertThat(agent.isActive()).isFalse();
+    }
+
+    @Test
+    void norInsideADeactivatedEntity() {
+        User officer = target(51L, Role.SENIOR_MANAGER, FIRM_A, null);
+        deactivate(officer);
+        RealEstateFirm closed = new RealEstateFirm();
+        closed.setName("Harbour Realty");
+        closed.setActive(false);
+        lenient().when(firms.findById(FIRM_A)).thenReturn(Optional.of(closed));
+
+        assertThatThrownBy(() -> service.update(root, 51L, FIRM_A, setActive(true)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("reactivate the reporting entity");
+    }
+
+    @Test
+    void suspendingByHandIsRecordedAsManual() {
+        User agent = target(50L, Role.AGENT, FIRM_A, BRANCH_10);
+
+        service.update(amlco, 50L, null, setActive(false));
+
+        assertThat(memberships.in(agent.getId(), FIRM_A).orElseThrow().getDeactivationSource())
+                .isEqualTo(DeactivationSource.MANUAL);
     }
 
     @Test

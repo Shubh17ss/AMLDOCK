@@ -73,7 +73,15 @@ export function FirmsAdminPage() {
                 </TableCell>
                 <TableCell>{firm.nzbn ? <Chip size="small" label={firm.nzbn} /> : '—'}</TableCell>
                 <TableCell>{firm.complianceOfficerEmail ?? '—'}</TableCell>
-                <TableCell><ActiveStatusChip active={firm.active} /></TableCell>
+                <TableCell>
+                  <ActiveStatusChip active={firm.active} />
+                  {!firm.active && firm.deactivatedAt && (
+                    <Typography variant="caption" display="block" sx={{ color: tokens.muted, mt: 0.5 }}>
+                      since {new Date(firm.deactivatedAt).toLocaleDateString(undefined,
+                        { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Typography>
+                  )}
+                </TableCell>
                 <TableCell align="right">
                   <Button size="small" variant="outlined"
                           onClick={() => navigate(`/settings/reporting-entities/${firm.publicId}`)}>

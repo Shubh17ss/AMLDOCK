@@ -2,12 +2,14 @@ package nz.amldock.user;
 
 import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.NotFoundException;
+import nz.amldock.firm.DeactivationSource;
 import nz.amldock.firm.RealEstateFirm;
 import nz.amldock.firm.RealEstateFirmRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -62,15 +64,24 @@ public class MembershipService {
 
     /**
      * The membership a new session for this account starts in: its home, or failing that its
-     * first active one. Empty for ROOT and AUDIT, and for an account active nowhere.
+     * first active one — preferring, either way, an entity that is itself still active, so an
+     * officer serving two entities isn't dropped into the read-only one. Empty for ROOT and
+     * AUDIT, and for an account active nowhere.
      */
     @Transactional(readOnly = true)
     public Optional<FirmMembership> sessionStart(User u) {
         List<FirmMembership> active = activeOf(u.getId());
-        return active.stream()
+        List<FirmMembership> open = active.stream()
+                .filter(m -> firms.findById(m.getRealEstateFirmId()).map(RealEstateFirm::isActive).orElse(false))
+                .toList();
+        return startIn(open, u).or(() -> startIn(active, u));
+    }
+
+    private static Optional<FirmMembership> startIn(List<FirmMembership> candidates, User u) {
+        return candidates.stream()
                 .filter(m -> m.getRealEstateFirmId().equals(u.getRealEstateFirmId()))
                 .findFirst()
-                .or(() -> active.stream().findFirst());
+                .or(() -> candidates.stream().findFirst());
     }
 
     /* ---------- writes ---------- */
@@ -164,20 +175,72 @@ public class MembershipService {
         copyToAccount(u, home);
     }
 
+    /**
+     * Switches off every active membership in a branch, recording {@code source} as the cause so
+     * that switching the branch back on restores exactly these. Returns the accounts touched, whose
+     * sessions the caller ends. Only branch-level roles have a branch, so firm-level staff are
+     * untouched — they keep read access to the branch through their entity.
+     */
+    @Transactional
+    public List<User> deactivateInBranch(Long branchId, DeactivationSource source) {
+        List<User> touched = new ArrayList<>();
+        for (FirmMembership m : memberships.findByFirmBranchIdOrderByUserIdAsc(branchId)) {
+            if (!m.isActive()) continue;
+            User u = users.findByIdForUpdate(m.getUserId())
+                    .orElseThrow(() -> new NotFoundException("User " + m.getUserId() + " not found"));
+            m.deactivate(source);
+            memberships.save(m);
+            syncAccount(u);
+            touched.add(u);
+        }
+        return touched;
+    }
+
+    /**
+     * Switches back on the memberships {@link #deactivateInBranch} switched off for {@code source}.
+     * One a manager switched off by hand stays off. So does one whose account has since become
+     * active somewhere it can't be active alongside — the branch coming back doesn't unseat them
+     * there; it stays marked, and comes back if they are freed and the branch is reactivated again.
+     * Returns how many were restored.
+     */
+    @Transactional
+    public int reactivateInBranch(Long branchId, DeactivationSource source) {
+        int restored = 0;
+        for (FirmMembership m : memberships.findByFirmBranchIdOrderByUserIdAsc(branchId)) {
+            if (m.isActive() || m.getDeactivationSource() != source) continue;
+            User u = users.findByIdForUpdate(m.getUserId())
+                    .orElseThrow(() -> new NotFoundException("User " + m.getUserId() + " not found"));
+            if (blockingMembership(u, m.getRealEstateFirmId(), m.getRole()).isPresent()) continue;
+            m.activate();
+            memberships.save(m);
+            syncAccount(u);
+            restored++;
+        }
+        return restored;
+    }
+
     /* ---------- the rule ---------- */
 
-    private void assertMayBeActive(User u, Long firmId, Role role, boolean revealEntity) {
+    /** The active membership elsewhere that stops one in {@code firmId} as {@code role}, if any. */
+    private Optional<FirmMembership> blockingMembership(User u, Long firmId, Role role) {
         List<FirmMembership> others = memberships.findByUserIdAndActiveTrueOrderByIdAsc(u.getId())
                 .stream()
                 .filter(o -> !o.getRealEstateFirmId().equals(firmId))
                 .toList();
-        if (others.isEmpty()) return;
-        if (role.isFirmLevel() && others.stream().allMatch(o -> o.getRole().isFirmLevel())) return;
-
-        FirmMembership blocking = others.stream()
+        if (others.isEmpty()) return Optional.empty();
+        if (role.isFirmLevel() && others.stream().allMatch(o -> o.getRole().isFirmLevel())) {
+            return Optional.empty();
+        }
+        return Optional.of(others.stream()
                 .filter(o -> !role.isFirmLevel() || !o.getRole().isFirmLevel())
                 .findFirst()
-                .orElse(others.get(0));
+                .orElse(others.get(0)));
+    }
+
+    private void assertMayBeActive(User u, Long firmId, Role role, boolean revealEntity) {
+        Optional<FirmMembership> found = blockingMembership(u, firmId, role);
+        if (found.isEmpty()) return;
+        FirmMembership blocking = found.get();
         String where = revealEntity
                 ? firms.findById(blocking.getRealEstateFirmId()).map(RealEstateFirm::getName)
                         .orElse("another reporting entity")

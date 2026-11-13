@@ -102,7 +102,7 @@ function EntityList({ query, onPick, open }) {
 
   const groups = useMemo(() => firmOptions.map((f, i) => {
     const q = branchQs[i];
-    const branches = (q?.data ?? []).filter((b) => b.active);
+    const branches = q?.data ?? [];
     const firmHit = !query || norm(f.name).includes(query);
     return {
       firm: f,
@@ -126,22 +126,26 @@ function EntityList({ query, onPick, open }) {
             }}>
               <Box component="span" className={flagClass(f.country)} title={f.country}
                    sx={{ fontSize: '1rem', borderRadius: '2px', flexShrink: 0 }} />
-              <Typography noWrap sx={{ fontSize: '0.82rem', fontWeight: 700, color: tokens.ink }}>
+              <Typography noWrap sx={{ fontSize: '0.82rem', fontWeight: 700, color: tokens.ink, flex: 1 }}>
                 {f.name}
               </Typography>
+              {!f.active && (
+                <Typography noWrap sx={{ fontSize: '0.72rem', color: tokens.muted }}>Deactivated · read-only</Typography>
+              )}
             </ListSubheader>
             {loading && (
               <Box sx={{ py: 1.5, pl: 6 }}><CircularProgress size={16} /></Box>
             )}
             {!loading && branches.length === 0 && (
               <Typography sx={{ py: 1.25, pl: 6, fontSize: '0.8rem', color: tokens.muted }}>
-                No active branches
+                No branches
               </Typography>
             )}
             {branches.map((b) => (
               <BranchRow
                 key={b.id}
                 name={b.name}
+                inactive={!b.active}
                 indent
                 selected={firm?.id === f.id && branch?.id === b.id}
                 onClick={() => onPick(f, b)}
@@ -161,13 +165,13 @@ function EntityList({ query, onPick, open }) {
  * there, by ScopeRequiredDialog.
  */
 function MembershipList({ query, onPick, onPickEntity }) {
-  const { branch, activeBranches, memberships, currentFirmId } = useDashboardScope();
+  const { branch, branchOptions, memberships, currentFirmId } = useDashboardScope();
   const current = memberships.find((m) => m.realEstateFirmId === currentFirmId);
   const others = memberships
     .filter((m) => m.realEstateFirmId !== currentFirmId)
     .filter((m) => !query || norm(m.realEstateFirmName).includes(query));
   const currentHit = !query || norm(current?.realEstateFirmName).includes(query);
-  const branches = currentHit ? activeBranches : activeBranches.filter((b) => norm(b.name).includes(query));
+  const branches = currentHit ? branchOptions : branchOptions.filter((b) => norm(b.name).includes(query));
 
   if (!current && others.length === 0) return <Empty text="No matches" />;
 
@@ -177,14 +181,15 @@ function MembershipList({ query, onPick, onPickEntity }) {
         <li>
           <List disablePadding>
             <EntityHeader name={current.realEstateFirmName} country={current.country}
-                          caption={`${roleLabel(current.role)} · current`} />
+                          caption={`${roleLabel(current.role)} · current${current.readOnly ? ' · read-only' : ''}`} />
             {branches.length === 0 && (
               <Typography sx={{ py: 1.25, pl: 6, fontSize: '0.8rem', color: tokens.muted }}>
-                No active branches
+                No branches
               </Typography>
             )}
             {branches.map((b) => (
-              <BranchRow key={b.id} name={b.name} indent selected={branch?.id === b.id} onClick={() => onPick(b)} />
+              <BranchRow key={b.id} name={b.name} inactive={!b.active} indent
+                         selected={branch?.id === b.id} onClick={() => onPick(b)} />
             ))}
           </List>
         </li>
@@ -204,7 +209,7 @@ function MembershipList({ query, onPick, onPickEntity }) {
                sx={{ fontSize: '1rem', borderRadius: '2px', flexShrink: 0 }} />
           <ListItemText
             primary={m.realEstateFirmName}
-            secondary={roleLabel(m.role)}
+            secondary={m.readOnly ? `${roleLabel(m.role)} · deactivated, read-only` : roleLabel(m.role)}
             primaryTypographyProps={{ noWrap: true, fontSize: '0.86rem', fontWeight: 600 }}
             secondaryTypographyProps={{ noWrap: true, fontSize: '0.74rem' }}
           />
@@ -235,10 +240,10 @@ function EntityHeader({ name, country, caption }) {
 
 /** Everyone else: their entity's branches, nothing about the entity itself. */
 function BranchList({ query, onPick }) {
-  const { branch, activeBranches } = useDashboardScope();
-  const rows = activeBranches.filter((b) => !query || norm(b.name).includes(query));
+  const { branch, branchOptions } = useDashboardScope();
+  const rows = branchOptions.filter((b) => !query || norm(b.name).includes(query));
 
-  if (rows.length === 0) return <Empty text={activeBranches.length ? 'No matches' : 'No active branches'} />;
+  if (rows.length === 0) return <Empty text={branchOptions.length ? 'No matches' : 'No branches'} />;
 
   return (
     <List disablePadding>
@@ -246,6 +251,7 @@ function BranchList({ query, onPick }) {
         <BranchRow
           key={b.id}
           name={b.name}
+          inactive={!b.active}
           selected={branch?.id === b.id}
           onClick={() => onPick(b)}
         />
@@ -254,7 +260,8 @@ function BranchList({ query, onPick }) {
   );
 }
 
-function BranchRow({ name, selected, indent = false, onClick }) {
+/** `inactive`: a deactivated branch, still opened to be read through its retention period. */
+function BranchRow({ name, selected, inactive = false, indent = false, onClick }) {
   return (
     <ListItemButton
       selected={selected}
@@ -269,7 +276,9 @@ function BranchRow({ name, selected, indent = false, onClick }) {
       </ListItemIcon>
       <ListItemText
         primary={name}
+        secondary={inactive ? 'Deactivated · read-only' : null}
         primaryTypographyProps={{ noWrap: true, fontSize: '0.86rem', fontWeight: selected ? 700 : 500 }}
+        secondaryTypographyProps={{ noWrap: true, fontSize: '0.72rem' }}
       />
       {selected && <CheckRoundedIcon sx={{ fontSize: 18, color: tokens.blue }} />}
     </ListItemButton>

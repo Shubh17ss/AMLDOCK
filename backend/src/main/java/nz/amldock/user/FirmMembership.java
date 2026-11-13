@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import nz.amldock.common.audit.BaseEntity;
+import nz.amldock.firm.DeactivationSource;
 
 import java.time.Instant;
 
@@ -46,6 +47,11 @@ public class FirmMembership extends BaseEntity {
     @Column(name = "deactivated_at")
     private Instant deactivatedAt;
 
+    /** What switched this membership off; null while active. See V69__offboarding.sql. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deactivation_source", length = 10)
+    private DeactivationSource deactivationSource;
+
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
@@ -57,10 +63,25 @@ public class FirmMembership extends BaseEntity {
     public void setRole(Role role) { this.role = role; }
     public boolean isActive() { return active; }
     public Instant getDeactivatedAt() { return deactivatedAt; }
+    public DeactivationSource getDeactivationSource() { return deactivationSource; }
 
+    /** Switching off this way counts as by hand; use {@link #deactivate} to name another cause. */
     public void setActive(boolean active) {
-        if (this.active == active) return;
-        this.active = active;
-        this.deactivatedAt = active ? null : Instant.now();
+        if (active) activate();
+        else deactivate(DeactivationSource.MANUAL);
+    }
+
+    public void activate() {
+        if (this.active) return;
+        this.active = true;
+        this.deactivatedAt = null;
+        this.deactivationSource = null;
+    }
+
+    public void deactivate(DeactivationSource source) {
+        if (!this.active) return;
+        this.active = false;
+        this.deactivatedAt = Instant.now();
+        this.deactivationSource = source;
     }
 }

@@ -14,5 +14,7 @@ public record MembershipSummary(
         String country,
         Long firmBranchId,
         String firmBranchName,
-        Role role
+        Role role,
+        /** The entity is deactivated: it can be opened, but nothing in it changed. */
+        boolean readOnly
 ) {}

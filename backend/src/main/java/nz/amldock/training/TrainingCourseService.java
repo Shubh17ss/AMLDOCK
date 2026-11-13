@@ -11,6 +11,7 @@ import nz.amldock.document.dto.UploadUrlResponse;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.training.dto.AnswerFeedbackDto;
 import nz.amldock.training.dto.CheckAnswerRequest;
 import nz.amldock.training.dto.CourseAttemptResultDto;
@@ -71,6 +72,7 @@ public class TrainingCourseService {
     private final UserRepository users;
     private final FirmMembershipRepository memberships;
     private final FirmBranchRepository branches;
+    private final ScopeStatusGuard scope;
     private final FileStorageService storage;
     private final AuditService audit;
     private final TrainingNotifier notifier;
@@ -86,6 +88,7 @@ public class TrainingCourseService {
                                  UserRepository users,
                                  FirmMembershipRepository memberships,
                                  FirmBranchRepository branches,
+                                 ScopeStatusGuard scope,
                                  FileStorageService storage,
                                  AuditService audit,
                                  TrainingNotifier notifier,
@@ -100,6 +103,7 @@ public class TrainingCourseService {
         this.users = users;
         this.memberships = memberships;
         this.branches = branches;
+        this.scope = scope;
         this.storage = storage;
         this.audit = audit;
         this.notifier = notifier;
@@ -144,6 +148,7 @@ public class TrainingCourseService {
         UserPrincipal actor = TrainingScope.currentPrincipal();
         Long firmId = TrainingScope.resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
         validateQuestions(req.questions());
 
         TrainingCourse c = new TrainingCourse();
@@ -171,6 +176,7 @@ public class TrainingCourseService {
         TrainingCourse c = mustLoad(id);
         UserPrincipal actor = TrainingScope.currentPrincipal();
         TrainingScope.assertSameFirm(actor, c.getRealEstateFirmId(), "course");
+        scope.assertWritable(c.getRealEstateFirmId(), c.getFirmBranchId());
 
         if (req.name() != null && !req.name().isBlank()) c.setName(req.name().trim());
         if (req.description() != null) c.setDescription(trimToNull(req.description()));
@@ -198,6 +204,7 @@ public class TrainingCourseService {
     @Transactional
     public void delete(Long id) {
         TrainingCourse c = mustLoad(id);
+        scope.assertWritable(c.getRealEstateFirmId(), c.getFirmBranchId());
         UserPrincipal actor = TrainingScope.currentPrincipal();
         if (!actor.role().canDeleteRecords()) {
             throw new ForbiddenException(
@@ -235,6 +242,7 @@ public class TrainingCourseService {
         TrainingCourse c = mustLoad(courseId);
         UserPrincipal actor = TrainingScope.currentPrincipal();
         TrainingScope.assertSameFirm(actor, c.getRealEstateFirmId(), "course");
+        scope.assertWritable(c.getRealEstateFirmId(), c.getFirmBranchId());
 
         TrainingCourseAssignee row = assignees
                 .findByTrainingCourseIdAndUserId(c.getId(), actor.id())
@@ -364,6 +372,7 @@ public class TrainingCourseService {
         TrainingCourse c = mustLoad(courseId);
         UserPrincipal actor = TrainingScope.currentPrincipal();
         TrainingScope.assertSameFirm(actor, c.getRealEstateFirmId(), "course");
+        scope.assertWritable(c.getRealEstateFirmId(), c.getFirmBranchId());
 
         TrainingCourseFile f = new TrainingCourseFile();
         f.setTrainingCourseId(c.getId());
@@ -385,6 +394,7 @@ public class TrainingCourseService {
         TrainingCourse c = mustLoad(courseId);
         UserPrincipal actor = TrainingScope.currentPrincipal();
         TrainingScope.assertSameFirm(actor, c.getRealEstateFirmId(), "course");
+        scope.assertWritable(c.getRealEstateFirmId(), c.getFirmBranchId());
         TrainingCourseFile f = mustLoadFile(courseId, fileId);
 
         if (f.getDocumentStatus() == DocumentStatus.ACTIVE) {
@@ -426,6 +436,7 @@ public class TrainingCourseService {
         TrainingCourse c = mustLoad(courseId);
         UserPrincipal actor = TrainingScope.currentPrincipal();
         TrainingScope.assertSameFirm(actor, c.getRealEstateFirmId(), "course");
+        scope.assertWritable(c.getRealEstateFirmId(), c.getFirmBranchId());
         TrainingCourseFile f = mustLoadFile(courseId, fileId);
 
         if (f.getS3Key() != null) storage.delete(f.getS3Key());

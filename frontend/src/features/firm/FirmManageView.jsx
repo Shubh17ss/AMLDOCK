@@ -29,14 +29,12 @@ export function FirmManageView({ firmId, currentUser, editableIdentity = false, 
   }
   if (firmQ.isError) return <Alert severity="error">Failed to load the reporting entity.</Alert>;
 
-  const canDeactivateBranch = currentUser?.role === 'ROOT' || currentUser?.role === 'SENIOR_MANAGER';
-
   return (
     <Stack spacing={3}>
       <FirmDetailsCard firm={firmQ.data} editableIdentity={editableIdentity} />
       {/* Users filter by the numeric id, which the loaded entity carries. */}
       {showUsers && <FirmUsersCard firmId={firmQ.data.id} currentUser={currentUser} />}
-      <FirmBranchesCard firmRef={firmId} canDeactivate={canDeactivateBranch}
+      <FirmBranchesCard firmRef={firmId} firmActive={firmQ.data?.active !== false}
                         maxBranches={firmQ.data?.numberOfBranches ?? null}
                         adminView={editableIdentity} />
       {/* ROOT's page only, and last: the one action here that takes the entity out of service. */}

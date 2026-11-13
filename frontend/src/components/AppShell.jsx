@@ -1,5 +1,5 @@
 import {
-  AppBar, Box, CircularProgress, Drawer, Stack, Toolbar, Typography,
+  Alert, AppBar, Box, CircularProgress, Drawer, Stack, Toolbar, Typography,
 } from '@mui/material';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -347,7 +347,8 @@ function BrokerGreeting({ user }) {
  * for the page title, and threading the pathname down would couple two unrelated readers.
  */
 function ScopedOutlet() {
-  const { scopeComplete } = useDashboardScope();
+  const { scopeComplete, firm, branch, branchOptions } = useDashboardScope();
+  const { user } = useAuth();
   const { pathname } = useLocation();
   if (!scopeComplete && !isScopeExemptPath(pathname)) {
     return (
@@ -356,7 +357,25 @@ function ScopedOutlet() {
       </Box>
     );
   }
-  return <Outlet />;
+  // Off-boarded scope: the whole entity the session is in, or the branch in view. Said once here
+  // rather than by every page, since every write in it is refused (InactiveScopeReadOnlyFilter,
+  // ScopeStatusGuard).
+  const entityClosed = user?.memberships?.some((m) => m.id === user.activeMembershipId && m.readOnly);
+  const branchClosed = branch && branchOptions.find((b) => b.id === branch.id)?.active === false;
+  return (
+    <>
+      {(entityClosed || branchClosed) && !isScopeExemptPath(pathname) && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {entityClosed
+            ? <><strong>{firm?.name ?? 'This reporting entity'}</strong> is deactivated.</>
+            : <>The <strong>{branch.name}</strong> branch is deactivated.</>}
+          {' '}You can view its records, but nothing can be changed while it is kept for its
+          retention period.
+        </Alert>
+      )}
+      <Outlet />
+    </>
+  );
 }
 
 function roleDisplay(role) {

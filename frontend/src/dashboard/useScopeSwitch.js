@@ -67,7 +67,7 @@ export function useScopeSwitch({ onSwitched } = {}) {
 
     const nextFirm = pickedFirm ?? firm;
     if (fresh) {
-      // The fetched row, not a lookup in `activeBranches`, which may predate the fetch.
+      // The fetched row, not a lookup in `branchOptions`, which may predate the fetch.
       selectScope(nextFirm, fresh);
       setSwitching({ phase: 'done', branchName: fresh.name });
       onSwitchedRef.current?.(nextFirm, fresh);

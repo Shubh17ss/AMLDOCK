@@ -1,5 +1,6 @@
 package nz.amldock.deal.assurance;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.common.exception.BadRequestException;
@@ -95,7 +96,7 @@ class AssuranceServiceTest {
         lenient().when(dealList.scopeForCurrentUser(any(), any())).thenAnswer(inv ->
                 DealScope.forActor(complianceOfficer, inv.getArgument(0), inv.getArgument(1)));
         service = new AssuranceService(dealList, query, deals, versions, issues,
-                new DealLifecycleService(mock(DealUserRepository.class)), branches, users, audit);
+                new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)), branches, users, audit);
 
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);

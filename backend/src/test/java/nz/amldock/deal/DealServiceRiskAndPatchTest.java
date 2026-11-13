@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.Client;
 import nz.amldock.client.ClientRepository;
@@ -83,11 +84,12 @@ class DealServiceRiskAndPatchTest {
         // The real DealRiskService, not a mock: these tests exist to pin the derivation, and a
         // mocked one would assert only that DealService calls something.
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
+                new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, people, edges, audit),
                 ownership, audit, notifier, versions, saleUnits,
                 org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
-                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
+                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class),
+                org.mockito.Mockito.mock(nz.amldock.document.storage.StoredFileReaper.class));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(agent, null, agent.getAuthorities()));
 

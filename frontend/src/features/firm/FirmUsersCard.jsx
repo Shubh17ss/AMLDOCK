@@ -83,14 +83,17 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Delete user">
-                            <IconButton size="small" color="error"
-                              onClick={() => {
-                                if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
-                              }}>
-                              <DeleteOutlineIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          {/* Off-boarding is for root, compliance officers and senior managers. */}
+                          {currentUser?.role !== 'SALES_MANAGER' && (
+                            <Tooltip title="Delete user">
+                              <IconButton size="small" color="error"
+                                onClick={() => {
+                                  if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
+                                }}>
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </>
                       )}
                     </TableCell>

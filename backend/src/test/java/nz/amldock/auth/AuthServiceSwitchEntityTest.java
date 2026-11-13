@@ -2,6 +2,7 @@ package nz.amldock.auth;
 
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
+import nz.amldock.auth.dto.MembershipSummary;
 import nz.amldock.auth.dto.MobileAuthResponse;
 import nz.amldock.auth.otp.OtpService;
 import nz.amldock.common.exception.ApiException;
@@ -157,14 +158,19 @@ class AuthServiceSwitchEntityTest {
                 .hasMessageContaining("no longer active");
     }
 
+    /** Off-boarding: an officer keeps read-only access to a deactivated entity through its hold. */
     @Test
-    void anInactiveEntityCannotBeSwitchedInto() {
+    void aDeactivatedEntityCanStillBeSwitchedIntoReadOnly() {
         firms.findById(FIRM_B).orElseThrow().setActive(false);
 
-        assertThatThrownBy(() -> service.switchEntityMobile(
-                sessionIn(FIRM_A, Role.AML_COMPLIANCE_OFFICER), inB.getId(), null))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("inactive");
+        MobileAuthResponse r = service.switchEntityMobile(
+                sessionIn(FIRM_A, Role.AML_COMPLIANCE_OFFICER), inB.getId(), null);
+
+        assertThat(r.user().realEstateFirmId()).isEqualTo(FIRM_B);
+        assertThat(r.user().memberships())
+                .filteredOn(s -> s.realEstateFirmId().equals(FIRM_B))
+                .singleElement()
+                .extracting(MembershipSummary::readOnly).isEqualTo(true);
     }
 
     /**

@@ -281,9 +281,9 @@ public class AuthService {
         if (!m.isActive()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You are no longer active in that reporting entity");
         }
-        if (!firms.findById(m.getRealEstateFirmId()).map(RealEstateFirm::isActive).orElse(false)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "That reporting entity is inactive");
-        }
+        // A deactivated entity can still be switched into: its firm-level staff keep read-only
+        // access through its retention period (InactiveScopeReadOnlyFilter). Its branch-level
+        // staff never get here — their memberships went off with its branches.
         if (rawRefresh != null && !rawRefresh.isBlank()) {
             refreshRepo.findByTokenHash(sha256(rawRefresh))
                     .filter(rt -> rt.getUserId().equals(u.getId()))
@@ -486,16 +486,16 @@ public class AuthService {
                         active.stream().map(FirmMembership::getFirmBranchId)
                                 .filter(java.util.Objects::nonNull).distinct().toList())
                 .stream().collect(Collectors.toMap(FirmBranch::getId, Function.identity()));
-        // Only entities that are themselves active: an inactive entity cannot be switched into.
+        // A deactivated entity is listed too, marked, since it can be switched into read-only.
         List<MembershipSummary> summaries = active.stream()
-                .filter(x -> firmById.containsKey(x.getRealEstateFirmId())
-                        && firmById.get(x.getRealEstateFirmId()).isActive())
+                .filter(x -> firmById.containsKey(x.getRealEstateFirmId()))
                 .map(x -> {
                     RealEstateFirm f = firmById.get(x.getRealEstateFirmId());
                     FirmBranch b = x.getFirmBranchId() == null ? null : branchById.get(x.getFirmBranchId());
                     return new MembershipSummary(x.getId(), f.getId(), f.getPublicId(), f.getName(),
                             f.getCountry(),
-                            x.getFirmBranchId(), b == null ? null : b.getName(), x.getRole());
+                            x.getFirmBranchId(), b == null ? null : b.getName(), x.getRole(),
+                            !f.isActive());
                 })
                 .toList();
 

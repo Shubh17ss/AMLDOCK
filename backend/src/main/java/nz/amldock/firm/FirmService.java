@@ -1,5 +1,6 @@
 package nz.amldock.firm;
 
+import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
@@ -11,6 +12,7 @@ import nz.amldock.user.UserOnboarding;
 import nz.amldock.user.UserPrincipal;
 import nz.amldock.user.UserService;
 import nz.amldock.user.dto.CreateUserRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -173,7 +175,14 @@ public class FirmService {
             // Firm-level managers may only touch their own firm…
             assertVisible(id);
         }
-        // …and the firm name, NZBN/ABN, country and active flag are platform-admin-only.
+        // A deactivated entity is held as it was, ROOT included: changing its country, say, would
+        // move its retention period.
+        if (!f.isActive()) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    f.getName() + " is deactivated — reactivate it before changing its details");
+        }
+        // …and the firm name, NZBN/ABN and country are platform-admin-only. Status changes go
+        // through deactivate / activate.
         if (isRoot) {
             if (req.country() != null) f.setCountry(normaliseCountry(req.country()));
             if (req.name() != null && !req.name().isBlank() && !req.name().equalsIgnoreCase(f.getName())) {
@@ -189,7 +198,6 @@ public class FirmService {
                 throw new BadRequestException(duplicateNzbn(f.getCountry(), nzbn));
             }
             f.setNzbn(nzbn);
-            if (req.active() != null) f.setActive(req.active());
         }
         if (req.liaisonName() != null) f.setLiaisonName(req.liaisonName());
         if (req.liaisonEmail() != null) f.setLiaisonEmail(req.liaisonEmail());

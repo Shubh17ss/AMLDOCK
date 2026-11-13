@@ -153,7 +153,7 @@ class FirmPublicIdAndBranchCountTest {
         org.mockito.Mockito.when(firms.existsByCountryAndNzbnIgnoreCaseAndIdNot("AU", "9429000000000", FIRM_ID))
                 .thenReturn(true);
         UpdateFirmRequest toAu = new UpdateFirmRequest(null, null, "AU", null, null, null,
-                null, null, null, null, null);
+                null, null, null, null);
         assertThatThrownBy(() -> service.update(FIRM_ID, toAu))
                 .isInstanceOf(nz.amldock.common.exception.BadRequestException.class)
                 .hasMessageContaining("ABN");
@@ -168,7 +168,7 @@ class FirmPublicIdAndBranchCountTest {
 
     private static UpdateFirmRequest request(String liaisonName, Integer numberOfBranches) {
         return new UpdateFirmRequest(null, null, null, liaisonName, null, null,
-                null, null, null, numberOfBranches, null);
+                null, null, null, numberOfBranches);
     }
 
     private void actAs(Role role) {

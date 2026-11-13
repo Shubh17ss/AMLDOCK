@@ -63,6 +63,11 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
       <CardContent>
         <Typography variant="h6" gutterBottom>Reporting Entity details</Typography>
         <Divider sx={{ mb: 2 }} />
+        {!firm.active && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            This reporting entity is deactivated, so its details are read-only.
+          </Alert>
+        )}
         <Box component="form" onSubmit={submit}>
           <Stack spacing={2} sx={{ maxWidth: 520 }}>
             <TextField label="Firm name" value={form.name ?? ''} onChange={ch('name')}
@@ -98,7 +103,7 @@ export function FirmDetailsCard({ firm, editableIdentity = false }) {
             {error && <Alert severity="error">{error}</Alert>}
             <Box>
               <Button type="submit" variant="contained"
-                      disabled={mut.isPending || !mayWrite
+                      disabled={mut.isPending || !mayWrite || !firm.active
                         || isBadEmail(form.liaisonEmail) || isBadEmail(form.complianceOfficerEmail)}>
                 {mut.isPending ? 'Saving…' : 'Save changes'}
               </Button>

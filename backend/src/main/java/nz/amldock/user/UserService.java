@@ -17,6 +17,7 @@ import nz.amldock.user.dto.CreateUserRequest;
 import nz.amldock.user.dto.UpdateUserRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -412,13 +413,16 @@ public class UserService {
                     "A platform account's role can't be changed here — create the account it should be instead");
         }
 
-        // Suspending is the same authority as creating, so it is governed by the same check:
-        // assertCanManage above has already settled the scope (firm-level staff over their own
-        // firm but not their peers, a sales manager over their own branch, ROOT over anyone but
-        // another ROOT). It switches off this entity's membership only; an officer serving two
-        // entities stays live in the other.
+        // Suspending is held to assertCanManage above (firm-level staff over their own firm but not
+        // their peers, ROOT over anyone but another ROOT), less the sales manager, who may manage
+        // their branch's agents but not off-board them. It switches off this entity's membership
+        // only; an officer serving two entities stays live in the other.
         boolean activeNow = m == null ? u.isActive() : m.isActive();
         if (req.active() != null && req.active() != activeNow) {
+            if (actor.role() == Role.SALES_MANAGER) {
+                throw new ForbiddenException("Only a compliance officer, senior manager or platform"
+                        + " administrator can activate or deactivate users");
+            }
             // assertCanManage deliberately lets an actor act on themselves, so that a manager can
             // fix their own name. Suspension is the one thing that must not follow from that: a
             // firm whose only compliance officer switched their own account off has nobody left
@@ -429,6 +433,7 @@ public class UserService {
             if (m == null) {
                 u.setActive(req.active());
             } else {
+                if (req.active()) assertScopeActive(m);
                 memberships.setActive(u, m, req.active(), isRoot || actor.role().seesAllFirms());
             }
             if (!req.active()) endSessions = true;
@@ -465,6 +470,12 @@ public class UserService {
      */
     @Transactional
     public void delete(UserPrincipal actor, Long id, Long firmId) {
+        // Held here too, not only on the controller: a sales manager may manage their branch's
+        // agents but not off-board them, by suspending or by deleting.
+        if (actor.role() == Role.SALES_MANAGER) {
+            throw new ForbiddenException("Only a compliance officer, senior manager or platform"
+                    + " administrator can delete users");
+        }
         User u = findById(id);
         if (u.getRole() == Role.ROOT) {
             throw new ForbiddenException("Administrator accounts can't be deleted");
@@ -577,7 +588,7 @@ public class UserService {
      * controller re-issues a session for the caller afterwards when the change was their own, so
      * they are not signed out by it.
      */
-    private void endSessions(User u) {
+    public void endSessions(User u) {
         u.bumpTokenVersion();
         refreshTokens.revokeAllForUser(u.getId(), Instant.now());
         tokenStates.evictAfterCommit(u.getId());
@@ -643,6 +654,23 @@ public class UserService {
 
     private static void requireBranch(Long branchId, String message) {
         if (branchId == null) throw new BadRequestException(message);
+    }
+
+    /**
+     * Nobody is switched back on inside a deactivated entity or branch: the branch's reactivation
+     * brings its own members back, and a membership switched on ahead of it would let someone in
+     * where nothing may change.
+     */
+    private void assertScopeActive(FirmMembership m) {
+        firms.findById(m.getRealEstateFirmId()).filter(f -> !f.isActive()).ifPresent(f -> {
+            throw new ApiException(HttpStatus.CONFLICT, f.getName()
+                    + " is deactivated — reactivate the reporting entity before its users");
+        });
+        if (m.getFirmBranchId() == null) return;
+        branches.findById(m.getFirmBranchId()).filter(b -> !b.isActive()).ifPresent(b -> {
+            throw new ApiException(HttpStatus.CONFLICT, "Branch " + b.getName()
+                    + " is deactivated — reactivate the branch before its users");
+        });
     }
 
     private void requireActiveFirm(Long firmId) {

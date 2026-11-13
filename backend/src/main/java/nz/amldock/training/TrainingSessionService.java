@@ -7,6 +7,7 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.training.dto.CreateTrainingSessionRequest;
 import nz.amldock.training.dto.TrainingAttendeeDto;
 import nz.amldock.training.dto.TrainingSessionDto;
@@ -52,6 +53,7 @@ public class TrainingSessionService {
     private final UserRepository users;
     private final FirmMembershipRepository memberships;
     private final FirmBranchRepository branches;
+    private final ScopeStatusGuard scope;
     private final AuditService audit;
     private final TrainingNotifier notifier;
 
@@ -61,6 +63,7 @@ public class TrainingSessionService {
                                   UserRepository users,
                                   FirmMembershipRepository memberships,
                                   FirmBranchRepository branches,
+                                  ScopeStatusGuard scope,
                                   AuditService audit,
                                   TrainingNotifier notifier) {
         this.sessions = sessions;
@@ -69,6 +72,7 @@ public class TrainingSessionService {
         this.users = users;
         this.memberships = memberships;
         this.branches = branches;
+        this.scope = scope;
         this.audit = audit;
         this.notifier = notifier;
     }
@@ -105,6 +109,7 @@ public class TrainingSessionService {
         UserPrincipal actor = TrainingScope.currentPrincipal();
         Long firmId = TrainingScope.resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
 
         TrainingSession s = new TrainingSession();
         s.setName(req.name().trim());
@@ -134,6 +139,7 @@ public class TrainingSessionService {
                 .orElseThrow(() -> new NotFoundException("Session " + id + " not found"));
         UserPrincipal actor = TrainingScope.currentPrincipal();
         TrainingScope.assertSameFirm(actor, s.getRealEstateFirmId(), "session");
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
 
         if (req.name() != null && !req.name().isBlank()) s.setName(req.name().trim());
         // Replace semantics: an empty description means the author cleared it, not "unchanged".
@@ -165,6 +171,7 @@ public class TrainingSessionService {
     public void delete(Long id) {
         TrainingSession s = sessions.findById(id)
                 .orElseThrow(() -> new NotFoundException("Session " + id + " not found"));
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
         UserPrincipal actor = TrainingScope.currentPrincipal();
         if (!actor.role().canDeleteRecords()) {
             throw new ForbiddenException(
@@ -199,6 +206,7 @@ public class TrainingSessionService {
             throw new ForbiddenException("Only training managers may record attendance");
         }
         TrainingScope.assertSameFirm(actor, s.getRealEstateFirmId(), "session");
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
 
         TrainingSessionAttendee row = attendees
                 .findByTrainingSessionIdAndUserId(s.getId(), userId)

@@ -1,5 +1,6 @@
 package nz.amldock.document;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.audit.AuditService;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.deal.Deal;
@@ -73,7 +74,7 @@ class DocumentServiceNodeScopeTest {
     @Mock FileStorageService storage;
     // The real thing, not a mock: it has no dependencies, and the status rule these tests are
     // about lives inside it. A mocked lifecycle made the delete cases pass vacuously.
-    final DealLifecycleService lifecycle = new DealLifecycleService(mock(DealUserRepository.class));
+    final DealLifecycleService lifecycle = new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class));
     @Mock BeneficialOwnerService beneficialOwners;
     @Mock AuditService audit;
     @Mock nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;

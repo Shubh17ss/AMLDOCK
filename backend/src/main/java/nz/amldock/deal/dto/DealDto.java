@@ -61,10 +61,12 @@ public record DealDto(
         boolean ownershipTenureTbc,
         // V64 — CDD delayed on this transaction, and since when.
         boolean cddDelayed,
-        Instant cddDelayedAt
+        Instant cddDelayedAt,
+        // V69 — false once the branch is deactivated: the deal is then read-only to everyone.
+        boolean branchActive
 ) {
     public static DealDto from(DealFields d, String publicId, Long firmId, String firmName, String branchName,
-                               PropertyDto property, ClientDto client,
+                               boolean branchActive, PropertyDto property, ClientDto client,
                                String createdByEmail) {
         return new DealDto(
                 publicId, d.getReference(), d.getStatus(), d.getTransactionType(),
@@ -83,6 +85,7 @@ public record DealDto(
                 d.getFaceToFaceIdVerified(), d.getKeyContactNodeId(),
                 d.getRiskValue(), d.isRiskApproved(), d.getRiskOverrideComment(),
                 d.isOwnershipTenureTbc(),
-                d.isCddDelayed(), d.getCddDelayedAt());
+                d.isCddDelayed(), d.getCddDelayedAt(),
+                branchActive);
     }
 }
