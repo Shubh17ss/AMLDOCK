@@ -5,7 +5,9 @@ import {
 } from '@mui/material';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { getDeal } from '../api/deals.js';
 import { listDealVersions } from '../api/dealVersions.js';
+import { useDealScopeGuard } from '../dashboard/useDealScopeGuard.jsx';
 import { SkeletonTable } from '../components/SkeletonTable.jsx';
 import { VersionChip } from '../features/deal/assurance/AssuranceDialog.jsx';
 import { tokens, fonts } from '../theme/theme.js';
@@ -30,9 +32,19 @@ export function DealVersionsPage() {
     enabled: Boolean(dealId),
   });
   const versions = q.data ?? [];
+  // Same key as DealReviewScreen and AppShell, so this is the deal they already fetched.
+  const dealQ = useQuery({
+    queryKey: ['deals', dealId],
+    queryFn: () => getDeal(dealId),
+    enabled: Boolean(dealId),
+    retry: false,
+  });
+  const scopeGuard = useDealScopeGuard(dealQ.data);
+  if (scopeGuard.blocked) return scopeGuard.element;
 
   return (
     <Stack spacing={2}>
+      {scopeGuard.element}
       <Stack direction="row" alignItems="center" spacing={1}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(dealPath)} size="small">
           Deal details

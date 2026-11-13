@@ -41,11 +41,18 @@ class AuthServiceLoginOtpTest {
     @Mock OtpService otp;
 
     AuthService service;
+    final nz.amldock.user.MembershipFixture membershipRows = new nz.amldock.user.MembershipFixture();
+
+    private nz.amldock.user.MembershipService memberships() {
+        return new nz.amldock.user.MembershipService(membershipRows.repo, users,
+                org.mockito.Mockito.mock(nz.amldock.firm.RealEstateFirmRepository.class));
+    }
 
     @BeforeEach
     void setUp() {
         service = new AuthService(authManager, users, jwt, refreshRepo, audit, otp,
-                org.mockito.Mockito.mock(nz.amldock.firm.RealEstateFirmRepository.class), 7, false, "Lax");
+                org.mockito.Mockito.mock(nz.amldock.firm.RealEstateFirmRepository.class), org.mockito.Mockito.mock(nz.amldock.firm.FirmBranchRepository.class),
+                memberships(), 7, false, "Lax");
     }
 
     private User user(Role role, boolean active) {

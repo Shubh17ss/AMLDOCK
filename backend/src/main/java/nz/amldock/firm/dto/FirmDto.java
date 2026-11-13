@@ -2,6 +2,8 @@ package nz.amldock.firm.dto;
 
 import nz.amldock.firm.RealEstateFirm;
 
+import java.time.Instant;
+
 public record FirmDto(
         Long id,
         /** What URLs and the /firms endpoints name the firm by. */
@@ -16,13 +18,15 @@ public record FirmDto(
         String complianceOfficerEmail,
         String complianceOfficerContactNumber,
         Integer numberOfBranches,
-        boolean active
+        boolean active,
+        /** When it was deactivated, starting its retention hold; null while active. */
+        Instant deactivatedAt
 ) {
     public static FirmDto from(RealEstateFirm f) {
         return new FirmDto(f.getId(), f.getPublicId(), f.getName(), f.getNzbn(), f.getCountry(),
                 f.getLiaisonName(), f.getLiaisonEmail(), f.getLiaisonContactNumber(),
                 f.getComplianceOfficerName(), f.getComplianceOfficerEmail(),
                 f.getComplianceOfficerContactNumber(),
-                f.getNumberOfBranches(), f.isActive());
+                f.getNumberOfBranches(), f.isActive(), f.getDeactivatedAt());
     }
 }

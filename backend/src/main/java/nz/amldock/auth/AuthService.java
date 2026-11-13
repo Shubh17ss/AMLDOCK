@@ -5,14 +5,20 @@ import jakarta.servlet.http.HttpServletResponse;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.auth.dto.AuthResponse;
+import nz.amldock.auth.dto.MembershipSummary;
 import nz.amldock.auth.dto.MobileAuthResponse;
 import nz.amldock.auth.otp.OtpPurpose;
 import nz.amldock.auth.otp.OtpService;
 import nz.amldock.common.exception.ApiException;
+import nz.amldock.firm.FirmBranch;
+import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.firm.RealEstateFirm;
 import nz.amldock.firm.RealEstateFirmRepository;
+import nz.amldock.user.FirmMembership;
+import nz.amldock.user.MembershipService;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
+import nz.amldock.user.UserPrincipal;
 import nz.amldock.user.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +38,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthService {
@@ -47,6 +57,8 @@ public class AuthService {
     private final AuditService audit;
     private final OtpService otp;
     private final RealEstateFirmRepository firms;
+    private final FirmBranchRepository branches;
+    private final MembershipService memberships;
     private final Duration refreshTtl;
     private final SecureRandom rng = new SecureRandom();
 
@@ -60,6 +72,8 @@ public class AuthService {
                        AuditService audit,
                        OtpService otp,
                        RealEstateFirmRepository firms,
+                       FirmBranchRepository branches,
+                       MembershipService memberships,
                        @Value("${JWT_REFRESH_TTL_DAYS:7}") long refreshTtlDays,
                        @Value("${COOKIE_SECURE:true}") boolean secureCookies,
                        @Value("${COOKIE_SAME_SITE:Lax}") String sameSite) {
@@ -72,6 +86,8 @@ public class AuthService {
         this.audit = audit;
         this.otp = otp;
         this.firms = firms;
+        this.branches = branches;
+        this.memberships = memberships;
         this.refreshTtl = Duration.ofDays(refreshTtlDays);
     }
 
@@ -118,10 +134,11 @@ public class AuthService {
      */
     public AuthResponse verifyLoginOtp(String email, String code, HttpServletResponse response) {
         User u = checkLoginOtp(email, code);
-        issueCookies(u, response);
+        FirmMembership m = sessionStart(u);
+        issueCookies(u, m, response);
         audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
                 "User " + u.getEmail() + " logged in via OTP");
-        return toAuthResponse(u);
+        return toAuthResponse(u, m);
     }
 
     /**
@@ -130,7 +147,7 @@ public class AuthService {
      */
     public MobileAuthResponse verifyLoginOtpMobile(String email, String code) {
         User u = checkLoginOtp(email, code);
-        MobileAuthResponse tokens = mintMobileTokens(u);
+        MobileAuthResponse tokens = mintMobileTokens(u, sessionStart(u));
         audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
                 "User " + u.getEmail() + " logged in via OTP (mobile app)");
         return tokens;
@@ -205,10 +222,10 @@ public class AuthService {
                     "Admin OTP verification failed for " + u.getEmail());
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid or expired code");
         }
-        issueCookies(u, response);
+        issueCookies(u, null, response);
         audit.recordForUser(u.getId(), u.getEmail(), AuditAction.USER_LOGIN, "User", u.getId(),
                 "ROOT " + u.getEmail() + " logged in via password + OTP");
-        return toAuthResponse(u);
+        return toAuthResponse(u, null);
     }
 
     private User activeNonRoot(String email) {
@@ -222,15 +239,60 @@ public class AuthService {
 
     @Transactional
     public AuthResponse refresh(String rawRefresh, HttpServletResponse response) {
-        User u = rotateRefresh(rawRefresh);
-        issueCookies(u, response);
-        return toAuthResponse(u);
+        Session s = rotateRefresh(rawRefresh);
+        issueCookies(s.user(), s.membership(), response);
+        return toAuthResponse(s.user(), s.membership());
     }
 
     /** Mobile refresh: rotates the body-supplied token and returns the new pair in the body. */
     @Transactional
     public MobileAuthResponse refreshMobile(String rawRefresh) {
-        return mintMobileTokens(rotateRefresh(rawRefresh));
+        Session s = rotateRefresh(rawRefresh);
+        return mintMobileTokens(s.user(), s.membership());
+    }
+
+    /* ---------- moving a session between reporting entities ---------- */
+
+    /**
+     * Moves the caller's web session into another entity they are active in: a fresh cookie pair
+     * minted from that membership, the old refresh token revoked, and the membership made the
+     * account's home so the next sign-in starts there too. Every role and scope check downstream
+     * reads the token, so this is all an entity switch needs to be.
+     */
+    @Transactional
+    public AuthResponse switchEntity(UserPrincipal principal, Long membershipId, String rawRefresh,
+                                     HttpServletResponse response) {
+        Session s = switchTo(principal, membershipId, rawRefresh);
+        issueCookies(s.user(), s.membership(), response);
+        return toAuthResponse(s.user(), s.membership());
+    }
+
+    /** The mobile app's switch: same checks, tokens in the body. */
+    @Transactional
+    public MobileAuthResponse switchEntityMobile(UserPrincipal principal, Long membershipId, String rawRefresh) {
+        Session s = switchTo(principal, membershipId, rawRefresh);
+        return mintMobileTokens(s.user(), s.membership());
+    }
+
+    private Session switchTo(UserPrincipal principal, Long membershipId, String rawRefresh) {
+        User u = users.findById(principal.id())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "User not found"));
+        FirmMembership m = memberships.ownedBy(u.getId(), membershipId);
+        if (!m.isActive()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You are no longer active in that reporting entity");
+        }
+        // A deactivated entity can still be switched into: its firm-level staff keep read-only
+        // access through its retention period (InactiveScopeReadOnlyFilter). Its branch-level
+        // staff never get here — their memberships went off with its branches.
+        if (rawRefresh != null && !rawRefresh.isBlank()) {
+            refreshRepo.findByTokenHash(sha256(rawRefresh))
+                    .filter(rt -> rt.getUserId().equals(u.getId()))
+                    .ifPresent(rt -> rt.setRevokedAt(Instant.now()));
+        }
+        memberships.makeHome(u, m);
+        audit.recordForUser(u.getId(), u.getEmail(), AuditAction.ENTITY_SWITCHED, "User", u.getId(),
+                "Switched to reporting entity " + m.getRealEstateFirmId() + " as " + m.getRole());
+        return new Session(u, m);
     }
 
     /**
@@ -258,8 +320,16 @@ public class AuthService {
         }
     }
 
-    /** Validates and revokes a refresh token, returning its active owner. Caller issues the new pair. */
-    private User rotateRefresh(String rawRefresh) {
+    /** A session: the account, and the membership it is in (null for ROOT and AUDIT). */
+    private record Session(User user, FirmMembership membership) {}
+
+    /**
+     * Validates and revokes a refresh token, returning its active owner and the entity the session
+     * was in. Caller issues the new pair. A session whose membership has since been switched off
+     * falls back to wherever a fresh sign-in would start — though switching one off also revokes
+     * every refresh token the account holds, so in practice that is a token older than V68.
+     */
+    private Session rotateRefresh(String rawRefresh) {
         if (rawRefresh == null || rawRefresh.isBlank()) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Missing refresh token");
         }
@@ -274,16 +344,22 @@ public class AuthService {
         if (!u.isActive()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "User is disabled");
         }
+        FirmMembership m = rt.getMembershipId() == null ? null
+                : memberships.ownedBy(u.getId(), rt.getMembershipId());
+        if (m == null || !m.isActive()) {
+            m = sessionStart(u);
+        }
         // rotate
         rt.setRevokedAt(Instant.now());
-        return u;
+        return new Session(u, m);
     }
 
+    /** The session's own entity, from the token — not the account's home, which another device may have moved. */
     @Transactional(readOnly = true)
-    public AuthResponse me(Long userId) {
-        User u = users.findById(userId)
+    public AuthResponse me(UserPrincipal principal) {
+        User u = users.findById(principal.id())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "User not found"));
-        return toAuthResponse(u);
+        return toAuthResponse(u, sessionIn(u, principal.realEstateFirmId()));
     }
 
     /**
@@ -300,9 +376,20 @@ public class AuthService {
      * being logged out for it would read as something having gone wrong.
      */
     @Transactional
-    public AuthResponse reissueSession(User u, HttpServletResponse response) {
-        issueCookies(u, response);
-        return toAuthResponse(u);
+    public AuthResponse reissueSession(User u, UserPrincipal current, HttpServletResponse response) {
+        FirmMembership m = sessionIn(u, current.realEstateFirmId());
+        issueCookies(u, m, response);
+        return toAuthResponse(u, m);
+    }
+
+    /** Where a new session starts: the home membership, or the first active one. Null for ROOT/AUDIT. */
+    private FirmMembership sessionStart(User u) {
+        return memberships.sessionStart(u).orElse(null);
+    }
+
+    /** The active membership in {@code firmId}, else where a new session would start. */
+    private FirmMembership sessionIn(User u, Long firmId) {
+        return memberships.activeIn(u.getId(), firmId).orElseGet(() -> sessionStart(u));
     }
 
     @Transactional
@@ -321,30 +408,39 @@ public class AuthService {
 
     private record TokenPair(String access, String refresh) {}
 
-    /** Signs an access token and stores a new hashed refresh token for the user. */
-    private TokenPair mintTokens(User u) {
-        String access = jwt.generateAccessToken(u.getId(), u.getEmail(), u.getRole(),
-                u.getRealEstateFirmId(), u.getFirmBranchId(), u.getTokenVersion());
+    /**
+     * Signs an access token and stores a new hashed refresh token for the user. Role, firm and
+     * branch come from the membership the session is in, so every check downstream — the
+     * {@code @PreAuthorize} roles, DealScope, the firm and branch guards — answers for that entity.
+     * ROOT and AUDIT have no membership and are described by their account.
+     */
+    private TokenPair mintTokens(User u, FirmMembership m) {
+        Role role = m == null ? u.getRole() : m.getRole();
+        Long firmId = m == null ? u.getRealEstateFirmId() : m.getRealEstateFirmId();
+        Long branchId = m == null ? u.getFirmBranchId() : m.getFirmBranchId();
+        String access = jwt.generateAccessToken(u.getId(), u.getEmail(), role, firmId, branchId,
+                u.getTokenVersion());
         String rawRefresh = newRandomToken();
         RefreshToken rt = new RefreshToken();
         rt.setUserId(u.getId());
+        rt.setMembershipId(m == null ? null : m.getId());
         rt.setTokenHash(sha256(rawRefresh));
         rt.setExpiresAt(Instant.now().plus(refreshTtl));
         refreshRepo.save(rt);
         return new TokenPair(access, rawRefresh);
     }
 
-    private void issueCookies(User u, HttpServletResponse response) {
-        TokenPair t = mintTokens(u);
+    private void issueCookies(User u, FirmMembership m, HttpServletResponse response) {
+        TokenPair t = mintTokens(u, m);
         addCookie(response, JwtAuthenticationFilter.ACCESS_COOKIE, t.access(),
                 (int) jwt.accessTtl().toSeconds(), "/");
         addCookie(response, REFRESH_COOKIE, t.refresh(),
                 (int) refreshTtl.toSeconds(), "/api/auth");
     }
 
-    private MobileAuthResponse mintMobileTokens(User u) {
-        TokenPair t = mintTokens(u);
-        return new MobileAuthResponse(t.access(), t.refresh(), jwt.accessTtl().toSeconds(), toAuthResponse(u));
+    private MobileAuthResponse mintMobileTokens(User u, FirmMembership m) {
+        TokenPair t = mintTokens(u, m);
+        return new MobileAuthResponse(t.access(), t.refresh(), jwt.accessTtl().toSeconds(), toAuthResponse(u, m));
     }
 
     private void clearCookies(HttpServletResponse response) {
@@ -377,13 +473,39 @@ public class AuthService {
         }
     }
 
-    private AuthResponse toAuthResponse(User u) {
+    private AuthResponse toAuthResponse(User u, FirmMembership m) {
+        Role role = m == null ? u.getRole() : m.getRole();
+        Long firmId = m == null ? u.getRealEstateFirmId() : m.getRealEstateFirmId();
+        Long branchId = m == null ? u.getFirmBranchId() : m.getFirmBranchId();
+
+        List<FirmMembership> active = memberships.activeOf(u.getId());
+        Map<Long, RealEstateFirm> firmById = firms.findAllById(
+                        active.stream().map(FirmMembership::getRealEstateFirmId).distinct().toList())
+                .stream().collect(Collectors.toMap(RealEstateFirm::getId, Function.identity()));
+        Map<Long, FirmBranch> branchById = branches.findAllById(
+                        active.stream().map(FirmMembership::getFirmBranchId)
+                                .filter(java.util.Objects::nonNull).distinct().toList())
+                .stream().collect(Collectors.toMap(FirmBranch::getId, Function.identity()));
+        // A deactivated entity is listed too, marked, since it can be switched into read-only.
+        List<MembershipSummary> summaries = active.stream()
+                .filter(x -> firmById.containsKey(x.getRealEstateFirmId()))
+                .map(x -> {
+                    RealEstateFirm f = firmById.get(x.getRealEstateFirmId());
+                    FirmBranch b = x.getFirmBranchId() == null ? null : branchById.get(x.getFirmBranchId());
+                    return new MembershipSummary(x.getId(), f.getId(), f.getPublicId(), f.getName(),
+                            f.getCountry(),
+                            x.getFirmBranchId(), b == null ? null : b.getName(), x.getRole(),
+                            !f.isActive());
+                })
+                .toList();
+
         // The firm's public id rides along so a client can name the firm in a URL or call
         // /firms/{ref} without first listing firms to find it.
-        String firmPublicId = u.getRealEstateFirmId() == null ? null
-                : firms.findById(u.getRealEstateFirmId()).map(RealEstateFirm::getPublicId).orElse(null);
-        return new AuthResponse(u.getId(), u.getEmail(), u.getFullName(), u.getRole(),
-                u.getRealEstateFirmId(), firmPublicId, u.getFirmBranchId());
+        String firmPublicId = firmId == null ? null
+                : firmById.containsKey(firmId) ? firmById.get(firmId).getPublicId()
+                : firms.findById(firmId).map(RealEstateFirm::getPublicId).orElse(null);
+        return new AuthResponse(u.getId(), u.getEmail(), u.getFullName(), role,
+                firmId, firmPublicId, branchId, m == null ? null : m.getId(), summaries);
     }
 
     /** An unauthenticated caller chooses this value; an email address is at most 254 characters. */

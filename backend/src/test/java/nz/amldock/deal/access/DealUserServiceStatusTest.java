@@ -1,5 +1,6 @@
 package nz.amldock.deal.access;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.deal.Deal;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -52,7 +54,7 @@ class DealUserServiceStatusTest {
 
     @BeforeEach
     void setUp() {
-        service = new DealUserService(dealUsers, deals, users, dealService, audit);
+        service = new DealUserService(dealUsers, deals, users, dealService, audit, mock(ScopeStatusGuard.class));
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);

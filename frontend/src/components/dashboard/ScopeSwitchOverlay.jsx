@@ -15,10 +15,11 @@ const rise = keyframes`
 `;
 
 /**
- * Full-screen, blurred hold while the scope changes. `phase` is 'switching' (spinner), 'done'
+ * Full-screen, blurred hold while the scope changes — a branch, or with `entity` a whole reporting
+ * entity, in which case `branchName` carries the entity's name. `phase` is 'switching' (spinner), 'done'
  * (tick, "Switched to …") or 'failed' (cross, scope left as it was); null hides it.
  */
-export function ScopeSwitchOverlay({ phase, branchName, error }) {
+export function ScopeSwitchOverlay({ phase, branchName, error, entity = false }) {
   const done = phase === 'done';
   const failed = phase === 'failed';
 
@@ -52,7 +53,7 @@ export function ScopeSwitchOverlay({ phase, branchName, error }) {
           fontSize: '1.05rem', fontWeight: 600, color: tokens.ink,
           animation: `${rise} 260ms ease-out both`,
         }}>
-          {phase === 'switching' && 'Switching branch'}
+          {phase === 'switching' && (entity ? 'Switching reporting entity' : 'Switching branch')}
           {done && <>Switched to <Box component="span" sx={{ color: tokens.blue }}>{branchName}</Box></>}
           {failed && `Couldn’t switch to ${branchName}`}
         </Typography>

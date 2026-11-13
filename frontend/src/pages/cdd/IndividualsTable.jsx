@@ -1,5 +1,5 @@
 import {
-  Box, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography,
+  Box, Chip, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography,
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { countryName, flagClass } from '../../data/countries.js';
@@ -50,6 +50,7 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
             <TableCell>Date of birth</TableCell>
             <TableCell>Country of residence</TableCell>
             <TableCell>Property</TableCell>
+            <TableCell>Party</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -84,11 +85,22 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
                   </Box>
                 </Tooltip>
               </TableCell>
+              <TableCell>
+                {/* Which side of the deal they stand on. A purchaser is recorded after the deal
+                    closed as sold, outside the sign-off, so it is the one worth marking. */}
+                {r.side === 'PURCHASER' ? (
+                  <Chip label="Purchaser" size="small" color="primary" variant="outlined" />
+                ) : (
+                  <Typography component="span" variant="body2" sx={{ color: tokens.muted }}>
+                    Vendor
+                  </Typography>
+                )}
+              </TableCell>
             </TableRow>
           ))}
           {!loading && rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} align="center" sx={{ py: 5, color: tokens.muted }}>
+              <TableCell colSpan={6} align="center" sx={{ py: 5, color: tokens.muted }}>
                 {emptyMessage}
               </TableCell>
             </TableRow>

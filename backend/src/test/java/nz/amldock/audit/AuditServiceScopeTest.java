@@ -1,5 +1,6 @@
 package nz.amldock.audit;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealLifecycleService;
@@ -46,6 +47,7 @@ class AuditServiceScopeTest {
     @Mock UserRepository users;
 
     AuditService service;
+    final nz.amldock.user.MembershipFixture memberships = new nz.amldock.user.MembershipFixture();
 
     // Firm 1's compliance officer. Deal 500 lives in branch 10, which belongs to firm 2.
     final UserPrincipal firmOneOfficer =
@@ -53,7 +55,8 @@ class AuditServiceScopeTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuditService(repo, deals, branches, new DealLifecycleService(mock(DealUserRepository.class)), users);
+        service = new AuditService(repo, deals, branches, new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)), users,
+                memberships.repo);
     }
 
     @AfterEach

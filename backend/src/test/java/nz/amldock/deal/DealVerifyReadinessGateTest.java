@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
 import nz.amldock.common.exception.BadRequestException;
@@ -69,11 +70,12 @@ class DealVerifyReadinessGateTest {
     void setUp() {
         service = new DealService(deals, mock(PropertyRepository.class), mock(ClientRepository.class),
                 branches, mock(RealEstateFirmRepository.class), mock(UserRepository.class),
-                new DealLifecycleService(mock(DealUserRepository.class)), dealNotes,
+                new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)), dealNotes,
                 mock(BeneficialOwnerService.class), mock(DealRiskService.class),
                 mock(nz.amldock.ownership.OwnershipService.class), audit, notifier, versions,
                 mock(nz.amldock.deal.sale.DealSaleUnitRepository.class), readiness,
-                mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
+                mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class),
+                mock(nz.amldock.document.storage.StoredFileReaper.class));
 
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);

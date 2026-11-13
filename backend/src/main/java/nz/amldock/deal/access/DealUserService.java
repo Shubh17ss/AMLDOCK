@@ -8,6 +8,7 @@ import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealRepository;
 import nz.amldock.deal.DealService;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.deal.access.dto.DealUserDto;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
@@ -52,14 +53,16 @@ public class DealUserService {
     private final UserRepository users;
     private final DealService dealService;
     private final AuditService audit;
+    private final ScopeStatusGuard scope;
 
     public DealUserService(DealUserRepository dealUsers, DealRepository deals, UserRepository users,
-                           DealService dealService, AuditService audit) {
+                           DealService dealService, AuditService audit, ScopeStatusGuard scope) {
         this.dealUsers = dealUsers;
         this.deals = deals;
         this.users = users;
         this.dealService = dealService;
         this.audit = audit;
+        this.scope = scope;
     }
 
     /**
@@ -193,6 +196,7 @@ public class DealUserService {
                     "Only the broker who created this deal, their sales manager, or a compliance "
                             + "officer or senior manager of the firm may change who can see it");
         }
+        scope.assertBranchWritable(deal.getFirmBranchId());
         return actor;
     }
 

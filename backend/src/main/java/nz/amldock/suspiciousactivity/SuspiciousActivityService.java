@@ -10,6 +10,7 @@ import nz.amldock.document.dto.DownloadUrlResponse;
 import nz.amldock.document.dto.UploadUrlResponse;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.suspiciousactivity.dto.CreateSuspiciousActivityRequest;
 import nz.amldock.suspiciousactivity.dto.SuspiciousActivityDto;
@@ -44,6 +45,7 @@ public class SuspiciousActivityService {
     private final SuspiciousActivityRepository activities;
     private final UserRepository users;
     private final FirmBranchRepository branches;
+    private final ScopeStatusGuard scope;
     private final FileStorageService storage;
     private final AuditService audit;
     private final long maxBytes;
@@ -53,6 +55,7 @@ public class SuspiciousActivityService {
     public SuspiciousActivityService(SuspiciousActivityRepository activities,
                                      UserRepository users,
                                      FirmBranchRepository branches,
+                                     ScopeStatusGuard scope,
                                      FileStorageService storage,
                                      AuditService audit,
                                      @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
@@ -61,6 +64,7 @@ public class SuspiciousActivityService {
         this.activities = activities;
         this.users = users;
         this.branches = branches;
+        this.scope = scope;
         this.storage = storage;
         this.audit = audit;
         this.maxBytes = maxBytes;
@@ -82,6 +86,7 @@ public class SuspiciousActivityService {
         UserPrincipal actor = currentPrincipal();
         Long firmId = resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
 
         SuspiciousActivity s = new SuspiciousActivity();
         s.setSuspicionType(req.suspicionType());
@@ -125,6 +130,7 @@ public class SuspiciousActivityService {
                 .orElseThrow(() -> new NotFoundException("Suspicious activity " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
         assertSameScope(actor, s);
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
 
         if (s.getDocumentStatus() == DocumentStatus.ACTIVE) {
             if (!actor.role().canDeleteRecords()) {
@@ -157,6 +163,7 @@ public class SuspiciousActivityService {
         // Scope first: the idempotent return below must not hand another firm's entry back.
         UserPrincipal actor = currentPrincipal();
         assertSameScope(actor, s);
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
         if (s.getDocumentStatus() == DocumentStatus.ACTIVE) {
             return toDto(s); // idempotent
         }
@@ -204,6 +211,7 @@ public class SuspiciousActivityService {
                     "Only ROOT, a senior manager or a compliance officer may delete a register entry");
         }
         if (actor.role() != Role.ROOT) assertSameScope(actor, s);
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
 
         if (s.getS3Key() != null) {
             storage.delete(s.getS3Key());

@@ -22,6 +22,7 @@ import nz.amldock.ownership.OwnershipNodeRepository;
 import nz.amldock.ownership.VerificationReset;
 import nz.amldock.ownership.OwnershipStructure;
 import nz.amldock.ownership.OwnershipStructureRepository;
+import nz.amldock.ownership.StructureSide;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
@@ -93,7 +94,7 @@ public class DocumentService {
         if (req.sizeBytes() > maxBytes) {
             throw new BadRequestException("File exceeds " + (maxBytes / 1024 / 1024) + " MB limit");
         }
-        Deal deal = mustLoadDealForWrite(req.dealId());
+        Deal deal = mustLoadDealForWrite(req.dealId(), req.ownershipNodeId());
         UserPrincipal actor = currentPrincipal();
 
         Long nodeId = null;
@@ -165,7 +166,7 @@ public class DocumentService {
         // Again here, not only at presign: the deal can be verified between the two calls, and
         // confirming is the step that makes the document live and creates its provisional owner.
         if (doc.getDealId() != null) {
-            mustLoadDealForWrite(doc.getDealId());
+            mustLoadDealForWrite(doc.getDealId(), doc.getOwnershipNodeId());
         }
 
         // Moves the bytes off the key the presigned URL writes to, so that URL can no longer
@@ -391,6 +392,12 @@ public class DocumentService {
             }
             assertAccepts(target, type);
         }
+        // Each side's evidence stays on that side. The write gate above was decided by where the
+        // document is now, so a move across would carry it past the other side's rule.
+        if (isPurchaserNode(d.getOwnershipNodeId()) != isPurchaserNode(targetNodeId)) {
+            throw new BadRequestException(
+                    "A document cannot move between the vendor's and the purchaser's records");
+        }
 
         d.setOwnershipNodeId(target == null ? null : target.getId());
         d.setDocumentType(type);
@@ -435,6 +442,10 @@ public class DocumentService {
             throw new ForbiddenException(
                     "Only the uploader, a compliance officer, a senior manager or ROOT may change this document");
         }
+        // ROOT included: the exemption below is from the firm check, not from the branch's hold.
+        if (actor.role() == Role.ROOT && d.getDealId() != null) {
+            deals.findById(d.getDealId()).ifPresent(lifecycle::assertBranchWritable);
+        }
         // Still status-checked for everyone firm-scoped: assertEditable is the codebase's
         // answer to "may this actor write to this deal", and it now admits reviewers through
         // REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the
@@ -448,7 +459,11 @@ public class DocumentService {
                     .orElseThrow(() -> new NotFoundException("Deal " + d.getDealId() + " not found"));
             Long firmId = branches.findById(deal.getFirmBranchId())
                     .map(FirmBranch::getRealEstateFirmId).orElse(null);
-            if (actor.role().isFirmLevel()) {
+            if (isPurchaserNode(d.getOwnershipNodeId())) {
+                // The purchaser's evidence answers to the purchaser's rule, for uploader and
+                // reviewer alike: open while the deal is closed as sold, shut otherwise.
+                lifecycle.assertPurchaserEditable(deal, actor, firmId);
+            } else if (actor.role().isFirmLevel()) {
                 lifecycle.assertEditable(deal, actor, firmId);
             } else {
                 lifecycle.assertCanUploadDocuments(deal, actor, firmId);
@@ -481,16 +496,34 @@ public class DocumentService {
         }
     }
 
-    private Deal mustLoadDealForWrite(Long dealId) {
+    /**
+     * The write gate for adding a document, filed on {@code nodeId} or (null) on the deal itself.
+     *
+     * <p>A real write gate: read scope plus the deal's status (see canUploadDocuments). It used to
+     * be read scope alone, which let anyone who could open a deal add documents, and the
+     * provisional owners a scan creates, to a VERIFIED or CLOSED one (C-07). A document filed on
+     * the purchaser answers to the purchaser's rule instead, which is open only on a CLOSED deal.
+     */
+    private Deal mustLoadDealForWrite(Long dealId, Long nodeId) {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new BadRequestException("Deal " + dealId + " not found"));
-        // A real write gate: read scope plus the deal's status (see canUploadDocuments). It used to
-        // be read scope alone, which let anyone who could open a deal add documents, and the
-        // provisional owners a scan creates, to a VERIFIED or CLOSED one (C-07).
         Long firmId = branches.findById(deal.getFirmBranchId())
                 .map(FirmBranch::getRealEstateFirmId).orElse(null);
-        lifecycle.assertCanUploadDocuments(deal, currentPrincipal(), firmId);
+        if (isPurchaserNode(nodeId)) {
+            lifecycle.assertPurchaserEditable(deal, currentPrincipal(), firmId);
+        } else {
+            lifecycle.assertCanUploadDocuments(deal, currentPrincipal(), firmId);
+        }
         return deal;
+    }
+
+    /** Whether a node is on a purchaser's structure. Null (the deal itself) and unknown ids are not. */
+    private boolean isPurchaserNode(Long nodeId) {
+        if (nodeId == null) return false;
+        return ownershipNodes.findById(nodeId)
+                .flatMap(n -> ownershipStructures.findById(n.getOwnershipStructureId()))
+                .map(s -> s.getSide() == StructureSide.PURCHASER)
+                .orElse(false);
     }
 
     private Deal mustLoadDealForRead(Long dealId) {

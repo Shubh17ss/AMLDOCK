@@ -237,7 +237,7 @@ class IndividualServiceTest {
         ReflectionTestUtils.setField(deal, "reference", reference);
         PropertyDto p = new PropertyDto(PROPERTY_ID, "14 Ridgeway Rd", null, "Remuera",
                 "Auckland", null, "NZ", null, null, null, null, null, null);
-        return DealDto.from(deal, "abcdefghjkmn", 100L, "Bayleys", "Remuera", p, null, "agent@example.com");
+        return DealDto.from(deal, "abcdefghjkmn", 100L, "Bayleys", "Remuera", true, p, null, "agent@example.com");
     }
 
     private static Property property() {

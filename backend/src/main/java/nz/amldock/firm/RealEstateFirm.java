@@ -9,6 +9,8 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import nz.amldock.common.audit.BaseEntity;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "real_estate_firm")
 public class RealEstateFirm extends BaseEntity {
@@ -56,6 +58,10 @@ public class RealEstateFirm extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /** Starts the retention hold. See RetentionPolicy. */
+    @Column(name = "deactivated_at")
+    private Instant deactivatedAt;
+
     public Long getId() { return id; }
     public String getPublicId() { return publicId; }
 
@@ -84,5 +90,11 @@ public class RealEstateFirm extends BaseEntity {
     public Integer getNumberOfBranches() { return numberOfBranches; }
     public void setNumberOfBranches(Integer numberOfBranches) { this.numberOfBranches = numberOfBranches; }
     public boolean isActive() { return active; }
-    public void setActive(boolean active) { this.active = active; }
+    public Instant getDeactivatedAt() { return deactivatedAt; }
+
+    public void setActive(boolean active) {
+        if (this.active == active) return;
+        this.active = active;
+        this.deactivatedAt = active ? null : Instant.now();
+    }
 }

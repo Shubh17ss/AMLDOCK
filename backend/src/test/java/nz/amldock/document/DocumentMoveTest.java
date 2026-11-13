@@ -1,5 +1,6 @@
 package nz.amldock.document;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
@@ -63,7 +64,7 @@ class DocumentMoveTest {
     @Mock OwnershipStructureRepository structures;
     @Mock UserRepository users;
     @Mock FileStorageService storage;
-    final DealLifecycleService lifecycle = new DealLifecycleService(mock(DealUserRepository.class));
+    final DealLifecycleService lifecycle = new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class));
     @Mock BeneficialOwnerService beneficialOwners;
     @Mock AuditService audit;
     @Mock nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;

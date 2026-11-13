@@ -39,7 +39,7 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
   };
 
   const deleteMut = useMutation({
-    mutationFn: (id) => deleteUser(id),
+    mutationFn: (id) => deleteUser(id, firmId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
     onError: (err) => window.alert(err.response?.data?.message || 'Failed to delete user'),
   });
@@ -83,14 +83,17 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Delete user">
-                            <IconButton size="small" color="error"
-                              onClick={() => {
-                                if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
-                              }}>
-                              <DeleteOutlineIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          {/* Off-boarding is for root, compliance officers and senior managers. */}
+                          {currentUser?.role !== 'SALES_MANAGER' && (
+                            <Tooltip title="Delete user">
+                              <IconButton size="small" color="error"
+                                onClick={() => {
+                                  if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
+                                }}>
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </>
                       )}
                     </TableCell>
@@ -115,12 +118,12 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
         currentUser={currentUser}
         lockedFirmId={firmId}
       />
-      <EditUserDialog target={editTarget} onClose={() => setEditTarget(null)} />
+      <EditUserDialog target={editTarget} firmId={firmId} onClose={() => setEditTarget(null)} />
     </Card>
   );
 }
 
-function EditUserDialog({ target, onClose }) {
+function EditUserDialog({ target, firmId, onClose }) {
   const qc = useQueryClient();
   const open = Boolean(target);
   const [form, setForm] = useState({ fullName: '', email: '' });
@@ -131,7 +134,7 @@ function EditUserDialog({ target, onClose }) {
   }, [target?.id]);
 
   const mut = useMutation({
-    mutationFn: () => updateUser(target.id, { fullName: form.fullName, email: form.email }),
+    mutationFn: () => updateUser(target.id, { fullName: form.fullName, email: form.email }, firmId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); setError(null); onClose(); },
     onError: (err) => setError(err.response?.data?.message || 'Failed to update user'),
   });

@@ -1,14 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  fetchMe, logout as apiLogout,
+  fetchMe, logout as apiLogout, switchEntity as apiSwitchEntity,
   requestOtp as apiRequestOtp, verifyOtp as apiVerifyOtp,
   adminLogin as apiAdminLogin, adminVerify as apiAdminVerify,
 } from '../api/auth.js';
 import { setOnUnauthorized } from '../api/client.js';
 import { clearSavedScope } from '../dashboard/scopeStorage.js';
+import { DASHBOARD_PATH } from '../navigation/moduleRegistry.jsx';
 
 const AuthContext = createContext(null);
+
+// Written when this tab moves the session into another reporting entity. The session lives in
+// cookies, which every tab shares, so the other tabs are now authorised for the new entity while
+// still showing the old one — they hear this and start over on the dashboard.
+const ENTITY_SWITCH_KEY = 'amldock.entitySwitch';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -37,6 +43,16 @@ export function AuthProvider({ children }) {
       setStatus('guest');
     });
   }, [refreshMe, queryClient]);
+
+  // Another tab switched entity. A full load rather than an in-place update: every screen in this
+  // tab was built for the old entity, and a reload is the one way to be sure none of it survives.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === ENTITY_SWITCH_KEY && e.newValue) window.location.assign(DASHBOARD_PATH);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   /**
    * Takes an AuthResponse the caller already has and makes it the current session.
@@ -67,6 +83,18 @@ export function AuthProvider({ children }) {
     return adoptSession(me);
   }, [adoptSession, queryClient]);
 
+  /**
+   * Moves the session into another reporting entity the user belongs to (`user.memberships`).
+   * Everything cached was fetched as a member of the old one, so the cache goes; where to go next
+   * is the caller's — ScopeSelector sends the user to the dashboard.
+   */
+  const switchEntity = useCallback(async (membershipId) => {
+    const me = await apiSwitchEntity(membershipId);
+    queryClient.clear();
+    try { localStorage.setItem(ENTITY_SWITCH_KEY, `${membershipId}:${Date.now()}`); } catch { /* ignore */ }
+    return adoptSession(me);
+  }, [adoptSession, queryClient]);
+
   const logout = useCallback(async () => {
     try { await apiLogout(); } catch { /* ignore */ }
     // The saved dashboard scope is keyed by userId, and ids are reused: a reseeded database
@@ -80,7 +108,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, status, logout, refreshMe, adoptSession,
+      user, status, logout, refreshMe, adoptSession, switchEntity,
       requestOtp, verifyOtp, adminLogin, adminVerify,
     }}>
       {children}

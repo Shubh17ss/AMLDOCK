@@ -13,6 +13,8 @@ import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
+import nz.amldock.user.FirmMembership;
+import nz.amldock.user.FirmMembershipRepository;
 import nz.amldock.user.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -38,17 +40,20 @@ public class AuditService {
     private final FirmBranchRepository branches;
     private final DealLifecycleService lifecycle;
     private final UserRepository users;
+    private final FirmMembershipRepository memberships;
 
     public AuditService(AuditLogRepository repo,
                         DealRepository deals,
                         FirmBranchRepository branches,
                         DealLifecycleService lifecycle,
-                        UserRepository users) {
+                        UserRepository users,
+                        FirmMembershipRepository memberships) {
         this.repo = repo;
         this.deals = deals;
         this.branches = branches;
         this.lifecycle = lifecycle;
         this.users = users;
+        this.memberships = memberships;
     }
 
     @Transactional
@@ -160,8 +165,11 @@ public class AuditService {
         if (actor.role().seesAllFirms()) {
             return (root, query, cb) -> cb.conjunction();
         }
-        List<Long> firmUserIds = users.findByRealEstateFirmIdOrderByIdAsc(actor.realEstateFirmId())
-                .stream().map(User::getId).toList();
+        // Everyone who is or was a member of the entity. The trail is keyed by actor, not entity,
+        // so an officer who also serves another entity brings their entries from there too —
+        // the closer cut needs an entity on every audit row, which the log does not carry.
+        List<Long> firmUserIds = memberships.findByRealEstateFirmIdOrderByUserIdAsc(actor.realEstateFirmId())
+                .stream().map(FirmMembership::getUserId).distinct().toList();
         if (firmUserIds.isEmpty()) {
             return (root, query, cb) -> cb.disjunction();
         }

@@ -72,6 +72,13 @@ export function DashboardScopeProvider({ children }) {
 
   const currentFirmId = isRoot ? (firm?.id ?? null) : user?.realEstateFirmId;
 
+  // The entities this account is active in. More than one only for a compliance officer or senior
+  // manager serving several; for them the entity becomes a choice too, made by switching the
+  // session (AuthContext.switchEntity) rather than by setting state here — the server authorises
+  // by the session's entity, so the scope cannot get ahead of it.
+  const memberships = useMemo(() => user?.memberships ?? [], [user]);
+  const multiEntity = !isRoot && memberships.length > 1;
+
   // These three live here rather than in ScopeSelector because the selector is a presentational
   // sidebar component, and the dialog that blocks the shell must not depend on it having mounted:
   // seeding would never run and a firm-level user would face a chooser with nothing pre-filled.
@@ -94,8 +101,12 @@ export function DashboardScopeProvider({ children }) {
 
   // Memoised because the reconciliation effect below depends on them; a fresh array each render
   // would re-run it on every render.
-  const activeFirms = useMemo(() => (firmsQ.data ?? []).filter((f) => f.active), [firmsQ.data]);
-  const activeBranches = useMemo(() => (branchesQ.data ?? []).filter((b) => b.active), [branchesQ.data]);
+  //
+  // Deactivated entities and branches stay in both lists: ROOT and an entity's compliance officers
+  // and senior managers go on reading them, read-only, through their retention period. The
+  // pickers mark them. Branch-level staff of a deactivated branch can't sign in to get here.
+  const firmList = useMemo(() => firmsQ.data ?? [], [firmsQ.data]);
+  const branchOptions = useMemo(() => branchesQ.data ?? [], [branchesQ.data]);
 
   // Converge on what the user's account already decides — every render, not once.
   //
@@ -128,7 +139,7 @@ export function DashboardScopeProvider({ children }) {
     if (!isRoot && !firm) setFirm(firmObj);
   }, [user, isRoot, branchLevel, firm, branch, firmQ.data, branchesQ.data]);
 
-  // A saved scope can outlive what it points at — an entity deactivated, a branch removed, or a
+  // A saved scope can outlive what it points at — an entity or branch deleted, or a
   // dev database reset. Nothing else catches this: the selects display the firm and branch *names*
   // held in the saved scope, while their options come from the API, so the sidebar goes on naming
   // an entity that is gone while the dropdown beside it is empty. Convergence above cannot catch it
@@ -144,7 +155,7 @@ export function DashboardScopeProvider({ children }) {
       if (!firmSettled) return;
 
       const stillExists = isRoot
-        ? activeFirms.some((f) => f.id === firm.id)
+        ? firmList.some((f) => f.id === firm.id)
         : firmQ.data?.id === firm.id;
       if (!stillExists) {
         setFirm(null);
@@ -154,7 +165,7 @@ export function DashboardScopeProvider({ children }) {
     }
 
     if (branch && branchesQ.isSuccess) {
-      const freshBranch = activeBranches.find((b) => b.id === branch.id);
+      const freshBranch = branchOptions.find((b) => b.id === branch.id);
       if (!freshBranch) {
         setBranch(null);
       } else if (freshBranch.name !== branch.name) {
@@ -169,13 +180,13 @@ export function DashboardScopeProvider({ children }) {
     // saved before it was carried has none, which would price an Australian entity in NZD via
     // useCurrency's fallback. Only set when something changed, so this effect does not loop.
     if (firm) {
-      const fresh = isRoot ? activeFirms.find((f) => f.id === firm.id) : firmQ.data;
+      const fresh = isRoot ? firmList.find((f) => f.id === firm.id) : firmQ.data;
       if (fresh && fresh.id === firm.id
           && (fresh.name !== firm.name || (fresh.country ?? null) !== (firm.country ?? null))) {
         setFirm({ id: fresh.id, name: fresh.name, country: fresh.country });
       }
     }
-  }, [isRoot, firm, branch, activeFirms, activeBranches,
+  }, [isRoot, firm, branch, firmList, branchOptions,
       firmsQ.isSuccess, firmQ.isSuccess, firmQ.isError, firmQ.data, branchesQ.isSuccess]);
 
   // Persist any non-empty selection. This used to be gated on `initialized`, which is gone; an
@@ -189,18 +200,18 @@ export function DashboardScopeProvider({ children }) {
   // `country` rides along because it decides the currency every amount in the app is shown in
   // (useCurrency). Without it the scope object couldn't answer "NZD or AUD?".
   const selectFirm = useCallback((firmId) => {
-    const f = activeFirms.find((x) => x.id === firmId);
+    const f = firmList.find((x) => x.id === firmId);
     setFirm(f ? { id: f.id, name: f.name, country: f.country } : null);
     setBranch(null);
-  }, [activeFirms]);
+  }, [firmList]);
 
   const selectBranch = useCallback((branchId) => {
-    const b = activeBranches.find((x) => x.id === branchId);
+    const b = branchOptions.find((x) => x.id === branchId);
     setBranch(b ? { id: b.id, name: b.name } : null);
-  }, [activeBranches]);
+  }, [branchOptions]);
 
   // Entity and branch in one step, from the rows themselves — the scope picker lists every
-  // entity's branches at once, so the branch it hands over need not be in `activeBranches`, which
+  // entity's branches at once, so the branch it hands over need not be in `branchOptions`, which
   // only holds the current entity's. Reconciliation below still checks it once that list loads.
   const selectScope = useCallback((f, b) => {
     setFirm({ id: f.id, name: f.name, country: f.country });
@@ -208,7 +219,7 @@ export function DashboardScopeProvider({ children }) {
   }, []);
 
   // What the two choosers offer. A non-ROOT user's entity is their own and nothing else.
-  const firmOptions = isRoot ? activeFirms : (firmQ.data ? [firmQ.data] : []);
+  const firmOptions = isRoot ? firmList : (firmQ.data ? [firmQ.data] : []);
 
   // "Still settling", so the dialog can show a spinner rather than an empty dropdown — a
   // firm-level user must not read "no branches" when the fetch is merely in flight, and nobody
@@ -225,14 +236,16 @@ export function DashboardScopeProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      firm, setFirm, branch, setBranch,
-      firmOptions, activeBranches, selectFirm, selectBranch, selectScope,
+      // No raw setters: a scope change from outside goes through selectScope, or better
+      // useScopeSwitch, which checks the branch with the server first.
+      firm, branch,
+      firmOptions, branchOptions, selectFirm, selectBranch, selectScope,
       isRoot, branchLevel, branchSelectable, currentFirmId, currentFirmRef,
-      optionsLoading, scopeComplete, scopeSettled,
+      optionsLoading, scopeComplete, scopeSettled, memberships, multiEntity,
     }),
-    [firm, branch, firmOptions, activeBranches, selectFirm, selectBranch, selectScope,
+    [firm, branch, firmOptions, branchOptions, selectFirm, selectBranch, selectScope,
      isRoot, branchLevel, branchSelectable, currentFirmId, currentFirmRef,
-     optionsLoading, scopeComplete, scopeSettled],
+     optionsLoading, scopeComplete, scopeSettled, memberships, multiEntity],
   );
 
   return <DashboardScopeContext.Provider value={value}>{children}</DashboardScopeContext.Provider>;

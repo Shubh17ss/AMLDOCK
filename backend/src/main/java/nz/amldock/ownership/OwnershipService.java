@@ -120,29 +120,53 @@ public class OwnershipService {
 
     @Transactional
     public TreeDto getTree(Long dealId) {
+        return getTree(dealId, StructureSide.VENDOR);
+    }
+
+    /**
+     * One side's tree. The vendor's is created on first read, as it always has been; the
+     * purchaser's is not, because reading a deal that has not closed must not leave a structure
+     * behind for a party that may never exist. Its first owner creates it.
+     */
+    @Transactional
+    public TreeDto getTree(Long dealId, StructureSide side) {
         Deal deal = assertReadable(dealId);
-        OwnershipStructure structure = structures.findByDealId(deal.getId())
-                .orElseGet(() -> createEmptyStructure(deal.getId()));
+        if (side == StructureSide.PURCHASER) {
+            return structures.findByDealIdAndSide(deal.getId(), side)
+                    .map(this::loadTree)
+                    .orElseGet(() -> emptyTree(deal));
+        }
+        OwnershipStructure structure = structures.findVendorByDealId(deal.getId())
+                .orElseGet(() -> createEmptyStructure(deal.getId(), StructureSide.VENDOR));
         return loadTree(structure);
     }
 
     @Transactional(readOnly = true)
     public TreeDto previewTree(Long dealId) {
         Deal deal = assertReadable(dealId);
-        OwnershipStructure structure = structures.findByDealId(deal.getId()).orElse(null);
+        OwnershipStructure structure = structures.findVendorByDealId(deal.getId()).orElse(null);
         if (structure == null) {
-            return new TreeDto(null, deal.getId(), null, null, List.of(), List.of());
+            return emptyTree(deal);
         }
         return loadTree(structure);
+    }
+
+    private static TreeDto emptyTree(Deal deal) {
+        return new TreeDto(null, deal.getId(), null, null, List.of(), List.of());
     }
 
     /* ---------- node CRUD ---------- */
 
     @Transactional
     public NodeDto createNode(Long dealId, CreateNodeRequest req) {
-        Deal deal = assertWritable(dealId);
-        OwnershipStructure structure = structures.findByDealId(deal.getId())
-                .orElseGet(() -> createEmptyStructure(deal.getId()));
+        return createNode(dealId, StructureSide.VENDOR, req);
+    }
+
+    @Transactional
+    public NodeDto createNode(Long dealId, StructureSide side, CreateNodeRequest req) {
+        Deal deal = assertWritable(dealId, side);
+        OwnershipStructure structure = structures.findByDealIdAndSide(deal.getId(), side)
+                .orElseGet(() -> createEmptyStructure(deal.getId(), side));
 
         OwnershipNode n = new OwnershipNode();
         n.setOwnershipStructureId(structure.getId());
@@ -189,14 +213,15 @@ public class OwnershipService {
         }
 
         NodeDto created = NodeDto.from(savedNode, person == null ? null : PersonDto.from(person));
-        risk.recomputeFor(dealId);
+        recomputeRiskFor(dealId, side);
         return created;
     }
 
     @Transactional
     public NodeDto updateNode(Long dealId, Long nodeId, UpdateNodeRequest req) {
-        Deal deal = assertWritable(dealId);
+        Deal deal = assertWritableOnEitherSide(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
+        StructureSide side = assertWritable(deal, n);
         // Compared by value rather than by what was sent: the form sends every field on every
         // save, so "present in the request" would clear a verification on any Update at all.
         List<Object> detailsBefore = detailsOf(n, personFor(n));
@@ -257,7 +282,7 @@ public class OwnershipService {
         // Two of the company answers feed the deal's rating, so a node write is now one of the
         // ways it can move. Runs unconditionally: working out whether this particular patch
         // touched a risk-bearing field would be a second copy of the rule.
-        risk.recomputeFor(dealId);
+        recomputeRiskFor(dealId, side);
         return NodeDto.from(n, person == null ? null : PersonDto.from(person),
                 nameOf(n.getVerifiedByUserId()));
     }
@@ -279,8 +304,9 @@ public class OwnershipService {
      */
     @Transactional
     public NodeDto verifyNode(Long dealId, Long nodeId, VerifyNodeRequest req) {
-        Deal deal = assertWritable(dealId);
+        Deal deal = assertWritableOnEitherSide(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
+        assertWritable(deal, n);
 
         NodeVerificationStatus outcome = req.outcome();
         if (!outcome.isVerified()) {
@@ -336,8 +362,9 @@ public class OwnershipService {
      */
     @Transactional
     public List<Long> deleteNode(Long dealId, Long nodeId, boolean force) {
-        Deal deal = assertWritable(dealId);
+        Deal deal = assertWritableOnEitherSide(dealId);
         OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
+        StructureSide side = assertWritable(deal, n);
 
         List<OwnershipEdge> outgoing = edges.findAllByParentNodeId(n.getId());
         List<OwnershipEdge> incoming = edges.findAllByChildNodeId(n.getId());
@@ -377,7 +404,7 @@ public class OwnershipService {
         // so the recompute's own query cannot still see the rows, and run once for the whole
         // cascade rather than once per node.
         nodes.flush();
-        risk.recomputeFor(dealId);
+        recomputeRiskFor(dealId, side);
         return List.copyOf(doomed);
     }
 
@@ -481,15 +508,18 @@ public class OwnershipService {
 
     @Transactional
     public EdgeDto createEdge(Long dealId, CreateEdgeRequest req) {
-        Deal deal = assertWritable(dealId);
+        Deal deal = assertWritableOnEitherSide(dealId);
         if (req.parentNodeId().equals(req.childNodeId())) {
             throw new BadRequestException("A node cannot be its own parent");
         }
         OwnershipNode parent = mustLoadNodeForDeal(deal, req.parentNodeId());
         OwnershipNode child = mustLoadNodeForDeal(deal, req.childNodeId());
+        // Before the write gate: this is also what keeps a link from joining the vendor's
+        // structure to the purchaser's, and the gate below is decided by the parent's side alone.
         if (!parent.getOwnershipStructureId().equals(child.getOwnershipStructureId())) {
             throw new BadRequestException("Parent and child belong to different ownership structures");
         }
+        StructureSide side = assertWritable(deal, parent);
         if (parent.getNodeType().isLeafOnly()) {
             throw new BadRequestException(
                     "An individual cannot own another node — " + parent.getDisplayName()
@@ -524,17 +554,17 @@ public class OwnershipService {
         EdgeDto saved = EdgeDto.from(edges.save(e));
         // The child now sits under another entity, which changes what its answers count for —
         // a nested private company's nominee answer, for one.
-        risk.recomputeFor(dealId);
+        recomputeRiskFor(dealId, side);
         return saved;
     }
 
     @Transactional
     public EdgeDto updateEdge(Long dealId, Long edgeId, UpdateEdgeRequest req) {
-        Deal deal = assertWritable(dealId);
+        Deal deal = assertWritableOnEitherSide(dealId);
         OwnershipEdge edge = edges.findById(edgeId)
                 .orElseThrow(() -> new NotFoundException("Edge " + edgeId + " not found"));
         // Sanity: the edge's nodes must belong to this deal's structure.
-        mustLoadNodeForDeal(deal, edge.getParentNodeId());
+        assertWritable(deal, mustLoadNodeForDeal(deal, edge.getParentNodeId()));
         // Written unconditionally, unlike the node patches: a percentage has to be clearable, and
         // the drawer already sends null for an emptied field. Reading null as "leave alone" here
         // made clearing one a silent no-op that still reported success. `role` keeps the
@@ -547,13 +577,13 @@ public class OwnershipService {
 
     @Transactional
     public void deleteEdge(Long dealId, Long edgeId) {
-        Deal deal = assertWritable(dealId);
+        Deal deal = assertWritableOnEitherSide(dealId);
         OwnershipEdge edge = edges.findById(edgeId)
                 .orElseThrow(() -> new NotFoundException("Edge " + edgeId + " not found"));
-        mustLoadNodeForDeal(deal, edge.getParentNodeId());
+        StructureSide side = assertWritable(deal, mustLoadNodeForDeal(deal, edge.getParentNodeId()));
         edges.delete(edge);
         // The child may now sit directly on the property; see createEdge.
-        risk.recomputeFor(dealId);
+        recomputeRiskFor(dealId, side);
     }
 
     /* ---------- sibling order ---------- */
@@ -574,8 +604,13 @@ public class OwnershipService {
      */
     @Transactional
     public TreeDto reorderSiblings(Long dealId, ReorderRequest req) {
-        Deal deal = assertWritable(dealId);
-        OwnershipStructure structure = structures.findByDealId(deal.getId())
+        return reorderSiblings(dealId, StructureSide.VENDOR, req);
+    }
+
+    @Transactional
+    public TreeDto reorderSiblings(Long dealId, StructureSide side, ReorderRequest req) {
+        Deal deal = assertWritable(dealId, side);
+        OwnershipStructure structure = structures.findByDealIdAndSide(deal.getId(), side)
                 .orElseThrow(() -> new NotFoundException(
                         "Deal " + dealId + " has no ownership structure to reorder"));
 
@@ -587,7 +622,7 @@ public class OwnershipService {
         if (req.parentNodeId() == null) {
             reorderTopLevel(structure, wanted);
         } else {
-            reorderChildren(deal, req.parentNodeId(), wanted);
+            reorderChildren(deal, structure, req.parentNodeId(), wanted);
         }
         return loadTree(structure);
     }
@@ -609,8 +644,10 @@ public class OwnershipService {
     }
 
     /** One owner’s children, positioned on the edges that hold them there. */
-    private void reorderChildren(Deal deal, Long parentNodeId, List<Long> wanted) {
+    private void reorderChildren(Deal deal, OwnershipStructure structure, Long parentNodeId, List<Long> wanted) {
         OwnershipNode parent = mustLoadNodeForDeal(deal, parentNodeId);
+        // The gate was decided by the side the request named, so the parent must be on that side.
+        assertOnStructure(parent, structure);
         Map<Long, OwnershipEdge> byChild = new LinkedHashMap<>();
         edges.findAllByParentNodeId(parent.getId())
                 .forEach(e -> byChild.put(e.getChildNodeId(), e));
@@ -644,13 +681,19 @@ public class OwnershipService {
 
     @Transactional
     public TreeDto setRoot(Long dealId, Long nodeId) {
-        Deal deal = assertWritable(dealId);
-        OwnershipStructure structure = structures.findByDealId(deal.getId())
-                .orElseGet(() -> createEmptyStructure(deal.getId()));
+        return setRoot(dealId, StructureSide.VENDOR, nodeId);
+    }
+
+    @Transactional
+    public TreeDto setRoot(Long dealId, StructureSide side, Long nodeId) {
+        Deal deal = assertWritable(dealId, side);
+        OwnershipStructure structure = structures.findByDealIdAndSide(deal.getId(), side)
+                .orElseGet(() -> createEmptyStructure(deal.getId(), side));
         if (nodeId == null) {
             structure.setRootNodeId(null);
         } else {
             OwnershipNode n = mustLoadNodeForDeal(deal, nodeId);
+            assertOnStructure(n, structure);
             structure.setRootNodeId(n.getId());
         }
         return loadTree(structure);
@@ -679,8 +722,8 @@ public class OwnershipService {
                                                    String displayName,
                                                    LocalDate dateOfBirth,
                                                    String idDocumentType) {
-        OwnershipStructure structure = structures.findByDealId(dealId)
-                .orElseGet(() -> createEmptyStructure(dealId));
+        OwnershipStructure structure = structures.findVendorByDealId(dealId)
+                .orElseGet(() -> createEmptyStructure(dealId, StructureSide.VENDOR));
 
         OwnershipNode n = new OwnershipNode();
         n.setOwnershipStructureId(structure.getId());
@@ -721,8 +764,8 @@ public class OwnershipService {
      */
     @Transactional
     public OwnershipNode attachImpliedTrust(Long dealId) {
-        OwnershipStructure structure = structures.findByDealId(dealId)
-                .orElseGet(() -> createEmptyStructure(dealId));
+        OwnershipStructure structure = structures.findVendorByDealId(dealId)
+                .orElseGet(() -> createEmptyStructure(dealId, StructureSide.VENDOR));
 
         List<OwnershipNode> existing = nodes.findAllByOwnershipStructureIdOrderByIdAsc(structure.getId());
         // Belt and braces with the caller's transition check: that one stops the repeat saves the
@@ -769,6 +812,23 @@ public class OwnershipService {
                 .orElse(false);
     }
 
+    /**
+     * The people behind the purchaser's individuals on a deal.
+     *
+     * <p>They are linked to the deal like everyone else (the link is what removal and the upload
+     * check go by), so readers of the deal's people that mean the vendor's - the people list, the
+     * versions - take these out. No permission check: a read for callers that have run their own.
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> purchaserPersonIds(Long dealId) {
+        return structures.findByDealIdAndSide(dealId, StructureSide.PURCHASER)
+                .map(s -> nodes.findAllByOwnershipStructureIdOrderByIdAsc(s.getId()).stream()
+                        .map(OwnershipNode::getBeneficialOwnerId)
+                        .filter(Objects::nonNull)
+                        .collect(java.util.stream.Collectors.toSet()))
+                .orElse(Set.of());
+    }
+
     /** Removes the node standing for a person. Used when their last scan is deleted. */
     @Transactional
     public void removeExtractedIndividual(Long beneficialOwnerId) {
@@ -777,10 +837,19 @@ public class OwnershipService {
 
     /* ---------- helpers ---------- */
 
-    private OwnershipStructure createEmptyStructure(Long dealId) {
+    private OwnershipStructure createEmptyStructure(Long dealId, StructureSide side) {
         OwnershipStructure s = new OwnershipStructure();
         s.setDealId(dealId);
+        s.setSide(side);
         return structures.save(s);
+    }
+
+    /**
+     * Only the vendor's owners feed the deal's rating. A purchaser write on a CLOSED deal has
+     * nothing to say to it, and recomputing there would only risk restamping a signed-off rating.
+     */
+    private void recomputeRiskFor(Long dealId, StructureSide side) {
+        if (side == StructureSide.VENDOR) risk.recomputeFor(dealId);
     }
 
     private TreeDto loadTree(OwnershipStructure structure) {
@@ -1077,14 +1146,79 @@ public class OwnershipService {
      *
      * <p>ROOT keeps read scope, as in {@code DocumentService.delete}: it belongs to no firm, so the
      * firm check inside assertEditable could never pass. It reaches only the two delete endpoints.
+     *
+     * <p>The purchaser's side answers to its own status rule instead
+     * ({@link DealLifecycleService#assertPurchaserEditable}): open once the deal has closed as
+     * sold, which is exactly when the vendor's side is shut.
      */
-    private Deal assertWritable(Long dealId) {
-        UserPrincipal actor = currentPrincipal();
-        if (actor.role() == nz.amldock.user.Role.ROOT) return assertReadable(dealId);
+    private Deal assertWritable(Long dealId, StructureSide side) {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
-        lifecycle.assertEditable(deal, actor, firmIdFor(deal));
+        assertWritable(deal, side);
         return deal;
+    }
+
+    private void assertWritable(Deal deal, StructureSide side) {
+        UserPrincipal actor = currentPrincipal();
+        if (actor.role() == nz.amldock.user.Role.ROOT) {
+            // ROOT skips assertEditable (it belongs to no firm) but not the branch's hold.
+            lifecycle.assertCanRead(deal, actor, firmIdFor(deal));
+            lifecycle.assertBranchWritable(deal);
+            return;
+        }
+        if (side == StructureSide.PURCHASER) {
+            lifecycle.assertPurchaserEditable(deal, actor, firmIdFor(deal));
+        } else {
+            lifecycle.assertEditable(deal, actor, firmIdFor(deal));
+        }
+    }
+
+    /**
+     * The first half of the gate for a change to an existing node or edge, run before the node is
+     * looked up: could this actor write to <em>either</em> side of this deal now? Which side the
+     * node is on is not known yet, and a deal that is locked on both should say so before it says
+     * anything about the ids in the request.
+     *
+     * <p>Answered with the purchaser's rule while that side is open, the vendor's otherwise — so a
+     * locked deal still reads "cannot be edited". {@link #assertWritable(Deal, OwnershipNode)} then
+     * decides by the node's own side.
+     */
+    private Deal assertWritableOnEitherSide(Long dealId) {
+        Deal deal = deals.findById(dealId)
+                .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
+        assertWritable(deal, DealLifecycleService.canEditPurchaser(deal.getStatus(), deal.getPropertySold())
+                ? StructureSide.PURCHASER : StructureSide.VENDOR);
+        return deal;
+    }
+
+    /**
+     * The write gate for a change to an existing node, decided by the side the node is on rather
+     * than by anything the caller says — so neither side can be edited under the other's rule.
+     * Always after {@link #assertWritableOnEitherSide}.
+     *
+     * @return that side, for the caller's risk recompute.
+     */
+    private StructureSide assertWritable(Deal deal, OwnershipNode node) {
+        StructureSide side = sideOf(node);
+        // ROOT's gate is the same on both sides, and assertWritableOnEitherSide has already run it.
+        if (currentPrincipal().role() != nz.amldock.user.Role.ROOT) {
+            assertWritable(deal, side);
+        }
+        return side;
+    }
+
+    private StructureSide sideOf(OwnershipNode node) {
+        return structures.findById(node.getOwnershipStructureId())
+                .map(OwnershipStructure::getSide)
+                .orElseThrow(() -> new NotFoundException("Structure for node " + node.getId() + " not found"));
+    }
+
+    /** A node named in a request scoped to one side must stand on that side's structure. */
+    private static void assertOnStructure(OwnershipNode node, OwnershipStructure structure) {
+        if (!node.getOwnershipStructureId().equals(structure.getId())) {
+            throw new BadRequestException("Node " + node.getId() + " is not on the "
+                    + structure.getSide().name().toLowerCase() + "'s structure");
+        }
     }
 
     private Long firmIdFor(Deal deal) {

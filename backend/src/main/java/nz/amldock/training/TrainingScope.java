@@ -2,6 +2,8 @@ package nz.amldock.training;
 
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
+import nz.amldock.user.FirmMembership;
+import nz.amldock.user.FirmMembershipRepository;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
@@ -57,8 +59,8 @@ final class TrainingScope {
      * client's list: {@code GET /api/users?branchId=} returns branch staff *and* the firm's
      * branchless firm-level staff, and neither tier is checked anywhere else.
      */
-    static void assertAssignable(UserRepository users, Long firmId, Long branchId,
-                                 Collection<Long> userIds) {
+    static void assertAssignable(UserRepository users, FirmMembershipRepository memberships,
+                                 Long firmId, Long branchId, Collection<Long> userIds) {
         if (userIds == null || userIds.isEmpty()) return;
 
         Map<Long, User> found = users.findAllById(userIds).stream()
@@ -68,17 +70,24 @@ final class TrainingScope {
             if (u == null) {
                 throw new BadRequestException("User " + userId + " not found");
             }
-            Role role = u.getRole();
+            // Judged on their membership in this record's entity, not their account's home: an
+            // officer serving two entities can be assigned training in either.
+            FirmMembership m = firmId == null ? null
+                    : memberships.findByUserIdAndRealEstateFirmId(userId, firmId)
+                            .filter(FirmMembership::isActive).orElse(null);
+            if (m == null) {
+                if (!u.getRole().isBranchLevel() && !u.getRole().isFirmLevel()) {
+                    throw new BadRequestException(u.getEmail() + " cannot be assigned training");
+                }
+                throw new BadRequestException(u.getEmail() + " is not in this reporting entity");
+            }
+            Role role = m.getRole();
             if (!role.isBranchLevel() && !role.isFirmLevel()) {
                 throw new BadRequestException(
                         u.getEmail() + " cannot be assigned training");
             }
-            boolean sameFirm = firmId != null && firmId.equals(u.getRealEstateFirmId());
-            if (!sameFirm) {
-                throw new BadRequestException(u.getEmail() + " is not in this reporting entity");
-            }
             // Only branch staff are pinned to a branch; firm-level staff have none by design.
-            if (role.isBranchLevel() && !(branchId != null && branchId.equals(u.getFirmBranchId()))) {
+            if (role.isBranchLevel() && !(branchId != null && branchId.equals(m.getFirmBranchId()))) {
                 throw new BadRequestException(u.getEmail() + " is not in this branch");
             }
         }

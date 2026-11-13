@@ -59,7 +59,7 @@ class FundTransactionReplaceTest {
 
     @BeforeEach
     void setUp() {
-        service = new InternationalFundTransactionService(transactions, users, branches, storage, audit,
+        service = new InternationalFundTransactionService(transactions, users, branches, org.mockito.Mockito.mock(nz.amldock.firm.ScopeStatusGuard.class), storage, audit,
                 26214400L, 5L, 5L);
     }
 

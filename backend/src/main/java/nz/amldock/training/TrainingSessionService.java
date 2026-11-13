@@ -7,6 +7,7 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.training.dto.CreateTrainingSessionRequest;
 import nz.amldock.training.dto.TrainingAttendeeDto;
 import nz.amldock.training.dto.TrainingSessionDto;
@@ -14,6 +15,7 @@ import nz.amldock.training.dto.UpdateTrainingSessionRequest;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
+import nz.amldock.user.FirmMembershipRepository;
 import nz.amldock.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +51,9 @@ public class TrainingSessionService {
     private final TrainingSessionAttendeeRepository attendees;
     private final TrainingProviderRepository providers;
     private final UserRepository users;
+    private final FirmMembershipRepository memberships;
     private final FirmBranchRepository branches;
+    private final ScopeStatusGuard scope;
     private final AuditService audit;
     private final TrainingNotifier notifier;
 
@@ -57,14 +61,18 @@ public class TrainingSessionService {
                                   TrainingSessionAttendeeRepository attendees,
                                   TrainingProviderRepository providers,
                                   UserRepository users,
+                                  FirmMembershipRepository memberships,
                                   FirmBranchRepository branches,
+                                  ScopeStatusGuard scope,
                                   AuditService audit,
                                   TrainingNotifier notifier) {
         this.sessions = sessions;
         this.attendees = attendees;
         this.providers = providers;
         this.users = users;
+        this.memberships = memberships;
         this.branches = branches;
+        this.scope = scope;
         this.audit = audit;
         this.notifier = notifier;
     }
@@ -101,6 +109,7 @@ public class TrainingSessionService {
         UserPrincipal actor = TrainingScope.currentPrincipal();
         Long firmId = TrainingScope.resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
 
         TrainingSession s = new TrainingSession();
         s.setName(req.name().trim());
@@ -130,6 +139,7 @@ public class TrainingSessionService {
                 .orElseThrow(() -> new NotFoundException("Session " + id + " not found"));
         UserPrincipal actor = TrainingScope.currentPrincipal();
         TrainingScope.assertSameFirm(actor, s.getRealEstateFirmId(), "session");
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
 
         if (req.name() != null && !req.name().isBlank()) s.setName(req.name().trim());
         // Replace semantics: an empty description means the author cleared it, not "unchanged".
@@ -161,6 +171,7 @@ public class TrainingSessionService {
     public void delete(Long id) {
         TrainingSession s = sessions.findById(id)
                 .orElseThrow(() -> new NotFoundException("Session " + id + " not found"));
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
         UserPrincipal actor = TrainingScope.currentPrincipal();
         if (!actor.role().canDeleteRecords()) {
             throw new ForbiddenException(
@@ -195,6 +206,7 @@ public class TrainingSessionService {
             throw new ForbiddenException("Only training managers may record attendance");
         }
         TrainingScope.assertSameFirm(actor, s.getRealEstateFirmId(), "session");
+        scope.assertWritable(s.getRealEstateFirmId(), s.getFirmBranchId());
 
         TrainingSessionAttendee row = attendees
                 .findByTrainingSessionIdAndUserId(s.getId(), userId)
@@ -263,7 +275,7 @@ public class TrainingSessionService {
                 ? Set.of()
                 : new LinkedHashSet<>(requestedUserIds.stream().filter(java.util.Objects::nonNull).toList());
 
-        TrainingScope.assertAssignable(users, session.getRealEstateFirmId(),
+        TrainingScope.assertAssignable(users, memberships, session.getRealEstateFirmId(),
                 session.getFirmBranchId(), wanted);
 
         List<TrainingSessionAttendee> existing = attendees.findAllByTrainingSessionId(session.getId());

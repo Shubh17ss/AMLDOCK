@@ -20,6 +20,13 @@ public class RefreshToken {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    /**
+     * The reporting entity this session is in. Renewing keeps it there, whatever the account's home
+     * has become since. Null for ROOT and AUDIT, and for tokens older than V68.
+     */
+    @Column(name = "membership_id")
+    private Long membershipId;
+
     @Column(name = "token_hash", nullable = false, unique = true)
     private String tokenHash;
 
@@ -35,6 +42,8 @@ public class RefreshToken {
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+    public Long getMembershipId() { return membershipId; }
+    public void setMembershipId(Long membershipId) { this.membershipId = membershipId; }
     public String getTokenHash() { return tokenHash; }
     public void setTokenHash(String tokenHash) { this.tokenHash = tokenHash; }
     public Instant getIssuedAt() { return issuedAt; }

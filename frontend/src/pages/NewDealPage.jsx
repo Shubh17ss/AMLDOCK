@@ -26,6 +26,7 @@ import { canEditContent } from '../data/dealStatus.js';
 import { tokens } from '../theme/theme.js';
 import { dealName } from '../utils/dealName.js';
 import { formatPropertyAddressShort } from '../data/addressFinderMeta.js';
+import { useDealScopeGuard } from '../dashboard/useDealScopeGuard.jsx';
 
 const SECTIONS = ['Your client', 'The property', 'Property details', 'Client identity', 'Risk & valuation'];
 
@@ -77,6 +78,8 @@ export function NewDealPage() {
   const { form, setField, setNested, setGroup, dealId, deal, saveState, error, setError } = draft;
   // A deal is named by its address; the reference is not shown.
   const dealLabel = dealName(formatPropertyAddressShort(deal?.property));
+  // Only a resumed deal can sit in another branch; one created here takes the current scope's.
+  const scopeGuard = useDealScopeGuard(resumeDealId ? deal : null);
 
   // A resumed deal opens at section 3: sections 1 and 2 are what created it, and re-asking
   // them is exactly the friction this split removes. They stay reachable with Back.
@@ -268,6 +271,7 @@ export function NewDealPage() {
   if (draft.loadingResume) {
     return <LoadingOverlay open title="Opening your draft…" />;
   }
+  if (scopeGuard.blocked) return scopeGuard.element;
 
   // Editing is only possible while a deal is NEW, and only by its broker or a reviewer of the
   // firm. Anyone else — or anyone still here after the deal moved on — goes to the deal page.
@@ -297,6 +301,7 @@ export function NewDealPage() {
     // their fields and turns every section into a scan from one edge of the screen to the other.
     <Stack spacing={3} sx={{ width: '100%', maxWidth: FORM_MAX_WIDTH, mx: 'auto' }}>
       <LoadingOverlay open={Boolean(overlay)} title={overlay?.title} subText={overlay?.subText} />
+      {scopeGuard.element}
 
       <PageHeader
         eyebrow={`section ${section + 1} of ${SECTIONS.length}`}

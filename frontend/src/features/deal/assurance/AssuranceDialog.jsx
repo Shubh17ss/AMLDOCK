@@ -22,9 +22,12 @@ import { dealName } from '../../../utils/dealName.js';
 /** A well background: a light grey in light mode, a lifted shade in dark. Used by the issues dialog. */
 const VERSIONS_BG = `color-mix(in srgb, ${tokens.muted} 8%, ${tokens.tile})`;
 
-/** How each verdict reads, and in what colour. Null is "not reviewed". */
-const ASSURANCE_META = {
-  ASSURED:         { label: 'Assured',         color: 'success', wash: 'var(--cl-ok-wash)',  ink: tokens.approved },
+/**
+ * How each verdict reads, and in what colour. Null is "not reviewed". Exported for the deal page's
+ * Update Assurance button, which wears the current verdict's colours.
+ */
+export const ASSURANCE_META = {
+  ASSURED:         { label: 'Passed',          color: 'success', wash: 'var(--cl-ok-wash)',  ink: tokens.approved },
   ACTION_REQUIRED: { label: 'Action required', color: 'error',   wash: 'var(--cl-err-wash)', ink: tokens.rejected },
 };
 
@@ -65,7 +68,7 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
       showToast({
         severity: 'success',
         message: `v${v.versionNo} of ${dealName(deal.propertyAddress)} marked `
-          + (result === 'ASSURED' ? 'assured' : 'action required'),
+          + (result === 'ASSURED' ? 'passed' : 'action required'),
       });
       onClose();
     },
@@ -88,6 +91,8 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
         <Stack direction="row" spacing={1} alignItems="center">
           <Box component="span">Update assurance</Box>
           <VersionChip no={v.versionNo} />
+          {/* Where the version stands now — the saved verdict, not the pill being picked below. */}
+          {v.assuranceStatus && <AssuranceChip status={v.assuranceStatus} />}
         </Stack>
         <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>
           {dealName(deal.propertyAddress)}
@@ -121,7 +126,7 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
         {result === 'ASSURED' && (
           <Typography variant="body2" sx={{ color: tokens.muted, mt: 2.5 }}>
             {v.issues?.length
-              ? 'Marking it assured removes the issues recorded against this version.'
+              ? 'Marking it passed removes the issues recorded against this version.'
               : 'This signed-off version holds up on review. No note is needed.'}
           </Typography>
         )}

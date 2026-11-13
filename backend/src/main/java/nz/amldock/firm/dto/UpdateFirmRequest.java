@@ -14,6 +14,5 @@ public record UpdateFirmRequest(
         String complianceOfficerName,
         @Email String complianceOfficerEmail,
         String complianceOfficerContactNumber,
-        @Min(0) Integer numberOfBranches,
-        Boolean active
+        @Min(0) Integer numberOfBranches
 ) {}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
@@ -9,9 +9,14 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import BlockRoundedIcon from '@mui/icons-material/BlockRounded';
+import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import { ActiveStatusChip } from './ActiveStatusChip.jsx';
 import EditIcon from '@mui/icons-material/Edit';
-import { createBranch, deactivateBranch, listBranches, updateBranch } from '../../api/firms.js';
+import {
+  activateBranch, createBranch, deactivateBranch, deleteBranch, getBranchDeletionPreview,
+  listBranches, updateBranch,
+} from '../../api/firms.js';
+import { TypeToConfirmDialog } from '../../components/TypeToConfirmDialog.jsx';
 import { tokens } from '../../theme/theme.js';
 import { useToast } from '../../components/ToastProvider.jsx';
 import { emailFieldProps, isBadEmail } from '../../utils/email.js';
@@ -24,17 +29,15 @@ const EMPTY_BRANCH = {
 /**
  * Branches of a reporting entity with add / edit.
  *
- * `adminView` is ROOT's page: a read-only Status column and a ⋯ menu per branch (Edit, Deactivate,
- * Delete). Otherwise — the entity's own staff — there is no status column, and actions are Edit
- * plus, for senior managers (`canDeactivate`), the deactivate icon.
+ * `adminView` is ROOT's page: a Status column and a ⋯ menu per branch (Edit, Deactivate or
+ * Reactivate, Delete). Off-boarding is ROOT's alone, so the entity's own staff get Edit only, and
+ * no status column.
  *
  * `firmRef` is the reporting entity's public id. `maxBranches` is the count declared in the
  * reporting entity's details (set by ROOT) — adding beyond it is blocked here
  * and, authoritatively, by the API.
  */
-export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches = null, adminView = false }) {
-  const qc = useQueryClient();
-  const { showToast } = useToast();
+export function FirmBranchesCard({ firmRef, firmActive = true, maxBranches = null, adminView = false }) {
   const branchesQ = useQuery({
     queryKey: ['firms', firmRef, 'branches'],
     queryFn: () => listBranches(firmRef),
@@ -42,18 +45,11 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
   });
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
+  const [statusTarget, setStatusTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const activeCount = branchesQ.data?.filter((b) => b.active).length ?? 0;
   const atLimit = maxBranches != null && activeCount >= maxBranches;
-
-  const deleteMut = useMutation({
-    mutationFn: (branch) => deactivateBranch(branch.publicId),
-    onSuccess: (_, branch) => {
-      qc.invalidateQueries({ queryKey: ['firms', firmRef, 'branches'] });
-      showToast({ severity: 'success', message: `${branch.name} deactivated` });
-    },
-    onError: (e) => showToast({ severity: 'error', message: e.response?.data?.message || 'That didn’t go through. Try again.' }),
-  });
 
   return (
     <Card>
@@ -67,9 +63,10 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
               </Typography>
             )}
           </Stack>
-          <Tooltip title={atLimit ? `This reporting entity has ${maxBranches} branch(es). Deactivate one or ask ROOT to raise the count.` : ''}>
+          <Tooltip title={!firmActive ? 'This reporting entity is deactivated.'
+            : atLimit ? `This reporting entity has ${maxBranches} branch(es). Deactivate one or ask ROOT to raise the count.` : ''}>
             <span>
-              <Button variant="contained" disabled={atLimit} onClick={() => setCreateOpen(true)}>
+              <Button variant="contained" disabled={atLimit || !firmActive} onClick={() => setCreateOpen(true)}>
                 + Add branch
               </Button>
             </span>
@@ -97,25 +94,28 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
                   <TableCell>{b.city ?? '—'}</TableCell>
                   <TableCell>{b.managerName ?? '—'}</TableCell>
                   <TableCell>{b.phone ?? '—'}</TableCell>
-                  {adminView && <TableCell><ActiveStatusChip active={b.active} /></TableCell>}
+                  {adminView && (
+                    <TableCell>
+                      <ActiveStatusChip active={b.active} />
+                      {!b.active && b.deactivatedAt && (
+                        <Typography variant="caption" display="block" sx={{ color: tokens.muted, mt: 0.5 }}>
+                          since {formatDate(b.deactivatedAt)}
+                        </Typography>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell align="right">
                     {adminView ? (
-                      <BranchActionsMenu branch={b} onEdit={() => setEditTarget(b)} />
-                    ) : (<>
-                    <Tooltip title="Edit">
-                      <IconButton size="small" onClick={() => setEditTarget(b)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    {canDeactivate && (
-                      <Tooltip title="Deactivate">
-                        <IconButton size="small" color="error"
-                                    onClick={() => deleteMut.mutate(b)} disabled={!b.active}>
-                          <DeleteOutlineIcon fontSize="small" />
+                      <BranchActionsMenu branch={b} onEdit={() => setEditTarget(b)}
+                                         onToggleStatus={() => setStatusTarget(b)}
+                                         onDelete={() => setDeleteTarget(b)} />
+                    ) : (
+                      <Tooltip title="Edit">
+                        <IconButton size="small" disabled={!b.active} onClick={() => setEditTarget(b)}>
+                          <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     )}
-                    </>)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -133,15 +133,21 @@ export function FirmBranchesCard({ firmRef, canDeactivate = false, maxBranches =
 
       <BranchDialog mode="create" firmRef={firmRef} open={createOpen} onClose={() => setCreateOpen(false)} />
       <BranchDialog mode="edit" firmRef={firmRef} branch={editTarget} onClose={() => setEditTarget(null)} />
+      <BranchStatusDialog firmRef={firmRef} branch={statusTarget} onClose={() => setStatusTarget(null)} />
+      <DeleteBranchDialog firmRef={firmRef} branch={deleteTarget} onClose={() => setDeleteTarget(null)} />
     </Card>
   );
 }
 
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 /**
- * ROOT's per-branch actions behind one ⋯ button. Edit opens the branch dialog; Deactivate and
- * Delete are placed now and wired up in the next phase.
+ * ROOT's per-branch actions behind one ⋯ button. Edit opens the branch dialog; Deactivate or
+ * Reactivate confirms first (BranchStatusDialog); Delete asks for the name (DeleteBranchDialog).
  */
-function BranchActionsMenu({ branch, onEdit }) {
+function BranchActionsMenu({ branch, onEdit, onToggleStatus, onDelete }) {
   const [anchor, setAnchor] = useState(null);
   const close = () => setAnchor(null);
 
@@ -154,23 +160,149 @@ function BranchActionsMenu({ branch, onEdit }) {
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={close}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
             transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-        <MenuItem onClick={() => { close(); onEdit(); }}>
+        {/* A deactivated branch is held as it was: reactivate it to edit it. */}
+        <MenuItem disabled={!branch.active} onClick={() => { close(); onEdit(); }}>
           <ListItemIcon><EditOutlinedIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Edit</ListItemText>
         </MenuItem>
-        {/* Next phase: deactivate the branch. */}
-        <MenuItem onClick={close}>
-          {/* Amber: a step short of Delete's red — it can be undone. */}
-          <ListItemIcon><BlockRoundedIcon fontSize="small" sx={{ color: tokens.review }} /></ListItemIcon>
-          <ListItemText>Deactivate</ListItemText>
-        </MenuItem>
-        {/* Next phase: delete the branch. */}
-        <MenuItem onClick={close} sx={{ color: tokens.rejected }}>
+        {branch.active ? (
+          <MenuItem onClick={() => { close(); onToggleStatus(); }}>
+            {/* Amber: a step short of Delete's red — it can be undone. */}
+            <ListItemIcon><BlockRoundedIcon fontSize="small" sx={{ color: tokens.review }} /></ListItemIcon>
+            <ListItemText>Deactivate</ListItemText>
+          </MenuItem>
+        ) : (
+          <MenuItem onClick={() => { close(); onToggleStatus(); }}>
+            <ListItemIcon><RestartAltRoundedIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Reactivate</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => { close(); onDelete(); }} sx={{ color: tokens.rejected }}>
           <ListItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: tokens.rejected }} /></ListItemIcon>
           <ListItemText>Delete</ListItemText>
         </MenuItem>
       </Menu>
     </>
+  );
+}
+
+/**
+ * Confirms deactivating or reactivating a branch, saying what each does to the people in it.
+ * Both touch users (their sessions and status), so the users list is refreshed too.
+ */
+function BranchStatusDialog({ firmRef, branch, onClose }) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  const [error, setError] = useState(null);
+  const deactivating = Boolean(branch?.active);
+
+  useEffect(() => { setError(null); }, [branch?.id]);
+
+  const mut = useMutation({
+    mutationFn: () => (deactivating ? deactivateBranch(branch.publicId) : activateBranch(branch.publicId)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['firms', firmRef, 'branches'] });
+      qc.invalidateQueries({ queryKey: ['users'] });
+      showToast({ severity: 'success', message: `${branch.name} ${deactivating ? 'deactivated' : 'reactivated'}` });
+      onClose();
+    },
+    onError: (err) => setError(err.response?.data?.message || 'That didn’t go through. Try again.'),
+  });
+
+  return (
+    <Dialog open={Boolean(branch)} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>{deactivating ? `Deactivate ${branch?.name}?` : `Reactivate ${branch?.name}?`}</DialogTitle>
+      <DialogContent>
+        {deactivating ? (
+          <Stack spacing={1.5}>
+            <DialogContentText>
+              Everyone who works in this branch is signed out and can no longer sign in.
+            </DialogContentText>
+            <DialogContentText>
+              Compliance officers and senior managers keep read-only access. Nothing in the branch
+              can be changed or deleted — not even by a platform administrator — until its
+              retention period has passed.
+            </DialogContentText>
+            <DialogContentText>You can reactivate it later.</DialogContentText>
+          </Stack>
+        ) : (
+          <DialogContentText>
+            The branch becomes editable again, and the people its deactivation switched off can sign
+            in again. Anyone a manager had deactivated themselves stays deactivated.
+          </DialogContentText>
+        )}
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" color={deactivating ? 'warning' : 'primary'}
+                disabled={mut.isPending} onClick={() => mut.mutate()}>
+          {mut.isPending ? 'Working…' : (deactivating ? 'Deactivate' : 'Reactivate')}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/**
+ * Deleting a branch. The server's preview decides what is offered: the retention date while a
+ * deactivated branch is on hold, what stands in the way if anything outside would break, or else
+ * what will go and the type-the-name confirmation.
+ */
+function DeleteBranchDialog({ firmRef, branch, onClose }) {
+  const qc = useQueryClient();
+  const { showToast } = useToast();
+  const [error, setError] = useState(null);
+
+  const previewQ = useQuery({
+    queryKey: ['branches', branch?.publicId, 'deletion-preview'],
+    queryFn: () => getBranchDeletionPreview(branch.publicId),
+    enabled: Boolean(branch),
+    // Always fresh: counts and eligibility move under it.
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  useEffect(() => { setError(null); }, [branch?.id]);
+
+  const mut = useMutation({
+    mutationFn: (typed) => deleteBranch(branch.publicId, typed),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['firms', firmRef, 'branches'] });
+      qc.invalidateQueries({ queryKey: ['users'] });
+      showToast({ severity: 'success', message: `${branch.name} deleted` });
+      onClose();
+    },
+    onError: (err) => setError(err.response?.data?.message || 'That didn’t go through. Try again.'),
+  });
+
+  const p = previewQ.data;
+  const summary = p && (
+    <Box component="ul" sx={{ m: 0, pl: 2.5, color: tokens.muted }}>
+      <li>{p.deals} deal(s) and {p.documents} document(s)</li>
+      <li>{p.usersDeleted} user account(s) that belong only to this branch</li>
+      {p.usersKept > 0 && (
+        <li>{p.usersKept} user(s) who also belong to another reporting entity lose access here only</li>
+      )}
+      <li>The branch’s compliance, fund transaction, suspicious activity and training records</li>
+    </Box>
+  );
+
+  return (
+    <TypeToConfirmDialog
+      open={Boolean(branch)}
+      title={`Delete ${branch?.name ?? 'branch'}?`}
+      name={branch?.name ?? ''}
+      kind="branch"
+      preview={p}
+      loading={previewQ.isLoading}
+      loadError={previewQ.isError ? (previewQ.error?.response?.data?.message || 'Couldn’t check this branch.') : null}
+      summary={summary}
+      error={error}
+      pending={mut.isPending}
+      onConfirm={(typed) => mut.mutate(typed)}
+      onClose={onClose}
+    />
   );
 }
 

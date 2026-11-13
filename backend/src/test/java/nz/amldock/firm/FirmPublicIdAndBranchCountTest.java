@@ -52,6 +52,9 @@ class FirmPublicIdAndBranchCountTest {
         lenient().when(firms.findById(FIRM_ID)).thenReturn(Optional.of(firm));
         lenient().when(firms.findByPublicId(FIRM_REF)).thenReturn(Optional.of(firm));
         lenient().when(branches.findAllByRealEstateFirmIdOrderByNameAsc(FIRM_ID)).thenReturn(List.of());
+        // Onboarding provisions the compliance officer through UserService.create; a new account.
+        lenient().when(userService.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new UserService.Created(new UserService.Member(new nz.amldock.user.User(), null), false));
     }
 
     @AfterEach
@@ -150,7 +153,7 @@ class FirmPublicIdAndBranchCountTest {
         org.mockito.Mockito.when(firms.existsByCountryAndNzbnIgnoreCaseAndIdNot("AU", "9429000000000", FIRM_ID))
                 .thenReturn(true);
         UpdateFirmRequest toAu = new UpdateFirmRequest(null, null, "AU", null, null, null,
-                null, null, null, null, null);
+                null, null, null, null);
         assertThatThrownBy(() -> service.update(FIRM_ID, toAu))
                 .isInstanceOf(nz.amldock.common.exception.BadRequestException.class)
                 .hasMessageContaining("ABN");
@@ -165,7 +168,7 @@ class FirmPublicIdAndBranchCountTest {
 
     private static UpdateFirmRequest request(String liaisonName, Integer numberOfBranches) {
         return new UpdateFirmRequest(null, null, null, liaisonName, null, null,
-                null, null, null, numberOfBranches, null);
+                null, null, null, numberOfBranches);
     }
 
     private void actAs(Role role) {

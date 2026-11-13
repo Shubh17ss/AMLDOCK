@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
 import nz.amldock.common.exception.BadRequestException;
@@ -84,11 +85,12 @@ class DealCloseSaleTest {
     @BeforeEach
     void setUp() {
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService(mock(DealUserRepository.class)),
+                new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)),
                 new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, risk, ownership, audit, notifier, versions, saleUnits,
                 org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
-                monitoring);
+                monitoring,
+                org.mockito.Mockito.mock(nz.amldock.document.storage.StoredFileReaper.class));
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(amlco, null, amlco.getAuthorities()));

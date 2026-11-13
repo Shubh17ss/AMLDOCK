@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
-import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { getIndividual, listIndividuals } from '../../api/individuals.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { personRolesLabel } from '../../api/ownership.js';
@@ -304,7 +304,7 @@ function PersonFacts({ person }) {
             <Chip
               size="small"
               icon={v.exception
-                ? <ReportProblemOutlinedIcon sx={{ fontSize: '0.8rem !important' }} />
+                ? <ErrorOutlineIcon sx={{ fontSize: '0.8rem !important' }} />
                 : undefined}
               label={v.label}
               sx={{
