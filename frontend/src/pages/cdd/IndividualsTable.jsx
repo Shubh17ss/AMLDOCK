@@ -48,7 +48,7 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
             <TableCell>Name</TableCell>
             <TableCell>Type</TableCell>
             <TableCell>Date of birth</TableCell>
-            <TableCell>Country of residence</TableCell>
+            <TableCell>Country of residence / incorporation</TableCell>
             <TableCell>Property</TableCell>
             <TableCell>Party</TableCell>
           </TableRow>

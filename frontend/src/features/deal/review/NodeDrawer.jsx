@@ -56,9 +56,11 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
    * through a ref - is the same coupling, pointed the harder way round.
    *
    * Seeded from what the owner already has, so re-verifying starts from the standing decision
-   * rather than from nothing, and null when they have none so neither pill is lit.
+   * rather than from nothing. An owner with none starts on a plain verification — the usual
+   * answer — so Verify is one click rather than a choice and then a click. An exception is still
+   * one tap away, and the field can still be cleared.
    */
-  const [verification, setVerification] = useState({ outcome: null, notes: '' });
+  const [verification, setVerification] = useState({ outcome: 'VERIFIED', notes: '' });
 
   // A different owner opens on Details. Landing on whichever tab the last one was left on would
   // mean opening a person and being shown an empty documents list for no reason.
@@ -66,7 +68,7 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
     if (!node?.id) return;
     setTab('details');
     setVerification({
-      outcome: isVerified(node.verificationStatus) ? node.verificationStatus : null,
+      outcome: isVerified(node.verificationStatus) ? node.verificationStatus : 'VERIFIED',
       notes: node.verificationNotes ?? '',
     });
   }, [node?.id]);

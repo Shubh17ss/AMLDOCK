@@ -14,12 +14,12 @@ import { IndividualsTable } from './IndividualsTable.jsx';
 import { exportIndividualsCsv } from './BeneficialOwnersPage.jsx';
 
 /**
- * The people on this branch's deals who live somewhere other than the reporting entity does.
+ * The owners on this branch's deals who sit outside the reporting entity's country: people who
+ * live elsewhere, and companies, trusts and other entities incorporated or registered elsewhere.
  *
- * <p>The overseas test runs on the server (`residence=OVERSEAS`): residence recorded and different
- * from the deal's reporting-entity country. It used to run here over the whole register, which a
- * paged list cannot do. This register asks for natural persons, where the Beneficial Owners one
- * asks for every kind of owner.
+ * <p>The overseas test runs on the server (`residence=OVERSEAS`): the deciding country recorded and
+ * different from the deal's reporting-entity country — residence for a person, jurisdiction for an
+ * entity (V71). It used to run here over the whole register, which a paged list cannot do.
  *
  * <p><strong>Someone with no residence recorded is not listed.</strong> Not being asked is not
  * evidence of living abroad, and a register that treated it as such would accuse people of an
@@ -32,19 +32,21 @@ export function OverseasResidentsPage() {
   const { showToast } = useToast();
   const paged = usePagedList({ resetOn: [firm?.id, branch?.id] });
   const query = paged.search;
-  const filters = { firmId: firm?.id, branchId: branch?.id, residence: 'OVERSEAS', q: paged.params.q };
+  // Every kind of owner: an entity registered abroad is as much an overseas owner as a person living
+  // abroad. Shared with the CSV, so the file holds what the screen does.
+  const filters = {
+    firmId: firm?.id, branchId: branch?.id, allTypes: true, residence: 'OVERSEAS', q: paged.params.q,
+  };
 
   const q = useQuery({
-    // Natural persons only — deliberately NOT the Beneficial Owners register's wider fetch, which
-    // now carries companies and trusts too. This register is about where a person lives, and an
-    // entity has no country of residence at all: every one of them would land in the "nobody has
-    // been asked" count below and read as unfinished diligence that does not exist. The narrower
-    // request keeps that impossible rather than merely filtered, so the two cannot drift.
+    // Every owner type here; the "nobody has been asked" count below stays on natural persons.
     queryKey: ['individuals', 'overseas', firm?.id ?? null, branch?.id ?? null, paged.params],
     queryFn: () => listIndividuals({ ...filters, page: paged.page, size: paged.size }),
     placeholderData: keepPreviousData,
   });
-  // Only the count is wanted, so one row is enough to read totalElements.
+  // Only the count is wanted, so one row is enough to read totalElements. People only, as before:
+  // the residence question is asked of a person, and counting every entity with no jurisdiction
+  // typed in would change what this number has always meant.
   const unansweredQ = useQuery({
     queryKey: ['individuals', 'unanswered', firm?.id ?? null, branch?.id ?? null],
     queryFn: () => listIndividuals({ firmId: firm?.id, branchId: branch?.id, residence: 'UNANSWERED', size: 1 }),
@@ -62,7 +64,7 @@ export function OverseasResidentsPage() {
     <Stack spacing={2.5}>
       <PageHeader
         eyebrow={[
-          `${countText(q.data)} ${total === 1 ? 'person' : 'people'} residing overseas`,
+          `${countText(q.data)} ${total === 1 ? 'owner' : 'owners'} overseas`,
           homeCountry ? `home ${countryName(homeCountry) ?? homeCountry}` : null,
           firm?.name,
           branch?.name,
@@ -74,7 +76,7 @@ export function OverseasResidentsPage() {
             startIcon={<TableViewIcon />}
             disabled={total === 0}
             onClick={() => exportIndividualsCsv({
-              params: filters, total: countText(q.data), prefix: 'overseas-residents', firm, branch, showToast, noun: ['person', 'people'],
+              params: filters, total: countText(q.data), prefix: 'overseas-residents', firm, branch, showToast, noun: ['owner', 'owners'],
             })}
           >
             Download CSV
