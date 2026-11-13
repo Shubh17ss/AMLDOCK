@@ -113,7 +113,7 @@ class DealRiskApprovalTest {
         deal.setRiskRating(RiskRating.LOW);
         lenient().when(deals.findById(DEAL_ID)).thenReturn(Optional.of(deal));
 
-        lenient().when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.empty());
+        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.empty());
         lenient().when(people.findAllById(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
 
         asUser(complianceOfficer);

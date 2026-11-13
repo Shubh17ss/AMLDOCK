@@ -493,7 +493,7 @@ public class DealRiskService {
 
     private List<OwnershipNode> nodesOf(Long dealId) {
         if (dealId == null) return List.of();   // a deal being created has no structure yet
-        OwnershipStructure structure = structures.findByDealId(dealId).orElse(null);
+        OwnershipStructure structure = structures.findVendorByDealId(dealId).orElse(null);
         if (structure == null) return List.of();
         return nodes.findAllByOwnershipStructureIdOrderByIdAsc(structure.getId());
     }

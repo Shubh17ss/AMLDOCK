@@ -1,6 +1,6 @@
 import { Box, Stack, TextField, Typography } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { SegmentedField } from '../../components/SegmentedField.jsx';
 import { tokens } from '../../theme/theme.js';
 import { formatVerifiedAt, verificationDisplay } from './verificationDisplay.js';
@@ -61,7 +61,7 @@ export function NodeVerificationTab({
         >
           <Stack direction="row" spacing={1} alignItems="flex-start">
             {granted.exception
-              ? <ReportProblemOutlinedIcon sx={{ fontSize: '1.15rem', color: 'var(--cl-warn-text)' }} />
+              ? <ErrorOutlineIcon sx={{ fontSize: '1.15rem', color: 'var(--cl-warn-text)' }} />
               : <CheckCircleIcon sx={{ fontSize: '1.15rem', color: granted.text }} />}
 
             <Stack spacing={0.5} sx={{ minWidth: 0 }}>

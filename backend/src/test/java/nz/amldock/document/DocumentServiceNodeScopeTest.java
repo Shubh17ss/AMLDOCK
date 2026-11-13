@@ -19,6 +19,7 @@ import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipNodeRepository;
 import nz.amldock.ownership.OwnershipStructure;
 import nz.amldock.ownership.OwnershipStructureRepository;
+import nz.amldock.ownership.StructureSide;
 import nz.amldock.user.Role;
 import nz.amldock.user.UserPrincipal;
 import nz.amldock.user.UserRepository;
@@ -611,6 +612,77 @@ class DocumentServiceNodeScopeTest {
     }
 
     /* ---------- helpers ---------- */
+
+    /* ---------- the purchaser's evidence ---------- */
+
+    private static final Long PURCHASER_STRUCTURE_ID = 21L;
+
+    /** Puts the test's node on the purchaser's structure, and the deal in the given close state. */
+    private void onPurchaserOf(DealStatus status, Boolean sold) {
+        OwnershipStructure purchaser = new OwnershipStructure();
+        ReflectionTestUtils.setField(purchaser, "id", PURCHASER_STRUCTURE_ID);
+        purchaser.setDealId(DEAL_ID);
+        purchaser.setSide(StructureSide.PURCHASER);
+        lenient().when(ownershipStructures.findById(PURCHASER_STRUCTURE_ID)).thenReturn(Optional.of(purchaser));
+        OwnershipNode node = ownershipNodes.findById(NODE_ID).orElseThrow();
+        node.setOwnershipStructureId(PURCHASER_STRUCTURE_ID);
+        Deal deal = deals.findById(DEAL_ID).orElseThrow();
+        deal.setStatus(status);
+        deal.setPropertySold(sold);
+    }
+
+    @Test
+    void thePurchasersEvidenceIsAddedToADealClosedAsSold() {
+        stubNodeForUpload(NodeType.PRIVATE_COMPANY);
+        onPurchaserOf(DealStatus.CLOSED, true);
+        when(documents.save(any())).thenAnswer(i -> {
+            Document d = i.getArgument(0);
+            ReflectionTestUtils.setField(d, "id", 42L);
+            return d;
+        });
+        when(storage.presignIncomingUpload(any(), any(), any())).thenReturn("https://s3.example/put");
+
+        service.presignUpload(uploadRequest(DocumentType.FINANCIAL_STATEMENTS));
+
+        verify(documents).save(any());
+    }
+
+    @Test
+    void thePurchasersEvidenceIsShutUnlessTheDealClosedAsSold() {
+        stubNodeForUpload(NodeType.PRIVATE_COMPANY);
+        onPurchaserOf(DealStatus.CLOSED, false);
+
+        assertThatThrownBy(() -> service.presignUpload(uploadRequest(DocumentType.FINANCIAL_STATEMENTS)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("closed as sold");
+        verify(documents, never()).save(any());
+    }
+
+    @Test
+    void theVendorsEvidenceStaysShutOnADealClosedAsSold() {
+        stubNodeForUpload(NodeType.PRIVATE_COMPANY);
+        Deal deal = deals.findById(DEAL_ID).orElseThrow();
+        deal.setStatus(DealStatus.CLOSED);
+        deal.setPropertySold(true);
+
+        assertThatThrownBy(() -> service.presignUpload(uploadRequest(DocumentType.FINANCIAL_STATEMENTS)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("cannot be added");
+    }
+
+    @Test
+    void aPurchasersDocumentCannotMoveOntoTheProperty() {
+        stubNodeForUpload(NodeType.PRIVATE_COMPANY);
+        onPurchaserOf(DealStatus.CLOSED, true);
+        Document d = doc(9L, "statement.pdf", Instant.now());
+        d.setOwnershipNodeId(NODE_ID);
+        when(documents.findById(9L)).thenReturn(Optional.of(d));
+
+        assertThatThrownBy(() -> service.move(9L, null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("vendor's and the purchaser's");
+        assertThat(d.getOwnershipNodeId()).isEqualTo(NODE_ID);
+    }
 
     private void stubNodeForUpload(NodeType type) {
         stubNode(type, null);

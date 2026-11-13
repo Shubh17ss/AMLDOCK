@@ -7,8 +7,16 @@ import java.util.List;
 import java.util.Optional;
 
 public interface OwnershipStructureRepository extends JpaRepository<OwnershipStructure, Long> {
-    Optional<OwnershipStructure> findByDealId(Long dealId);
+    Optional<OwnershipStructure> findByDealIdAndSide(Long dealId, StructureSide side);
 
-    /** Every structure behind a set of deals, for readers that span more than one. */
-    List<OwnershipStructure> findAllByDealIdIn(Collection<Long> dealIds);
+    /**
+     * The vendor's structure - the one the deal's risk, readiness and versions are about. Named for
+     * the side on purpose: a deal now has two, and "the deal's structure" no longer says which.
+     */
+    default Optional<OwnershipStructure> findVendorByDealId(Long dealId) {
+        return findByDealIdAndSide(dealId, StructureSide.VENDOR);
+    }
+
+    /** Every structure on one side behind a set of deals, for readers that span more than one. */
+    List<OwnershipStructure> findAllByDealIdInAndSide(Collection<Long> dealIds, StructureSide side);
 }

@@ -188,6 +188,32 @@ public class DealLifecycleService {
     }
 
     /**
+     * Whether the purchaser's structure may be changed on a deal in this state.
+     *
+     * <p>Only once the deal has closed as sold, and only while it stays there. The purchaser is not
+     * part of the compliance sign-off — it never feeds risk or readiness — so CLOSED, which locks
+     * the vendor's side, is exactly when this one opens. A deal closed as unsold has no purchaser
+     * to record, and one taken back to VERIFIED keeps what was recorded but cannot change it until
+     * it is closed as sold again.
+     */
+    public static boolean canEditPurchaser(DealStatus status, Boolean propertySold) {
+        return status == DealStatus.CLOSED && Boolean.TRUE.equals(propertySold);
+    }
+
+    /**
+     * The write gate for the purchaser's structure and its documents: the same people as
+     * {@link #assertEditable}, with {@link #canEditPurchaser} in place of the content-status rule.
+     */
+    public void assertPurchaserEditable(Deal deal, UserPrincipal actor, Long dealFirmId) {
+        assertActor(deal, actor, dealFirmId, Who.EDITOR);
+        if (!canEditPurchaser(deal.getStatus(), deal.getPropertySold())) {
+            throw new BadRequestException("The purchaser can only be recorded on a deal closed as sold"
+                    + " — this one is " + deal.getStatus()
+                    + (deal.getStatus() == DealStatus.CLOSED ? " as not sold" : "") + ".");
+        }
+    }
+
+    /**
      * Whether this role may add documents to a deal in this status.
      *
      * <p>Wider than {@link #canEditContent} on purpose. The broker (author or granted agent) adds

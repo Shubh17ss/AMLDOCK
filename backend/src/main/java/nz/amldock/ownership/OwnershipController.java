@@ -40,19 +40,30 @@ public class OwnershipController {
         this.audit = audit;
     }
 
+    /*
+     * `side` picks the vendor's structure or the purchaser's, on the endpoints that name a
+     * structure rather than a node. VENDOR when absent, so every caller written before the
+     * purchaser existed - the mobile app among them - keeps addressing the structure it always has.
+     * Endpoints that name a node or an edge take the side from it instead.
+     */
+
     @GetMapping
-    public TreeDto getTree(@DealRef Long dealId) {
-        return ownership.getTree(dealId);
+    public TreeDto getTree(@DealRef Long dealId,
+                           @RequestParam(defaultValue = "VENDOR") StructureSide side) {
+        return ownership.getTree(dealId, side);
     }
 
     /* ---------- nodes ---------- */
 
     @PostMapping("/nodes")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public NodeDto createNode(@DealRef Long dealId, @Valid @RequestBody CreateNodeRequest req) {
-        NodeDto node = ownership.createNode(dealId, req);
+    public NodeDto createNode(@DealRef Long dealId,
+                              @RequestParam(defaultValue = "VENDOR") StructureSide side,
+                              @Valid @RequestBody CreateNodeRequest req) {
+        NodeDto node = ownership.createNode(dealId, side, req);
         audit.record(AuditAction.NODE_CREATED, "OwnershipNode", node.id(),
-                "Created " + node.nodeType() + " node \"" + node.displayName() + "\" on deal " + dealId);
+                "Created " + node.nodeType() + " node \"" + node.displayName() + "\" on deal " + dealId
+                        + (side == StructureSide.PURCHASER ? " (purchaser)" : ""));
         return node;
     }
 
@@ -148,11 +159,14 @@ public class OwnershipController {
      */
     @PostMapping("/order")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public TreeDto reorder(@DealRef Long dealId, @Valid @RequestBody ReorderRequest req) {
-        TreeDto tree = ownership.reorderSiblings(dealId, req);
+    public TreeDto reorder(@DealRef Long dealId,
+                           @RequestParam(defaultValue = "VENDOR") StructureSide side,
+                           @Valid @RequestBody ReorderRequest req) {
+        TreeDto tree = ownership.reorderSiblings(dealId, side, req);
         audit.record(AuditAction.STRUCTURE_REORDERED, "OwnershipStructure", tree.ownershipStructureId(),
                 req.parentNodeId() == null
-                        ? "Reordered the top-level owners of deal " + dealId
+                        ? "Reordered the top-level " + (side == StructureSide.PURCHASER ? "purchasers" : "owners")
+                                + " of deal " + dealId
                         : "Reordered the children of node " + req.parentNodeId(),
                 "{\"order\":" + req.childNodeIds() + "}");
         return tree;
@@ -162,7 +176,9 @@ public class OwnershipController {
 
     @PostMapping("/root")
     @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
-    public TreeDto setRoot(@DealRef Long dealId, @RequestBody SetRootRequest req) {
-        return ownership.setRoot(dealId, req.nodeId());
+    public TreeDto setRoot(@DealRef Long dealId,
+                           @RequestParam(defaultValue = "VENDOR") StructureSide side,
+                           @RequestBody SetRootRequest req) {
+        return ownership.setRoot(dealId, side, req.nodeId());
     }
 }

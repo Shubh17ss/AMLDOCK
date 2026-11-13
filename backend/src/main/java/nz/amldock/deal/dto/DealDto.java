@@ -63,7 +63,10 @@ public record DealDto(
         boolean cddDelayed,
         Instant cddDelayedAt,
         // V69 — false once the branch is deactivated: the deal is then read-only to everyone.
-        boolean branchActive
+        boolean branchActive,
+        // V49 — what the deal closed as; null until it has been closed. A CLOSED deal with true
+        // here is the one that takes a purchaser.
+        Boolean propertySold
 ) {
     public static DealDto from(DealFields d, String publicId, Long firmId, String firmName, String branchName,
                                boolean branchActive, PropertyDto property, ClientDto client,
@@ -86,6 +89,6 @@ public record DealDto(
                 d.getRiskValue(), d.isRiskApproved(), d.getRiskOverrideComment(),
                 d.isOwnershipTenureTbc(),
                 d.isCddDelayed(), d.getCddDelayedAt(),
-                branchActive);
+                branchActive, d.getPropertySold());
     }
 }

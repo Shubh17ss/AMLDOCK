@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Box, ButtonBase, Stack, Typography } from '@mui/material';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { getVerificationTrail } from '../../api/ownership.js';
 import { tokens, fonts } from '../../theme/theme.js';
 import { formatVerifiedAt, verificationDisplay } from './verificationDisplay.js';
@@ -63,7 +63,7 @@ function TrailRow({ entry: e, onOpen }) {
             {display.label}
           </Typography>
           {display.exception && (
-            <ReportProblemOutlinedIcon sx={{ fontSize: '0.9rem', color: 'var(--cl-warn-text)' }} />
+            <ErrorOutlineIcon sx={{ fontSize: '0.9rem', color: 'var(--cl-warn-text)' }} />
           )}
           {stamp && (
             <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: tokens.muted }}>

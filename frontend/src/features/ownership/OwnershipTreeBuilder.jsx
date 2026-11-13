@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, IconButton, Menu, MenuItem, Stack, Tooltip, Typography,
+  Alert, Box, Button, ButtonBase, Chip, IconButton, Menu, MenuItem, Stack, Tooltip, Typography,
 } from '@mui/material';
 import { DndContext, DragOverlay, useDraggable, useDroppable } from '@dnd-kit/core';
 import AddIcon from '@mui/icons-material/Add';
@@ -14,6 +14,7 @@ import LinkOffIcon from '@mui/icons-material/LinkOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { isLeafOnlyType, nodeTypeLabel, personRolesLabel, trustTypeLabel } from '../../api/ownership.js';
 import { countryName } from '../../data/countries.js';
 import { formatPropertyAddress } from '../../data/addressFinderMeta.js';
@@ -104,6 +105,14 @@ export function OwnershipTreeBuilder({
   /** Opens the deal itself, from the property at the head of the chain. */
   onOpenDeal,
   dealSelected = false,
+  /**
+   * Which party's structure is on screen — `'VENDOR'` or `'PURCHASER'` — and the switch between
+   * them, in place of the old heading. The purchaser's side exists only once the deal has closed
+   * as sold; until then `purchaserAvailable` is false and that half of the switch is off.
+   */
+  side = 'VENDOR',
+  onSideChange,
+  purchaserAvailable = false,
 }) {
   const { nodesById, childrenByParent, parentIdByChild } = useMemo(() => indexTree(tree), [tree]);
 
@@ -190,9 +199,11 @@ export function OwnershipTreeBuilder({
     <Stack spacing={2}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
         <Box>
-          <Typography sx={{ fontFamily: fonts.display, fontSize: '1.05rem', color: tokens.ink }}>
-            Ownership structure
-          </Typography>
+          <SideToggle
+            side={side}
+            onChange={onSideChange}
+            purchaserAvailable={purchaserAvailable}
+          />
           {/* <Typography variant="caption" sx={{ color: tokens.muted }}>
             {dragEnabled
               ? 'Who stands behind this property, down to the people — drag a row onto an owner to move it'
@@ -221,6 +232,108 @@ export function OwnershipTreeBuilder({
         </DndContext>
       ) : body}
     </Stack>
+  );
+}
+
+/**
+ * Vendor | Purchaser, where the heading used to say "Ownership structure".
+ *
+ * <p>A segmented control rather than MUI's toggle group: two halves of equal width, and one ink
+ * pill behind them that slides to whichever side is on screen. The pill is what moves; the labels
+ * only change colour over it, so the switch reads as one thing travelling rather than two buttons
+ * swapping a fill.
+ *
+ * <p>The purchaser half is disabled, with the reason on hover, until the deal has closed as sold.
+ * A disabled button swallows pointer events, so the tooltip hangs off a wrapper around it.
+ */
+// Sized to sit level with the small buttons on this screen ("Add owner" beside it), and set in the
+// tab strip's own type, so the Structure tab's header reads as part of the same row of controls.
+const SIDE_WIDTH = 96;
+const SIDE_HEIGHT = 32;
+const SIDE_INSET = 3;
+// The primary button's corner (MuiButton in theme.js), so the toggle and "Add owner" match. The
+// pill sits SIDE_INSET inside the track, so its corner is smaller by that much to stay concentric.
+const SIDE_RADIUS = 12;
+const SIDE_PILL_RADIUS = SIDE_RADIUS - SIDE_INSET;
+// True black in both themes. tokens.ink is a slate that inverts to near-white in dark mode, which
+// under white text would leave the active side unreadable.
+const SIDE_ACTIVE = '#262525';
+
+function SideToggle({ side, onChange, purchaserAvailable }) {
+  const onPurchaser = side === 'PURCHASER';
+  const choose = (next) => { if (next !== side && onChange) onChange(next); };
+
+  const half = (value, label, disabled = false) => {
+    const active = side === value;
+    return (
+      <ButtonBase
+        role="radio"
+        aria-checked={active}
+        disabled={disabled}
+        onClick={() => choose(value)}
+        sx={motion.respectful({
+          position: 'relative',
+          zIndex: 1,
+          width: SIDE_WIDTH,
+          height: SIDE_HEIGHT - SIDE_INSET * 2,
+          borderRadius: `${SIDE_PILL_RADIUS}px`,
+          fontFamily: fonts.body,
+          fontSize: '0.9rem',
+          fontWeight: active ? 600 : 500,
+          color: active ? '#FFFFFF' : tokens.muted,
+          transition: `color ${motion.enter} ${motion.ease}`,
+          '&:hover': active || disabled ? {} : { color: tokens.ink },
+          '&.Mui-disabled': { color: tokens.muted, opacity: 0.45 },
+          '&.Mui-focusVisible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
+        })}
+      >
+        {label}
+      </ButtonBase>
+    );
+  };
+
+  return (
+    <Box
+      role="radiogroup"
+      aria-label="Whose structure to show"
+      sx={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        p: `${SIDE_INSET}px`,
+        height: SIDE_HEIGHT,
+        borderRadius: `${SIDE_RADIUS}px`,
+        border: `1px solid ${tokens.hairline}`,
+        backgroundColor: tokens.tile,
+      }}
+    >
+      {/* The pill. One element, translated rather than re-rendered on the other side, so the
+          browser animates the movement itself. */}
+      <Box
+        aria-hidden
+        sx={motion.respectful({
+          position: 'absolute',
+          top: SIDE_INSET,
+          left: SIDE_INSET,
+          width: SIDE_WIDTH,
+          height: SIDE_HEIGHT - SIDE_INSET * 2,
+          borderRadius: `${SIDE_PILL_RADIUS}px`,
+          backgroundColor: SIDE_ACTIVE,
+          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.2)',
+          transform: `translateX(${onPurchaser ? SIDE_WIDTH : 0}px)`,
+          transition: `transform ${motion.enter} ${motion.ease}`,
+        })}
+      />
+      {half('VENDOR', 'Vendor')}
+      <Tooltip
+        title={purchaserAvailable ? '' : 'Available once the deal is closed as sold'}
+        placement="top"
+      >
+        <Box component="span" sx={{ display: 'inline-flex' }}>
+          {half('PURCHASER', 'Purchaser', !purchaserAvailable)}
+        </Box>
+      </Tooltip>
+    </Box>
   );
 }
 
@@ -705,7 +818,7 @@ function NodeBranch({
                 <Chip
                   size="small"
                   icon={v.exception
-                    ? <ReportProblemOutlinedIcon sx={{ fontSize: '0.85rem !important' }} />
+                    ? <ErrorOutlineIcon sx={{ fontSize: '0.85rem !important' }} />
                     : undefined}
                   label={v.label}
                   sx={{

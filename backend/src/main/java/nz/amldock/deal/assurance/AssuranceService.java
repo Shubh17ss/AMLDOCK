@@ -185,7 +185,7 @@ public class AssuranceService {
                 "Deal", d.getId(),
                 "Version " + versionNo + " of deal " + d.getReference()
                         + (assured
-                            ? " assured"
+                            ? " marked passed"
                             : " marked action required: " + cleaned.size()
                               + (cleaned.size() == 1 ? " issue — " : " issues — ")
                               + cleaned.stream().map(IssueDto::issue).collect(Collectors.joining("; "))));

@@ -16,6 +16,7 @@ import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipNodeRepository;
 import nz.amldock.ownership.OwnershipStructure;
 import nz.amldock.ownership.OwnershipStructureRepository;
+import nz.amldock.ownership.StructureSide;
 import nz.amldock.property.Property;
 import nz.amldock.property.PropertyRepository;
 import nz.amldock.property.PropertyType;
@@ -215,7 +216,7 @@ class DealVersionServiceTest {
         structure.setDealId(DEAL_ID);
         structure.setRootNodeId(100L);
         structure.setNotes("Two-tier trust");
-        when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
         when(versions.findTopByDealIdOrderByVersionNoDesc(DEAL_ID)).thenReturn(Optional.empty());
         when(versions.save(any())).thenAnswer(inv -> withId(inv.getArgument(0), 500L));
 
@@ -252,6 +253,49 @@ class DealVersionServiceTest {
                     // The link row's own column: which scan put this person on the deal.
                     assertThat(p.getSourceDocumentId()).isEqualTo(200L);
                 });
+    }
+
+    /**
+     * The purchaser is recorded after the sign-off a version captures, so a deal re-verified with
+     * one on it copies none of it: not its owners, not the documents filed on them, not the people
+     * behind them.
+     */
+    @Test
+    void thePurchaserStaysOutOfTheVersion() {
+        stubEmptyGraph();
+        OwnershipStructure purchaser = new OwnershipStructure();
+        ReflectionTestUtils.setField(purchaser, "id", 21L);
+        purchaser.setDealId(DEAL_ID);
+        purchaser.setSide(StructureSide.PURCHASER);
+        when(structures.findByDealIdAndSide(DEAL_ID, StructureSide.PURCHASER)).thenReturn(Optional.of(purchaser));
+        OwnershipNode buyer = node(150L);
+        buyer.setOwnershipStructureId(21L);
+        buyer.setBeneficialOwnerId(301L);
+        when(nodes.findAllByOwnershipStructureIdOrderByIdAsc(21L)).thenReturn(List.of(buyer));
+
+        Document vendorScan = document(200L);
+        Document buyerDoc = document(201L);
+        buyerDoc.setBeneficialOwnerId(null);
+        buyerDoc.setOwnershipNodeId(150L);
+        when(documents.findAllByDealIdAndStatusOrderByCreatedAtDesc(DEAL_ID, DocumentStatus.ACTIVE))
+                .thenReturn(List.of(vendorScan, buyerDoc));
+        when(dealOwners.findAllByDealIdOrderByCreatedAtAsc(DEAL_ID)).thenReturn(List.of(
+                new nz.amldock.beneficialowner.DealBeneficialOwner(DEAL_ID, 300L, 200L),
+                new nz.amldock.beneficialowner.DealBeneficialOwner(DEAL_ID, 301L, null)));
+        when(owners.findAllById(any())).thenAnswer(inv -> {
+            java.util.Collection<Long> ids = inv.getArgument(0);
+            return ids.stream().map(DealVersionServiceTest::person).toList();
+        });
+
+        capture(dealIn(DealStatus.VERIFIED), "re-verified");
+
+        ArgumentCaptor<List<DealVersionDocument>> docs = listCaptor();
+        verify(versionDocuments).saveAll(docs.capture());
+        assertThat(docs.getValue()).extracting(DealVersionDocument::getDocumentId).containsExactly(200L);
+
+        ArgumentCaptor<List<DealVersionPerson>> people = listCaptor();
+        verify(versionPeople).saveAll(people.capture());
+        assertThat(people.getValue()).extracting(DealVersionPerson::getBeneficialOwnerId).containsExactly(300L);
     }
 
     /**
@@ -298,7 +342,7 @@ class DealVersionServiceTest {
 
     /** A deal with no structure, documents or people — the shape most of these tests need. */
     private void stubEmptyGraph() {
-        lenient().when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.empty());
+        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.empty());
         lenient().when(properties.findById(PROPERTY_ID)).thenReturn(Optional.empty());
         lenient().when(clients.findById(CLIENT_ID)).thenReturn(Optional.empty());
         lenient().when(documents.findAllByDealIdAndStatusOrderByCreatedAtDesc(DEAL_ID, DocumentStatus.ACTIVE))

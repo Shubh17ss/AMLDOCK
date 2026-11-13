@@ -3,6 +3,7 @@ package nz.amldock.individual;
 import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.PersonRole;
+import nz.amldock.ownership.StructureSide;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,6 +27,8 @@ public record IndividualRowDto(
          * and the person behind it are two rows that look alike and read very differently.
          */
         NodeType nodeType,
+        /** Which party to the deal this owner stands for: the vendor, or the purchaser recorded at close. */
+        StructureSide side,
         /** The deal's public id. */
         String dealId,
         String dealReference,

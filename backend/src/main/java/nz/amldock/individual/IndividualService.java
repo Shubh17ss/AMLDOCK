@@ -96,9 +96,10 @@ public class IndividualService {
         Map<Long, OwnershipNode> nodeById = byId(nodes.findAllById(nodeIds), OwnershipNode::getId);
         List<OwnershipNode> page = nodeIds.stream().map(nodeById::get).filter(java.util.Objects::nonNull).toList();
 
-        Map<Long, Long> dealIdByStructureId = structures.findAllById(distinct(page, OwnershipNode::getOwnershipStructureId))
-                .stream().collect(Collectors.toMap(OwnershipStructure::getId, OwnershipStructure::getDealId));
-        Map<Long, Deal> dealById = byId(deals.findAllById(dealIdByStructureId.values().stream().distinct().toList()), Deal::getId);
+        Map<Long, OwnershipStructure> structureById = byId(
+                structures.findAllById(distinct(page, OwnershipNode::getOwnershipStructureId)), OwnershipStructure::getId);
+        Map<Long, Deal> dealById = byId(deals.findAllById(structureById.values().stream()
+                .map(OwnershipStructure::getDealId).distinct().toList()), Deal::getId);
         // Bulk-resolve, the same idiom the deals list uses: one query per lookup table rather
         // than one per row.
         Map<Long, BeneficialOwner> ownerById = byId(
@@ -108,7 +109,8 @@ public class IndividualService {
                 properties.findAllById(distinct(List.copyOf(dealById.values()), Deal::getPropertyId)), Property::getId);
 
         return page.stream().map(n -> {
-            Deal deal = dealById.get(dealIdByStructureId.get(n.getOwnershipStructureId()));
+            OwnershipStructure structure = structureById.get(n.getOwnershipStructureId());
+            Deal deal = structure == null ? null : dealById.get(structure.getDealId());
             if (deal == null) return null;   // removed between the id query and this load
             Property property = propertyById.get(deal.getPropertyId());
             // Null when the person record was deleted out from under the node: beneficial_owner_id
@@ -119,6 +121,7 @@ public class IndividualService {
             return new IndividualRowDto(
                     n.getId(),
                     n.getNodeType(),
+                    structure.getSide(),
                     deal.getPublicId(),
                     // Matches how the deals list renders a reference that was never generated.
                     deal.getReference() != null ? deal.getReference() : "#" + deal.getPublicId(),
