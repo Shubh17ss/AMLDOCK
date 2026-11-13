@@ -16,7 +16,7 @@ import java.util.stream.Stream;
 final class IndividualCsv {
 
     // No deal reference column: deals are named by their property address, which is already here.
-    static final String REGISTER_HEADERS = "Name,Type,Date of birth,Country of residence,Property,Party";
+    static final String REGISTER_HEADERS = "Name,Type,Date of birth,Country of residence / incorporation,Property,Party";
     static final String EXCEPTION_HEADERS = "Name,Type,Verified,Property,Party";
 
     private IndividualCsv() {}

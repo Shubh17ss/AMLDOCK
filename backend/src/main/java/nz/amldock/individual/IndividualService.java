@@ -129,14 +129,16 @@ public class IndividualService {
                     n.getDisplayName(),
                     // The node's copy first: extraction writes the person's and pushes it down, so
                     // the node carries what this deal was told, which is what this row is about.
-                    // Both of the next two are person-shaped and come back null for a company or
-                    // a trust — those never link to a beneficial_owner, and a company has an
-                    // incorporation date rather than a birthday. The registers render the gap as a
-                    // dash; the Overseas one keeps to natural persons so the gap is never read as
-                    // "nobody asked".
+                    // Person-shaped, so null for a company or a trust — a company has an
+                    // incorporation date rather than a birthday. The registers render it as a dash.
                     n.getDateOfBirth() != null ? n.getDateOfBirth()
                             : (person == null ? null : person.getDateOfBirth()),
-                    person == null ? null : person.getCountryOfResidence(),
+                    // The country that decides whether this owner is overseas, the same one the
+                    // node's is_overseas is kept from (V71): where a person lives, or where an
+                    // entity is incorporated or registered.
+                    n.getNodeType() == NodeType.INDIVIDUAL
+                            ? (person == null ? null : person.getCountryOfResidence())
+                            : n.getJurisdictionCountry(),
                     n.getPersonRoles(),
                     n.getVerificationStatus(),
                     n.getVerifiedAt(),

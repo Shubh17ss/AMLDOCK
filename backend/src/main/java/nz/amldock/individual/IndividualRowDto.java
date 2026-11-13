@@ -35,7 +35,11 @@ public record IndividualRowDto(
         String propertyAddress,
         String displayName,
         LocalDate dateOfBirth,
-        /** ISO 3166-1 alpha-2, or null when nobody has been asked. */
+        /**
+         * ISO 3166-1 alpha-2: where a person lives, or where an entity is incorporated or
+         * registered — the country that decides whether the owner is overseas. Null when nobody
+         * has been asked.
+         */
         String countryOfResidence,
         Set<PersonRole> personRoles,
         NodeVerificationStatus verificationStatus,
