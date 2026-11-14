@@ -7,6 +7,7 @@ import { ContactPage } from '../pages/ContactPage.jsx';
 import { PlatformPage } from '../pages/PlatformPage.jsx';
 import { SecurityPage } from '../pages/SecurityPage.jsx';
 import { AboutPage } from '../pages/AboutPage.jsx';
+import { PrivacyPage, TermsPage } from '../pages/LegalPages.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { AdminLoginPage } from '../pages/AdminLoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
@@ -50,12 +51,17 @@ import { NewDealPage } from '../pages/NewDealPage.jsx';
 import { DealReviewScreen } from '../pages/DealReviewScreen.jsx';
 import { DealVersionsPage } from '../pages/DealVersionsPage.jsx';
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
+import { FlatSurface } from '../components/FlatSurface.jsx';
 
 /**
  * Who may open a section landing or module route. Everything is section-read except the two
  * Reporting modules FINANCE works in, plus the landing they sit under, and the Workspace section,
  * which is ROOT's.
  */
+// Every route reachable from the sidebar menu, and the profile, is on the flat theme. The deal
+// screens and the branch/firm lists outside the menu are not yet.
+const flat = (page) => <FlatSurface>{page}</FlatSurface>;
+
 const rolesFor = (path) => {
   if (path === WORKSPACE_PATH || path.startsWith(`${WORKSPACE_PATH}/`)) return QUERY_ADMIN_ROLES;
   return FINANCE_PATHS.includes(path) ? FINANCE_SECTION_ROLES : SECTION_READ_ROLES;
@@ -68,6 +74,8 @@ export function AppRoutes() {
       <Route path="/platform" element={<PlatformPage />} />
       <Route path="/security" element={<SecurityPage />} />
       <Route path="/about" element={<AboutPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -75,25 +83,25 @@ export function AppRoutes() {
 
       <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
         <Route path="/app" element={<HomeRedirect />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/dashboard" element={flat(<DashboardPage />)} />
+        <Route path="/profile" element={flat(<ProfilePage />)} />
 
         {/* CDD Register — the role-aware stats dashboard (the CDD group landing) */}
-        <Route path={CDD_REGISTER_PATH} element={<CddRegisterPage />} />
+        <Route path={CDD_REGISTER_PATH} element={flat(<CddRegisterPage />)} />
 
         {/* Deals — the full deal list with filters (formerly the /queue compliance queue) */}
-        <Route path={DEALS_PATH} element={<DealsPage />} />
+        <Route path={DEALS_PATH} element={flat(<DealsPage />)} />
         {/* The three CDD registers. Unguarded like the rest of the CDD section: who may see
             which individuals is decided by the server narrowing the deals behind them, not by
             which roles can open the page. */}
-        <Route path={BENEFICIAL_OWNERS_PATH} element={<BeneficialOwnersPage />} />
-        <Route path={OVERSEAS_RESIDENTS_PATH} element={<OverseasResidentsPage />} />
-        <Route path={CDD_EXCEPTIONS_PATH} element={<CddExceptionsPage />} />
+        <Route path={BENEFICIAL_OWNERS_PATH} element={flat(<BeneficialOwnersPage />)} />
+        <Route path={OVERSEAS_RESIDENTS_PATH} element={flat(<OverseasResidentsPage />)} />
+        <Route path={CDD_EXCEPTIONS_PATH} element={flat(<CddExceptionsPage />)} />
         {/* Guarded, unlike its neighbours: it is compliance's own workspace, and the server
             refuses the list to every other role (AssuranceController). */}
         <Route path={CDD_ASSURANCE_PATH} element={
           <ProtectedRoute roles={ASSURANCE_ROLES}>
-            <CddAssurancePage />
+            {flat(<CddAssurancePage />)}
           </ProtectedRoute>
         } />
 
@@ -101,7 +109,7 @@ export function AppRoutes() {
             each with its review status. The CDD landing is the stats dashboard instead, so
             it isn't in SECTION_LANDING_GROUPS. Only CDD is open to everyone. */}
         {SECTION_LANDING_GROUPS.map((g) => {
-          const page = <SectionLandingPage group={g} />;
+          const page = flat(<SectionLandingPage group={g} />);
           return (
             <Route
               key={g.to}
@@ -122,7 +130,7 @@ export function AppRoutes() {
             path={m.path}
             element={
               <ProtectedRoute roles={SECTION_READ_ROLES}>
-                <DocumentModulePage category={m.category} title={m.title} moduleKey={m.id} />
+                {flat(<DocumentModulePage category={m.category} title={m.title} moduleKey={m.id} />)}
               </ProtectedRoute>
             }
           />
@@ -132,21 +140,21 @@ export function AppRoutes() {
             restricted to the full-workspace roles like the document registers. */}
         <Route path={INTL_FUND_TRANSACTIONS_PATH} element={
           <ProtectedRoute roles={FINANCE_SECTION_ROLES}>
-            <InternationalFundTransactionRegisterPage />
+            {flat(<InternationalFundTransactionRegisterPage />)}
           </ProtectedRoute>
         } />
 
         {/* Reporting › Suspicious Activity Register — same gating as the register above. */}
         <Route path={SUSPICIOUS_ACTIVITIES_PATH} element={
           <ProtectedRoute roles={SECTION_READ_ROLES}>
-            <SuspiciousActivityRegisterPage />
+            {flat(<SuspiciousActivityRegisterPage />)}
           </ProtectedRoute>
         } />
 
         {/* AML Training › Staff Training — the workspace for whoever runs training. */}
         <Route path={STAFF_TRAINING_PATH} element={
           <ProtectedRoute roles={SECTION_READ_ROLES}>
-            <StaffTrainingPage />
+            {flat(<StaffTrainingPage />)}
           </ProtectedRoute>
         } />
 
@@ -154,7 +162,7 @@ export function AppRoutes() {
             staff plus the firm's compliance officers and senior managers. */}
         <Route path={MY_TRAINING_PATH} element={
           <ProtectedRoute roles={TRAINING_ASSIGNABLE_ROLES}>
-            <MyTrainingPage />
+            {flat(<MyTrainingPage />)}
           </ProtectedRoute>
         } />
 
@@ -162,7 +170,7 @@ export function AppRoutes() {
             managers see the same screen, scoped by the API to their own reporting entity. */}
         <Route path="/settings/users" element={
           <ProtectedRoute roles={SETTINGS_ROLES}>
-            <UsersAdminPage />
+            {flat(<UsersAdminPage />)}
           </ProtectedRoute>
         } />
 
@@ -170,44 +178,44 @@ export function AppRoutes() {
             user manages their own on /profile; this is the firm-wide override. */}
         <Route path="/settings/notifications" element={
           <ProtectedRoute roles={NOTIFICATION_ADMIN_ROLES}>
-            <NotificationsAdminPage />
+            {flat(<NotificationsAdminPage />)}
           </ProtectedRoute>
         } />
 
         {/* Settings › Reporting Entities — the register of every entity. ROOT only. */}
         <Route path="/settings/reporting-entities" element={
           <ProtectedRoute roles={ENTITY_ADMIN_ROLES}>
-            <FirmsAdminPage />
+            {flat(<FirmsAdminPage />)}
           </ProtectedRoute>
         } />
         <Route path="/settings/reporting-entities/:id" element={
           <ProtectedRoute roles={ENTITY_ADMIN_ROLES}>
-            <FirmAdminDetailPage />
+            {flat(<FirmAdminDetailPage />)}
           </ProtectedRoute>
         } />
         {/* Settings › Reporting Entity — everyone else's view of their own entity. The bare path
             is what the menu links to; it forwards to the entity's own address. */}
         <Route path="/reporting-entity" element={
           <ProtectedRoute roles={REPORTING_ENTITY_ROLES}>
-            <ReportingEntityRedirect />
+            {flat(<ReportingEntityRedirect />)}
           </ProtectedRoute>
         } />
         <Route path="/reporting-entity/:id" element={
           <ProtectedRoute roles={REPORTING_ENTITY_ROLES}>
-            <ReportingEntityPage />
+            {flat(<ReportingEntityPage />)}
           </ProtectedRoute>
         } />
         {/* Workspace › Queries — change requests raised from Settings › Reporting Entity. */}
         <Route path={QUERIES_PATH} element={
           <ProtectedRoute roles={QUERY_ADMIN_ROLES}>
-            <QueriesAdminPage />
+            {flat(<QueriesAdminPage />)}
           </ProtectedRoute>
         } />
 
         {/* Compliance modules + group landings — placeholders until each is built out.
             Only the CDD section is open to everyone; other sections need the full-workspace roles. */}
         {placeholderRoutes().map((r) => {
-          const page = <PlaceholderPage title={r.title} detail="Coming soon — this module will be built out." />;
+          const page = flat(<PlaceholderPage title={r.title} detail="Coming soon — this module will be built out." />);
           return (
             <Route
               key={r.to}
@@ -267,7 +275,7 @@ export function AppRoutes() {
             manager sees their own entity's, narrowed by actor in AuditService.search. */}
         <Route path={AUDIT_LOG_PATH} element={
           <ProtectedRoute roles={AUDIT_LOG_ROLES}>
-            <AuditAdminPage />
+            {flat(<AuditAdminPage />)}
           </ProtectedRoute>
         } />
         {/* The trail used to live under /admin; keep old links and bookmarks working. */}

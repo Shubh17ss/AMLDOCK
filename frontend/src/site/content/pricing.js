@@ -77,7 +77,7 @@ export const FAQS = [
   },
   {
     q: 'Where are documents kept?',
-    // TO CONFIRM: region taken from the deployment notes (ap-southeast-2).
-    a: 'In Amazon Web Services storage in the Sydney region. Files are opened through links that expire after a short time.',
+    // Deliberately says nothing about the hosting provider or region.
+    a: 'In secure storage that is kept apart from the application database. Files are opened through links that expire after a short time.',
   },
 ];

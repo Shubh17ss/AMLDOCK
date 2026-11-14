@@ -45,7 +45,7 @@ export function BranchDashboard() {
     <Bento>
       <HeroTile
         index={0}
-        eyebrow="BRANCH · LIVE"
+        eyebrow="Your branch"
         value={inMotion}
         label={inMotion === 1 ? 'deal in motion' : 'deals in motion'}
         caption={`${money.formatCompact(valueOf(summary, 'REVIEW', 'ON_HOLD'))} moving through review`}
@@ -58,14 +58,14 @@ export function BranchDashboard() {
         }
       />
 
-      <StatTile index={1} eyebrow="BRANCH DEALS" value={summary.total} label="All-time" to="/firm/deals" />
-      <StatTile index={2} eyebrow="TEAM" dot={tokens.blue} value={activeUsers.length} label="Active users" to="/branch-users" />
-      <StatTile index={3} eyebrow="IN REVIEW" cols={2} dot={dealStatusDot('REVIEW')} value={underReview}
+      <StatTile index={1} eyebrow="Branch deals" value={summary.total} label="All-time" to="/firm/deals" />
+      <StatTile index={2} eyebrow="Team" dot={tokens.blue} value={activeUsers.length} label="Active users" to="/branch-users" />
+      <StatTile index={3} eyebrow="In review" cols={2} dot={dealStatusDot('REVIEW')} value={underReview}
                 label="With compliance" color={underReview ? tokens.review : undefined} to="/firm/deals" />
 
       <ListTile
         index={4}
-        eyebrow="RECENT · UPDATED"
+        eyebrow="Recently updated"
         title="Recent branch deals"
         to="/firm/deals"
         items={recent}
@@ -75,21 +75,21 @@ export function BranchDashboard() {
 
       {/* Branch team breakdown */}
       <BentoTile index={5} cols={2} rows={1}>
-        <Eyebrow>BRANCH TEAM</Eyebrow>
+        <Eyebrow>Branch team</Eyebrow>
         <Box sx={{ mt: 'auto', display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {teamRows.length ? teamRows.map(([role, n]) => (
             <Box key={role} sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 0.6,
               px: 1.25, py: 0.6, borderRadius: '9px', backgroundColor: tokens.hover }}>
-              <Typography sx={{ fontFamily: fonts.mono, fontWeight: 700, color: tokens.ink, fontSize: '0.9rem' }}>{n}</Typography>
+              <Typography sx={{ fontFamily: fonts.mono, fontWeight: 500, color: tokens.ink, fontSize: '0.9rem' }}>{n}</Typography>
               <Typography sx={{ fontSize: '0.74rem', color: tokens.muted }}>{roleLabel(role)}</Typography>
             </Box>
           )) : <Typography sx={{ fontSize: '0.82rem', color: tokens.muted }}>No team members yet.</Typography>}
         </Box>
       </BentoTile>
 
-      <StatTile index={6} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={underReview}
+      <StatTile index={6} eyebrow="In review" dot={dealStatusDot('REVIEW')} value={underReview}
                 label="Under compliance" color={underReview ? tokens.review : undefined} to="/firm/deals" />
-      <StatTile index={7} eyebrow="VERIFIED · 30D" dot={dealStatusDot('VERIFIED')} value={verifiedRecent}
+      <StatTile index={7} eyebrow="Verified, last 30 days" dot={dealStatusDot('VERIFIED')} value={verifiedRecent}
                 label="Cleared this month" color={verifiedRecent ? tokens.approved : undefined} to="/firm/deals" />
 
       <ActionTile

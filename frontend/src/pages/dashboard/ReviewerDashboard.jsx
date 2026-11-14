@@ -45,7 +45,7 @@ export function ReviewerDashboard() {
     <Bento>
       <HeroTile
         index={0}
-        eyebrow="DEALS · LIVE"
+        eyebrow="Deals"
         value={underReview}
         label={underReview === 1 ? 'deal in review' : 'deals in review'}
         caption={`${onHold} on hold · ${money.formatCompact(awaitingValue)} awaiting clearance`}
@@ -57,16 +57,16 @@ export function ReviewerDashboard() {
         }
       />
 
-      <StatTile index={1} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={underReview}
+      <StatTile index={1} eyebrow="In review" dot={dealStatusDot('REVIEW')} value={underReview}
                 label="With compliance" color={underReview ? tokens.review : undefined} to="/cdd/deals" />
-      <StatTile index={2} eyebrow="ON HOLD" dot={dealStatusDot('ON_HOLD')} value={onHold}
+      <StatTile index={2} eyebrow="On hold" dot={dealStatusDot('ON_HOLD')} value={onHold}
                 label="Parked, needing a decision" color={onHold ? tokens.rejected : undefined} to="/cdd/deals" />
-      <StatTile index={3} eyebrow={`${money.code} · AWAITING`} cols={2} mono value={money.formatCompact(awaitingValue)}
+      <StatTile index={3} eyebrow={`Awaiting review, ${money.code}`} cols={2} mono value={money.formatCompact(awaitingValue)}
                 label="Transaction value in the queue" />
 
       <ListTile
         index={4}
-        eyebrow="AWAITING · YOUR REVIEW"
+        eyebrow="Awaiting your review"
         title="Next deals to review"
         to="/cdd/deals"
         items={awaitingItems}
@@ -74,9 +74,9 @@ export function ReviewerDashboard() {
         empty="Nothing awaiting review."
       />
 
-      <StatTile index={5} eyebrow="OLDEST WAIT" mono value={oldest}
+      <StatTile index={5} eyebrow="Oldest wait" mono value={oldest}
                 label="Longest awaiting review" color={oldestUrgent ? tokens.rejected : undefined} to="/cdd/deals" />
-      <StatTile index={6} eyebrow="ENTITIES" value={firmsInQueue} label="With deals waiting" to="/cdd/deals" />
+      <StatTile index={6} eyebrow="Entities" value={firmsInQueue} label="With deals waiting" to="/cdd/deals" />
 
       <ActionTile
         index={7}

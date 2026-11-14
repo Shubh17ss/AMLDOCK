@@ -103,7 +103,10 @@ export function SectionLandingPage({ group }) {
                 )}
               </Box>
 
-              <Typography sx={{ fontWeight: 700, fontSize: '1.02rem', color: tokens.ink }}>
+              <Typography sx={{
+                fontFamily: fonts.display, fontWeight: 500, fontSize: '1.12rem',
+                letterSpacing: '-0.02em', color: tokens.ink,
+              }}>
                 {item.label}
               </Typography>
               <Typography sx={{ mt: 0.75, mb: 1.75, fontSize: '0.84rem', color: tokens.muted, lineHeight: 1.45 }}>
@@ -119,7 +122,7 @@ export function SectionLandingPage({ group }) {
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1,
                 }}>
                   <Box sx={{ minWidth: 0 }}>
-                    <Eyebrow>Review Date</Eyebrow>
+                    <Eyebrow>Review date</Eyebrow>
                     <Typography sx={{
                       mt: 0.4, fontFamily: fonts.mono, fontSize: '0.78rem', whiteSpace: 'nowrap',
                       color: meta.color, fontWeight: 700,

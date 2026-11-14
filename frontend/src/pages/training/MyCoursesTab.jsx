@@ -136,8 +136,7 @@ export function MyCoursesTab({ courses, isLoading, isError }) {
                 {(c.files?.length ?? 0) > 0 && (
                   <Box sx={{ mt: 1.5 }}>
                     <Typography sx={{
-                      fontFamily: fonts.mono, fontSize: '0.65rem', letterSpacing: '0.1em',
-                      textTransform: 'uppercase', color: tokens.muted, mb: 0.75,
+                      fontSize: '0.8rem', fontWeight: 600, color: tokens.muted, mb: 0.75,
                     }}>
                       Course material
                     </Typography>

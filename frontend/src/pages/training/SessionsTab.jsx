@@ -209,8 +209,7 @@ export function SessionsTab({ createOpen, onCloseCreate }) {
 
                 <Box>
                   <Typography sx={{
-                    fontFamily: fonts.mono, fontSize: '0.68rem', letterSpacing: '0.08em',
-                    textTransform: 'uppercase', color: tokens.muted, mb: 1,
+                    fontSize: '0.8rem', fontWeight: 600, color: tokens.muted, mb: 1,
                   }}>
                     Assigned — {detail.completedCount} of {detail.assignedCount} attended
                   </Typography>

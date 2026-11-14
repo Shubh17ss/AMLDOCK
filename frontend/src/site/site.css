@@ -355,6 +355,30 @@ a    { text-decoration: none; }
 .site-sent { display: grid; gap: 16px; justify-items: start; padding: 32px; border: 1px solid var(--s-line2); border-radius: 20px; }
 .site-sent__mark { height: 48px; width: 48px; border-radius: 50%; background: var(--s-ok-wash); color: var(--s-ok); display: grid; place-items: center; }
 
+/* ── Legal pages ───────────────────────────────────────────────────────── */
+.site-legal { display: grid; gap: 40px; padding-bottom: clamp(72px, 10vw, 128px); }
+.site-legal__toc { display: none; }
+.site-legal__body { max-width: 44em; counter-reset: clause; }
+.site-legal__body section { padding-block: 28px; border-top: 1px solid var(--s-line); scroll-margin-top: calc(var(--s-nav-h) + 16px); }
+.site-legal__body section:first-child { border-top-color: var(--s-ink); }
+.site-legal__body h2 { font-family: var(--s-display); font-weight: 500; font-size: 1.4rem; line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 12px; counter-increment: clause; }
+.site-legal__body h2::before { content: counter(clause) ". "; color: var(--s-muted); }
+.site-legal__body p, .site-legal__body li { color: var(--s-muted); }
+.site-legal__body p + p, .site-legal__body p + ul, .site-legal__body ul + p { margin-top: 12px; }
+.site-legal__body ul { display: grid; gap: 6px; }
+.site-legal__body li { padding-left: 18px; position: relative; }
+.site-legal__body li::before { content: ""; position: absolute; left: 0; top: 0.68em; height: 5px; width: 5px; border-radius: 50%; background: var(--s-blue); }
+.site-legal__body a { color: var(--s-blue); font-weight: 600; }
+@media (min-width: 960px) {
+  .site-legal { grid-template-columns: 240px minmax(0, 1fr); gap: 72px; }
+  .site-legal__toc { display: block; position: sticky; top: calc(var(--s-nav-h) + 32px); align-self: start; font-size: 0.9rem; counter-reset: toc; }
+  .site-legal__toc li { counter-increment: toc; }
+  .site-legal__toc li + li { margin-top: 8px; }
+  .site-legal__toc a { color: var(--s-muted); transition: color .2s; }
+  .site-legal__toc a::before { content: counter(toc) ". "; }
+  .site-legal__toc a:hover { color: var(--s-ink); }
+}
+
 /* ── Footer ────────────────────────────────────────────────────────────── */
 .site-footer { border-top: 1px solid var(--s-line); padding-block: 56px 32px; font-size: 0.92rem; }
 .site-footer__grid { display: grid; gap: 40px; }

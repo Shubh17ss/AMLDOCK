@@ -4,7 +4,8 @@ import { AuditLogMock } from '../site/mock/Registers.jsx';
 import { ClosingCta } from '../site/sections/ClosingCta.jsx';
 
 // Each statement here describes how the application is built. Keep it that way: no
-// certifications, audits or guarantees unless they exist.
+// certifications, audits or guarantees unless they exist. Two things are left out on purpose:
+// the hosting provider, and the administrator's separate sign-in.
 const TOPICS = [
   {
     id: 'sign-in',
@@ -12,7 +13,6 @@ const TOPICS = [
     intro: 'No staff passwords to leak, reuse or reset.',
     items: [
       { name: 'One-time codes', desc: 'Staff enter their work email and a six-digit code sent to it. The sign-in page gives the same answer whether or not an address has an account.' },
-      { name: 'Administrator sign-in', desc: 'The platform administrator signs in with a password and then a one-time code, on a separate page.' },
       { name: 'Sessions', desc: 'The session is held in a cookie that page scripts cannot read and that is only sent over HTTPS.' },
     ],
   },
@@ -32,7 +32,7 @@ const TOPICS = [
     name: 'Documents',
     intro: 'Identity documents are the most sensitive thing in the system.',
     items: [
-      { name: 'Storage', desc: 'Files are kept in Amazon Web Services object storage, not in the application database.' },
+      { name: 'Storage', desc: 'Files are kept in dedicated file storage, apart from the application database.' },
       { name: 'Expiring links', desc: 'A document is opened through a link created for that request, which stops working shortly afterwards.' },
       { name: 'Review status', desc: 'Each document records whether it has been reviewed, and by whom.' },
     ],

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as RouterLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   Alert, Box, Button, Link, Stack, TextField, Typography,
 } from '@mui/material';
@@ -63,15 +63,7 @@ export function LoginPage() {
   };
 
   return (
-    <AuthShell
-      footer={(
-        <>
-          © {new Date().getFullYear()} AMLDOCK
-          {' · '}
-          <RouterLink to="/admin-login">Administrator sign-in</RouterLink>
-        </>
-      )}
-    >
+    <AuthShell footer={<>© {new Date().getFullYear()} AMLDOCK</>}>
         <Box sx={{ width: '100%', maxWidth: 400 }}>
           <Stack spacing={0.5} sx={{ mb: 4 }}>
             <Typography variant="h4" sx={{

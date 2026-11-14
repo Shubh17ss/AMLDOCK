@@ -3,13 +3,13 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import EditCalendarRoundedIcon from '@mui/icons-material/EditCalendarRounded';
 import { tokens, fonts, shadows } from '../../theme/theme.js';
-import { BentoTile, Eyebrow } from '../bento/BentoTile.jsx';
+import { BentoTile } from '../bento/BentoTile.jsx';
 import { reviewMetaFor } from '../documents/reviewStatus.jsx';
 
 /**
  * A compliance-module card for the dashboard hub. Mirrors the reference layout:
  * title + status icon, an ISSUES / WARNINGS numeral pair, and a review-date footer.
- * Built on BentoTile so the staggered load, hover-lift, and focus ring come for free.
+ * Built on BentoTile, so the surface, staggered load and focus ring come for free.
  *
  * Placeholder-friendly: every metric defaults to a neutral, all-clear state until the
  * module is wired to real data. When `reviewStatus` is supplied (UNSET / OVERDUE /
@@ -54,7 +54,8 @@ export function ModuleCard({
       {/* Title + status */}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
         <Typography sx={{
-          fontWeight: 700, fontSize: '0.98rem', color: tokens.ink, lineHeight: 1.25, minWidth: 0,
+          fontFamily: fonts.display, fontWeight: 500, fontSize: '1.05rem', letterSpacing: '-0.015em',
+          color: tokens.ink, lineHeight: 1.25, minWidth: 0,
           // Two lines, always: reserved when the label is short so the metrics below start at the
           // same y on every card, and clamped when it is long so a third line cannot push the
           // card taller than its neighbours. 2.5em is the two lines at this line-height.
@@ -90,7 +91,7 @@ export function ModuleCard({
       {/* Review date footer */}
       <Box sx={{ mt: 1.75, pt: 1.25, borderTop: `1px solid ${tokens.hairline}`,
                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-        <Eyebrow>Review Date</Eyebrow>
+        <Label>Review date</Label>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
           <Typography sx={{
             fontFamily: fonts.mono, fontSize: '0.74rem', whiteSpace: 'nowrap',
@@ -138,13 +139,22 @@ function Metric({ value, label, color }) {
   return (
     <Box>
       <Typography sx={{
-        fontFamily: fonts.display, fontWeight: 800, lineHeight: 1,
+        fontFamily: fonts.display, fontWeight: 500, lineHeight: 1,
         fontSize: 'clamp(1.6rem, 3vw, 2rem)', letterSpacing: '-0.03em', color,
         fontVariantNumeric: 'tabular-nums',
       }}>
         {value}
       </Typography>
-      <Box sx={{ mt: 0.6 }}><Eyebrow>{label}</Eyebrow></Box>
+      <Box sx={{ mt: 0.5 }}><Label>{label}</Label></Box>
     </Box>
+  );
+}
+
+/** A small plain caption for a figure. */
+function Label({ children }) {
+  return (
+    <Typography component="span" sx={{ fontSize: '0.78rem', lineHeight: 1.2, color: tokens.muted, whiteSpace: 'nowrap' }}>
+      {children}
+    </Typography>
   );
 }

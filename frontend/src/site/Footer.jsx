@@ -2,7 +2,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Logo } from './Navbar.jsx';
 import { CONTACT_EMAIL } from './content/company.js';
 
-// Only links that resolve. Add a column when the page behind it exists.
+// Only links that resolve. Add a column when the page behind it exists. The administrator's
+// sign-in is reached by its address and is not linked from anywhere.
 const COLUMNS = [
   {
     title: 'Product',
@@ -17,13 +18,14 @@ const COLUMNS = [
     links: [
       { label: 'About',   to: '/about' },
       { label: 'Contact', to: '/contact' },
+      { label: 'Sign in', to: '/login' },
     ],
   },
   {
-    title: 'Account',
+    title: 'Legal',
     links: [
-      { label: 'Sign in',               to: '/login' },
-      { label: 'Administrator sign-in', to: '/admin-login' },
+      { label: 'Privacy policy',       to: '/privacy' },
+      { label: 'Terms and conditions', to: '/terms' },
     ],
   },
 ];

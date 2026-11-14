@@ -1,7 +1,7 @@
 import { Link as RouterLink } from 'react-router-dom';
 
 const FACTS = [
-  { head: 'Sign-in by one-time code', body: 'Staff sign in with a code sent to their work email. Administrators use a password and a code.' },
+  { head: 'Sign-in by one-time code', body: 'Staff sign in with a code sent to their work email. There are no passwords to leak or reuse.' },
   { head: 'Access by role and branch', body: 'What someone can open is decided on the server from their role and where they work.' },
   { head: 'Documents behind expiring links', body: 'Passports and deeds are opened through links that stop working after a short time.' },
   { head: 'Sign-offs that cannot drift', body: 'A verified file is stored as its own version, so later edits never rewrite what was approved.' },

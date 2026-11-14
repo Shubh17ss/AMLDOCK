@@ -89,8 +89,7 @@ function DetailBlock({ label, text }) {
     <Box>
       <Typography
         sx={{
-          fontFamily: fonts.mono, fontSize: '0.68rem', letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: tokens.muted, mb: 0.75,
+          fontSize: '0.8rem', fontWeight: 600, color: tokens.muted, mb: 0.75,
         }}
       >
         {label}

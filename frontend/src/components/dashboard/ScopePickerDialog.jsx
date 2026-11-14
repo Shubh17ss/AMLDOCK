@@ -13,9 +13,19 @@ import { listBranches } from '../../api/firms.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { flagClass } from '../../data/countries.js';
 import { roleLabel } from '../../auth/roles.js';
-import { tokens } from '../../theme/theme.js';
+import { tokens, fonts } from '../../theme/theme.js';
 
 const norm = (s) => (s ?? '').toLowerCase();
+
+// A row is an inset, rounded target rather than an edge-to-edge strip.
+const ROW_SX = { mx: 1.5, my: 0.25, px: 1.5, py: 0.9, borderRadius: '14px' };
+
+// An entity's name over its branches. Sticky, so it has to cover what scrolls under it.
+const HEADER_SX = {
+  display: 'flex', alignItems: 'center', gap: 1, lineHeight: 1.3,
+  px: 3, pt: 2, pb: 0.75,
+  backgroundColor: 'background.paper',
+};
 
 /**
  * Centred picker behind ScopeSelector. ROOT and AUDIT get every active entity with its branches
@@ -27,11 +37,15 @@ const norm = (s) => (s ?? '').toLowerCase();
  * `onPickEntity(membership)` to move to another entity — and closes. Applying it is ScopeSelector's.
  */
 export function ScopePickerDialog({ open, onClose, onPick, onPickEntity }) {
-  const { isRoot, multiEntity } = useDashboardScope();
+  const { isRoot, multiEntity, firm, branch } = useDashboardScope();
   const showsEntity = isRoot || multiEntity;
   const [search, setSearch] = useState('');
 
   useEffect(() => { if (open) setSearch(''); }, [open]);
+
+  const where = showsEntity
+    ? [firm?.name, branch?.name].filter(Boolean).join(', ')
+    : branch?.name;
 
   return (
     <Dialog
@@ -39,17 +53,29 @@ export function ScopePickerDialog({ open, onClose, onPick, onPickEntity }) {
       onClose={onClose}
       maxWidth="xs"
       fullWidth
-      PaperProps={{ sx: { borderRadius: '16px', height: 'min(70vh, 560px)' } }}
+      // As tall as its list needs, up to a cap: three branches should not sit in a 580px sheet.
+      PaperProps={{ sx: { borderRadius: '24px', maxHeight: 'min(72vh, 580px)' } }}
     >
-      <DialogTitle component="div" sx={{ pb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="h6" component="h2" sx={{ flex: 1 }}>
-          {showsEntity ? 'Switch reporting entity' : 'Switch branch'}
-        </Typography>
-        <IconButton size="small" onClick={onClose} aria-label="Close">
+      <DialogTitle component="div" sx={{ px: 3, pt: 3, pb: 2, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography component="h2" sx={{
+            fontFamily: fonts.display, fontWeight: 500, fontSize: '1.45rem',
+            letterSpacing: '-0.03em', lineHeight: 1.15, color: tokens.ink,
+          }}>
+            {showsEntity ? 'Switch reporting entity' : 'Switch branch'}
+          </Typography>
+          {/* Where you are now, so the list below reads as "where to instead". */}
+          {where && (
+            <Typography sx={{ mt: 0.5, fontSize: '0.86rem', color: tokens.muted }}>
+              You are working in <Box component="span" sx={{ color: tokens.ink, fontWeight: 600 }}>{where}</Box>
+            </Typography>
+          )}
+        </Box>
+        <IconButton onClick={onClose} aria-label="Close" sx={{ mt: -0.5, mr: -1, borderRadius: '50%' }}>
           <CloseRoundedIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
-      <Box sx={{ px: 3, pb: 1.5 }}>
+      <Box sx={{ px: 3, pb: 2 }}>
         <TextField
           autoFocus
           fullWidth
@@ -57,6 +83,7 @@ export function ScopePickerDialog({ open, onClose, onPick, onPickEntity }) {
           placeholder={showsEntity ? 'Search entities and branches' : 'Search branches'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 999, pl: 1.75 } }}
           slotProps={{
             input: {
               startAdornment: (
@@ -68,7 +95,7 @@ export function ScopePickerDialog({ open, onClose, onPick, onPickEntity }) {
           }}
         />
       </Box>
-      <DialogContent dividers sx={{ p: 0 }}>
+      <DialogContent sx={{ p: 0, pb: 1, borderTop: `1px solid ${tokens.hairline}` }}>
         {isRoot && (
           <EntityList query={norm(search.trim())} onPick={(f, b) => { onClose(); onPick(f, b); }} open={open} />
         )}
@@ -120,24 +147,21 @@ function EntityList({ query, onPick, open }) {
       {groups.map(({ firm: f, branches, loading }) => (
         <li key={f.id}>
           <List disablePadding>
-            <ListSubheader sx={{
-              display: 'flex', alignItems: 'center', gap: 1, lineHeight: 1.3, py: 1.25,
-              backgroundColor: 'background.paper', borderBottom: `1px solid ${tokens.hairline}`,
-            }}>
+            <ListSubheader sx={HEADER_SX}>
               <Box component="span" className={flagClass(f.country)} title={f.country}
                    sx={{ fontSize: '1rem', borderRadius: '2px', flexShrink: 0 }} />
-              <Typography noWrap sx={{ fontSize: '0.82rem', fontWeight: 700, color: tokens.ink, flex: 1 }}>
+              <Typography noWrap sx={{ fontSize: '0.88rem', fontWeight: 600, color: tokens.ink, flex: 1 }}>
                 {f.name}
               </Typography>
               {!f.active && (
-                <Typography noWrap sx={{ fontSize: '0.72rem', color: tokens.muted }}>Deactivated · read-only</Typography>
+                <Typography noWrap sx={{ fontSize: '0.76rem', color: tokens.muted }}>Deactivated, read-only</Typography>
               )}
             </ListSubheader>
             {loading && (
-              <Box sx={{ py: 1.5, pl: 6 }}><CircularProgress size={16} /></Box>
+              <Box sx={{ py: 1.5, pl: 3 }}><CircularProgress size={16} /></Box>
             )}
             {!loading && branches.length === 0 && (
-              <Typography sx={{ py: 1.25, pl: 6, fontSize: '0.8rem', color: tokens.muted }}>
+              <Typography sx={{ py: 1, pl: 3, fontSize: '0.84rem', color: tokens.muted }}>
                 No branches
               </Typography>
             )}
@@ -181,9 +205,9 @@ function MembershipList({ query, onPick, onPickEntity }) {
         <li>
           <List disablePadding>
             <EntityHeader name={current.realEstateFirmName} country={current.country}
-                          caption={`${roleLabel(current.role)} · current${current.readOnly ? ' · read-only' : ''}`} />
+                          caption={`${roleLabel(current.role)}, current${current.readOnly ? ', read-only' : ''}`} />
             {branches.length === 0 && (
-              <Typography sx={{ py: 1.25, pl: 6, fontSize: '0.8rem', color: tokens.muted }}>
+              <Typography sx={{ py: 1, pl: 3, fontSize: '0.84rem', color: tokens.muted }}>
                 No branches
               </Typography>
             )}
@@ -195,23 +219,19 @@ function MembershipList({ query, onPick, onPickEntity }) {
         </li>
       )}
       {others.length > 0 && (
-        <ListSubheader sx={{
-          lineHeight: 1.3, py: 1.25, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em',
-          textTransform: 'uppercase', color: tokens.muted, backgroundColor: 'background.paper',
-          borderBottom: `1px solid ${tokens.hairline}`,
-        }}>
+        <ListSubheader sx={{ ...HEADER_SX, fontSize: '0.8rem', fontWeight: 600, color: tokens.muted }}>
           Your other reporting entities
         </ListSubheader>
       )}
       {others.map((m) => (
-        <ListItemButton key={m.id} onClick={() => onPickEntity(m)} sx={{ pl: 2.5, py: 1.1, gap: 1 }}>
+        <ListItemButton key={m.id} onClick={() => onPickEntity(m)} sx={{ ...ROW_SX, gap: 1.25 }}>
           <Box component="span" className={flagClass(m.country)} title={m.country ?? undefined}
                sx={{ fontSize: '1rem', borderRadius: '2px', flexShrink: 0 }} />
           <ListItemText
             primary={m.realEstateFirmName}
-            secondary={m.readOnly ? `${roleLabel(m.role)} · deactivated, read-only` : roleLabel(m.role)}
-            primaryTypographyProps={{ noWrap: true, fontSize: '0.86rem', fontWeight: 600 }}
-            secondaryTypographyProps={{ noWrap: true, fontSize: '0.74rem' }}
+            secondary={m.readOnly ? `${roleLabel(m.role)}, deactivated, read-only` : roleLabel(m.role)}
+            primaryTypographyProps={{ noWrap: true, fontSize: '0.9rem', fontWeight: 500 }}
+            secondaryTypographyProps={{ noWrap: true, fontSize: '0.76rem' }}
           />
           <SwapHorizRoundedIcon sx={{ fontSize: 18, color: tokens.muted }} />
         </ListItemButton>
@@ -222,17 +242,14 @@ function MembershipList({ query, onPick, onPickEntity }) {
 
 function EntityHeader({ name, country, caption }) {
   return (
-    <ListSubheader sx={{
-      display: 'flex', alignItems: 'center', gap: 1, lineHeight: 1.3, py: 1.25,
-      backgroundColor: 'background.paper', borderBottom: `1px solid ${tokens.hairline}`,
-    }}>
+    <ListSubheader sx={HEADER_SX}>
       <Box component="span" className={flagClass(country)} title={country ?? undefined}
            sx={{ fontSize: '1rem', borderRadius: '2px', flexShrink: 0 }} />
-      <Typography noWrap sx={{ fontSize: '0.82rem', fontWeight: 700, color: tokens.ink, flex: 1 }}>
+      <Typography noWrap sx={{ fontSize: '0.88rem', fontWeight: 600, color: tokens.ink, flex: 1 }}>
         {name}
       </Typography>
       {caption && (
-        <Typography noWrap sx={{ fontSize: '0.72rem', color: tokens.muted }}>{caption}</Typography>
+        <Typography noWrap sx={{ fontSize: '0.76rem', color: tokens.muted }}>{caption}</Typography>
       )}
     </ListSubheader>
   );
@@ -246,7 +263,7 @@ function BranchList({ query, onPick }) {
   if (rows.length === 0) return <Empty text={branchOptions.length ? 'No matches' : 'No branches'} />;
 
   return (
-    <List disablePadding>
+    <List disablePadding sx={{ pt: 1 }}>
       {rows.map((b) => (
         <BranchRow
           key={b.id}
@@ -261,26 +278,40 @@ function BranchList({ query, onPick }) {
 }
 
 /** `inactive`: a deactivated branch, still opened to be read through its retention period. */
+// `indent` is accepted for the callers that nest branches under an entity; the entity header
+// above already groups them, so the rows no longer step in.
 function BranchRow({ name, selected, inactive = false, indent = false, onClick }) {
   return (
     <ListItemButton
       selected={selected}
       onClick={onClick}
+      aria-current={selected ? 'true' : undefined}
       sx={{
-        pl: indent ? 4 : 2.5, py: 1,
-        '&.Mui-selected, &.Mui-selected:hover': { backgroundColor: tokens.blueWash },
+        ...ROW_SX,
+        '&.Mui-selected, &.Mui-selected:hover': { backgroundColor: tokens.blueWash, color: tokens.ink },
       }}
     >
-      <ListItemIcon sx={{ minWidth: 34, color: selected ? tokens.blue : tokens.muted }}>
-        <StorefrontRoundedIcon sx={{ fontSize: 18 }} />
+      {/* The icon sits in a chip, as it does on the scope card this dialog opens from. */}
+      <ListItemIcon sx={{ minWidth: 0, mr: 1.5 }}>
+        <Box sx={{
+          width: 32, height: 32, borderRadius: '10px', display: 'grid', placeItems: 'center',
+          backgroundColor: selected ? tokens.blue : tokens.hover,
+          color: selected ? '#fff' : tokens.muted,
+        }}>
+          <StorefrontRoundedIcon sx={{ fontSize: 17 }} />
+        </Box>
       </ListItemIcon>
       <ListItemText
         primary={name}
-        secondary={inactive ? 'Deactivated · read-only' : null}
-        primaryTypographyProps={{ noWrap: true, fontSize: '0.86rem', fontWeight: selected ? 700 : 500 }}
-        secondaryTypographyProps={{ noWrap: true, fontSize: '0.72rem' }}
+        secondary={inactive ? 'Deactivated, read-only' : null}
+        primaryTypographyProps={{ noWrap: true, fontSize: '0.9rem', fontWeight: selected ? 600 : 500, color: tokens.ink }}
+        secondaryTypographyProps={{ noWrap: true, fontSize: '0.76rem' }}
       />
-      {selected && <CheckRoundedIcon sx={{ fontSize: 18, color: tokens.blue }} />}
+      {selected && (
+        <Typography sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, fontSize: '0.78rem', fontWeight: 600, color: tokens.blue, flexShrink: 0 }}>
+          <CheckRoundedIcon sx={{ fontSize: 16 }} /> Current
+        </Typography>
+      )}
     </ListItemButton>
   );
 }
