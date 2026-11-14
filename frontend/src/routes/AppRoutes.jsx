@@ -4,6 +4,9 @@ import { ProtectedRoute } from '../auth/ProtectedRoute.jsx';
 import { LandingPage } from '../pages/LandingPage.jsx';
 import { PricingPage } from '../pages/PricingPage.jsx';
 import { ContactPage } from '../pages/ContactPage.jsx';
+import { PlatformPage } from '../pages/PlatformPage.jsx';
+import { SecurityPage } from '../pages/SecurityPage.jsx';
+import { AboutPage } from '../pages/AboutPage.jsx';
 import { LoginPage } from '../pages/LoginPage.jsx';
 import { AdminLoginPage } from '../pages/AdminLoginPage.jsx';
 import { ProfilePage } from '../pages/ProfilePage.jsx';
@@ -62,6 +65,9 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/platform" element={<PlatformPage />} />
+      <Route path="/security" element={<SecurityPage />} />
+      <Route path="/about" element={<AboutPage />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/login" element={<LoginPage />} />

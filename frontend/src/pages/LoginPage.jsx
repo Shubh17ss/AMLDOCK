@@ -6,15 +6,13 @@ import {
 import { OtpCodeField, isCompleteOtp } from '../components/OtpCodeField.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
-import logoSrc from '../../assets/logos/image.png';
+import { AuthShell } from '../site/AuthShell.jsx';
 
-import { tokens, shadows } from '../theme/theme.js';
+import { tokens, fonts } from '../theme/theme.js';
 
-const NEU_BASE   = tokens.canvas;
 const NEU_FG     = tokens.ink;
 const NEU_MUTED  = tokens.muted;
 const NEU_ACCENT = tokens.blue;
-const EXT        = shadows.md;
 
 export function LoginPage() {
   const { user, status, requestOtp, verifyOtp } = useAuth();
@@ -65,28 +63,21 @@ export function LoginPage() {
   };
 
   return (
-    <Box sx={{
-      minHeight: '100vh',
-      backgroundColor: NEU_BASE,
-      display: 'flex', flexDirection: 'column',
-    }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', px: { xs: 3, sm: 5 }, py: 2.5 }}>
-        <Brand />
-      </Box>
-
-      <Box sx={{
-        flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        px: 2, py: { xs: 3, sm: 6 },
-      }}>
-        <Box sx={{
-          width: '100%', maxWidth: 420,
-          backgroundColor: tokens.tile, border: `1px solid ${tokens.hairline}`, borderRadius: 4, boxShadow: EXT,
-          p: { xs: 4, sm: 5 },
-        }}>
+    <AuthShell
+      footer={(
+        <>
+          © {new Date().getFullYear()} AMLDOCK
+          {' · '}
+          <RouterLink to="/admin-login">Administrator sign-in</RouterLink>
+        </>
+      )}
+    >
+        <Box sx={{ width: '100%', maxWidth: 400 }}>
           <Stack spacing={0.5} sx={{ mb: 4 }}>
             <Typography variant="h4" sx={{
               fontWeight: 800, color: NEU_FG,
-              fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+              fontFamily: fonts.display, letterSpacing: '-0.03em',
+              fontSize: { xs: '1.7rem', sm: '2.125rem' },
             }}>
               Sign in
             </Typography>
@@ -151,27 +142,6 @@ export function LoginPage() {
             </Box>
           )}
         </Box>
-      </Box>
-
-      <Box sx={{ py: 3, textAlign: 'center', color: NEU_MUTED, fontSize: '0.78rem' }}>
-        © {new Date().getFullYear()} AMLDOCK · All rights reserved
-        {' · '}
-        <Link component={RouterLink} to="/admin-login" underline="hover" sx={{ color: NEU_MUTED }}>
-          Administrator sign-in
-        </Link>
-      </Box>
-    </Box>
-  );
-}
-
-function Brand() {
-  return (
-    <Box
-      component={RouterLink}
-      to="/"
-      sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, textDecoration: 'none' }}
-    >
-      <img src={logoSrc} alt="AMLDOCK" className="h-24 w-auto object-contain" />
-    </Box>
+    </AuthShell>
   );
 }
