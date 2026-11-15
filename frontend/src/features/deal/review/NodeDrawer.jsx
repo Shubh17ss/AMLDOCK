@@ -62,6 +62,11 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
    */
   const [verification, setVerification] = useState({ outcome: 'VERIFIED', notes: '' });
 
+  // The footer's slot for the Details actions, which NodeEditorPane portals into. A callback ref
+  // held in state, so the pane re-renders once the slot exists rather than missing it.
+  const [actionsEl, setActionsEl] = useState(null);
+  const detailsActionsInFooter = Boolean(node) && tab === 'details' && !readOnly;
+
   // A different owner opens on Details. Landing on whichever tab the last one was left on would
   // mean opening a person and being shown an empty documents list for no reason.
   useEffect(() => {
@@ -241,6 +246,8 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
             onRequestDelete={onRequestDelete}
             version={version}
             side={side}
+            actionsContainer={detailsActionsInFooter ? actionsEl : null}
+            onClose={onClose}
           />
         )}
       </Box>
@@ -254,11 +261,14 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
           backgroundColor: tokens.tileRaised,
         }}
       >
-        {/* Verification is the one tab whose primary action sits down here rather than in the
-            body: it is a decision about the owner as a whole, not a save of the fields above it,
-            and the two buttons the design asks for are Close and Verify. Every other tab keeps
-            its own save inline and leaves this footer as the single way out. */}
-        {tab === 'verification' && !readOnly ? (
+        {/* The footer stays put while the body scrolls, so a tab's actions belong down here
+            rather than at the end of a form someone has to scroll through to reach them.
+            Verification draws its own Close and Verify. Details lends this slot to
+            NodeEditorPane, which holds the form, for Remove, Close and Update. Every other tab
+            has nothing to save and keeps the single way out. */}
+        {detailsActionsInFooter ? (
+          <Box ref={setActionsEl} />
+        ) : tab === 'verification' && !readOnly ? (
           <Stack direction="row" spacing={1.5}>
             <Button fullWidth variant="outlined" onClick={onClose}>Close</Button>
             <Button

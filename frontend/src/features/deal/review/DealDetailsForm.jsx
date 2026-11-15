@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Button, Collapse, FormControl, InputLabel, MenuItem, Select, Stack, TextField,
+  Alert, Button, Collapse, FormControl, InputLabel, MenuItem, Select, Stack, TextField,
   Typography,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
@@ -42,6 +43,11 @@ import { tokens } from '../../../theme/theme.js';
  */
 export function DealDetailsForm({
   deal, dealId, form, setForm, dirty, onSaved, readOnly = false, individuals = [],
+  // The drawer footer's slot, which Update (and any save error) is portalled into so it stays in
+  // view however far down the form the reviewer is. Null leaves the actions out.
+  actionsContainer = null,
+  // Closes the drawer. Drawn beside Update, because this footer replaces the one that held Close.
+  onClose,
 }) {
   const qc = useQueryClient();
   const money = useCurrency();
@@ -327,27 +333,33 @@ export function DealDetailsForm({
         <RiskRatingChip rating={deal.riskRating} />
       </Stack>
 
-      {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
-
-      {/* Right-aligned, alone on its row: it is the one thing on this tab that commits, and the
-          end of the line is where a reader looks for that after working down the form. */}
-      {!readOnly && (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            // startIcon={<SaveIcon />}
-            onClick={handleSave}
-            // Not gated on the value checks above: a dead button the reviewer has to
-            // reverse-engineer is worse than one that presses and says what is wrong.
-            disabled={saving || !dirty}
-            // Wider than its text needs. It is the only commit on the tab and it sits alone at the
-            // end of a long form, so it has to read as the destination rather than as one more
-            // control — and the width holds steady while the label swaps to "Updating…".
-            sx={{ minWidth: 180 }}
-          >
-            {saving ? 'Updating…' : 'Update'}
-          </Button>
-        </Box>
+      {/* Pinned to the drawer footer rather than at the end of the form: a long form should not
+          have to be scrolled through to commit it. The error rides along, so a failed save is
+          reported next to the button that was pressed rather than out of sight below. */}
+      {!readOnly && actionsContainer && createPortal(
+        <>
+          {error && (
+            <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 1.5 }}>{error}</Alert>
+          )}
+          <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+            <Button variant="outlined" onClick={onClose} sx={{ flex: { xs: 1, sm: 'none' } }}>
+              Close
+            </Button>
+            <Button
+              variant="contained"
+              // startIcon={<SaveIcon />}
+              onClick={handleSave}
+              // Not gated on the value checks above: a dead button the reviewer has to
+              // reverse-engineer is worse than one that presses and says what is wrong.
+              disabled={saving || !dirty}
+              // The width holds steady while the label swaps to "Updating…".
+              sx={{ flex: { xs: 1, sm: 'none' }, minWidth: 180 }}
+            >
+              {saving ? 'Updating…' : 'Update'}
+            </Button>
+          </Stack>
+        </>,
+        actionsContainer,
       )}
     </Stack>
   );
