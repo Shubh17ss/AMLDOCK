@@ -12,11 +12,12 @@ import { UserMenu } from './UserMenu.jsx';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { BottomNav, BOTTOM_NAV_CLEARANCE, BROKER_NAV_CLEARANCE } from './BottomNav.jsx';
 import { greeting, stamp } from '../pages/dashboard/greeting.js';
-import { moduleTitleFor, DASHBOARD_PATH, DEALS_PATH } from '../navigation/moduleRegistry.jsx';
+import { moduleTitleFor, DASHBOARD_PATH, DEALS_PATH, MY_TRAINING_PATH } from '../navigation/moduleRegistry.jsx';
 import { DashboardScopeProvider, useDashboardScope, isScopeExemptPath } from '../dashboard/DashboardScope.jsx';
 import { ScopeRequiredDialog } from '../dashboard/ScopeRequiredDialog.jsx';
 import { ColorModeProvider } from '../theme/ColorMode.jsx';
 import { tokens, fonts } from '../theme/theme.js';
+import logoSrc from '../../assets/logos/image.png';
 
 const SIDEBAR_WIDTH = 260;
 
@@ -92,6 +93,13 @@ export function AppShell() {
   const broker = isBroker(user?.role);
   const brokerHome = broker && pathname === DASHBOARD_PATH;
 
+  // The dashboard and everything reachable from the sidebar carry their own page title, and the
+  // sidebar already says where you are, so the title bar there was saying both a second time.
+  // Those routes, and the profile, get the account avatar alone. The remaining pages outside the
+  // menu keep the bar: on a deal it is where the property address is shown.
+  const menuRoute = pathname === DASHBOARD_PATH || pathname === MY_TRAINING_PATH
+    || pathname === '/profile' || moduleTitleFor(pathname) != null;
+
   return (
     <ColorModeProvider>
     <DashboardScopeProvider>
@@ -111,40 +119,20 @@ export function AppShell() {
             },
           }}
         >
+          {/* The logo file carries a wide white margin, so the frame crops to the mark and
+              wordmark — the same crop the public site's nav uses. As tall as the app bar, so the
+              two hairlines meet. */}
           <Box
             component={RouterLink}
             to={user ? '/dashboard' : '/'}
+            aria-label="AMLDOCK dashboard"
             sx={{
-              display: 'flex', alignItems: 'center', gap: 1.25,
-              px: 2.5, py: 2.5,
-              textDecoration: 'none', color: 'inherit',
+              display: 'flex', alignItems: 'center',
+              height: 64, flexShrink: 0, px: 2.5,
               borderBottom: `1px solid ${tokens.hairline}`,
-              background: tokens.sidebarHeadBg,
-              boxShadow: '0 6px 16px -12px rgba(16,24,40,0.18)',
-              position: 'relative', zIndex: 1,
             }}
           >
-            <Box sx={{
-              width: 38, height: 38, borderRadius: 2.5,
-              background: `linear-gradient(140deg, ${tokens.blue}, ${tokens.blueDark})`,
-              boxShadow: '0 4px 10px -3px rgba(27,95,227,0.45), inset 0 1px 0 rgba(255,255,255,0.25)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexShrink: 0,
-            }}>
-              <ShieldCheckIcon color="#fff" />
-            </Box>
-            <Box>
-              <Typography sx={{
-                fontWeight: 800, color: tokens.ink,
-                letterSpacing: '0.08em', fontSize: '0.92rem',
-                fontFamily: '"FK Grotesk Trial", "Plus Jakarta Sans", sans-serif',
-              }}>
-                AMLDOCK
-              </Typography>
-              <Typography variant="caption" sx={{ color: tokens.muted, lineHeight: 1 }}>
-                Compliance
-              </Typography>
-            </Box>
+            <BrandLogo />
           </Box>
 
           <SidebarNav />
@@ -164,7 +152,32 @@ export function AppShell() {
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {brokerHome && <BrokerGreeting user={user} />}
 
-        <AppBar
+        {menuRoute && (
+          <Box
+            component="header"
+            sx={{
+              // On the broker's phone home the greeting above already carries the avatar.
+              display: brokerHome ? { xs: 'none', md: 'flex' } : 'flex',
+              alignItems: 'center', justifyContent: 'space-between',
+              position: 'relative', zIndex: 2,
+              px: { xs: 2, md: 4 }, pt: { xs: 1.5, md: 2.5 },
+            }}
+          >
+            {/* A phone has no sidebar, so the logo is the way home. */}
+            <Box
+              component={RouterLink}
+              to="/dashboard"
+              aria-label="AMLDOCK dashboard"
+              sx={{ display: { xs: 'flex', md: 'none' } }}
+            >
+              <BrandLogo />
+            </Box>
+            <Box sx={{ flex: 1 }} />
+            <UserMenu compact />
+          </Box>
+        )}
+
+        {!menuRoute && <AppBar
           position="sticky"
           // On the broker's home the greeting above replaces this bar — but only on a phone; the
           // desktop shell is unchanged, so the bar has to come back at md.
@@ -235,7 +248,7 @@ export function AppShell() {
 
             <UserMenu compact />
           </Toolbar>
-        </AppBar>
+        </AppBar>}
 
         <Box
           component="main"
@@ -243,6 +256,9 @@ export function AppShell() {
             flexGrow: 1,
             position: 'relative',
             p: { xs: 2, md: 4 },
+            // Under the bare avatar row. Enough room that a page's own actions (Download CSV, a
+            // "New …" button), which sit at the right of its header, clear the avatar above them.
+            ...(menuRoute ? { pt: { xs: 2.5, md: 3.5 } } : {}),
             // Room for whichever nav is mounted — the constants live with it so the two cannot
             // drift. The broker's pill floats clear of the bottom edge and so needs more.
             pb: { xs: broker ? BROKER_NAV_CLEARANCE : BOTTOM_NAV_CLEARANCE, md: 4 },
@@ -375,6 +391,24 @@ function ScopedOutlet() {
       )}
       <Outlet />
     </>
+  );
+}
+
+/** The logo file carries a wide white margin; the frame crops to the mark and wordmark. */
+function BrandLogo() {
+  return (
+    <Box sx={{ position: 'relative', width: 92, height: 52, overflow: 'hidden', flexShrink: 0 }}>
+      <Box
+        component="img"
+        src={logoSrc}
+        alt=""
+        sx={{
+          position: 'absolute', left: '50%', top: '50%',
+          width: 118, height: 118, maxWidth: 'none',
+          transform: 'translate(-50%, -50%)',
+        }}
+      />
+    </Box>
   );
 }
 

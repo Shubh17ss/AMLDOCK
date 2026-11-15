@@ -7,7 +7,7 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { visibleGroupsFor, DASHBOARD_PATH, MY_TRAINING_PATH } from '../navigation/moduleRegistry.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canBeAssignedTraining } from '../auth/roles.js';
-import { tokens, fonts } from '../theme/theme.js';
+import { tokens } from '../theme/theme.js';
 
 const inGroup = (group, pathname) =>
   pathname === group.to || pathname.startsWith(group.to + '/') ||
@@ -50,30 +50,28 @@ export function SidebarNav() {
         const isOpen = open === group.group;
         const groupActive = inGroup(group, pathname);
         return (
-          <Box key={group.group} sx={{ mt: 1.75 }}>
+          <Box key={group.group} sx={{ mt: 0.5 }}>
             <Box
               component={RouterLink}
               to={group.to}
               onClick={() => setOpen(group.group)}
               sx={{
-                display: 'flex', alignItems: 'center', gap: 1.25,
-                px: 1.75, py: 1.1, borderRadius: '6px', textDecoration: 'none',
-                fontFamily: fonts.mono, fontSize: '0.64rem', fontWeight: 700,
-                letterSpacing: '0.12em', textTransform: 'uppercase',
-                color: groupActive ? tokens.blue : tokens.muted,
-                // Squared chip: light wash at rest; the open header reads as a raised control.
-                background: isOpen ? tokens.sidebarHeadBg : tokens.tileRaised,
-                border: `1px solid ${isOpen ? tokens.hairline : 'transparent'}`,
-                boxShadow: isOpen ? '0 2px 6px -2px rgba(16,24,40,0.10)' : 'none',
-                transition: 'color 0.15s ease, background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-                '&:hover': { color: tokens.blue, backgroundColor: isOpen ? undefined : tokens.hover },
+                display: 'flex', alignItems: 'center', gap: 1.5,
+                pl: 1.75, pr: 1, py: 0.9, borderRadius: 999, textDecoration: 'none',
+                fontSize: '0.88rem', fontWeight: 600, lineHeight: 1.3,
+                // A plain label, not a chip: the section that owns the current page is ink, the
+                // rest are muted, and nothing is drawn around either.
+                color: groupActive ? tokens.ink : tokens.muted,
+                transition: 'color 0.15s ease, background-color 0.2s ease',
+                '&:hover': { color: tokens.ink, backgroundColor: tokens.hover },
+                '&:focus-visible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
               }}
             >
               {/* Section glyph — sized to sit with the mono label. */}
               <Box component="span" sx={{
                 display: 'inline-flex', alignItems: 'center', flexShrink: 0,
                 color: groupActive ? tokens.blue : tokens.muted,
-                '& svg': { fontSize: 17 },
+                '& svg': { fontSize: 18 },
               }}>
                 {group.icon}
               </Box>
@@ -89,7 +87,7 @@ export function SidebarNav() {
                 }}
                 sx={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 22, height: 22, borderRadius: '5px', flexShrink: 0,
+                  width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
                   color: 'inherit',
                   transition: 'transform 0.25s cubic-bezier(0.22,1,0.36,1), background-color 0.15s ease',
                   transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -102,7 +100,7 @@ export function SidebarNav() {
 
             <Collapse in={isOpen} timeout={260} unmountOnExit>
               {/* Left hairline guide gives the open section its sense of depth. */}
-              <Box sx={{ mt: 0.5, ml: 1.75, pl: 1, borderLeft: `1px solid ${tokens.hairline2}` }}>
+              <Box sx={{ mt: 0.25, mb: 0.75, ml: 2.75, pl: 1, borderLeft: `1px solid ${tokens.hairline2}` }}>
                 <NavList items={group.items} pathname={pathname} />
               </Box>
             </Collapse>
@@ -121,26 +119,31 @@ function NavList({ items, pathname, sx }) {
           pathname === item.to ||
           (item.to !== DASHBOARD_PATH && pathname.startsWith(item.to + '/'));
         return (
-          <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
+          <ListItem key={item.to} disablePadding sx={{ mb: 0.25 }}>
             <ListItemButton
               component={RouterLink}
               to={item.to}
               selected={active}
               sx={{
-                py: 0.9,
-                borderRadius: '6px',
-                color: active ? tokens.blue : tokens.ink,
-                '&.Mui-selected': { backgroundColor: tokens.blueWash, color: tokens.blue },
+                py: 0.6,
+                pl: 1.75,
+                borderRadius: 999,
+                color: active ? tokens.ink : tokens.muted,
+                // Ink on the blue wash: the wash says where you are, the icon carries the blue.
+                '&.Mui-selected': { backgroundColor: tokens.blueWash, color: tokens.ink },
                 '&.Mui-selected:hover': { backgroundColor: tokens.blueWash },
-                '&:hover': { backgroundColor: tokens.hover },
+                '&:hover': { backgroundColor: tokens.hover, color: tokens.ink },
               }}
             >
-              <ListItemIcon sx={{ minWidth: 36, color: active ? tokens.blue : tokens.muted }}>
+              <ListItemIcon sx={{
+                minWidth: 30, color: active ? tokens.blue : 'inherit',
+                '& svg': { fontSize: 18 },
+              }}>
                 {item.icon}
               </ListItemIcon>
               <ListItemText
                 primary={item.label}
-                primaryTypographyProps={{ fontWeight: active ? 700 : 500, fontSize: '0.9rem' }}
+                primaryTypographyProps={{ fontWeight: active ? 600 : 500, fontSize: '0.88rem', color: 'inherit' }}
               />
             </ListItemButton>
           </ListItem>

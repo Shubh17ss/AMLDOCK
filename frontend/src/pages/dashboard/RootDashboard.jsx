@@ -56,7 +56,7 @@ export function RootDashboard() {
     <Bento>
       <HeroTile
         index={0}
-        eyebrow={`${(firm?.name ?? 'Platform').toUpperCase()} · LIVE`}
+        eyebrow={firm?.name ?? 'Platform'}
         value={total}
         label={`${total === 1 ? 'deal' : 'deals'} in ${branch?.name ?? 'this branch'}`}
         caption={[firm?.name, branch?.name].filter(Boolean).join(' · ')}
@@ -68,11 +68,11 @@ export function RootDashboard() {
         }
       />
 
-      <StatTile index={1} eyebrow="REPORTING ENTITIES" value={firms.length} label="Registered" to="/settings/reporting-entities" />
-      <StatTile index={2} eyebrow="USERS" value={users.length} label={`In ${firm?.name ?? 'this entity'}`} to="/settings/users" />
+      <StatTile index={1} eyebrow="Reporting entities" value={firms.length} label="Registered" to="/settings/reporting-entities" />
+      <StatTile index={2} eyebrow="Users" value={users.length} label={`In ${firm?.name ?? 'this entity'}`} to="/settings/users" />
       <DistributionTile
         index={3}
-        eyebrow="DEAL STATUS · MIX"
+        eyebrow="Deals by status"
         total={total}
         segments={segments}
         cols={2}
@@ -80,7 +80,7 @@ export function RootDashboard() {
 
       <ListTile
         index={4}
-        eyebrow="ACTIVITY · RECENT"
+        eyebrow="Recent activity"
         title="Across the platform"
         to="/settings/audit-log"
         items={activity}
@@ -88,9 +88,9 @@ export function RootDashboard() {
         empty={auditQ.isError ? 'Activity feed unavailable.' : 'No recent activity.'}
       />
 
-      <StatTile index={5} eyebrow="ACTIVE ENTITIES" dot={tokens.approved} value={activeFirms}
+      <StatTile index={5} eyebrow="Active entities" dot={tokens.approved} value={activeFirms}
                 label={`${firms.length - activeFirms} inactive`} to="/settings/reporting-entities" />
-      <StatTile index={6} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={count('REVIEW')}
+      <StatTile index={6} eyebrow="In review" dot={dealStatusDot('REVIEW')} value={count('REVIEW')}
                 label="With compliance" color={count('REVIEW') ? tokens.review : undefined} to="/cdd/deals" />
 
       <ActionTile

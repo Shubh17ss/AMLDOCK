@@ -11,7 +11,6 @@ const NEU_BASE   = tokens.tile;
 const NEU_FG     = tokens.ink;
 const NEU_MUTED  = tokens.muted;
 const NEU_ACCENT = tokens.blue;
-const EXT        = shadows.md;
 const EXT_SM     = shadows.sm;
 
 /**
@@ -36,15 +35,14 @@ export function DealCard({ deal, canEdit }) {
       onClick={handleCardClick}
       sx={{
         backgroundColor: NEU_BASE,
-        border: `1px solid ${tokens.hairline}`,
+        border: `1px solid ${tokens.hairline2}`,
         borderRadius: 4,
-        boxShadow: EXT,
         p: 2.5,
         cursor: 'pointer',
-        transition: 'box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease',
+        transition: 'transform 0.25s ease, border-color 0.2s ease',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
-        '&:hover': { boxShadow: shadows.lg, borderColor: tokens.hairline2 },
+        '&:hover': { borderColor: tokens.ink },
         '&:active': { transform: 'scale(0.995)' },
       }}
     >

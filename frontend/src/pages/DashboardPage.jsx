@@ -12,16 +12,19 @@ import { ReviewDialog } from '../components/documents/ReviewDialog.jsx';
 import { listDocumentReviews, reviewStatusOf } from '../api/documentReviews.js';
 import { REVIEW_META } from '../components/documents/reviewStatus.jsx';
 import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
-import { greeting, stamp } from './dashboard/greeting.js';
+import { greeting } from './dashboard/greeting.js';
 import { tokens, fonts } from '../theme/theme.js';
 
-// Tile edge, and the page's measure with it — three of these across is the widest the grid
-// ever gets, so the greeting and the grid share one right edge at every width above a phone.
+// Widest a tile gets, and the page's measure with it — three of these across is the widest the
+// grid ever gets, so the greeting and the grid share one left edge at every width above a phone.
 //
 // Five sections wrap to two rows, and two rows plus the greeting still land inside a laptop
 // viewport without scrolling.
-const TILE = 230;
+const TILE = 304;
 const COLS = 3;
+
+const today = () =>
+  new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' });
 
 const cardDateFmt = (iso) =>
   iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -125,19 +128,15 @@ export function DashboardPage() {
           },
           '@media (prefers-reduced-motion: reduce)': { opacity: 1, animation: 'none' },
         }}>
-          <Typography sx={{
-            fontFamily: fonts.mono, fontSize: '0.68rem', letterSpacing: '0.16em',
-            color: tokens.muted, textTransform: 'uppercase', mb: 0.75,
-          }}>
-            {stamp()} . {roleLabel(user?.role)}
-          </Typography>
-          <Typography variant="h4" sx={{
-            fontFamily: fonts.display, fontWeight: 800, letterSpacing: '-0.035em',
-            color: tokens.ink, lineHeight: 1.12,
+          <Typography component="h1" sx={{
+            fontFamily: fonts.display, fontWeight: 500, letterSpacing: '-0.035em',
+            fontSize: 'clamp(1.9rem, 3.4vw, 2.6rem)',
+            color: tokens.ink, lineHeight: 1.08,
           }}>
             {greeting()}{firstName ? `, ${firstName}` : ''}
-            {/* The clearance stamp — one blue full stop. */}
-            <Box component="span" sx={{ color: tokens.blue }}>.</Box>
+          </Typography>
+          <Typography sx={{ fontSize: '0.95rem', color: tokens.muted, mt: 1 }}>
+            {today()}, signed in as {roleLabel(user?.role)}
           </Typography>
         </Box>
         {/* Mobile only — on desktop the scope selector lives in the sidebar. */}
@@ -157,7 +156,8 @@ export function DashboardPage() {
         // then follows from the tile size, so the grid's right edge lands on the greeting's.
         gridTemplateColumns: {
           xs: 'repeat(1, minmax(0, 1fr))',
-          sm: `repeat(${cols}, minmax(0, 1fr))`,
+          sm: `repeat(${Math.min(cols, 2)}, minmax(0, 1fr))`,
+          md: `repeat(${cols}, minmax(0, 1fr))`,
         },
         maxWidth: cols * TILE + (cols - 1) * 16,
       }}>

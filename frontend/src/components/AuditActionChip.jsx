@@ -50,6 +50,13 @@ const COLOR = {
   ENTITY_QUERY_DELETED: 'error',
 };
 
+/** `DEAL_SUBMITTED_FOR_REVIEW` → "Deal submitted for review". The stored value is unchanged. */
+export function auditActionLabel(action) {
+  if (!action) return '';
+  const text = action.toLowerCase().replace(/_/g, ' ').replace(/\bocr\b/, 'OCR');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function AuditActionChip({ action }) {
-  return <Chip size="small" label={action} color={COLOR[action] ?? 'default'} variant="outlined" />;
+  return <Chip size="small" label={auditActionLabel(action)} color={COLOR[action] ?? 'default'} variant="outlined" />;
 }

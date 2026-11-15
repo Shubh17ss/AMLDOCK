@@ -25,7 +25,8 @@ export function PageHeader({ eyebrow, title, subtitle, actions }) {
           <Typography variant="body2" sx={{ color: tokens.muted, mt: 0.5 }}>{subtitle}</Typography>
         )}
       </Box>
-      {actions && <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, alignItems: 'center' }}>{actions}</Box>}
+      {/* Wraps, and may shrink to the row: two long buttons side by side are wider than a phone. */}
+      {actions && <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', maxWidth: '100%', alignItems: 'center' }}>{actions}</Box>}
     </Box>
   );
 }

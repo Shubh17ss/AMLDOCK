@@ -26,7 +26,7 @@ export function Bento({ children, sx }) {
   );
 }
 
-/** A single metric: ledger eyebrow on top, big numeral + label at the base. */
+/** A single metric: a caption on top, big numeral + label at the base. */
 export function StatTile({ eyebrow, dot, value, label, color, mono, to, onClick, index, cols = 1, rows = 1 }) {
   return (
     <BentoTile cols={cols} rows={rows} index={index} to={to} onClick={onClick} ariaLabel={label}>
@@ -35,7 +35,7 @@ export function StatTile({ eyebrow, dot, value, label, color, mono, to, onClick,
         <Typography
           sx={{
             fontFamily: mono ? fonts.mono : fonts.display,
-            fontWeight: mono ? 500 : 800,
+            fontWeight: 500,
             fontSize: mono ? 'clamp(1.4rem, 3vw, 1.9rem)' : 'clamp(1.9rem, 4vw, 2.6rem)',
             lineHeight: 1,
             letterSpacing: mono ? '-0.01em' : '-0.03em',
@@ -65,7 +65,7 @@ export function HeroTile({ eyebrow, value, label, caption, action, footer, index
       <Eyebrow light>{eyebrow}</Eyebrow>
       <Box sx={{ mt: 'auto', position: 'relative' }}>
         <Typography sx={{
-          fontFamily: fonts.display, fontWeight: 800,
+          fontFamily: fonts.display, fontWeight: 500,
           fontSize: 'clamp(2.6rem, 6vw, 4.4rem)', lineHeight: 0.95, letterSpacing: '-0.04em',
         }}>
           {value}
@@ -93,7 +93,7 @@ export function ListTile({ eyebrow, title, to, viewAllLabel = 'View all', items,
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
         <Box>
           <Eyebrow>{eyebrow}</Eyebrow>
-          {title && <Typography sx={{ mt: 0.5, fontWeight: 700, fontSize: '0.98rem', color: tokens.ink }}>{title}</Typography>}
+          {title && <Typography sx={{ mt: 0.5, fontFamily: fonts.display, fontWeight: 500, fontSize: '1.05rem', letterSpacing: '-0.015em', color: tokens.ink }}>{title}</Typography>}
         </Box>
         {to && (
           <Typography
