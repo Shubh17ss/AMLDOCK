@@ -350,6 +350,22 @@ public class DealController {
         return deals.transactionMonitoring(id);
     }
 
+    /**
+     * Adds or corrects the note on one move; a blank note clears it. Reviewers only, as for the
+     * close and unclose that write the note in the first place. Returns the refreshed history.
+     */
+    @PatchMapping("/{id}/transaction-monitoring/{moveId}/note")
+    @PreAuthorize(REVIEWER_ROLES)
+    public List<StatusMoveDto> editMoveNote(@DealRef("id") Long id, @PathVariable Long moveId,
+                                            @Valid @RequestBody OptionalNoteRequest req) {
+        var r = deals.editMoveNote(id, moveId, req.note());
+        audit.record(AuditAction.DEAL_MOVE_NOTE_EDITED, "Deal", r.deal().getId(),
+                "Transaction note on deal " + r.deal().getReference() + " changed from \""
+                        + (r.previousNote() == null ? "" : r.previousNote()) + "\" to \""
+                        + (req.note() == null ? "" : req.note().trim()) + "\"");
+        return deals.transactionMonitoring(id);
+    }
+
     @GetMapping("/{id}/verification-readiness")
     public Readiness verificationReadiness(@DealRef("id") Long id) {
         return deals.verificationReadiness(id);

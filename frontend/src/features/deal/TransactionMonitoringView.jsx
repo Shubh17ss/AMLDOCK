@@ -1,10 +1,14 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert, Box, Chip, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Tooltip, Typography,
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper,
+  Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip,
+  Typography,
 } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { getTransactionMonitoring } from '../../api/deals.js';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import AddIcon from '@mui/icons-material/Add';
+import { editTransactionNote, getTransactionMonitoring } from '../../api/deals.js';
 import { VersionChip } from './assurance/AssuranceDialog.jsx';
 import { SkeletonTable } from '../../components/SkeletonTable.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
@@ -31,17 +35,23 @@ const VARIANCE = {
  * is a view of the deal in its own right, and having it in the URL lets the browser's Back return
  * to the deal details.
  *
- * Props: dealId, onOpenVersion(versionNo)
+ * <p>A reviewer may add a note to a move, or correct the one it was made with. The row then says
+ * who last changed it; the text it replaced is in the audit log.
+ *
+ * Props: dealId, onOpenVersion(versionNo), canEditNotes
  */
-export function TransactionMonitoringView({ dealId, onOpenVersion }) {
+export function TransactionMonitoringView({ dealId, onOpenVersion, canEditNotes = false }) {
   const money = useCurrency();
+  const queryKey = ['deals', dealId, 'transaction-monitoring'];
   const q = useQuery({
     // Under ['deals', id] so the invalidations a close or unclose already makes refresh it.
-    queryKey: ['deals', dealId, 'transaction-monitoring'],
+    queryKey,
     queryFn: () => getTransactionMonitoring(dealId),
     enabled: Boolean(dealId),
   });
   const rows = q.data ?? [];
+  // The row whose note is open for editing, or null.
+  const [editing, setEditing] = useState(null);
 
   return (
     <Stack spacing={2}>
@@ -78,9 +88,8 @@ export function TransactionMonitoringView({ dealId, onOpenVersion }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {rows.map((r, i) => (
-                  // eslint-disable-next-line react/no-array-index-key
-                  <TableRow key={`${r.occurredAt}-${i}`} sx={{ verticalAlign: 'top' }}>
+                {rows.map((r) => (
+                  <TableRow key={r.id} sx={{ verticalAlign: 'top' }}>
                     {/* The version the deal stood on for this move. Absent for a move recorded
                         without one — an override close, say. */}
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
@@ -110,7 +119,21 @@ export function TransactionMonitoringView({ dealId, onOpenVersion }) {
                         : <Typography component="span" sx={{ color: tokens.muted }}>—</Typography>}
                     </TableCell>
                     <TableCell sx={{ maxWidth: 320 }}>
-                      <Notes text={r.note} by={r.actorName} />
+                      <Stack direction="row" spacing={0.5} alignItems="flex-start">
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Notes row={r} />
+                        </Box>
+                        {canEditNotes && (
+                          <Tooltip title={r.note ? 'Edit note' : 'Add note'}>
+                            <IconButton size="small" aria-label={r.note ? 'Edit note' : 'Add note'}
+                                        onClick={() => setEditing(r)} sx={{ mt: -0.5 }}>
+                              {r.note
+                                ? <EditOutlinedIcon sx={{ fontSize: '1rem' }} />
+                                : <AddIcon sx={{ fontSize: '1rem' }} />}
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -119,7 +142,67 @@ export function TransactionMonitoringView({ dealId, onOpenVersion }) {
           </TableContainer>
         )}
       </Box>
+
+      {editing && (
+        <EditNoteDialog dealId={dealId} row={editing} queryKey={queryKey} onClose={() => setEditing(null)} />
+      )}
     </Stack>
+  );
+}
+
+/**
+ * Adds or corrects a move's note. Saving an empty note clears it. The endpoint returns the
+ * refreshed history, so the cache is seeded rather than refetched.
+ */
+function EditNoteDialog({ dealId, row, queryKey, onClose }) {
+  const qc = useQueryClient();
+  const [text, setText] = useState(row.note ?? '');
+  const [error, setError] = useState(null);
+  const mut = useMutation({
+    mutationFn: () => editTransactionNote(dealId, row.id, text),
+    onSuccess: (list) => {
+      qc.setQueryData(queryKey, list);
+      onClose();
+    },
+    onError: (e) => setError(e.response?.data?.message || 'The note didn’t save. Try again.'),
+  });
+  const unchanged = text.trim() === (row.note ?? '').trim();
+
+  return (
+    // Closing mid-save would leave the reviewer unsure whether it happened.
+    <Dialog open onClose={mut.isPending ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{row.note ? 'Edit note' : 'Add note'}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" sx={{ color: tokens.muted, mb: 1.5 }}>
+          {dealStatusLabel(row.fromStatus)} → {dealStatusLabel(row.toStatus)},{' '}
+          {formatDateTimeNumeric(row.occurredAt) ?? '—'}. The text it replaces is kept in the audit log.
+        </Typography>
+        <TextField
+          autoFocus
+          fullWidth
+          multiline
+          minRows={3}
+          maxRows={10}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Leave empty to clear the note"
+          inputProps={{ maxLength: 4000 }}
+          helperText={`${text.length}/4000`}
+          disabled={mut.isPending}
+        />
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} disabled={mut.isPending}>Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={() => { setError(null); mut.mutate(); }}
+          disabled={mut.isPending || unchanged}
+        >
+          {mut.isPending ? 'Saving…' : 'Save'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -166,9 +249,22 @@ function ClosingValue({ row, format }) {
   return <Typography component="span" sx={{ fontWeight: 600 }}>{format(row.saleTotal)}</Typography>;
 }
 
-/** Two lines at most in the row; the whole note on hover. */
-function Notes({ text, by }) {
-  if (!text) return <Typography component="span" sx={{ color: tokens.muted }}>—</Typography>;
+/** Two lines at most in the row; the whole note on hover. Says so if it was changed after the move. */
+function Notes({ row }) {
+  const { note: text, actorName: by, noteEditedAt, noteEditorName } = row;
+  const edited = noteEditedAt && (
+    <Typography variant="caption" sx={{ display: 'block', color: tokens.muted, fontStyle: 'italic' }}>
+      Edited{noteEditorName ? ` by ${noteEditorName}` : ''} · {formatDateTimeNumeric(noteEditedAt)}
+    </Typography>
+  );
+  if (!text) {
+    return (
+      <Box>
+        <Typography component="span" sx={{ color: tokens.muted }}>—</Typography>
+        {edited}
+      </Box>
+    );
+  }
   return (
     <Tooltip title={<Box sx={{ whiteSpace: 'pre-wrap' }}>{text}</Box>}>
       <Box>
@@ -180,7 +276,8 @@ function Notes({ text, by }) {
         >
           {text}
         </Typography>
-        {by && <Typography variant="caption" sx={{ color: tokens.muted }}>{by}</Typography>}
+        {by && <Typography variant="caption" sx={{ display: 'block', color: tokens.muted }}>{by}</Typography>}
+        {edited}
       </Box>
     </Tooltip>
   );

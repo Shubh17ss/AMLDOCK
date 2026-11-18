@@ -18,6 +18,9 @@ import java.time.Instant;
  * <p>Append-only: written once, inside the transaction that made the move, and never updated. That
  * is the point of it — the deal row keeps only the latest sale, and this is where the earlier
  * ones go on being true. See V52.
+ *
+ * <p>The one exception is the note, which a reviewer may add or correct later (V72). Whoever last
+ * changed it is kept beside it; the text it replaced goes to the audit log.
  */
 @Entity
 @Table(name = "deal_status_move")
@@ -61,8 +64,14 @@ public class DealStatusMove {
     @Column(name = "sale_total", updatable = false)
     private BigDecimal saleTotal;
 
-    @Column(name = "note", columnDefinition = "text", updatable = false)
+    @Column(name = "note", columnDefinition = "text")
     private String note;
+
+    @Column(name = "note_edited_at")
+    private Instant noteEditedAt;
+
+    @Column(name = "note_edited_by")
+    private Long noteEditedBy;
 
     protected DealStatusMove() {}
 
@@ -82,6 +91,13 @@ public class DealStatusMove {
         this.note = note;
     }
 
+    /** Replaces the note, and records who did it. The only change a move takes after it is made. */
+    void editNote(String note, Long editorId, Instant at) {
+        this.note = note;
+        this.noteEditedBy = editorId;
+        this.noteEditedAt = at;
+    }
+
     public Long getId() { return id; }
     public Long getDealId() { return dealId; }
     public Kind getKind() { return kind; }
@@ -94,4 +110,6 @@ public class DealStatusMove {
     public Boolean getPropertySold() { return propertySold; }
     public BigDecimal getSaleTotal() { return saleTotal; }
     public String getNote() { return note; }
+    public Instant getNoteEditedAt() { return noteEditedAt; }
+    public Long getNoteEditedBy() { return noteEditedBy; }
 }
