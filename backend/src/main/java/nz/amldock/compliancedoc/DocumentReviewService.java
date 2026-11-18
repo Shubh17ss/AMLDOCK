@@ -7,6 +7,7 @@ import nz.amldock.compliancedoc.dto.CompleteReviewRequest;
 import nz.amldock.compliancedoc.dto.DocumentReviewDto;
 import nz.amldock.compliancedoc.dto.SetReviewDateRequest;
 import nz.amldock.firm.FirmBranch;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
@@ -37,15 +38,18 @@ public class DocumentReviewService {
     private final DocumentReviewRepository reviews;
     private final UserRepository users;
     private final FirmBranchRepository branches;
+    private final ScopeStatusGuard scope;
     private final AuditService audit;
 
     public DocumentReviewService(DocumentReviewRepository reviews,
                                  UserRepository users,
                                  FirmBranchRepository branches,
+                                 ScopeStatusGuard scope,
                                  AuditService audit) {
         this.reviews = reviews;
         this.users = users;
         this.branches = branches;
+        this.scope = scope;
         this.audit = audit;
     }
 
@@ -74,6 +78,7 @@ public class DocumentReviewService {
         UserPrincipal actor = currentPrincipal();
         Long firmId = resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
 
         String moduleKey = ReviewableModules.require(req.moduleKey());
 
@@ -99,6 +104,7 @@ public class DocumentReviewService {
         UserPrincipal actor = currentPrincipal();
         Long firmId = resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
 
         String moduleKey = ReviewableModules.require(req.moduleKey());
 

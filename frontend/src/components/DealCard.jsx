@@ -5,12 +5,12 @@ import { RiskRatingChip } from './RiskRatingChip.jsx';
 import { tokens, shadows } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
+import { dealName } from '../utils/dealName.js';
 
 const NEU_BASE   = tokens.tile;
 const NEU_FG     = tokens.ink;
 const NEU_MUTED  = tokens.muted;
 const NEU_ACCENT = tokens.blue;
-const EXT        = shadows.md;
 const EXT_SM     = shadows.sm;
 
 /**
@@ -35,30 +35,20 @@ export function DealCard({ deal, canEdit }) {
       onClick={handleCardClick}
       sx={{
         backgroundColor: NEU_BASE,
-        border: `1px solid ${tokens.hairline}`,
+        border: `1px solid ${tokens.hairline2}`,
         borderRadius: 4,
-        boxShadow: EXT,
         p: 2.5,
         cursor: 'pointer',
-        transition: 'box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease',
+        transition: 'transform 0.25s ease, border-color 0.2s ease',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
-        '&:hover': { boxShadow: shadows.lg, borderColor: tokens.hairline2 },
+        '&:hover': { borderColor: tokens.ink },
         '&:active': { transform: 'scale(0.995)' },
       }}
     >
-      {/* Row 1: reference + status */}
+      {/* Row 1: risk + status */}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 1.5 }}>
-        <Typography sx={{
-          fontSize: '0.78rem',
-          fontWeight: 700,
-          color: NEU_MUTED,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          pt: 0.25,
-        }}>
-          {deal.reference ?? `#${deal.id}`}
-        </Typography>
+        <Box />
         <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {/* Hidden when unassessed — a card is dense enough without "Not assessed" on every
               pre-V28 deal, and the absence says nothing a reviewer needs here. */}
@@ -67,17 +57,15 @@ export function DealCard({ deal, canEdit }) {
         </Box>
       </Box>
 
-      {/* Row 2: property address */}
-      {deal.propertyAddress && (
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
-          <Box sx={{ mt: '3px', flexShrink: 0 }}>
-            <LocationDot />
-          </Box>
-          <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: NEU_FG, lineHeight: 1.35 }}>
-            {deal.propertyAddress}
-          </Typography>
+      {/* Row 2: the property address — how a deal is named */}
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
+        <Box sx={{ mt: '3px', flexShrink: 0 }}>
+          <LocationDot />
         </Box>
-      )}
+        <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: NEU_FG, lineHeight: 1.35 }}>
+          {dealName(deal.propertyAddress)}
+        </Typography>
+      </Box>
 
       {/* Row 3: client */}
       {deal.clientDisplayName && (

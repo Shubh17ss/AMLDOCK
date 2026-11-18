@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.document.storage.StoredFileReaper;
 import nz.amldock.client.Client;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
@@ -75,6 +76,7 @@ public class DealService {
     private final DealSaleUnitRepository saleUnits;
     private final VerificationReadinessService readiness;
     private final TransactionMonitoringService monitoring;
+    private final StoredFileReaper files;
 
     public DealService(DealRepository deals,
                        PropertyRepository properties,
@@ -92,7 +94,8 @@ public class DealService {
                        DealVersionService versions,
                        DealSaleUnitRepository saleUnits,
                        VerificationReadinessService readiness,
-                       TransactionMonitoringService monitoring) {
+                       TransactionMonitoringService monitoring,
+                       StoredFileReaper files) {
         this.deals = deals;
         this.properties = properties;
         this.clients = clients;
@@ -110,6 +113,7 @@ public class DealService {
         this.saleUnits = saleUnits;
         this.readiness = readiness;
         this.monitoring = monitoring;
+        this.files = files;
     }
 
     /* ---------- queries ---------- */
@@ -125,10 +129,11 @@ public class DealService {
         Property p = properties.findById(d.getPropertyId()).orElse(null);
         Client c = clients.findById(d.getClientId()).orElse(null);
         User creator = users.findById(d.getCreatedByUserId()).orElse(null);
-        return DealDto.from(d,
+        return DealDto.from(d, d.getPublicId(),
                 firm == null ? null : firm.getId(),
                 firm == null ? null : firm.getName(),
                 branch == null ? null : branch.getName(),
+                branch == null || branch.isActive(),
                 p == null ? null : PropertyDto.from(p),
                 c == null ? null : ClientDto.from(c),
                 creator == null ? null : creator.getEmail());
@@ -209,6 +214,7 @@ public class DealService {
         d.setValuationMax(req.valuationMax());
         d.setCreatedByUserId(actor.id());
         applyRiskRating(d);
+        d.setPublicId(newPublicId());
         Deal saved = deals.save(d);
 
         // Generate human reference now that we have an id
@@ -320,8 +326,14 @@ public class DealService {
     public void delete(Long id) {
         Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
         assertCanDelete(d);
+        // ROOT too: a deactivated branch's deals are held until its retention period has run,
+        // and then go with the branch rather than one by one.
+        lifecycle.assertBranchWritable(d);
         Long propertyId = d.getPropertyId();
         Long clientId = d.getClientId();
+        // Read before the rows cascade away with the deal; deleted once this commits. Until this
+        // the objects were left behind in the bucket with nothing pointing at them.
+        files.deleteAfterCommit(files.keysOfDeal(d.getId()));
 
         // Before the deal row goes. deal_beneficial_owner cascades with it, so afterwards there
         // is no way to tell which people this deal held — and any left on no other deal would
@@ -530,9 +542,10 @@ public class DealService {
     }
 
     /**
-     * Adds a free comment to the deal's timeline. Readable deal, writable comment — while the deal
-     * is still being worked. A verified or closed deal is a finished file, and a note added to it
-     * afterwards would read as part of what was signed off.
+     * Adds a free comment to the deal's timeline. Readable deal, writable comment — in every
+     * status, verified and closed included. A signed-off version is unaffected: its notes are cut
+     * off at the moment of sign-off ({@code DealNoteService.timeline(deal, upTo)}), so a later
+     * note never reads as part of what was signed.
      */
     @Transactional
     public Deal comment(Long id, String body) {
@@ -544,9 +557,7 @@ public class DealService {
             throw new ForbiddenException("The audit role has read-only access");
         }
         lifecycle.assertCanRead(d, actor, firmIdOf(d));
-        if (d.getStatus() == DealStatus.VERIFIED || d.getStatus() == DealStatus.CLOSED) {
-            throw new BadRequestException("Notes can't be added to a verified or closed deal");
-        }
+        lifecycle.assertBranchWritable(d);
         dealNotes.appendComment(d, actor, body);
         return d;
     }
@@ -686,7 +697,50 @@ public class DealService {
         if (!DealLifecycleService.isDecider(actor.role())) {
             throw new ForbiddenException("Only compliance may set a deal's risk level");
         }
+        // A verified or closed deal carries a sign-off, and its risk is part of what was signed.
+        // Changing it means reopening the deal first, the same as any other content.
+        if (isSignedOff(d)) {
+            throw new BadRequestException(
+                    "Risk can't be changed on a verified or closed deal — reopen it first");
+        }
         return actor;
+    }
+
+    private static boolean isSignedOff(Deal d) {
+        return d.getStatus() == DealStatus.VERIFIED || d.getStatus() == DealStatus.CLOSED;
+    }
+
+    /* ---------- delay CDD ---------- */
+
+    /**
+     * Records that CDD on this transaction is being delayed.
+     *
+     * <p>Open to anyone who may read the deal and write at all, except finance: the auditor
+     * writes nothing, and finance has no part in a deal's due diligence. Only while the deal is
+     * still being worked — a signed-off deal keeps whatever it was signed off with.
+     */
+    @Transactional
+    public Deal setCddDelayed(Long id, boolean delayed) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        UserPrincipal actor = currentPrincipal();
+        if (actor.role().isReadOnly() || actor.role() == Role.FINANCE) {
+            throw new ForbiddenException("Your role can't delay CDD on a deal");
+        }
+        lifecycle.assertCanRead(d, actor, firmIdOf(d));
+        lifecycle.assertBranchWritable(d);
+        if (isSignedOff(d)) {
+            throw new BadRequestException("CDD delay can't be changed on a verified or closed deal");
+        }
+        if (d.isCddDelayed() == delayed) return d;
+
+        d.setCddDelayed(delayed);
+        d.setCddDelayedByUserId(delayed ? actor.id() : null);
+        d.setCddDelayedAt(delayed ? Instant.now() : null);
+
+        audit.record(delayed ? AuditAction.DEAL_CDD_DELAYED : AuditAction.DEAL_CDD_DELAY_UNDONE,
+                "Deal", d.getId(),
+                (delayed ? "CDD delayed on deal " : "CDD delay undone on deal ") + d.getReference());
+        return d;
     }
 
     private RiskAssessmentDto riskDto(Deal d) {
@@ -872,6 +926,13 @@ public class DealService {
         throw new BadRequestException("No authenticated user");
     }
 
+    /** A public id no deal has yet. A clash is vanishingly rare; the unique index is the backstop. */
+    private String newPublicId() {
+        String id = PublicIds.newId();
+        while (deals.existsByPublicId(id)) id = PublicIds.newId();
+        return id;
+    }
+
     // expose for controller resolving DTOs after mutation
     public DealDto toDtoAfterMutation(Deal d) {
         FirmBranch b = branches.findById(d.getFirmBranchId()).orElse(null);
@@ -879,10 +940,11 @@ public class DealService {
         Property p = properties.findById(d.getPropertyId()).orElse(null);
         Client c = clients.findById(d.getClientId()).orElse(null);
         User creator = users.findById(d.getCreatedByUserId()).orElse(null);
-        return DealDto.from(d,
+        return DealDto.from(d, d.getPublicId(),
                 f == null ? null : f.getId(),
                 f == null ? null : f.getName(),
                 b == null ? null : b.getName(),
+                b == null || b.isActive(),
                 p == null ? null : PropertyDto.from(p),
                 c == null ? null : ClientDto.from(c),
                 creator == null ? null : creator.getEmail());

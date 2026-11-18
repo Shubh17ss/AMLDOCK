@@ -3,6 +3,7 @@ package nz.amldock.individual;
 import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.PersonRole;
+import nz.amldock.ownership.StructureSide;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,12 +27,19 @@ public record IndividualRowDto(
          * and the person behind it are two rows that look alike and read very differently.
          */
         NodeType nodeType,
-        Long dealId,
+        /** Which party to the deal this owner stands for: the vendor, or the purchaser recorded at close. */
+        StructureSide side,
+        /** The deal's public id. */
+        String dealId,
         String dealReference,
         String propertyAddress,
         String displayName,
         LocalDate dateOfBirth,
-        /** ISO 3166-1 alpha-2, or null when nobody has been asked. */
+        /**
+         * ISO 3166-1 alpha-2: where a person lives, or where an entity is incorporated or
+         * registered — the country that decides whether the owner is overseas. Null when nobody
+         * has been asked.
+         */
         String countryOfResidence,
         Set<PersonRole> personRoles,
         NodeVerificationStatus verificationStatus,

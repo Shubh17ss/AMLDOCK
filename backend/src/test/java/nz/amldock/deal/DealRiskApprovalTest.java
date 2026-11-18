@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.beneficialowner.BeneficialOwnerRepository;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
@@ -89,12 +90,13 @@ class DealRiskApprovalTest {
     @BeforeEach
     void setUp() {
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService(mock(DealUserRepository.class)),
+                new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)),
                 new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, people, edges, audit),
                 ownership, audit, notifier, versions, saleUnits,
                 org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
-                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
+                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class),
+                org.mockito.Mockito.mock(nz.amldock.document.storage.StoredFileReaper.class));
 
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);
@@ -111,7 +113,7 @@ class DealRiskApprovalTest {
         deal.setRiskRating(RiskRating.LOW);
         lenient().when(deals.findById(DEAL_ID)).thenReturn(Optional.of(deal));
 
-        lenient().when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.empty());
+        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.empty());
         lenient().when(people.findAllById(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
 
         asUser(complianceOfficer);
@@ -264,6 +266,76 @@ class DealRiskApprovalTest {
     /* ---------- helpers ---------- */
 
     /** The three deal-level questions, answered so that nothing scores and nothing is missing. */
+    /* ---------- a signed-off deal's risk is locked ---------- */
+
+    @Test
+    void riskCannotBeApprovedOrOverriddenOnceVerifiedOrClosed() {
+        answerEverything();
+        for (DealStatus signedOff : List.of(DealStatus.VERIFIED, DealStatus.CLOSED)) {
+            deal.setStatus(signedOff);
+
+            assertThatThrownBy(() -> service.approveRisk(DEAL_ID))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("reopen it first");
+            assertThatThrownBy(() -> service.overrideRisk(DEAL_ID, RiskRating.HIGH, "Because"))
+                    .isInstanceOf(BadRequestException.class);
+
+            assertThat(deal.getRiskRating()).isEqualTo(RiskRating.LOW);
+            assertThat(deal.isRiskApproved()).isFalse();
+        }
+    }
+
+    @Test
+    void aBackgroundRecomputeLeavesASignedOffDealAlone() {
+        deal.setStatus(DealStatus.VERIFIED);
+        deal.setRiskValue(0);
+        deal.setRiskRating(RiskRating.HIGH);   // deliberately out of step with the score
+
+        DealRiskService risk = new DealRiskService(deals, structures, nodes, people, edges, audit);
+        assertThat(risk.recomputeFor(DEAL_ID)).isNull();
+        assertThat(deal.getRiskRating()).isEqualTo(RiskRating.HIGH);
+    }
+
+    /* ---------- delay CDD ---------- */
+
+    @Test
+    void anAgentCanDelayCddAndUndoIt() {
+        asUser(agent);
+
+        service.setCddDelayed(DEAL_ID, true);
+        assertThat(deal.isCddDelayed()).isTrue();
+        assertThat(deal.getCddDelayedByUserId()).isEqualTo(agent.id());
+        assertThat(deal.getCddDelayedAt()).isNotNull();
+        verify(audit).record(eq(AuditAction.DEAL_CDD_DELAYED), eq("Deal"), eq(DEAL_ID), anyString());
+
+        service.setCddDelayed(DEAL_ID, false);
+        assertThat(deal.isCddDelayed()).isFalse();
+        assertThat(deal.getCddDelayedByUserId()).isNull();
+        assertThat(deal.getCddDelayedAt()).isNull();
+        verify(audit).record(eq(AuditAction.DEAL_CDD_DELAY_UNDONE), eq("Deal"), eq(DEAL_ID), anyString());
+    }
+
+    @Test
+    void auditAndFinanceMayNotDelayCdd() {
+        for (Role role : List.of(Role.AUDIT, Role.FINANCE)) {
+            asUser(new UserPrincipal(9L, "x@firm.com", null, role, FIRM_ID, null, true));
+            assertThatThrownBy(() -> service.setCddDelayed(DEAL_ID, true))
+                    .isInstanceOf(ForbiddenException.class);
+        }
+        assertThat(deal.isCddDelayed()).isFalse();
+    }
+
+    @Test
+    void cddDelayIsFixedOnceVerifiedOrClosed() {
+        deal.setCddDelayed(true);
+        for (DealStatus signedOff : List.of(DealStatus.VERIFIED, DealStatus.CLOSED)) {
+            deal.setStatus(signedOff);
+            assertThatThrownBy(() -> service.setCddDelayed(DEAL_ID, false))
+                    .isInstanceOf(BadRequestException.class);
+        }
+        assertThat(deal.isCddDelayed()).isTrue();
+    }
+
     private void answerEverything() {
         deal.setOwnershipTenureYears(10);
         deal.setOwnershipTenureMonths(0);

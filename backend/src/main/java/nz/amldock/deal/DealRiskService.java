@@ -230,6 +230,11 @@ public class DealRiskService {
         if (dealId == null) return null;
         Deal deal = deals.findById(dealId).orElse(null);
         if (deal == null) return null;
+        // A verified or closed deal's risk is part of its sign-off; nothing moves it until the
+        // deal is reopened.
+        if (deal.getStatus() == DealStatus.VERIFIED || deal.getStatus() == DealStatus.CLOSED) {
+            return null;
+        }
 
         RiskRating previous = deal.getRiskRating();
         if (!apply(deal)) return null;
@@ -488,7 +493,7 @@ public class DealRiskService {
 
     private List<OwnershipNode> nodesOf(Long dealId) {
         if (dealId == null) return List.of();   // a deal being created has no structure yet
-        OwnershipStructure structure = structures.findByDealId(dealId).orElse(null);
+        OwnershipStructure structure = structures.findVendorByDealId(dealId).orElse(null);
         if (structure == null) return List.of();
         return nodes.findAllByOwnershipStructureIdOrderByIdAsc(structure.getId());
     }

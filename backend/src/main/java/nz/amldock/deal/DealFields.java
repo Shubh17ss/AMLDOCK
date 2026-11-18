@@ -207,6 +207,20 @@ public abstract class DealFields extends BaseEntity {
     @Column(name = "risk_approved_at")
     private Instant riskApprovedAt;
 
+    /**
+     * Whether CDD on this transaction has been delayed (V64). Set and undone only while the deal
+     * is NEW, in review or on hold; it stays on the record once the deal is verified or closed.
+     * Who and when are cleared together with the flag.
+     */
+    @Column(name = "cdd_delayed", nullable = false)
+    private boolean cddDelayed = false;
+
+    @Column(name = "cdd_delayed_by_user_id")
+    private Long cddDelayedByUserId;
+
+    @Column(name = "cdd_delayed_at")
+    private Instant cddDelayedAt;
+
     @Column(name = "decided_by_user_id")
     private Long decidedByUserId;
 
@@ -280,6 +294,12 @@ public abstract class DealFields extends BaseEntity {
     public void setOwnershipTenureMonths(Integer v) { this.ownershipTenureMonths = v; }
     public boolean isOwnershipTenureTbc() { return ownershipTenureTbc; }
     public void setOwnershipTenureTbc(boolean v) { this.ownershipTenureTbc = v; }
+    public boolean isCddDelayed() { return cddDelayed; }
+    public void setCddDelayed(boolean v) { this.cddDelayed = v; }
+    public Long getCddDelayedByUserId() { return cddDelayedByUserId; }
+    public void setCddDelayedByUserId(Long v) { this.cddDelayedByUserId = v; }
+    public Instant getCddDelayedAt() { return cddDelayedAt; }
+    public void setCddDelayedAt(Instant v) { this.cddDelayedAt = v; }
     public Boolean getFaceToFaceIdVerified() { return faceToFaceIdVerified; }
     public void setFaceToFaceIdVerified(Boolean v) { this.faceToFaceIdVerified = v; }
     public Long getKeyContactNodeId() { return keyContactNodeId; }

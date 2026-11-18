@@ -10,14 +10,14 @@ export function PageHeader({ eyebrow, title, subtitle, actions }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
       <Box sx={{ minWidth: 0 }}>
-        {eyebrow && (
+        {/* {eyebrow && (
           <Typography sx={{
             fontFamily: fonts.mono, fontSize: '0.68rem', letterSpacing: '0.16em',
             color: tokens.muted, textTransform: 'uppercase', mb: 0.75,
           }}>
             {eyebrow}
           </Typography>
-        )}
+        )} */}
         <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.03em', color: tokens.ink }}>
           {title}
         </Typography>
@@ -25,7 +25,8 @@ export function PageHeader({ eyebrow, title, subtitle, actions }) {
           <Typography variant="body2" sx={{ color: tokens.muted, mt: 0.5 }}>{subtitle}</Typography>
         )}
       </Box>
-      {actions && <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, alignItems: 'center' }}>{actions}</Box>}
+      {/* Wraps, and may shrink to the row: two long buttons side by side are wider than a phone. */}
+      {actions && <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', maxWidth: '100%', alignItems: 'center' }}>{actions}</Box>}
     </Box>
   );
 }

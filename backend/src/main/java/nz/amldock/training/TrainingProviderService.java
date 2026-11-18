@@ -7,6 +7,7 @@ import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.firm.FirmBranch;
 import nz.amldock.firm.FirmBranchRepository;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.training.dto.CreateTrainingProviderRequest;
 import nz.amldock.training.dto.TrainingProviderDto;
 import nz.amldock.user.Role;
@@ -32,17 +33,20 @@ public class TrainingProviderService {
     private final TrainingSessionRepository sessions;
     private final UserRepository users;
     private final FirmBranchRepository branches;
+    private final ScopeStatusGuard scope;
     private final AuditService audit;
 
     public TrainingProviderService(TrainingProviderRepository providers,
                                    TrainingSessionRepository sessions,
                                    UserRepository users,
                                    FirmBranchRepository branches,
+                                   ScopeStatusGuard scope,
                                    AuditService audit) {
         this.providers = providers;
         this.sessions = sessions;
         this.users = users;
         this.branches = branches;
+        this.scope = scope;
         this.audit = audit;
     }
 
@@ -59,6 +63,7 @@ public class TrainingProviderService {
         UserPrincipal actor = TrainingScope.currentPrincipal();
         Long firmId = TrainingScope.resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
         String name = req.name().trim();
 
         if (providers.existsByRealEstateFirmIdAndFirmBranchIdAndNameIgnoreCase(firmId, branchId, name)) {
@@ -83,6 +88,7 @@ public class TrainingProviderService {
     public void delete(Long id) {
         TrainingProvider p = providers.findById(id)
                 .orElseThrow(() -> new NotFoundException("Provider " + id + " not found"));
+        scope.assertWritable(p.getRealEstateFirmId(), p.getFirmBranchId());
         UserPrincipal actor = TrainingScope.currentPrincipal();
         if (!actor.role().canDeleteRecords()) {
             throw new ForbiddenException(

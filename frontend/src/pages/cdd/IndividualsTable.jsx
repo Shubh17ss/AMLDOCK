@@ -1,10 +1,11 @@
 import {
-  Box, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography,
+  Box, Chip, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography,
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { countryName, flagClass } from '../../data/countries.js';
 import { nodeTypeLabel } from '../../api/ownership.js';
 import { tokens, fonts } from '../../theme/theme.js';
+import { dealName } from '../../utils/dealName.js';
 
 const dateFmt = new Intl.DateTimeFormat('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -47,8 +48,9 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
             <TableCell>Name</TableCell>
             <TableCell>Type</TableCell>
             <TableCell>Date of birth</TableCell>
-            <TableCell>Country of residence</TableCell>
+            <TableCell>Country of residence / incorporation</TableCell>
             <TableCell>Property</TableCell>
+            <TableCell>Party</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -79,15 +81,26 @@ export function IndividualsTable({ rows, loading, emptyMessage }) {
                       '&:hover': { color: tokens.blue, textDecoration: 'underline' },
                     }}
                   >
-                    {r.propertyAddress ?? r.dealReference}
+                    {dealName(r.propertyAddress)}
                   </Box>
                 </Tooltip>
+              </TableCell>
+              <TableCell>
+                {/* Which side of the deal they stand on. A purchaser is recorded after the deal
+                    closed as sold, outside the sign-off, so it is the one worth marking. */}
+                {r.side === 'PURCHASER' ? (
+                  <Chip label="Purchaser" size="small" color="primary" variant="outlined" />
+                ) : (
+                  <Typography component="span" variant="body2" sx={{ color: tokens.muted }}>
+                    Vendor
+                  </Typography>
+                )}
               </TableCell>
             </TableRow>
           ))}
           {!loading && rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} align="center" sx={{ py: 5, color: tokens.muted }}>
+              <TableCell colSpan={6} align="center" sx={{ py: 5, color: tokens.muted }}>
                 {emptyMessage}
               </TableCell>
             </TableRow>

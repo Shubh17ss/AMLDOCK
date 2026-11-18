@@ -59,13 +59,18 @@ function applyOrderLocally(prev, { parentNodeId, childNodeIds }) {
   };
 }
 
-export function useOwnershipTree(dealId) {
+/**
+ * One side's structure — the vendor's unless told otherwise. Each side is its own cache entry
+ * under the deal's `['ownership', dealId]` prefix, so the invalidations elsewhere that name only
+ * the deal still refresh both.
+ */
+export function useOwnershipTree(dealId, side = 'VENDOR') {
   const qc = useQueryClient();
-  const key = ['ownership', dealId];
+  const key = ['ownership', dealId, side];
 
   const treeQ = useQuery({
     queryKey: key,
-    queryFn: () => getTree(dealId),
+    queryFn: () => getTree(dealId, side),
     enabled: Boolean(dealId),
   });
 
@@ -85,7 +90,7 @@ export function useOwnershipTree(dealId) {
     qc.invalidateQueries({ queryKey: ['verificationTrail'] });
   };
 
-  const createNodeMut = useMutation({ mutationFn: (payload) => createNode(dealId, payload), onSuccess: invalidate });
+  const createNodeMut = useMutation({ mutationFn: (payload) => createNode(dealId, payload, side), onSuccess: invalidate });
   const updateNodeMut = useMutation({
     mutationFn: ({ nodeId, payload }) => updateNode(dealId, nodeId, payload),
     onSuccess: invalidate,
@@ -152,7 +157,7 @@ export function useOwnershipTree(dealId) {
    * at all. The server returns the whole tree, which the invalidate below picks up.
    */
   const reorderMut = useMutation({
-    mutationFn: (payload) => reorder(dealId, payload),
+    mutationFn: (payload) => reorder(dealId, payload, side),
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData(key);

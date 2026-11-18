@@ -10,6 +10,7 @@ import nz.amldock.document.dto.DownloadUrlResponse;
 import nz.amldock.document.dto.UploadUrlResponse;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.fundtransaction.dto.CreateFundTransactionRequest;
 import nz.amldock.fundtransaction.dto.FundTransactionDto;
@@ -43,6 +44,7 @@ public class InternationalFundTransactionService {
     private final InternationalFundTransactionRepository transactions;
     private final UserRepository users;
     private final FirmBranchRepository branches;
+    private final ScopeStatusGuard scope;
     private final FileStorageService storage;
     private final AuditService audit;
     private final long maxBytes;
@@ -52,6 +54,7 @@ public class InternationalFundTransactionService {
     public InternationalFundTransactionService(InternationalFundTransactionRepository transactions,
                                               UserRepository users,
                                               FirmBranchRepository branches,
+                                              ScopeStatusGuard scope,
                                               FileStorageService storage,
                                               AuditService audit,
                                               @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
@@ -60,6 +63,7 @@ public class InternationalFundTransactionService {
         this.transactions = transactions;
         this.users = users;
         this.branches = branches;
+        this.scope = scope;
         this.storage = storage;
         this.audit = audit;
         this.maxBytes = maxBytes;
@@ -81,6 +85,7 @@ public class InternationalFundTransactionService {
         UserPrincipal actor = currentPrincipal();
         Long firmId = resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
 
         InternationalFundTransaction t = new InternationalFundTransaction();
         t.setDealReference(trimToNull(req.dealReference()));
@@ -124,6 +129,7 @@ public class InternationalFundTransactionService {
                 .orElseThrow(() -> new NotFoundException("Transaction " + id + " not found"));
         UserPrincipal actor = currentPrincipal();
         assertSameScope(actor, t);
+        scope.assertWritable(t.getRealEstateFirmId(), t.getFirmBranchId());
 
         if (t.getDocumentStatus() == DocumentStatus.ACTIVE) {
             if (!actor.role().canDeleteRecords()) {
@@ -156,6 +162,7 @@ public class InternationalFundTransactionService {
         // Scope first: the idempotent return below must not hand another firm's entry back.
         UserPrincipal actor = currentPrincipal();
         assertSameScope(actor, t);
+        scope.assertWritable(t.getRealEstateFirmId(), t.getFirmBranchId());
         if (t.getDocumentStatus() == DocumentStatus.ACTIVE) {
             return toDto(t); // idempotent
         }
@@ -203,6 +210,7 @@ public class InternationalFundTransactionService {
                     "Only ROOT, a senior manager or a compliance officer may delete a register entry");
         }
         if (actor.role() != Role.ROOT) assertSameScope(actor, t);
+        scope.assertWritable(t.getRealEstateFirmId(), t.getFirmBranchId());
 
         if (t.getS3Key() != null) {
             storage.delete(t.getS3Key());

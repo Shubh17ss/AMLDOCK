@@ -1,5 +1,6 @@
 package nz.amldock.ownership;
 
+import nz.amldock.deal.DealRef;
 import nz.amldock.ownership.dto.VerificationTrailEntryDto;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,7 +21,7 @@ public class VerificationTrailController {
     }
 
     @GetMapping("/nodes/{nodeId}/verification-trail")
-    public List<VerificationTrailEntryDto> trail(@PathVariable Long dealId, @PathVariable Long nodeId) {
+    public List<VerificationTrailEntryDto> trail(@DealRef Long dealId, @PathVariable Long nodeId) {
         return trail.trail(dealId, nodeId);
     }
 }

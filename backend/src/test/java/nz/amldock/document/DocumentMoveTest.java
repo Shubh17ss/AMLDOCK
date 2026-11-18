@@ -1,5 +1,6 @@
 package nz.amldock.document;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
@@ -63,7 +64,7 @@ class DocumentMoveTest {
     @Mock OwnershipStructureRepository structures;
     @Mock UserRepository users;
     @Mock FileStorageService storage;
-    final DealLifecycleService lifecycle = new DealLifecycleService(mock(DealUserRepository.class));
+    final DealLifecycleService lifecycle = new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class));
     @Mock BeneficialOwnerService beneficialOwners;
     @Mock AuditService audit;
     @Mock nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;
@@ -155,6 +156,53 @@ class DocumentMoveTest {
         assertThatThrownBy(() -> service.move(d.getId(), null))
                 .isInstanceOf(BadRequestException.class).hasMessageContaining("does not take");
         assertThat(d.getOwnershipNodeId()).isEqualTo(anna.getId());
+    }
+
+    /* ---------- refiled and renamed on the way ---------- */
+
+    @Test
+    void movesAPassportToThePropertyOnceRefiledAsSomethingItTakes() {
+        Document d = doc(DocumentType.PASSPORT, anna.getId());
+
+        service.move(d.getId(), null, DocumentType.OTHER, null);
+
+        assertThat(d.getOwnershipNodeId()).isNull();
+        assertThat(d.getDocumentType()).isEqualTo(DocumentType.OTHER);
+        verify(audit).record(eq(AuditAction.DOCUMENT_MOVED), eq("Document"), eq(d.getId()),
+                org.mockito.ArgumentMatchers.contains("type PASSPORT"));
+    }
+
+    @Test
+    void checksTheTargetAgainstTheNewType() {
+        Document d = doc(DocumentType.OTHER, anna.getId());
+        assertThatThrownBy(() -> service.move(d.getId(), trust.getId(), DocumentType.PASSPORT, null))
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("does not accept");
+        assertThat(d.getDocumentType()).isEqualTo(DocumentType.OTHER);
+        assertThat(d.getOwnershipNodeId()).isEqualTo(anna.getId());
+    }
+
+    @Test
+    void renamesAndKeepsTheExtension() {
+        Document d = doc(DocumentType.OTHER, anna.getId());
+
+        service.move(d.getId(), ben.getId(), null, "  Anna rates notice ");
+
+        assertThat(d.getOriginalFilename()).isEqualTo("Anna rates notice.pdf");
+        assertThat(d.getDocumentType()).isEqualTo(DocumentType.OTHER);
+    }
+
+    @Test
+    void aBlankNameKeepsTheOldOne() {
+        assertThat(DocumentService.renamed("file.pdf", "   ")).isEqualTo("file.pdf");
+        assertThat(DocumentService.renamed("file.pdf", "new.PDF")).isEqualTo("new.PDF");
+        assertThat(DocumentService.renamed("file.pdf", "a/b")).isEqualTo("a_b.pdf");
+    }
+
+    @Test
+    void refusesRefilingAFileAsAVoiceNote() {
+        Document d = doc(DocumentType.OTHER, anna.getId());
+        assertThatThrownBy(() -> service.move(d.getId(), ben.getId(), DocumentType.VOICE_NOTE, null))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test

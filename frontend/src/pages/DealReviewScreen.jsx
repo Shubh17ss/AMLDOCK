@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, CircularProgress, Stack, Tab, Tabs,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { getDeal } from '../api/deals.js';
+import { delayCdd, getDeal, undoCddDelay } from '../api/deals.js';
 import { getDealVersion, listDealVersions } from '../api/dealVersions.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import { useDealScopeGuard } from '../dashboard/useDealScopeGuard.jsx';
 import { NotFoundPage } from './NotFoundPage.jsx';
-import { canOverride, canWrite, isDealAuthor, isDealReviewer } from '../auth/roles.js';
+import {
+  canDelayCdd, canManageDealAccess, canOverride, canWrite, isDealAuthor, isDealReviewer,
+} from '../auth/roles.js';
+import { useToast } from '../components/ToastProvider.jsx';
+import { DelayCddDialog } from '../features/deal/DelayCddDialog.jsx';
 import { DealStatusChip } from '../components/DealStatusChip.jsx';
 import { RiskRatingChip } from '../components/RiskRatingChip.jsx';
 import { OwnershipTreeBuilder } from '../features/ownership/OwnershipTreeBuilder.jsx';
@@ -29,12 +33,15 @@ import { useDealStatusAction } from '../features/deal/useDealStatusAction.js';
 import { TransactionMonitoringView } from '../features/deal/TransactionMonitoringView.jsx';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
-import { AssuranceDialog } from '../features/deal/assurance/AssuranceDialog.jsx';
+import { ASSURANCE_META, AssuranceDialog } from '../features/deal/assurance/AssuranceDialog.jsx';
 import { formatPropertyAddressShort } from '../data/addressFinderMeta.js';
 import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
-import { canEditContent, canUploadDocuments, dealStatusLabel, isEditable, transitionsFrom } from '../data/dealStatus.js';
+import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import {
+  canEditContent, canUploadDocuments, dealStatusLabel, isEditable, isPurchaserOpen, transitionsFrom,
+} from '../data/dealStatus.js';
 
 /**
  * The three faces of a deal under review.
@@ -51,9 +58,31 @@ const TABS = [
 
 const TAB_VALUES = TABS.map((t) => t.value);
 
+/**
+ * The Update Assurance button, in the colours of the verdict the current version carries — green
+ * once it has passed, red while action is required — so the deal says where its assurance stands
+ * without opening the dialog. Unreviewed keeps the plain outline. Colours come from ASSURANCE_META,
+ * the same table the chips read.
+ */
+function assuranceButtonSx(status) {
+  const meta = ASSURANCE_META[status];
+  if (!meta) return undefined;
+  return {
+    color: meta.ink,
+    backgroundColor: meta.wash,
+    borderColor: meta.ink,
+    // A slightly deeper wash on hover, as AssuranceChip does, rather than the outline's blue.
+    '&:hover': {
+      backgroundColor: `color-mix(in srgb, ${meta.wash} 88%, ${meta.ink})`,
+      borderColor: meta.ink,
+    },
+  };
+}
+
 export function DealReviewScreen() {
   const { id } = useParams();
-  const dealId = Number(id);
+  // The deal's public id, as it appears in the URL. Never a number.
+  const dealId = id;
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname } = location;
@@ -83,12 +112,18 @@ export function DealReviewScreen() {
   const [attachNodeId, setAttachNodeId]     = useState(null);
   const [changeOwner, setChangeOwner]       = useState(null);   // { nodeId, edge }
   const [deleteNodeId, setDeleteNodeId]     = useState(null);
+  // Whose structure the Structure tab shows. Only a choice once the deal has closed as sold —
+  // see `side` below, which is what everything actually reads.
+  const [structureSide, setStructureSide]   = useState('VENDOR');
   const [statusOpen, setStatusOpen]         = useState(false);
   // Closing asks a second set of questions, so the status list hands over to its own dialog
   // rather than growing a branch for the one verb that records an outcome as well as a position.
   const [closeOpen, setCloseOpen]           = useState(false);
   const [assuranceOpen, setAssuranceOpen]   = useState(false);
   const [actionError, setActionError]       = useState(null);
+  const [delayOpen, setDelayOpen]           = useState(false);
+  const { showToast } = useToast();
+  const qc = useQueryClient();
 
   /*
    * Which version is on screen, or null for the live deal.
@@ -143,6 +178,7 @@ export function DealReviewScreen() {
     setParams(merged);
   };
 
+  const { branch: scopeBranch } = useDashboardScope();
   const dealQ = useQuery({
     queryKey: ['deals', dealId],
     queryFn: () => getDeal(dealId),
@@ -150,31 +186,18 @@ export function DealReviewScreen() {
     retry: (count, err) => ![403, 404].includes(err?.response?.status) && count < 3,
   });
 
-  /*
-   * Follow the deal into its branch.
-   *
-   * A link can lead here from anywhere — another deal's verification trail, a register, a
-   * notification — and the scope selector should say where the deal on screen lives. Only for a
-   * viewer who can switch: a branch-pinned role can only ever open its own branch's deals. ROOT
-   * and AUDIT may need the entity changed as well; its country is filled in by the scope's own
-   * reconciliation once the entity list has it.
-   */
-  const scope = useDashboardScope();
-  const liveForScope = dealQ.data;
-  useEffect(() => {
-    const d = liveForScope;
-    if (!d?.firmBranchId || !scope.branchSelectable) return;
-    if (scope.isRoot && d.firmId && scope.firm?.id !== d.firmId) {
-      scope.setFirm({ id: d.firmId, name: d.firmName, country: null });
-    }
-    if (scope.branch?.id !== d.firmBranchId) {
-      scope.setBranch({ id: d.firmBranchId, name: d.branchName });
-    }
-    // Keyed on the deal: once it has been followed, a viewer changing the selector by hand is not
-    // pulled back.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveForScope?.id]);
-  const liveTree = useOwnershipTree(dealId);
+  // A deal outside the current scope is not shown under it — see useDealScopeGuard.
+  const scopeGuard = useDealScopeGuard(dealQ.data);
+  // The purchaser's side opens once the deal has closed as sold, on the live deal only: a version
+  // records the vendor's structure at sign-off, and the purchaser was never part of that. Leaving
+  // that state (unclosed, re-closed as unsold) keeps what was recorded but takes the toggle away.
+  const purchaserAvailable = isPurchaserOpen(dealQ.data?.status, dealQ.data?.propertySold)
+    && viewingVersion == null;
+  const side = purchaserAvailable ? structureSide : 'VENDOR';
+  const vendorTree = useOwnershipTree(dealId);
+  // Not fetched at all until the side can be shown.
+  const purchaserTree = useOwnershipTree(purchaserAvailable ? dealId : null, 'PURCHASER');
+  const liveTree = side === 'PURCHASER' ? purchaserTree : vendorTree;
 
   const versionsQ = useQuery({
     queryKey: ['dealVersions', dealId],
@@ -212,6 +235,21 @@ export function DealReviewScreen() {
     onFailed: setActionError,
   });
 
+  // Delay CDD and its undo. Both refresh the deal, which is what drives the banner.
+  const delayMut = useMutation({
+    mutationFn: (delayed) => (delayed ? delayCdd(dealId) : undoCddDelay(dealId)),
+    onSuccess: (_, delayed) => {
+      qc.invalidateQueries({ queryKey: ['deals'] });
+      setDelayOpen(false);
+      setActionError(null);
+      showToast({ severity: 'success', message: delayed ? 'CDD delayed' : 'CDD delay undone' });
+    },
+    onError: (err) => {
+      setDelayOpen(false);
+      setActionError(err.response?.data?.message || 'That didn’t go through. Try again.');
+    },
+  });
+
   if (dealQ.isLoading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
   }
@@ -228,6 +266,7 @@ export function DealReviewScreen() {
     }
     return <Alert severity="error">Failed to load deal.</Alert>;
   }
+  if (scopeGuard.blocked) return scopeGuard.element;
 
   const liveDeal    = dealQ.data;
   const isOwnerAgent = isDealAuthor(user?.role) && user?.userId === liveDeal.createdByUserId;
@@ -275,13 +314,30 @@ export function DealReviewScreen() {
    * that still allows content changes, and never the auditor, who reads every screen in the
    * product and writes to none.
    */
+  // A deactivated branch is read-only to everyone, platform administrators included, until its
+  // retention period has passed (ScopeStatusGuard on the server). Folded into every write
+  // predicate below rather than tested by each control.
+  const branchClosed = liveDeal.branchActive === false;
+  // The shell already says so when this deal's branch is the one in view (AppShell.ScopedOutlet).
+  const sayBranchClosed = branchClosed && scopeBranch?.id !== liveDeal.firmBranchId;
+
   const mayEdit = (isOwnerAgent || isDealReviewer(user?.role))
     && canEditContent(liveDeal.status, user?.role)
     && canWrite(user?.role)
     // A version is a record of a past moment, so nothing on it is editable by anyone — regardless
     // of what the live deal's status would otherwise allow. Folded into the one predicate the
     // whole screen already reads, rather than added as a second test each consumer must remember.
-    && !snapshot;
+    && !snapshot
+    && !branchClosed;
+
+  // The purchaser's side answers to its own status rule — open exactly while the deal stands
+  // closed as sold, when the vendor's is shut — for the same people. Uploading on it follows the
+  // same rule as editing it (DealLifecycleService.assertPurchaserEditable).
+  const mayEditPurchaser = (isOwnerAgent || isDealReviewer(user?.role))
+    && purchaserAvailable
+    && canWrite(user?.role)
+    && !snapshot
+    && !branchClosed;
 
   // Adding evidence answers to a wider rule than editing (canUploadDocuments): the deal's own
   // agent while it is NEW, and branch staff or firm reviewers through REVIEW and ON_HOLD. The
@@ -291,15 +347,23 @@ export function DealReviewScreen() {
   const mayUpload = (isOwnerAgent || !isAgent)
     && canUploadDocuments(liveDeal.status, user?.role)
     && canWrite(user?.role)
-    && !snapshot;
+    && !snapshot
+    && !branchClosed;
 
   const showOverride = canOverride(user?.role);
+
+  // What the Structure tab and its owner drawer may do, for whichever side is on screen. The deal
+  // drawer keeps the vendor's rules: the deal's own record is not the purchaser's to change.
+  const structureMayEdit = side === 'PURCHASER' ? mayEditPurchaser : mayEdit;
+  const structureMayUpload = side === 'PURCHASER' ? mayEditPurchaser : mayUpload;
 
   const selectedNode = tree.tree?.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
   // The people on this deal, for the key-contact picker in the deal drawer. Read off the tree
   // already in hand rather than fetched again, so the list cannot lag a node edit.
-  const individuals = (tree.tree?.nodes ?? [])
+  // Always the vendor's: the key contact is someone on the vendor's side.
+  const vendorNodes = (snapshot ? tree.tree?.nodes : vendorTree.tree?.nodes) ?? [];
+  const individuals = vendorNodes
     .filter((n) => n.nodeType === 'INDIVIDUAL')
     .map((n) => ({ id: n.id, displayName: n.displayName }));
 
@@ -308,6 +372,7 @@ export function DealReviewScreen() {
   // moves of the deal, and looking at v1 does not make them moves of v1.
   const canUpdateStatus = isDealReviewer(user?.role)
     && !snapshot
+    && !branchClosed
     && (transitionsFrom(liveDeal.status).length > 0 || showOverride);
 
   /*
@@ -317,16 +382,24 @@ export function DealReviewScreen() {
    * depend on the deal having a transition available — rating a deal is not a move along the
    * lifecycle — and it is not gated on canEditContent either, because setting a risk level is a
    * compliance act on a deal under review, which is exactly when the deal itself is closed to
-   * content changes. The server checks the same thing, scoped to the deal's own firm.
+   * content changes. A verified or closed deal is different: its risk is part of the sign-off,
+   * so it is locked until the deal is reopened. The server checks the same thing, scoped to the
+   * deal's own firm.
    */
-  const canDecideRisk = isDealReviewer(user?.role) && canWrite(user?.role) && !snapshot;
+  const signedOff = liveDeal.status === 'VERIFIED' || liveDeal.status === 'CLOSED';
+  const canDecideRisk = isDealReviewer(user?.role) && canWrite(user?.role) && !snapshot
+    && !signedOff && !branchClosed;
+
+  // Delay CDD: any role that writes except finance, while the deal is still being worked. The
+  // flag itself stays visible after verify or close; only changing it is closed off.
+  const canToggleDelay = canDelayCdd(user?.role) && !snapshot && !signedOff && !branchClosed;
 
   const versions = versionsQ.data ?? [];
   // The version the deal stands on: newest first, and not yet worked past.
   const currentVersion = versions.find((v) => v.reopenedAt == null) ?? null;
   // Same gate as the Assurance register's menu; the server only accepts verified or closed deals.
   const canUpdateAssurance = isDealReviewer(user?.role) && canWrite(user?.role)
-    && !snapshot && currentVersion != null
+    && !snapshot && !branchClosed && currentVersion != null
     && (liveDeal.status === 'VERIFIED' || liveDeal.status === 'CLOSED');
   const showVersionLinks = versions.length > 0 && !showingTransactions;
 
@@ -358,7 +431,7 @@ export function DealReviewScreen() {
         {/* History on the left — where the deal has been (transaction monitoring) and what was
             signed off (CDD versions). Absent until the deal has been verified once. Actions on the
             right: compliance's assurance verdict, then the deal's next move. */}
-        {(canUpdateStatus || canUpdateAssurance || showVersionLinks) && (
+        {(canUpdateStatus || canUpdateAssurance || showVersionLinks || canToggleDelay) && (
           <Stack direction="row" justifyContent="space-between" alignItems="center"
             spacing={1} flexWrap="wrap" useFlexGap sx={{ py: 1.5 }}>
             <Stack direction="row" spacing={1}>
@@ -375,8 +448,18 @@ export function DealReviewScreen() {
               )}
             </Stack>
             <Stack direction="row" spacing={1}>
+              {canToggleDelay && !liveDeal.cddDelayed && (
+                <Button variant="outlined" size="small" onClick={() => setDelayOpen(true)}>
+                  Delay CDD
+                </Button>
+              )}
               {canUpdateAssurance && (
-                <Button variant="outlined" size="small" onClick={() => setAssuranceOpen(true)}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setAssuranceOpen(true)}
+                  sx={assuranceButtonSx(currentVersion?.assuranceStatus)}
+                >
                   Update Assurance
                 </Button>
               )}
@@ -409,12 +492,41 @@ export function DealReviewScreen() {
         onBackToCurrent={() => setViewingVersion(null)}
       />
 
+      {/* Shown whatever the status, so a verified or closed deal still says CDD was delayed.
+          Undo only while the delay can still be changed. */}
+      {deal.cddDelayed && (
+        <Alert
+          severity="info"
+          sx={{ py: 0.5, alignItems: 'center' }}
+          action={canToggleDelay ? (
+            <Button
+              color="inherit"
+              size="small"
+              disabled={delayMut.isPending}
+              onClick={() => delayMut.mutate(false)}
+              sx={{ textDecoration: 'underline', textTransform: 'none', fontWeight: 600 }}
+            >
+              Undo
+            </Button>
+          ) : null}
+        >
+          CDD has been <strong>delayed</strong> on this transaction.
+        </Alert>
+      )}
+
       {/* The version banner already says the page is read-only and why, so this one would be a
           second answer to a question the reader has stopped asking. */}
-      {!mayEdit && !snapshot && (
+      {sayBranchClosed && !snapshot && (
+        <Alert severity="warning" sx={{ py: 0.5 }}>
+          The <strong>{deal.branchName ?? 'branch'}</strong> branch is deactivated, so this deal is
+          read-only. It is kept unchanged for its retention period.
+        </Alert>
+      )}
+      {!mayEdit && !snapshot && !branchClosed && (
         <Alert severity="info" sx={{ py: 0.5 }}>
           This deal is <strong>{dealStatusLabel(deal.status)}</strong>.
           Move it back to in review to make changes.
+          {mayEditPurchaser && ' The purchaser can still be recorded on the Purchaser side of the structure.'}
         </Alert>
       )}
 
@@ -464,10 +576,21 @@ export function DealReviewScreen() {
             onAddRoot={() => setAddDialog({ parentNodeId: null })}
             onAddChild={(parentNodeId) => setAddDialog({ parentNodeId })}
             onAttachDetached={setAttachNodeId}
-            onChangeOwner={mayEdit ? (nodeId, edge) => setChangeOwner({ nodeId, edge }) : undefined}
-            onDetachFromParent={mayEdit ? (edgeId) => tree.deleteEdge.mutate(edgeId) : undefined}
-            onDeleteNode={mayEdit ? setDeleteNodeId : undefined}
-            readOnly={!mayEdit}
+            onChangeOwner={structureMayEdit ? (nodeId, edge) => setChangeOwner({ nodeId, edge }) : undefined}
+            onDetachFromParent={structureMayEdit ? (edgeId) => tree.deleteEdge.mutate(edgeId) : undefined}
+            onDeleteNode={structureMayEdit ? setDeleteNodeId : undefined}
+            readOnly={!structureMayEdit}
+            side={side}
+            purchaserAvailable={purchaserAvailable}
+            // A node id means nothing on the other side, so the drawer and any dialog close.
+            onSideChange={(next) => {
+              setSelectedNodeId(null);
+              setAddDialog(null);
+              setAttachNodeId(null);
+              setChangeOwner(null);
+              setDeleteNodeId(null);
+              setStructureSide(next);
+            }}
             // The live mutations, for dragging a row onto a new owner. Always the live tree,
             // even when a version is on screen: readOnly is what turns dragging off there, and
             // a snapshot has nothing to move.
@@ -526,7 +649,9 @@ export function DealReviewScreen() {
         canUpload={mayUpload}
         // Commenting is not editing — a reviewer may still add a note to a deal they can no
         // longer change. Only the auditor, who writes nothing anywhere, is kept out.
-        canComment={canWrite(user?.role)}
+        canComment={canWrite(user?.role) && !branchClosed}
+        // Granting and revoking access is open in every status, to the roles the server allows.
+        canManageAccess={canManageDealAccess(user, liveDeal) && !snapshot && !branchClosed}
         // The thread as it stood at the sign-off, which also turns off the composer and the live
         // audit tab. Null on the live deal, where the drawer fetches its own.
         frozenNotes={snapshot?.notes ?? null}
@@ -534,8 +659,9 @@ export function DealReviewScreen() {
         // show the files this version was signed off with, not the deal's current ones.
         version={documentScope}
         individuals={individuals}
-        // The live owners, for moving a property document onto one. A version turns moving off.
-        owners={liveTree.tree?.nodes ?? []}
+        // The vendor's live owners, for moving a property document onto one. Never the
+        // purchaser's: evidence does not cross sides. A version turns moving off.
+        owners={vendorTree.tree?.nodes ?? []}
       />
 
       {/* ── The selected owner ──────────────────────────────────────────── */}
@@ -546,10 +672,11 @@ export function DealReviewScreen() {
         useTree={liveTree}
         dealId={dealId}
         onClose={() => setSelectedNodeId(null)}
-        onRequestDelete={mayEdit ? setDeleteNodeId : undefined}
-        readOnly={!mayEdit}
-        canUpload={mayUpload}
+        onRequestDelete={structureMayEdit ? setDeleteNodeId : undefined}
+        readOnly={!structureMayEdit}
+        canUpload={structureMayUpload}
         version={documentScope}
+        side={side}
       />
 
       {/* ── Dialogs ─────────────────────────────────────────────────────── */}
@@ -573,6 +700,13 @@ export function DealReviewScreen() {
           onClose={() => setAssuranceOpen(false)}
         />
       )}
+
+      <DelayCddDialog
+        open={delayOpen}
+        submitting={delayMut.isPending}
+        onConfirm={() => delayMut.mutate(true)}
+        onClose={() => setDelayOpen(false)}
+      />
 
       <DealStatusDialog
         open={statusOpen}
@@ -632,6 +766,8 @@ export function DealReviewScreen() {
           setDeleteNodeId(null);
         }}
       />
+      {/* The switch overlay, so a switch made from the guard's panel finishes on screen. */}
+      {scopeGuard.element}
     </Stack>
   );
 }

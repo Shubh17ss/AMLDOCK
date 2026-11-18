@@ -46,10 +46,13 @@ class UserServiceFindVisibleByIdTest {
     @Mock TokenStateCache tokenStates;
 
     UserService service;
+    MembershipFixture memberships;
 
     @BeforeEach
     void setUp() {
-        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates);
+        memberships = new MembershipFixture();
+        service = new UserService(users, firms, branches, encoder, refreshTokens, tokenStates,
+                memberships.repo, new MembershipService(memberships.repo, users, firms));
         stubUser(AGENT_A10, FIRM_A, BRANCH_10);
         stubUser(AGENT_A11, FIRM_A, BRANCH_11);
         stubUser(AGENT_B20, FIRM_B, BRANCH_20);
@@ -67,16 +70,16 @@ class UserServiceFindVisibleByIdTest {
 
     @Test
     void firmLevelStaffReadTheirWholeFirm() {
-        assertThat(service.findVisibleById(actor(Role.AML_COMPLIANCE_OFFICER, FIRM_A, null), AGENT_A11).getId())
+        assertThat(service.findVisibleById(actor(Role.AML_COMPLIANCE_OFFICER, FIRM_A, null), AGENT_A11, null).user().getId())
                 .isEqualTo(AGENT_A11);
-        assertThat(service.findVisibleById(actor(Role.SENIOR_MANAGER, FIRM_A, null), AGENT_A10).getId())
+        assertThat(service.findVisibleById(actor(Role.SENIOR_MANAGER, FIRM_A, null), AGENT_A10, null).user().getId())
                 .isEqualTo(AGENT_A10);
     }
 
     @Test
     void aSalesManagerReadsOnlyTheirOwnBranch() {
         UserPrincipal sm = actor(Role.SALES_MANAGER, FIRM_A, BRANCH_10);
-        assertThat(service.findVisibleById(sm, AGENT_A10).getId()).isEqualTo(AGENT_A10);
+        assertThat(service.findVisibleById(sm, AGENT_A10, null).user().getId()).isEqualTo(AGENT_A10);
         // Same firm, other branch: outside the list, so outside this too.
         assertHidden(sm, AGENT_A11);
         assertHidden(sm, AGENT_B20);
@@ -84,9 +87,9 @@ class UserServiceFindVisibleByIdTest {
 
     @Test
     void rootAndAuditReadAnyone() {
-        assertThat(service.findVisibleById(actor(Role.ROOT, null, null), AGENT_B20).getId())
+        assertThat(service.findVisibleById(actor(Role.ROOT, null, null), AGENT_B20, null).user().getId())
                 .isEqualTo(AGENT_B20);
-        assertThat(service.findVisibleById(actor(Role.AUDIT, null, null), AGENT_A10).getId())
+        assertThat(service.findVisibleById(actor(Role.AUDIT, null, null), AGENT_A10, null).user().getId())
                 .isEqualTo(AGENT_A10);
     }
 
@@ -96,7 +99,7 @@ class UserServiceFindVisibleByIdTest {
     }
 
     private void assertHidden(UserPrincipal actor, Long id) {
-        assertThatThrownBy(() -> service.findVisibleById(actor, id))
+        assertThatThrownBy(() -> service.findVisibleById(actor, id, null))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -111,5 +114,28 @@ class UserServiceFindVisibleByIdTest {
         u.setRealEstateFirmId(firmId);
         u.setFirmBranchId(branchId);
         lenient().when(users.findById(id)).thenReturn(Optional.of(u));
+        memberships.add(id, Role.AGENT, firmId, branchId, true);
+    }
+
+    /**
+     * An officer serving two entities is visible from each, as what they are there, and an
+     * officer of a third entity cannot see them at all.
+     */
+    @Test
+    void anOfficerInTwoEntitiesIsSeenFromEachAsTheirRoleThere() {
+        Long officer = 40L;
+        User u = new User();
+        ReflectionTestUtils.setField(u, "id", officer);
+        u.setRole(Role.AML_COMPLIANCE_OFFICER);
+        u.setRealEstateFirmId(FIRM_A);
+        lenient().when(users.findById(officer)).thenReturn(Optional.of(u));
+        memberships.add(officer, Role.AML_COMPLIANCE_OFFICER, FIRM_A, null, true);
+        memberships.add(officer, Role.SENIOR_MANAGER, FIRM_B, null, true);
+
+        assertThat(service.findVisibleById(actor(Role.SENIOR_MANAGER, FIRM_A, null), officer, null).role())
+                .isEqualTo(Role.AML_COMPLIANCE_OFFICER);
+        assertThat(service.findVisibleById(actor(Role.AML_COMPLIANCE_OFFICER, FIRM_B, null), officer, null).role())
+                .isEqualTo(Role.SENIOR_MANAGER);
+        assertHidden(actor(Role.AML_COMPLIANCE_OFFICER, 3L, null), officer);
     }
 }

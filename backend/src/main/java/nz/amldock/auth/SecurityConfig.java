@@ -28,15 +28,18 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final AuditReadOnlyFilter auditReadOnlyFilter;
+    private final InactiveScopeReadOnlyFilter inactiveScopeReadOnlyFilter;
     private final LoginRateLimitFilter loginRateLimitFilter;
 
     @Value("${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://amldock.com,https://dev.amldock.com}")
     private String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter, AuditReadOnlyFilter auditReadOnlyFilter,
+                          InactiveScopeReadOnlyFilter inactiveScopeReadOnlyFilter,
                           LoginRateLimitFilter loginRateLimitFilter) {
         this.jwtFilter = jwtFilter;
         this.auditReadOnlyFilter = auditReadOnlyFilter;
+        this.inactiveScopeReadOnlyFilter = inactiveScopeReadOnlyFilter;
         this.loginRateLimitFilter = loginRateLimitFilter;
     }
 
@@ -50,7 +53,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/otp/request", "/api/auth/otp/verify",
                                 "/api/auth/admin/login", "/api/auth/admin/verify",
-                                "/api/auth/refresh").permitAll()
+                                "/api/auth/refresh",
+                                // Native mobile app. Logout is open so a token whose access JWT
+                                // has expired can still be revoked; holding it is the proof.
+                                "/api/auth/mobile/otp/verify", "/api/auth/mobile/refresh",
+                                "/api/auth/mobile/logout").permitAll()
                         // Load-balancer probes, plus the Prometheus scrape. Prometheus is exposed only
                         // by profiles that also move actuator to a separate management port, which
                         // is reachable inside the VPC/compose network only, never via the ALB.
@@ -85,7 +92,8 @@ public class SecurityConfig {
                 .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 // After the JWT filter, so the principal's role is resolved by the time it runs.
-                .addFilterAfter(auditReadOnlyFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(auditReadOnlyFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(inactiveScopeReadOnlyFilter, AuditReadOnlyFilter.class);
         return http.build();
     }
 

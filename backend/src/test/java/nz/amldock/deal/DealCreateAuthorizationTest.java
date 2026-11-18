@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
 import nz.amldock.client.dto.ClientInput;
@@ -77,11 +78,12 @@ class DealCreateAuthorizationTest {
     @BeforeEach
     void setUp() {
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService(mock(DealUserRepository.class)), new DealNoteService(dealNotes, documents, users),
+                new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)), new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, new DealRiskService(deals, structures, nodes, people, edges, audit),
                 ownership, audit, notifier, versions, saleUnits,
                 org.mockito.Mockito.mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
-                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
+                org.mockito.Mockito.mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class),
+                org.mockito.Mockito.mock(nz.amldock.document.storage.StoredFileReaper.class));
 
         lenient().when(branches.findById(OWN_BRANCH)).thenReturn(Optional.of(branch(OWN_BRANCH, 1L)));
         lenient().when(branches.findById(OTHER_FIRM_BRANCH))

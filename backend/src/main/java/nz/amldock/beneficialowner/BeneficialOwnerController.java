@@ -1,5 +1,6 @@
 package nz.amldock.beneficialowner;
 
+import nz.amldock.deal.DealRef;
 import nz.amldock.beneficialowner.dto.BeneficialOwnerDto;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,7 +30,7 @@ public class BeneficialOwnerController {
     }
 
     @GetMapping("/{dealId}/beneficial-owners")
-    public List<BeneficialOwnerDto> listForDeal(@PathVariable Long dealId) {
+    public List<BeneficialOwnerDto> listForDeal(@DealRef Long dealId) {
         return owners.listForDeal(dealId);
     }
 }

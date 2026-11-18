@@ -1,5 +1,6 @@
 package nz.amldock.deal.version;
 
+import nz.amldock.deal.DealRef;
 import nz.amldock.deal.version.dto.DealVersionDto;
 import nz.amldock.deal.version.dto.DealVersionSummaryDto;
 import nz.amldock.document.dto.DownloadUrlResponse;
@@ -35,7 +36,7 @@ public class DealVersionController {
 
     /** Newest first. Empty for a deal that has never been verified. */
     @GetMapping
-    public List<DealVersionSummaryDto> list(@PathVariable Long dealId) {
+    public List<DealVersionSummaryDto> list(@DealRef Long dealId) {
         return versions.list(dealId);
     }
 
@@ -47,7 +48,7 @@ public class DealVersionController {
      * business outside these tables.
      */
     @GetMapping("/{versionNo}")
-    public DealVersionDto get(@PathVariable Long dealId, @PathVariable Integer versionNo) {
+    public DealVersionDto get(@DealRef Long dealId, @PathVariable Integer versionNo) {
         return versions.get(dealId, versionNo);
     }
 
@@ -60,7 +61,7 @@ public class DealVersionController {
      * stop being evidence because the deal moved on.
      */
     @GetMapping("/{versionNo}/documents/{documentId}/download")
-    public DownloadUrlResponse download(@PathVariable Long dealId,
+    public DownloadUrlResponse download(@DealRef Long dealId,
                                         @PathVariable Integer versionNo,
                                         @PathVariable Long documentId) {
         return versions.presignDownload(dealId, versionNo, documentId);

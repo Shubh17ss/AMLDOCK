@@ -110,8 +110,8 @@ public class VerificationTrailService {
                     if (b == null || !Objects.equals(b.getRealEstateFirmId(), firmId)) return null;
                     return new VerificationTrailEntryDto(
                             n.getId(),
-                            d.getId(),
-                            d.getReference() != null ? d.getReference() : "#" + d.getId(),
+                            d.getPublicId(),
+                            d.getReference() != null ? d.getReference() : "#" + d.getPublicId(),
                             d.getPropertyId() == null ? null : addressByProperty.get(d.getPropertyId()),
                             b.getId(),
                             b.getName(),

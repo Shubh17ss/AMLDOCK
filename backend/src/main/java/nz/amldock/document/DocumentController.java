@@ -5,7 +5,8 @@ import nz.amldock.document.dto.ConfirmUploadRequest;
 import nz.amldock.document.dto.DocumentDto;
 import nz.amldock.document.dto.DownloadUrlResponse;
 import nz.amldock.document.dto.MoveDocumentRequest;
-import nz.amldock.document.dto.UploadUrlRequest;
+import nz.amldock.document.dto.PresignUploadBody;
+import nz.amldock.deal.DealRefResolver;
 import nz.amldock.document.dto.UploadUrlResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,14 +26,17 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService documents;
+    // Deals are named by their public id on the wire; the service works on the internal one.
+    private final DealRefResolver dealRefs;
 
-    public DocumentController(DocumentService documents) {
+    public DocumentController(DocumentService documents, DealRefResolver dealRefs) {
         this.documents = documents;
+        this.dealRefs = dealRefs;
     }
 
     @PostMapping("/upload-url")
-    public UploadUrlResponse presignUpload(@Valid @RequestBody UploadUrlRequest req) {
-        return documents.presignUpload(req);
+    public UploadUrlResponse presignUpload(@Valid @RequestBody PresignUploadBody body) {
+        return documents.presignUpload(body.toRequest(dealRefs.resolve(body.dealId())));
     }
 
     @PostMapping("/confirm")
@@ -41,10 +45,10 @@ public class DocumentController {
     }
 
     @GetMapping
-    public List<DocumentDto> list(@RequestParam(required = false) Long dealId,
+    public List<DocumentDto> list(@RequestParam(required = false) String dealId,
                                   @RequestParam(required = false) Long nodeId) {
         if (nodeId != null) return documents.listForNode(nodeId);
-        if (dealId != null) return documents.listForDeal(dealId);
+        if (dealId != null) return documents.listForDeal(dealRefs.resolve(dealId));
         return List.of();
     }
 
@@ -64,7 +68,7 @@ public class DocumentController {
      */
     @PostMapping("/{id}/move")
     public DocumentDto move(@PathVariable Long id, @Valid @RequestBody MoveDocumentRequest req) {
-        return documents.move(id, req.targetNodeId());
+        return documents.move(id, req.targetNodeId(), req.documentType(), req.filename());
     }
 
     /**

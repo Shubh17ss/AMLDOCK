@@ -2,11 +2,16 @@ package nz.amldock.firm;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import nz.amldock.common.audit.BaseEntity;
+
+import java.time.Instant;
 
 @Entity
 @Table(name = "firm_branch")
@@ -15,6 +20,10 @@ public class FirmBranch extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** What URLs and the /firms and /branches endpoints name this row by. See FirmPublicIds. */
+    @Column(name = "public_id", nullable = false, unique = true, length = 12, updatable = false)
+    private String publicId;
 
     @Column(name = "real_estate_firm_id", nullable = false)
     private Long realEstateFirmId;
@@ -43,7 +52,22 @@ public class FirmBranch extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /** Starts the retention hold; the jurisdiction is the entity's. See RetentionPolicy. */
+    @Column(name = "deactivated_at")
+    private Instant deactivatedAt;
+
+    /** MANUAL or FIRM while inactive, null while active. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deactivation_source", length = 10)
+    private DeactivationSource deactivationSource;
+
     public Long getId() { return id; }
+    public String getPublicId() { return publicId; }
+
+    @PrePersist
+    void assignPublicId() {
+        if (publicId == null) publicId = FirmPublicIds.newId();
+    }
     public Long getRealEstateFirmId() { return realEstateFirmId; }
     public void setRealEstateFirmId(Long realEstateFirmId) { this.realEstateFirmId = realEstateFirmId; }
     public String getName() { return name; }
@@ -67,5 +91,29 @@ public class FirmBranch extends BaseEntity {
     public String getManagerEmail() { return managerEmail; }
     public void setManagerEmail(String managerEmail) { this.managerEmail = managerEmail; }
     public boolean isActive() { return active; }
-    public void setActive(boolean active) { this.active = active; }
+    public Instant getDeactivatedAt() { return deactivatedAt; }
+    public DeactivationSource getDeactivationSource() { return deactivationSource; }
+
+    /** Switching off this way counts as by hand; use {@link #deactivate} to name another cause. */
+    public void setActive(boolean active) {
+        if (active) activate();
+        else deactivate(DeactivationSource.MANUAL);
+    }
+
+    public void activate() {
+        if (this.active) return;
+        this.active = true;
+        this.deactivatedAt = null;
+        this.deactivationSource = null;
+    }
+
+    public void deactivate(DeactivationSource source) {
+        if (source == DeactivationSource.BRANCH) {
+            throw new IllegalArgumentException("A branch is switched off by hand or by its entity");
+        }
+        if (!this.active) return;
+        this.active = false;
+        this.deactivatedAt = Instant.now();
+        this.deactivationSource = source;
+    }
 }

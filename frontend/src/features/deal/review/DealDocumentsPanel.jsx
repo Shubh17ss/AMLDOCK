@@ -31,23 +31,19 @@ export function DealDocumentsPanel({ dealId, readOnly = false, canUpload, versio
 
   return (
     <Stack spacing={1.5}>
-      <Typography variant="caption" sx={{ color: tokens.muted }}>
+      {/* <Typography variant="caption" sx={{ color: tokens.muted }}>
         Files that belong to the deal itself rather than to any one party. A party's own evidence
         is filed against them, in the ownership structure.
-      </Typography>
+      </Typography> */}
 
       <DocumentUploader
         dealId={dealId}
         dealOnly
         allowedTypes={DEAL_DOCUMENT_TYPES}
-        // The drawer is 560–640px, and MUI's breakpoints watch the viewport rather than the
-        // container — without this the table runs off the edge on a wide screen.
-        compact
         canUpload={canUpload ?? !readOnly}
         // `dealOnly` narrows this the same way it narrows the live list, so a version shows the
         // deal's own files rather than the whole snapshot.
         frozenDocuments={version?.documents ?? null}
-        title="Documents on this deal"
         onViewDocument={setViewingDoc}
         // A property document can be moved onto one owner. Not on a version, which is read-only.
         moveTargets={version ? null : owners}

@@ -154,12 +154,6 @@ export function NotificationsAdminPage() {
               </TableBody>
             </Table>
           </TableContainer>
-
-          <Typography variant="caption" sx={{ color: tokens.muted }}>
-            Everyone is notified by default. A switch here is the same setting the person sees under
-            Profile › Deal email notifications, and compliance officers appear once per branch they
-            cover.
-          </Typography>
         </>
       )}
     </Stack>

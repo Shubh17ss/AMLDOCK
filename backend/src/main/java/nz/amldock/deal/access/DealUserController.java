@@ -1,5 +1,6 @@
 package nz.amldock.deal.access;
 
+import nz.amldock.deal.DealRef;
 import jakarta.validation.Valid;
 import nz.amldock.deal.access.dto.AddDealUsersRequest;
 import nz.amldock.deal.access.dto.DealUserDto;
@@ -33,7 +34,7 @@ public class DealUserController {
     }
 
     @GetMapping
-    public List<DealUserDto> list(@PathVariable Long dealId) {
+    public List<DealUserDto> list(@DealRef Long dealId) {
         return dealUsers.list(dealId);
     }
 
@@ -44,19 +45,19 @@ public class DealUserController {
      * not share their own deal.
      */
     @GetMapping("/candidates")
-    public List<DealUserDto> candidates(@PathVariable Long dealId) {
+    public List<DealUserDto> candidates(@DealRef Long dealId) {
         return dealUsers.candidates(dealId);
     }
 
     /** Returns the whole list rather than what was added, so the panel needs no second request. */
     @PostMapping
-    public List<DealUserDto> add(@PathVariable Long dealId,
+    public List<DealUserDto> add(@DealRef Long dealId,
                                  @Valid @RequestBody AddDealUsersRequest req) {
         return dealUsers.add(dealId, req.userIds());
     }
 
     @DeleteMapping("/{userId}")
-    public ResponseEntity<Void> remove(@PathVariable Long dealId, @PathVariable Long userId) {
+    public ResponseEntity<Void> remove(@DealRef Long dealId, @PathVariable Long userId) {
         dealUsers.remove(dealId, userId);
         return ResponseEntity.noContent().build();
     }

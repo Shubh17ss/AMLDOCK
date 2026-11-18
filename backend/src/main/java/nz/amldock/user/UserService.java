@@ -17,17 +17,22 @@ import nz.amldock.user.dto.CreateUserRequest;
 import nz.amldock.user.dto.UpdateUserRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -38,20 +43,44 @@ public class UserService {
     private final PasswordEncoder encoder;
     private final RefreshTokenRepository refreshTokens;
     private final TokenStateCache tokenStates;
+    private final FirmMembershipRepository membershipRepo;
+    private final MembershipService memberships;
 
     public UserService(UserRepository users,
                        RealEstateFirmRepository firms,
                        FirmBranchRepository branches,
                        PasswordEncoder encoder,
                        RefreshTokenRepository refreshTokens,
-                       TokenStateCache tokenStates) {
+                       TokenStateCache tokenStates,
+                       FirmMembershipRepository membershipRepo,
+                       MembershipService memberships) {
         this.users = users;
         this.firms = firms;
         this.branches = branches;
         this.encoder = encoder;
         this.refreshTokens = refreshTokens;
         this.tokenStates = tokenStates;
+        this.membershipRepo = membershipRepo;
+        this.memberships = memberships;
     }
+
+    /**
+     * An account as seen from one reporting entity: the account, and its membership there. The
+     * membership is null for ROOT and AUDIT, who belong to none, and — in an unfiltered platform
+     * listing — names the account's home entity.
+     *
+     * <p>Role, branch and active-ness are the membership's: an officer serving two entities is
+     * listed in each with that entity's role, and switched off in one without the other.
+     */
+    public record Member(User user, FirmMembership membership) {
+        public Role role() { return membership == null ? user.getRole() : membership.getRole(); }
+        public Long firmId() { return membership == null ? user.getRealEstateFirmId() : membership.getRealEstateFirmId(); }
+        public Long branchId() { return membership == null ? user.getFirmBranchId() : membership.getFirmBranchId(); }
+        public boolean active() { return membership == null ? user.isActive() : membership.isActive(); }
+    }
+
+    /** What {@link #create} did with the address: a new account, or an existing one added here. */
+    public record Created(Member member, boolean existingAccount) {}
 
     // Stable display order so toggling active/inactive (or any update) never reshuffles the list.
     private static final Sort BY_ID = Sort.by(Sort.Direction.ASC, "id");
@@ -61,48 +90,71 @@ public class UserService {
         return users.findAll(BY_ID);
     }
 
-    /** Users the actor is allowed to see, scoped to their tier. */
-    @Transactional(readOnly = true)
-    public List<User> findVisible(UserPrincipal actor) {
-        Role role = actor.role();
-        // ROOT manages every user; AUDIT only reads them, which AuditReadOnlyFilter enforces.
-        if (role.seesAllFirms()) {
-            return users.findAll(BY_ID);
-        }
-        if (role.isFirmLevel()) {
-            return users.findByRealEstateFirmIdOrderByIdAsc(actor.realEstateFirmId());
-        }
-        if (role == Role.SALES_MANAGER) {
-            return users.findByFirmBranchIdOrderByIdAsc(actor.firmBranchId());
-        }
-        // Agents, branch admins and FINANCE don't see the user register.
-        return List.of();
-    }
-
     /**
-     * Tier-scoped visible users, further narrowed to the firm/branch selected in the UI.
-     * The tier scope from {@link #findVisible(UserPrincipal)} always applies first, so this
-     * can only ever shrink what the actor is already permitted to see.
-     *
-     * <p>Each level of the filter keeps the tier above it, because those people oversee the
-     * narrower scope without sitting inside it:
+     * Users the actor may see, as members of the entity in view, further narrowed to the firm and
+     * branch selected in the UI. The tier scope always applies first, so the filter can only ever
+     * shrink what the actor is already permitted to see:
      * <ul>
-     *   <li>a selected <b>branch</b> keeps that branch's users <em>and</em> the firm's branchless
-     *       firm-level staff (compliance officers / senior managers);</li>
-     *   <li>a selected <b>firm</b> keeps that firm's users <em>and</em> the firm-less platform
-     *       accounts (ROOT, AUDIT). Without this an auditor — who belongs to no reporting
-     *       entity by design — vanished from Settings › Users the moment an entity was picked.</li>
+     *   <li>ROOT / AUDIT see every account. Without a firm, one row per account, in its home entity;
+     *       with one, that entity's members plus the firm-less platform accounts (ROOT, AUDIT) —
+     *       without which an auditor, who belongs to no reporting entity by design, vanished from
+     *       Settings › Users the moment an entity was picked;</li>
+     *   <li>firm-level staff see their own entity's members;</li>
+     *   <li>a sales manager sees their own branch's;</li>
+     *   <li>agents, branch admins and FINANCE don't see the user register.</li>
      * </ul>
+     * A selected <b>branch</b> keeps that branch's members <em>and</em> the entity's branchless
+     * firm-level staff, who oversee the branch without sitting inside it.
      */
     @Transactional(readOnly = true)
-    public List<User> findVisible(UserPrincipal actor, Long firmId, Long branchId) {
-        return findVisible(actor).stream()
-                .filter((u) -> firmId == null
-                        || firmId.equals(u.getRealEstateFirmId())
-                        || u.getRealEstateFirmId() == null)
-                .filter((u) -> branchId == null
-                        || branchId.equals(u.getFirmBranchId())
-                        || u.getFirmBranchId() == null)
+    public List<Member> findVisible(UserPrincipal actor, Long firmId, Long branchId) {
+        Role role = actor.role();
+        List<Member> scoped;
+        if (role.seesAllFirms()) {
+            scoped = firmId == null ? everyAccount() : membersOf(firmId, true);
+        } else if (role.isFirmLevel()) {
+            scoped = membersOf(actor.realEstateFirmId(), false);
+        } else if (role == Role.SALES_MANAGER) {
+            scoped = withAccounts(membershipRepo.findByFirmBranchIdOrderByUserIdAsc(actor.firmBranchId()));
+        } else {
+            return List.of();
+        }
+        return scoped.stream()
+                .filter(m -> firmId == null || m.firmId() == null || firmId.equals(m.firmId()))
+                .filter(m -> branchId == null || m.branchId() == null || branchId.equals(m.branchId()))
+                .toList();
+    }
+
+    /** Every account once, each in its home entity. ROOT and AUDIT, who have none, as themselves. */
+    private List<Member> everyAccount() {
+        List<User> all = users.findAll(BY_ID);
+        Map<Long, List<FirmMembership>> byUser = membershipRepo
+                .findByUserIdIn(all.stream().map(User::getId).toList()).stream()
+                .collect(Collectors.groupingBy(FirmMembership::getUserId));
+        return all.stream().map(u -> new Member(u, byUser.getOrDefault(u.getId(), List.of()).stream()
+                        .filter(m -> m.getRealEstateFirmId().equals(u.getRealEstateFirmId()))
+                        .findFirst().orElse(null)))
+                .toList();
+    }
+
+    /** One entity's members, active or not, plus the platform accounts when asked for. */
+    private List<Member> membersOf(Long firmId, boolean withPlatformAccounts) {
+        List<Member> out = new ArrayList<>(withAccounts(membershipRepo.findByRealEstateFirmIdOrderByUserIdAsc(firmId)));
+        if (withPlatformAccounts) {
+            users.findAll(BY_ID).stream()
+                    .filter(u -> u.getRole().seesAllFirms())
+                    .forEach(u -> out.add(new Member(u, null)));
+            out.sort(Comparator.comparing(m -> m.user().getId()));
+        }
+        return out;
+    }
+
+    private List<Member> withAccounts(List<FirmMembership> rows) {
+        Map<Long, User> byId = users.findAllById(rows.stream().map(FirmMembership::getUserId).toList())
+                .stream().collect(Collectors.toMap(User::getId, Function.identity()));
+        return rows.stream()
+                .filter(m -> byId.containsKey(m.getUserId()))
+                .map(m -> new Member(byId.get(m.getUserId()), m))
                 .toList();
     }
 
@@ -112,39 +164,51 @@ public class UserService {
     }
 
     /**
-     * One user, if the actor could see them in {@link #findVisible(UserPrincipal)}. Same tier rule,
-     * so the single-item read never shows more than the list does. Anyone out of scope is a 404,
-     * not a 403: ids are sequential, and a different answer would say which ones exist.
+     * One user, as a member of the entity in view, if the actor could see them in
+     * {@link #findVisible}. Same tier rule, so the single-item read never shows more than the list
+     * does. Anyone out of scope is a 404, not a 403: ids are sequential, and a different answer
+     * would say which ones exist.
+     *
+     * <p>{@code firmId} picks the entity for ROOT and AUDIT; without it, the account's home.
+     * Everyone else always sees the user as a member of their own entity.
      */
     @Transactional(readOnly = true)
-    public User findVisibleById(UserPrincipal actor, Long id) {
+    public Member findVisibleById(UserPrincipal actor, Long id, Long firmId) {
         User u = findById(id);
         Role role = actor.role();
-        boolean visible = role.seesAllFirms()
-                || (role.isFirmLevel() && actor.realEstateFirmId() != null
-                        && actor.realEstateFirmId().equals(u.getRealEstateFirmId()))
-                || (role == Role.SALES_MANAGER && actor.firmBranchId() != null
-                        && actor.firmBranchId().equals(u.getFirmBranchId()));
+        if (role.seesAllFirms()) {
+            if (u.getRole().seesAllFirms()) return new Member(u, null);
+            Long firm = firmId != null ? firmId : u.getRealEstateFirmId();
+            return memberships.in(u.getId(), firm).map(m -> new Member(u, m))
+                    .orElseThrow(() -> new NotFoundException("User " + id + " not found"));
+        }
+        FirmMembership m = memberships.in(u.getId(), actor.realEstateFirmId()).orElse(null);
+        boolean visible = m != null
+                && (role.isFirmLevel()
+                    || (role == Role.SALES_MANAGER && actor.firmBranchId() != null
+                        && actor.firmBranchId().equals(m.getFirmBranchId())));
         if (!visible) {
             throw new NotFoundException("User " + id + " not found");
         }
-        return u;
+        return new Member(u, m);
     }
 
     /**
-     * Create a user below the actor in the hierarchy. Enforces:
+     * Create a user below the actor in the hierarchy, or add an existing account to this entity.
+     * Enforces:
      *   1. the actor may create the requested role (top tier creates the tier below, never otherwise);
      *   2. firm/branch linkage matches the target role's tier;
      *   3. the new user lands within the actor's own scope (firm for firm-level creators,
-     *      firm + branch for the sales manager).
+     *      firm + branch for the sales manager);
+     *   4. an address already in use joins its account to this entity rather than failing — if
+     *      MembershipService's rule allows it: several entities at once for compliance officers
+     *      and senior managers only, and for anyone else only once they are switched off where
+     *      they were. The account's name is kept; it is theirs, not this entity's.
      */
     @Transactional
-    public User create(UserPrincipal creator, CreateUserRequest req) {
+    public Created create(UserPrincipal creator, CreateUserRequest req) {
         if (!creator.role().canCreate(req.role())) {
             throw new ForbiddenException(creator.role() + " is not permitted to create " + req.role() + " users");
-        }
-        if (users.existsByEmailIgnoreCase(req.email())) {
-            throw new BadRequestException("Email already in use");
         }
 
         Long firmId = req.realEstateFirmId();
@@ -152,15 +216,31 @@ public class UserService {
         bindCreationScope(creator, req.role(), firmId, branchId);
         validateFirmLinkage(req.role(), firmId, branchId);
 
+        User existing = users.findByEmailIgnoreCase(req.email()).orElse(null);
+        if (existing != null) {
+            if (!req.role().requiresFirm() || existing.getRole().seesAllFirms()) {
+                throw new BadRequestException("Email already in use");
+            }
+            MembershipService.Joined joined = memberships.join(
+                    existing, req.role(), firmId, branchId, creator.role().seesAllFirms());
+            return new Created(new Member(existing, joined.membership()), true);
+        }
+
         User u = new User();
         u.setEmail(req.email().toLowerCase());
         u.setFullName(req.fullName());
+        // The account's home starts as this membership; see MembershipService.syncAccount.
         u.setRole(req.role());
         u.setRealEstateFirmId(firmId);
         u.setFirmBranchId(branchId);
         // Passwordless: these users sign in with email + OTP.
         u.setActive(true);
-        return users.save(u);
+        u = users.save(u);
+        if (!req.role().requiresFirm()) {
+            return new Created(new Member(u, null), false);
+        }
+        FirmMembership m = memberships.join(u, req.role(), firmId, branchId, true).membership();
+        return new Created(new Member(u, m), false);
     }
 
     /** Most users one bulk import may create. Mirrored by MAX_BULK_USERS in CreateUserDialog.jsx. */
@@ -177,12 +257,13 @@ public class UserService {
     /**
      * Bulk-create users from a parsed CSV. Every row is validated against the same rules as the
      * single-user {@link #create} path (role feasibility, scope binding, firm/branch linkage,
-     * email uniqueness) plus in-file duplicate detection. All-or-nothing: if any row is invalid,
+     * existing addresses joining this entity under the membership rule) plus in-file duplicate
+     * detection. All-or-nothing: if any row is invalid,
      * a {@link BulkValidationException} listing every reason is thrown and nothing is persisted.
      * No onboarding/welcome emails are sent for imported users.
      */
     @Transactional
-    public List<User> createBulk(UserPrincipal creator, BulkCreateUsersRequest req) {
+    public List<Member> createBulk(UserPrincipal creator, BulkCreateUsersRequest req) {
         // Who may import at all is settled before a single row is looked at.
         if (creator.role().creatableRoles().isEmpty()) {
             throw new ForbiddenException("You are not permitted to create users");
@@ -199,7 +280,7 @@ public class UserService {
         Long contextFirmId = creator.role() == Role.ROOT ? req.realEstateFirmId() : creator.realEstateFirmId();
 
         List<ApiError.FieldError> errors = new ArrayList<>();
-        List<User> toSave = new ArrayList<>();
+        List<Member> created = new ArrayList<>();
         Set<String> seenEmails = new HashSet<>();
 
         for (int i = 0; i < rows.size(); i++) {
@@ -223,24 +304,17 @@ public class UserService {
                 if (!seenEmails.add(emailKey)) {
                     throw new BadRequestException("duplicate email in file: " + email);
                 }
-                if (users.existsByEmailIgnoreCase(email)) {
-                    throw new BadRequestException("email already in use: " + email);
-                }
-
                 Long firmId = role.requiresFirm() ? contextFirmId : null;
                 Long branchId = resolveBranchId(creator, role, firmId, row.branchName());
 
                 bindCreationScope(creator, role, firmId, branchId);
                 validateFirmLinkage(role, firmId, branchId);
 
-                User u = new User();
-                u.setEmail(emailKey);
-                u.setFullName(fullName);
-                u.setRole(role);
-                u.setRealEstateFirmId(firmId);
-                u.setFirmBranchId(branchId);
-                u.setActive(true);
-                toSave.add(u);
+                // The same path as a single create, existing addresses included. Rows are written
+                // as they pass; a later row's failure rolls them all back, because the whole
+                // import is one transaction and fails by throwing.
+                CreateUserRequest single = new CreateUserRequest(email, fullName, role, firmId, branchId);
+                created.add(create(creator, single).member());
             } catch (ApiException ex) {
                 errors.add(new ApiError.FieldError(field, ex.getMessage()));
             }
@@ -249,7 +323,7 @@ public class UserService {
         if (!errors.isEmpty()) {
             throw new BulkValidationException(errors);
         }
-        return users.saveAll(toSave);
+        return created;
     }
 
     /** Normalise a free-text role: case-, space- and hyphen-insensitive against the enum names. */
@@ -288,46 +362,67 @@ public class UserService {
         return branch.getId();
     }
 
+    /**
+     * Edits a user as a member of the entity in view ({@code firmId}: ROOT's pick, or the account's
+     * home; everyone else's own entity). Role, branch and active-ness change that membership only.
+     * The name and address belong to the account, so for someone who also serves another entity
+     * only they themselves or ROOT may change them — one entity's officer must not rename a person
+     * out from under another.
+     */
     @Transactional
-    public User update(UserPrincipal actor, Long id, UpdateUserRequest req) {
+    public Member update(UserPrincipal actor, Long id, Long firmId, UpdateUserRequest req) {
         User u = findById(id);
-        assertCanManage(actor, u);
         boolean isRoot = actor.role() == Role.ROOT;
-        // What an access token claims about this user. If any of it changes, or the account is
-        // switched off, tokens already issued no longer describe them (F6).
-        Role roleBefore = u.getRole();
-        Long firmBefore = u.getRealEstateFirmId();
-        Long branchBefore = u.getFirmBranchId();
-        boolean activeBefore = u.isActive();
+        Long contextFirm = isRoot
+                ? (req.realEstateFirmId() != null ? req.realEstateFirmId()
+                        : firmId != null ? firmId : u.getRealEstateFirmId())
+                : actor.realEstateFirmId();
+        FirmMembership m = u.getRole().seesAllFirms() ? null
+                : memberships.in(u.getId(), contextFirm)
+                        .orElseThrow(() -> new NotFoundException("User " + id + " not found"));
+        assertCanManage(actor, new Member(u, m));
 
+        if (changes(req.fullName(), u.getFullName()) || changesEmail(req.email(), u.getEmail())) {
+            assertMayEditAccount(actor, u, m);
+        }
         if (req.fullName() != null && !req.fullName().isBlank()) {
             u.setFullName(req.fullName());
         }
-        if (req.email() != null && !req.email().isBlank() && !req.email().equalsIgnoreCase(u.getEmail())) {
+        if (changesEmail(req.email(), u.getEmail())) {
             if (users.existsByEmailIgnoreCaseAndIdNot(req.email(), u.getId())) {
                 throw new BadRequestException("Email already in use");
             }
             u.setEmail(req.email().toLowerCase());
         }
-        // Role / firm / branch stay platform-admin concerns — they decide what a user *is* and
-        // which reporting entity they answer to, which is not a firm manager's call to make.
-        if (isRoot) {
-            if (req.role() != null) {
-                u.setRole(req.role());
-                u.setRealEstateFirmId(req.realEstateFirmId());
-                u.setFirmBranchId(req.firmBranchId());
-            } else {
-                if (req.realEstateFirmId() != null) u.setRealEstateFirmId(req.realEstateFirmId());
-                if (req.firmBranchId() != null) u.setFirmBranchId(req.firmBranchId());
+
+        boolean endSessions = false;
+        // Role and branch stay platform-admin concerns — they decide what a user *is* in an entity,
+        // which is not a firm manager's call to make. The entity itself is no longer edited here:
+        // a move is "deactivate there, add here", so the old membership keeps its history.
+        if (isRoot && m != null && (req.role() != null || req.firmBranchId() != null)) {
+            Role role = req.role() != null ? req.role() : m.getRole();
+            Long branchId = req.role() != null ? req.firmBranchId()
+                    : (req.firmBranchId() != null ? req.firmBranchId() : m.getFirmBranchId());
+            validateFirmLinkage(role, m.getRealEstateFirmId(), branchId);
+            if (role != m.getRole() || !Objects.equals(branchId, m.getFirmBranchId())) {
+                memberships.change(u, m, role, branchId, true);
+                endSessions = true;
             }
+        } else if (isRoot && m == null && req.role() != null && req.role() != u.getRole()) {
+            throw new BadRequestException(
+                    "A platform account's role can't be changed here — create the account it should be instead");
         }
-        // Suspending is not. It used to sit in the block above, which left the compliance officers
-        // who create a firm's accounts unable to switch one off — the account stayed live until a
-        // platform administrator got round to it. Suspending is the same authority as creating, so
-        // it is governed by the same check: assertCanManage ran at the top of this method and has
-        // already settled the scope (firm-level staff over their own firm but not their peers, a
-        // sales manager over their own branch, ROOT over anyone but another ROOT).
-        if (req.active() != null && req.active() != u.isActive()) {
+
+        // Suspending is held to assertCanManage above (firm-level staff over their own firm but not
+        // their peers, ROOT over anyone but another ROOT), less the sales manager, who may manage
+        // their branch's agents but not off-board them. It switches off this entity's membership
+        // only; an officer serving two entities stays live in the other.
+        boolean activeNow = m == null ? u.isActive() : m.isActive();
+        if (req.active() != null && req.active() != activeNow) {
+            if (actor.role() == Role.SALES_MANAGER) {
+                throw new ForbiddenException("Only a compliance officer, senior manager or platform"
+                        + " administrator can activate or deactivate users");
+            }
             // assertCanManage deliberately lets an actor act on themselves, so that a manager can
             // fix their own name. Suspension is the one thing that must not follow from that: a
             // firm whose only compliance officer switched their own account off has nobody left
@@ -335,27 +430,74 @@ public class UserService {
             if (actor.id().equals(u.getId())) {
                 throw new BadRequestException("You can't change your own account's status");
             }
-            u.setActive(req.active());
+            if (m == null) {
+                u.setActive(req.active());
+            } else {
+                if (req.active()) assertScopeActive(m);
+                memberships.setActive(u, m, req.active(), isRoot || actor.role().seesAllFirms());
+            }
+            if (!req.active()) endSessions = true;
         }
-        validateFirmLinkage(u.getRole(), u.getRealEstateFirmId(), u.getFirmBranchId());
-        if (u.getRole() != roleBefore
-                || !Objects.equals(u.getRealEstateFirmId(), firmBefore)
-                || !Objects.equals(u.getFirmBranchId(), branchBefore)
-                || (activeBefore && !u.isActive())) {
+        // Sessions are per account, not per entity: switching someone off in one entity ends their
+        // sessions everywhere, and they sign back in to whichever entities they still have.
+        if (endSessions) {
             endSessions(u);
         }
-        return u;
+        return new Member(u, m);
     }
 
+    private static boolean changes(String requested, String current) {
+        return requested != null && !requested.isBlank() && !requested.equals(current);
+    }
+
+    private static boolean changesEmail(String requested, String current) {
+        return requested != null && !requested.isBlank() && !requested.equalsIgnoreCase(current);
+    }
+
+    private void assertMayEditAccount(UserPrincipal actor, User u, FirmMembership m) {
+        if (actor.role() == Role.ROOT || actor.id().equals(u.getId()) || m == null) return;
+        boolean elsewhere = membershipRepo.findByUserIdOrderByIdAsc(u.getId()).stream()
+                .anyMatch(o -> o.isActive() && !o.getRealEstateFirmId().equals(m.getRealEstateFirmId()));
+        if (elsewhere) {
+            throw new ForbiddenException("This person also belongs to another reporting entity, so only they or"
+                    + " a platform administrator can change their name or email");
+        }
+    }
+
+    /**
+     * Removes a user from the entity in view. Someone who belongs to no other entity loses the
+     * account outright, as before; someone who does keeps it, and only this membership goes.
+     */
     @Transactional
-    public void delete(UserPrincipal actor, Long id) {
+    public void delete(UserPrincipal actor, Long id, Long firmId) {
+        // Held here too, not only on the controller: a sales manager may manage their branch's
+        // agents but not off-board them, by suspending or by deleting.
+        if (actor.role() == Role.SALES_MANAGER) {
+            throw new ForbiddenException("Only a compliance officer, senior manager or platform"
+                    + " administrator can delete users");
+        }
         User u = findById(id);
-        assertCanManage(actor, u);
         if (u.getRole() == Role.ROOT) {
             throw new ForbiddenException("Administrator accounts can't be deleted");
         }
+        Long contextFirm = actor.role().seesAllFirms()
+                ? (firmId != null ? firmId : u.getRealEstateFirmId())
+                : actor.realEstateFirmId();
+        FirmMembership m = u.getRole().seesAllFirms() ? null
+                : memberships.in(u.getId(), contextFirm)
+                        .orElseThrow(() -> new NotFoundException("User " + id + " not found"));
+        assertCanManage(actor, new Member(u, m));
         if (actor.id().equals(u.getId())) {
             throw new BadRequestException("You can't delete your own account");
+        }
+        boolean elsewhere = m != null && membershipRepo.findByUserIdOrderByIdAsc(u.getId()).stream()
+                .anyMatch(o -> !o.getId().equals(m.getId()));
+        if (elsewhere) {
+            membershipRepo.delete(m);
+            membershipRepo.flush();
+            memberships.syncAccount(u);
+            endSessions(u);
+            return;
         }
         // Once the row is gone, JwtAuthenticationFilter finds no user and refuses their access
         // tokens; refresh tokens are revoked here so none can be renewed in the meantime (F6).
@@ -371,37 +513,37 @@ public class UserService {
     }
 
     /**
-     * Who an actor may edit/delete:
+     * Who an actor may edit/delete, judged on the target's membership in the actor's entity:
      *   ROOT        → anyone, except another ROOT account.
-     *   firm-level  → users in their own firm, except firm-level peers (their own account is fine).
+     *   firm-level  → members of their own firm, except firm-level peers (their own account is fine).
      *                 The firm-scoped mirror of the ROOT rule: peers appoint each other but can't
      *                 edit or remove one another, so no single officer can unseat the other.
      *   everyone else → no one.
      */
-    private void assertCanManage(UserPrincipal actor, User target) {
+    private void assertCanManage(UserPrincipal actor, Member target) {
+        User u = target.user();
         if (actor.role() == Role.ROOT) {
-            if (target.getRole() == Role.ROOT && !actor.id().equals(target.getId())) {
+            if (u.getRole() == Role.ROOT && !actor.id().equals(u.getId())) {
                 throw new ForbiddenException("Another administrator account can't be managed here");
             }
             return;
         }
         if (actor.role().isFirmLevel()) {
-            if (target.getRealEstateFirmId() == null
-                    || !target.getRealEstateFirmId().equals(actor.realEstateFirmId())) {
+            if (target.firmId() == null || !target.firmId().equals(actor.realEstateFirmId())) {
                 throw new ForbiddenException("This user is not in your firm");
             }
-            if (target.getRole().isFirmLevel() && !actor.id().equals(target.getId())) {
+            if (target.role().isFirmLevel() && !actor.id().equals(u.getId())) {
                 throw new ForbiddenException(
                         "Senior managers and compliance officers can't be edited or deleted here");
             }
             return;
         }
         if (actor.role() == Role.SALES_MANAGER) {
-            if (target.getFirmBranchId() == null || !target.getFirmBranchId().equals(actor.firmBranchId())) {
+            if (target.branchId() == null || !target.branchId().equals(actor.firmBranchId())) {
                 throw new ForbiddenException("This user is not in your branch");
             }
             // A sales manager may only manage the branch staff they can create (agents/admins).
-            if (!actor.role().canCreate(target.getRole())) {
+            if (!actor.role().canCreate(target.role())) {
                 throw new ForbiddenException("You can only manage agents in your branch");
             }
             return;
@@ -446,7 +588,7 @@ public class UserService {
      * controller re-issues a session for the caller afterwards when the change was their own, so
      * they are not signed out by it.
      */
-    private void endSessions(User u) {
+    public void endSessions(User u) {
         u.bumpTokenVersion();
         refreshTokens.revokeAllForUser(u.getId(), Instant.now());
         tokenStates.evictAfterCommit(u.getId());
@@ -512,6 +654,23 @@ public class UserService {
 
     private static void requireBranch(Long branchId, String message) {
         if (branchId == null) throw new BadRequestException(message);
+    }
+
+    /**
+     * Nobody is switched back on inside a deactivated entity or branch: the branch's reactivation
+     * brings its own members back, and a membership switched on ahead of it would let someone in
+     * where nothing may change.
+     */
+    private void assertScopeActive(FirmMembership m) {
+        firms.findById(m.getRealEstateFirmId()).filter(f -> !f.isActive()).ifPresent(f -> {
+            throw new ApiException(HttpStatus.CONFLICT, f.getName()
+                    + " is deactivated — reactivate the reporting entity before its users");
+        });
+        if (m.getFirmBranchId() == null) return;
+        branches.findById(m.getFirmBranchId()).filter(b -> !b.isActive()).ifPresent(b -> {
+            throw new ApiException(HttpStatus.CONFLICT, "Branch " + b.getName()
+                    + " is deactivated — reactivate the branch before its users");
+        });
     }
 
     private void requireActiveFirm(Long firmId) {

@@ -87,7 +87,7 @@ class DealRiskServiceTest {
         structure.setDealId(DEAL_ID);
 
         lenient().when(deals.findById(DEAL_ID)).thenReturn(Optional.of(deal));
-        lenient().when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
         lenient().when(nodes.findAllByOwnershipStructureIdOrderByIdAsc(STRUCTURE_ID))
                 .thenReturn(List.of());
         lenient().when(people.findAllById(any())).thenReturn(List.of());
@@ -585,7 +585,7 @@ class DealRiskServiceTest {
         service.apply(fresh);
 
         assertThat(fresh.getRiskRating()).isEqualTo(RiskRating.LOW);
-        verify(structures, never()).findByDealId(any());
+        verify(structures, never()).findVendorByDealId(any());
     }
 
     @Test

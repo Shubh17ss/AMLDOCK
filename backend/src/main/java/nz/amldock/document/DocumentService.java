@@ -22,6 +22,7 @@ import nz.amldock.ownership.OwnershipNodeRepository;
 import nz.amldock.ownership.VerificationReset;
 import nz.amldock.ownership.OwnershipStructure;
 import nz.amldock.ownership.OwnershipStructureRepository;
+import nz.amldock.ownership.StructureSide;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
 import nz.amldock.user.UserPrincipal;
@@ -93,7 +94,7 @@ public class DocumentService {
         if (req.sizeBytes() > maxBytes) {
             throw new BadRequestException("File exceeds " + (maxBytes / 1024 / 1024) + " MB limit");
         }
-        Deal deal = mustLoadDealForWrite(req.dealId());
+        Deal deal = mustLoadDealForWrite(req.dealId(), req.ownershipNodeId());
         UserPrincipal actor = currentPrincipal();
 
         Long nodeId = null;
@@ -165,7 +166,7 @@ public class DocumentService {
         // Again here, not only at presign: the deal can be verified between the two calls, and
         // confirming is the step that makes the document live and creates its provisional owner.
         if (doc.getDealId() != null) {
-            mustLoadDealForWrite(doc.getDealId());
+            mustLoadDealForWrite(doc.getDealId(), doc.getOwnershipNodeId());
         }
 
         // Moves the bytes off the key the presigned URL writes to, so that URL can no longer
@@ -329,6 +330,17 @@ public class DocumentService {
      */
     @Transactional
     public DocumentDto move(Long id, Long targetNodeId) {
+        return move(id, targetNodeId, null, null);
+    }
+
+    /**
+     * A move that may also refile the document as another type and rename it. The target's rules
+     * are checked against the new type, so a passport reaches the property only as something the
+     * property takes. Null keeps the current type or name. Audio stays audio and a file stays a
+     * file: the player and the viewer pick their path by type.
+     */
+    @Transactional
+    public DocumentDto move(Long id, Long targetNodeId, DocumentType newType, String newFilename) {
         Document d = documents.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found"));
         if (d.getStatus() != DocumentStatus.ACTIVE) {
@@ -349,12 +361,22 @@ public class DocumentService {
                 ? (source == null ? "#" + d.getOwnershipNodeId() : "\"" + source.getDisplayName() + "\"")
                 : "the property";
 
+        DocumentType oldType = d.getDocumentType();
+        DocumentType type = newType != null ? newType : oldType;
+        if (type.isAudio() != oldType.isAudio()) {
+            throw new BadRequestException(oldType.isAudio()
+                    ? "A voice note can only be filed as a voice note"
+                    : "Only a recording can be filed as a voice note");
+        }
+        String oldName = d.getOriginalFilename();
+        String name = renamed(oldName, newFilename);
+
         OwnershipNode target = null;
         if (targetNodeId == null) {
             if (onProperty) throw new BadRequestException("The document is already on the property");
-            if (!DEAL_LEVEL_TYPES.contains(d.getDocumentType())) {
+            if (!DEAL_LEVEL_TYPES.contains(type)) {
                 throw new BadRequestException("The property does not take "
-                        + d.getDocumentType().name().replace('_', ' ').toLowerCase()
+                        + type.name().replace('_', ' ').toLowerCase()
                         + " documents; file it on an owner");
             }
         } else {
@@ -368,14 +390,26 @@ public class DocumentService {
             if (d.getDealId() == null || !d.getDealId().equals(structure.getDealId())) {
                 throw new BadRequestException("A document can only move to an owner on the same deal");
             }
-            assertAccepts(target, d.getDocumentType());
+            assertAccepts(target, type);
+        }
+        // Each side's evidence stays on that side. The write gate above was decided by where the
+        // document is now, so a move across would carry it past the other side's rule.
+        if (isPurchaserNode(d.getOwnershipNodeId()) != isPurchaserNode(targetNodeId)) {
+            throw new BadRequestException(
+                    "A document cannot move between the vendor's and the purchaser's records");
         }
 
         d.setOwnershipNodeId(target == null ? null : target.getId());
+        d.setDocumentType(type);
+        d.setOriginalFilename(name);
 
+        java.util.List<String> changes = new java.util.ArrayList<>();
+        if (type != oldType) changes.add("type " + oldType.name() + " \u2192 " + type.name());
+        if (!name.equals(oldName)) changes.add("renamed to " + name);
         audit.record(AuditAction.DOCUMENT_MOVED, "Document", d.getId(),
-                "Moved " + d.getOriginalFilename() + " from " + from + " to "
-                        + (target == null ? "the property" : "\"" + target.getDisplayName() + "\""));
+                "Moved " + oldName + " from " + from + " to "
+                        + (target == null ? "the property" : "\"" + target.getDisplayName() + "\"")
+                        + (changes.isEmpty() ? "" : " (" + String.join("; ", changes) + ")"));
         // Only owners carry a verification; the property has none to withdraw.
         if (source != null) verificationReset.clearIfVerified(source, "document moved away");
         if (target != null) verificationReset.clearIfVerified(target, "document added");
@@ -408,6 +442,10 @@ public class DocumentService {
             throw new ForbiddenException(
                     "Only the uploader, a compliance officer, a senior manager or ROOT may change this document");
         }
+        // ROOT included: the exemption below is from the firm check, not from the branch's hold.
+        if (actor.role() == Role.ROOT && d.getDealId() != null) {
+            deals.findById(d.getDealId()).ifPresent(lifecycle::assertBranchWritable);
+        }
         // Still status-checked for everyone firm-scoped: assertEditable is the codebase's
         // answer to "may this actor write to this deal", and it now admits reviewers through
         // REVIEW and ON_HOLD. ROOT skips it because it belongs to no firm, so the
@@ -421,12 +459,31 @@ public class DocumentService {
                     .orElseThrow(() -> new NotFoundException("Deal " + d.getDealId() + " not found"));
             Long firmId = branches.findById(deal.getFirmBranchId())
                     .map(FirmBranch::getRealEstateFirmId).orElse(null);
-            if (actor.role().isFirmLevel()) {
+            if (isPurchaserNode(d.getOwnershipNodeId())) {
+                // The purchaser's evidence answers to the purchaser's rule, for uploader and
+                // reviewer alike: open while the deal is closed as sold, shut otherwise.
+                lifecycle.assertPurchaserEditable(deal, actor, firmId);
+            } else if (actor.role().isFirmLevel()) {
                 lifecycle.assertEditable(deal, actor, firmId);
             } else {
                 lifecycle.assertCanUploadDocuments(deal, actor, firmId);
             }
         }
+    }
+
+    /**
+     * The name a move leaves a document with. Blank keeps the old one; a name typed without the
+     * old extension gets it back, since the download and the viewer go by it; path separators
+     * become underscores.
+     */
+    static String renamed(String oldName, String newName) {
+        if (newName == null) return oldName;
+        String name = newName.replaceAll("[\\\\/]", "_").trim();
+        if (name.isEmpty()) return oldName;
+        int dot = oldName == null ? -1 : oldName.lastIndexOf('.');
+        String ext = dot > 0 ? oldName.substring(dot) : "";
+        if (!ext.isEmpty() && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
+        return name.length() > 255 ? name.substring(0, 255) : name;
     }
 
     /** The upload rule, shared with a move: a node only holds the document types its type accepts. */
@@ -439,16 +496,34 @@ public class DocumentService {
         }
     }
 
-    private Deal mustLoadDealForWrite(Long dealId) {
+    /**
+     * The write gate for adding a document, filed on {@code nodeId} or (null) on the deal itself.
+     *
+     * <p>A real write gate: read scope plus the deal's status (see canUploadDocuments). It used to
+     * be read scope alone, which let anyone who could open a deal add documents, and the
+     * provisional owners a scan creates, to a VERIFIED or CLOSED one (C-07). A document filed on
+     * the purchaser answers to the purchaser's rule instead, which is open only on a CLOSED deal.
+     */
+    private Deal mustLoadDealForWrite(Long dealId, Long nodeId) {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new BadRequestException("Deal " + dealId + " not found"));
-        // A real write gate: read scope plus the deal's status (see canUploadDocuments). It used to
-        // be read scope alone, which let anyone who could open a deal add documents, and the
-        // provisional owners a scan creates, to a VERIFIED or CLOSED one (C-07).
         Long firmId = branches.findById(deal.getFirmBranchId())
                 .map(FirmBranch::getRealEstateFirmId).orElse(null);
-        lifecycle.assertCanUploadDocuments(deal, currentPrincipal(), firmId);
+        if (isPurchaserNode(nodeId)) {
+            lifecycle.assertPurchaserEditable(deal, currentPrincipal(), firmId);
+        } else {
+            lifecycle.assertCanUploadDocuments(deal, currentPrincipal(), firmId);
+        }
         return deal;
+    }
+
+    /** Whether a node is on a purchaser's structure. Null (the deal itself) and unknown ids are not. */
+    private boolean isPurchaserNode(Long nodeId) {
+        if (nodeId == null) return false;
+        return ownershipNodes.findById(nodeId)
+                .flatMap(n -> ownershipStructures.findById(n.getOwnershipStructureId()))
+                .map(s -> s.getSide() == StructureSide.PURCHASER)
+                .orElse(false);
     }
 
     private Deal mustLoadDealForRead(Long dealId) {

@@ -41,7 +41,7 @@ const TABS = [
  * dismissed with unsaved work.
  */
 export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canUpload, canComment = true,
-                            frozenNotes = null, version = null, individuals = [], owners = [] }) {
+                            canManageAccess = false, frozenNotes = null, version = null, individuals = [], owners = [] }) {
   const [tab, setTab] = useState('details');
 
   // The user list is not part of a snapshot: it is who can reach the deal today, which would
@@ -83,6 +83,11 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
   const address = deal ? (formatPropertyAddress(deal.property ?? {}) || 'This deal') : '';
 
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  // The footer's slot for the Details actions, which DealDetailsForm portals into — see
+  // NodeDrawer, which does the same. A callback ref held in state so the form sees the slot.
+  const [actionsEl, setActionsEl] = useState(null);
+  const detailsActionsInFooter = Boolean(deal && form) && current === 'details' && !readOnly;
 
   /**
    * Nothing here autosaves, so a dismissal is the one way a reviewer could lose work they cannot
@@ -139,7 +144,7 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
               color: tokens.blue,
             }}
           >
-            {deal?.reference ?? 'This deal'}
+            This deal
           </Typography>
           <Typography
             sx={{
@@ -217,6 +222,9 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
             // than fetched here: the review screen holds the tree already, and a second
             // subscription would show a different list for a frame after every node edit.
             individuals={individuals}
+            actionsContainer={detailsActionsInFooter ? actionsEl : null}
+            // The guarded close, so the footer's Close still asks about unsaved work.
+            onClose={requestClose}
           />
         )}
         {deal && current === 'documents' && (
@@ -224,13 +232,13 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
                              owners={owners} />
         )}
         {deal && current === 'users' && (
-          <DealUsersPanel dealId={dealId} readOnly={readOnly} />
+          // Access follows its own role rule, not the deal's status (see canManageDealAccess).
+          <DealUsersPanel dealId={dealId} readOnly={!canManageAccess} />
         )}
         {deal && current === 'notes' && (
           // No status chip: the page header already carries one a couple of inches away.
           <DealNotesTimeline
             dealId={dealId}
-            dealStatus={deal.status}
             canComment={canComment}
             frozenEntries={frozenNotes}
             embedded
@@ -247,7 +255,13 @@ export function DealDrawer({ open, deal, dealId, onClose, readOnly = false, canU
           backgroundColor: tokens.tileRaised,
         }}
       >
-        <Button fullWidth variant="outlined" onClick={requestClose}>Close</Button>
+        {/* Details lends this slot to its form for Close and Update, so committing never means
+            scrolling to the end of it. Every other tab keeps the single way out. */}
+        {detailsActionsInFooter ? (
+          <Box ref={setActionsEl} />
+        ) : (
+          <Button fullWidth variant="outlined" onClick={requestClose}>Close</Button>
+        )}
       </Box>
       {/* fullWidth + xs so the card is the same centred shape on a phone as on a desktop —
           the same shape NewDealPage's discard confirmation uses. */}

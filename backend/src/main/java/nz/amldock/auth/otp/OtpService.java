@@ -2,6 +2,7 @@ package nz.amldock.auth.otp;
 
 import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.BadRequestException;
+import nz.amldock.email.EmailLayout;
 import nz.amldock.email.EmailMessage;
 import nz.amldock.email.EmailService;
 import nz.amldock.user.User;
@@ -36,6 +37,10 @@ public class OtpService {
     private final PasswordEncoder encoder;
     private final EmailService email;
     private final Duration ttl;
+    // Where the emails' logo is served from. A field rather than a constructor argument so the
+    // tests that build this service by hand keep working; they get the local default.
+    @Value("${APP_BASE_URL:http://localhost:5173}")
+    private String appBaseUrl = "http://localhost:5173";
     private final int maxAttempts;
     private final int maxIssuesPerWindow;
     private final Duration issueWindow;
@@ -181,16 +186,11 @@ public class OtpService {
 
                 — AMLDOCK
                 """.formatted(code, ttl.toMinutes());
-        String html = """
-                <!doctype html>
-                <html><body style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937; max-width: 480px; margin:0 auto; padding: 24px;">
-                  <h2 style="color:#1f4b7a; margin-top:0;">Your sign-in code</h2>
-                  <p>Use this one-time code to finish signing in:</p>
-                  <p style="font-size: 30px; font-weight: 800; letter-spacing: 6px; color:#1f4b7a; margin: 16px 0;">%s</p>
-                  <p style="color:#6b7280; font-size: 13px;">It expires in %d minutes. If you didn't request this, you can ignore this email.</p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
-                </body></html>
-                """.formatted(code, ttl.toMinutes());
+        String body = EmailLayout.paragraph("Use this one-time code to finish signing in:")
+                + EmailLayout.code(code)
+                + EmailLayout.finePrint("It expires in " + ttl.toMinutes()
+                        + " minutes. If you didn't request this, you can ignore this email.");
+        String html = EmailLayout.page(EmailLayout.logoUrl(appBaseUrl), "Your sign-in code", body);
         return EmailMessage.of(to, subject, html, text);
     }
 
@@ -214,16 +214,12 @@ public class OtpService {
 
                 — AMLDOCK
                 """.formatted(code, ttl.toMinutes());
-        String html = """
-                <!doctype html>
-                <html><body style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#1f2937; max-width: 480px; margin:0 auto; padding: 24px;">
-                  <h2 style="color:#1f4b7a; margin-top:0;">Confirm your email address</h2>
-                  <p>Someone asked to use this address for their AMLDOCK account. Enter this code to confirm it:</p>
-                  <p style="font-size: 30px; font-weight: 800; letter-spacing: 6px; color:#1f4b7a; margin: 16px 0;">%s</p>
-                  <p style="color:#6b7280; font-size: 13px;">It expires in %d minutes. If this wasn't you, ignore this email — nothing changes until the code is entered.</p>
-                  <p style="color:#9ca3af; font-size: 12px; margin-top: 24px;">— AMLDOCK</p>
-                </body></html>
-                """.formatted(code, ttl.toMinutes());
+        String body = EmailLayout.paragraph("Someone asked to use this address for their AMLDOCK account."
+                        + " Enter this code to confirm it:")
+                + EmailLayout.code(code)
+                + EmailLayout.finePrint("It expires in " + ttl.toMinutes() + " minutes. If this wasn't you,"
+                        + " ignore this email &mdash; nothing changes until the code is entered.");
+        String html = EmailLayout.page(EmailLayout.logoUrl(appBaseUrl), "Confirm your email address", body);
         return EmailMessage.of(to, subject, html, text);
     }
 }

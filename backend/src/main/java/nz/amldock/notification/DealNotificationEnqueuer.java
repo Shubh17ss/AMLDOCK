@@ -107,7 +107,8 @@ public class DealNotificationEnqueuer {
 
         List<DealNotificationPreferenceRepository.RecipientCandidate> candidates =
                 preferences.findRecipientCandidates(
-                        branch.getId(), event.name(), deal.getCreatedByUserId(), actor.id());
+                        branch.getId(), deal.getId(), event.name(),
+                        deal.getCreatedByUserId(), actor.id());
         if (candidates.isEmpty()) return;
 
         RealEstateFirm firm = firms.findById(branch.getRealEstateFirmId()).orElse(null);
@@ -132,13 +133,15 @@ public class DealNotificationEnqueuer {
                     deal.getReference(),
                     branch.getName(),
                     firm == null ? null : firm.getName(),
-                    property == null ? null : DealService.formatAddress(property),
+                    // The address is how a deal is named now, in the subject line included.
+                    addressOrPlaceholder(property),
                     client == null ? null : client.getDisplayName(),
                     from == null ? null : from.name(),
                     to == null ? null : to.name(),
                     actorName,
                     c.getFullName(),
-                    appBaseUrl + "/deals/" + deal.getId());
+                    // The public id: a sequential one in an email would say how many deals exist.
+                    appBaseUrl + "/deals/" + deal.getPublicId());
 
             DealNotification n = new DealNotification();
             n.setDealId(deal.getId());
@@ -154,6 +157,11 @@ public class DealNotificationEnqueuer {
         if (rows.isEmpty()) return;
         notifications.saveAll(rows);
         log.debug("Enqueued {} {} notification(s) for deal {}", rows.size(), event, deal.getId());
+    }
+
+    private static String addressOrPlaceholder(nz.amldock.property.Property property) {
+        String address = property == null ? null : DealService.formatAddress(property);
+        return address == null || address.isBlank() ? "an address not yet entered" : address;
     }
 
     /**

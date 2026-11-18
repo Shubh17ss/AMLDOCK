@@ -3,8 +3,9 @@ import { Link as RouterLink } from 'react-router-dom';
 import { tokens, fonts } from '../../theme/theme.js';
 import { DealStatusChip } from '../DealStatusChip.jsx';
 import { useCurrency } from '../../dashboard/useCurrency.js';
+import { dealName } from '../../utils/dealName.js';
 
-/** Compact deal row for dashboard list tiles: mono reference + address, status + value. */
+/** Compact deal row for dashboard list tiles: the address, status + value. */
 export function DealRow({ deal, to }) {
   const money = useCurrency();
   return (
@@ -21,11 +22,8 @@ export function DealRow({ deal, to }) {
       }}
     >
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.68rem', color: tokens.muted, letterSpacing: '0.02em' }}>
-          {deal.reference ?? `#${deal.id}`}
-        </Typography>
         <Typography noWrap sx={{ fontSize: '0.86rem', fontWeight: 600, color: tokens.ink }}>
-          {deal.propertyAddress ?? deal.clientDisplayName ?? '—'}
+          {dealName(deal.propertyAddress)}
         </Typography>
       </Box>
       <Box sx={{ textAlign: 'right', flexShrink: 0 }}>

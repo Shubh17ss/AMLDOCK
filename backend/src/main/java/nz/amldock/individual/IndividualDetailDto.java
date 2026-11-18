@@ -24,7 +24,8 @@ import java.util.List;
  */
 public record IndividualDetailDto(
         Long nodeId,
-        Long dealId,
+        /** The deal's public id. */
+        String dealId,
         String dealReference,
         String propertyAddress,
 

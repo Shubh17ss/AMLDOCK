@@ -1,5 +1,6 @@
 package nz.amldock.document;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.audit.AuditService;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.deal.Deal;
@@ -75,7 +76,7 @@ class DocumentVersionRetentionTest {
     @BeforeEach
     void setUp() {
         service = new DocumentService(documents, deals, branches, ownershipNodes, ownershipStructures,
-                users, storage, new DealLifecycleService(mock(DealUserRepository.class)), beneficialOwners, audit,
+                users, storage, new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)), beneficialOwners, audit,
                 versionDocuments, new nz.amldock.ownership.VerificationReset(ownershipNodes, audit),
                 26214400L, 5L, 5L);
 

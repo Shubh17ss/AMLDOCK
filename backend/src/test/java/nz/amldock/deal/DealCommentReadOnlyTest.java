@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
 import nz.amldock.common.exception.ForbiddenException;
@@ -60,11 +61,12 @@ class DealCommentReadOnlyTest {
     @BeforeEach
     void setUp() {
         service = new DealService(deals, properties, clients, branches, firms, users,
-                new DealLifecycleService(mock(DealUserRepository.class)),
+                new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)),
                 new DealNoteService(dealNotes, documents, users),
                 beneficialOwners, risk, ownership, audit, notifier, versions, saleUnits,
                 mock(nz.amldock.deal.readiness.VerificationReadinessService.class),
-                mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
+                mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class),
+                mock(nz.amldock.document.storage.StoredFileReaper.class));
 
         Deal d = new Deal();
         ReflectionTestUtils.setField(d, "id", 1L);

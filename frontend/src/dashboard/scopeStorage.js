@@ -9,19 +9,31 @@
 // re-created with the same address inherited the deleted one's firm and branch.
 const keyFor = (user) => `amldock.dashScope.${user?.userId ?? user?.email ?? 'anon'}`;
 
-export function readSavedScope(user) {
+// Two copies. sessionStorage is this tab's own, so a reload keeps the scope it was working in even
+// after another tab switched. localStorage is only the starting point for a tab that has none yet:
+// the last scope anyone chose. Tabs used to share the one localStorage copy, so a switch in one
+// silently decided where every other tab landed on its next reload.
+function readFrom(storage, user) {
   try {
-    const raw = localStorage.getItem(keyFor(user));
+    const raw = storage.getItem(keyFor(user));
     if (raw) {
       const saved = JSON.parse(raw);
       return { firm: saved.firm ?? null, branch: saved.branch ?? null, initialized: true };
     }
-  } catch { /* corrupt or unavailable storage — fall through to defaults */ }
-  return { firm: null, branch: null, initialized: false };
+  } catch { /* corrupt or unavailable storage — fall through */ }
+  return null;
+}
+
+export function readSavedScope(user) {
+  return readFrom(sessionStorage, user)
+    ?? readFrom(localStorage, user)
+    ?? { firm: null, branch: null, initialized: false };
 }
 
 export function writeSavedScope(user, { firm, branch }) {
-  try { localStorage.setItem(keyFor(user), JSON.stringify({ firm, branch })); } catch { /* ignore */ }
+  const raw = JSON.stringify({ firm, branch });
+  try { sessionStorage.setItem(keyFor(user), raw); } catch { /* ignore */ }
+  try { localStorage.setItem(keyFor(user), raw); } catch { /* ignore */ }
 }
 
 /**
@@ -32,5 +44,6 @@ export function writeSavedScope(user, { firm, branch }) {
  * that id had selected, and the scope would name an entity the new user may not even be in.
  */
 export function clearSavedScope(user) {
+  try { sessionStorage.removeItem(keyFor(user)); } catch { /* ignore */ }
   try { localStorage.removeItem(keyFor(user)); } catch { /* ignore */ }
 }

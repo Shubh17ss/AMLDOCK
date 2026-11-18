@@ -13,6 +13,7 @@ import nz.amldock.document.dto.DownloadUrlResponse;
 import nz.amldock.document.dto.UploadUrlResponse;
 import nz.amldock.document.storage.FileStorageService;
 import nz.amldock.firm.FirmBranch;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.firm.FirmBranchRepository;
 import nz.amldock.user.Role;
 import nz.amldock.user.User;
@@ -45,6 +46,7 @@ public class ComplianceDocumentService {
     private final DocumentReviewRepository reviews;
     private final UserRepository users;
     private final FirmBranchRepository branches;
+    private final ScopeStatusGuard scope;
     private final FileStorageService storage;
     private final AuditService audit;
     private final long maxBytes;
@@ -55,6 +57,7 @@ public class ComplianceDocumentService {
                                      DocumentReviewRepository reviews,
                                      UserRepository users,
                                      FirmBranchRepository branches,
+                                     ScopeStatusGuard scope,
                                      FileStorageService storage,
                                      AuditService audit,
                                      @Value("${S3_MAX_BYTES:26214400}") long maxBytes,
@@ -64,6 +67,7 @@ public class ComplianceDocumentService {
         this.reviews = reviews;
         this.users = users;
         this.branches = branches;
+        this.scope = scope;
         this.storage = storage;
         this.audit = audit;
         this.maxBytes = maxBytes;
@@ -86,6 +90,7 @@ public class ComplianceDocumentService {
         UserPrincipal actor = currentPrincipal();
         Long firmId = resolveTargetFirm(actor, req.realEstateFirmId());
         Long branchId = resolveBranch(req.firmBranchId(), firmId);
+        scope.assertWritable(firmId, branchId);
 
         int nextVersion = (firmId == null
                 ? docs.findTopByCategoryAndRealEstateFirmIdIsNullOrderByVersionNoDesc(req.category())
@@ -121,6 +126,7 @@ public class ComplianceDocumentService {
         UserPrincipal actor = currentPrincipal();
         assertNotReadOnly(actor);
         assertSameScope(actor, doc);
+        scope.assertWritable(doc.getRealEstateFirmId(), doc.getFirmBranchId());
         if (doc.getStatus() == DocumentStatus.ACTIVE) {
             return toDto(doc); // idempotent
         }
@@ -185,6 +191,7 @@ public class ComplianceDocumentService {
                     "Only ROOT, a senior manager or a compliance officer may delete a document");
         }
         if (actor.role() != Role.ROOT) assertSameScope(actor, d);
+        scope.assertWritable(d.getRealEstateFirmId(), d.getFirmBranchId());
         if (d.getStatus() == DocumentStatus.DELETED) return;
 
         storage.delete(d.getS3Key());

@@ -1,5 +1,6 @@
 package nz.amldock.firm;
 
+import nz.amldock.common.exception.ApiException;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.common.exception.NotFoundException;
@@ -11,6 +12,7 @@ import nz.amldock.user.UserOnboarding;
 import nz.amldock.user.UserPrincipal;
 import nz.amldock.user.UserService;
 import nz.amldock.user.dto.CreateUserRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +61,19 @@ public class FirmService {
         return firms.findAllByOrderByNameAsc();
     }
 
+    /**
+     * The internal id for a public id, or a 404. A numeric id, or anything else that is not a
+     * well-formed public id, is a 404 without a query — the old sequential URLs name nothing now.
+     * Visibility is still the caller's to check, as it is for a numeric id.
+     */
+    @Transactional(readOnly = true)
+    public Long resolve(String publicId) {
+        if (!FirmPublicIds.isWellFormed(publicId)) throw new NotFoundException("Firm " + publicId + " not found");
+        return firms.findByPublicId(publicId)
+                .map(RealEstateFirm::getId)
+                .orElseThrow(() -> new NotFoundException("Firm " + publicId + " not found"));
+    }
+
     @Transactional(readOnly = true)
     public RealEstateFirm findById(Long id) {
         RealEstateFirm f = firms.findById(id)
@@ -79,13 +94,16 @@ public class FirmService {
             throw new BadRequestException("Firm name already in use");
         }
         String nzbn = blankToNull(req.nzbn());
-        if (nzbn != null && firms.existsByNzbnIgnoreCase(nzbn)) {
-            throw new BadRequestException("NZBN/ABN already in use");
+        String country = normaliseCountry(req.country());
+        // Unique within a country: the same number may belong to an NZ and an AU entity, since
+        // NZBNs and ABNs are issued by different registers.
+        if (nzbn != null && firms.existsByCountryAndNzbnIgnoreCase(country, nzbn)) {
+            throw new BadRequestException(duplicateNzbn(country, nzbn));
         }
         RealEstateFirm f = new RealEstateFirm();
         f.setName(req.name());
         f.setNzbn(nzbn);
-        f.setCountry(normaliseCountry(req.country()));
+        f.setCountry(country);
         f.setLiaisonName(req.liaisonName());
         f.setLiaisonEmail(req.liaisonEmail());
         f.setLiaisonContactNumber(req.liaisonContactNumber());
@@ -106,6 +124,11 @@ public class FirmService {
     }
 
     /** Upper-cases and checks an ISO code against the jurisdictions the platform supports. */
+    private static String duplicateNzbn(String country, String nzbn) {
+        String label = "AU".equals(country) ? "ABN" : "NZBN";
+        return "Another " + country + " reporting entity already uses " + label + " " + nzbn;
+    }
+
     private static String normaliseCountry(String code) {
         String normalised = code == null ? null : code.trim().toUpperCase(Locale.ROOT);
         if (normalised == null || !SUPPORTED_COUNTRIES.contains(normalised)) {
@@ -132,8 +155,14 @@ public class FirmService {
         String fullName = (name == null || name.isBlank()) ? email : name;
         CreateUserRequest coReq = new CreateUserRequest(
                 email, fullName, Role.AML_COMPLIANCE_OFFICER, firmId, null);
-        User co = userService.create(currentPrincipal(), coReq);
-        onboarding.sendWelcome(co);
+        // An address that already serves another entity as a compliance officer or senior manager
+        // is added to this one rather than refused; see UserService.create.
+        UserService.Created created = userService.create(currentPrincipal(), coReq);
+        if (created.existingAccount()) {
+            onboarding.sendAddedToEntity(created.member().user(), firmId, Role.AML_COMPLIANCE_OFFICER);
+        } else {
+            onboarding.sendWelcome(created.member().user());
+        }
     }
 
     @Transactional
@@ -146,7 +175,14 @@ public class FirmService {
             // Firm-level managers may only touch their own firm…
             assertVisible(id);
         }
-        // …and the firm name, NZBN/ABN, country and active flag are platform-admin-only.
+        // A deactivated entity is held as it was, ROOT included: changing its country, say, would
+        // move its retention period.
+        if (!f.isActive()) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    f.getName() + " is deactivated — reactivate it before changing its details");
+        }
+        // …and the firm name, NZBN/ABN and country are platform-admin-only. Status changes go
+        // through deactivate / activate.
         if (isRoot) {
             if (req.country() != null) f.setCountry(normaliseCountry(req.country()));
             if (req.name() != null && !req.name().isBlank() && !req.name().equalsIgnoreCase(f.getName())) {
@@ -155,14 +191,13 @@ public class FirmService {
                 }
                 f.setName(req.name());
             }
-            if (req.nzbn() != null) {
-                String nzbn = blankToNull(req.nzbn());
-                if (nzbn != null && firms.existsByNzbnIgnoreCaseAndIdNot(nzbn, f.getId())) {
-                    throw new BadRequestException("NZBN/ABN already in use");
-                }
-                f.setNzbn(nzbn);
+            // Checked against the pair as it will stand, so moving an entity to another country
+            // is refused just as a clashing number is.
+            String nzbn = req.nzbn() != null ? blankToNull(req.nzbn()) : f.getNzbn();
+            if (nzbn != null && firms.existsByCountryAndNzbnIgnoreCaseAndIdNot(f.getCountry(), nzbn, f.getId())) {
+                throw new BadRequestException(duplicateNzbn(f.getCountry(), nzbn));
             }
-            if (req.active() != null) f.setActive(req.active());
+            f.setNzbn(nzbn);
         }
         if (req.liaisonName() != null) f.setLiaisonName(req.liaisonName());
         if (req.liaisonEmail() != null) f.setLiaisonEmail(req.liaisonEmail());
@@ -170,7 +205,10 @@ public class FirmService {
         if (req.complianceOfficerName() != null) f.setComplianceOfficerName(req.complianceOfficerName());
         if (req.complianceOfficerEmail() != null) f.setComplianceOfficerEmail(req.complianceOfficerEmail());
         if (req.complianceOfficerContactNumber() != null) f.setComplianceOfficerContactNumber(req.complianceOfficerContactNumber());
-        if (req.numberOfBranches() != null) {
+        if (req.numberOfBranches() != null && !req.numberOfBranches().equals(f.getNumberOfBranches())) {
+            // The declared count is the platform's to set: it is the ceiling on what the firm may
+            // operate. Refused rather than ignored, so a screen that offers it cannot drift.
+            if (!isRoot) throw new ForbiddenException("Only ROOT can change the number of branches");
             // The declared count is the ceiling BranchService enforces, so it must not be set
             // below the branches the firm already operates — that would strand existing rows
             // above the limit. Deactivate them first.

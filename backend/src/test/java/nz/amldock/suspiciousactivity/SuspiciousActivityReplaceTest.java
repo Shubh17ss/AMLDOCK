@@ -55,7 +55,7 @@ class SuspiciousActivityReplaceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SuspiciousActivityService(activities, users, branches, storage, audit, 26214400L, 5L, 5L);
+        service = new SuspiciousActivityService(activities, users, branches, org.mockito.Mockito.mock(nz.amldock.firm.ScopeStatusGuard.class), storage, audit, 26214400L, 5L, 5L);
     }
 
     @AfterEach

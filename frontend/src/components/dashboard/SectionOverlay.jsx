@@ -84,13 +84,12 @@ export function SectionOverlay({ open, group, originRect, onClose, reviewPropsFo
             display: 'flex',
             flexDirection: 'column',
             // A larger radius than the 20px tile it came from: the hierarchy is carried by the
-            // form rather than by adding anything to it.
+            // form rather than by adding anything to it. Solid, not glass — the tiles are flat
+            // now, and the one thing on this page that floats is the one thing with a shadow.
             borderRadius: '24px',
-            border: `1px solid ${tokens.glassBorder}`,
-            background: tokens.panelBg,
-            backdropFilter: 'blur(18px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(18px) saturate(180%)',
-            boxShadow: shadows.glassHover,
+            border: `1px solid ${tokens.hairline}`,
+            backgroundColor: tokens.tile,
+            boxShadow: shadows.lg,
             outline: 'none',
             transformOrigin: `calc(50% + ${dx}px) calc(50% + ${dy}px)`,
             opacity: 0,
@@ -127,21 +126,24 @@ export function SectionOverlay({ open, group, originRect, onClose, reviewPropsFo
 
             <Box sx={{ minWidth: 0, flexGrow: 1 }}>
               <Typography id="section-overlay-title" sx={{
-                fontFamily: fonts.display, fontWeight: 800, fontSize: '1.5rem',
+                fontFamily: fonts.display, fontWeight: 500, fontSize: '1.6rem',
                 letterSpacing: '-0.03em', color: tokens.ink, lineHeight: 1.15,
               }}>
                 {group.title}
               </Typography>
-              <Typography
-                component={RouterLink}
-                to={group.to}
-                onClick={requestClose}
-                sx={{
-                  fontSize: '0.85rem', color: tokens.muted, textDecoration: 'none',
-                  '&:hover': { color: tokens.blue, textDecoration: 'underline' },
-                }}
-              >
-                {count} {count === 1 ? 'module' : 'modules'} — open the full section
+              <Typography sx={{ fontSize: '0.88rem', color: tokens.muted, mt: 0.25 }}>
+                {count} {count === 1 ? 'module' : 'modules'}.{' '}
+                <Box
+                  component={RouterLink}
+                  to={group.to}
+                  onClick={requestClose}
+                  sx={{
+                    color: tokens.blue, fontWeight: 600, textDecoration: 'none',
+                    '&:hover': { textDecoration: 'underline' },
+                  }}
+                >
+                  Open the full section
+                </Box>
               </Typography>
             </Box>
 

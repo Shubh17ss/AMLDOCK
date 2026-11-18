@@ -10,7 +10,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 public record DealListItemDto(
-        Long id,
+        /** The deal's public id — see {@link nz.amldock.deal.PublicIds}. */
+        String id,
         String reference,
         DealStatus status,
         TransactionType transactionType,
@@ -45,7 +46,7 @@ public record DealListItemDto(
                                        String clientName, String propertyAddress,
                                        PropertyType propertyType,
                                        String createdByEmail, String createdByName) {
-        return new DealListItemDto(d.getId(), d.getReference(), d.getStatus(), d.getTransactionType(),
+        return new DealListItemDto(d.getPublicId(), d.getReference(), d.getStatus(), d.getTransactionType(),
                 d.getTransactionValue(), d.getFirmBranchId(), firmName, branchName,
                 clientName, propertyAddress, propertyType,
                 d.getCreatedByUserId(), createdByEmail, createdByName,

@@ -92,6 +92,16 @@ export const canUploadDocuments = (status, role) => {
 };
 
 /**
+ * Whether the purchaser's side of the structure is open on a deal in this state: only once it has
+ * closed as sold, and only while it stays there. Who may write is the same as for the vendor's
+ * side; this is the status half alone.
+ *
+ * Mirrors `DealLifecycleService.canEditPurchaser`.
+ */
+export const isPurchaserOpen = (status, propertySold) =>
+  status === 'CLOSED' && propertySold === true;
+
+/**
  * Every status change a reviewer can make, as a table.
  *
  * <p>Mirrors `DealLifecycleService.RULES`, `noteRequired` included — that is the server's own

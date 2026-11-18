@@ -35,7 +35,7 @@ const TABS = [
  * nothing — each tab saves its own work with its own button.
  */
 export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onRequestDelete,
-                            readOnly = false, canUpload, version = null }) {
+                            readOnly = false, canUpload, version = null, side = 'VENDOR' }) {
   const [tab, setTab] = useState('details');
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -56,9 +56,16 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
    * through a ref - is the same coupling, pointed the harder way round.
    *
    * Seeded from what the owner already has, so re-verifying starts from the standing decision
-   * rather than from nothing, and null when they have none so neither pill is lit.
+   * rather than from nothing. An owner with none starts on a plain verification — the usual
+   * answer — so Verify is one click rather than a choice and then a click. An exception is still
+   * one tap away, and the field can still be cleared.
    */
-  const [verification, setVerification] = useState({ outcome: null, notes: '' });
+  const [verification, setVerification] = useState({ outcome: 'VERIFIED', notes: '' });
+
+  // The footer's slot for the Details actions, which NodeEditorPane portals into. A callback ref
+  // held in state, so the pane re-renders once the slot exists rather than missing it.
+  const [actionsEl, setActionsEl] = useState(null);
+  const detailsActionsInFooter = Boolean(node) && tab === 'details' && !readOnly;
 
   // A different owner opens on Details. Landing on whichever tab the last one was left on would
   // mean opening a person and being shown an empty documents list for no reason.
@@ -66,7 +73,7 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
     if (!node?.id) return;
     setTab('details');
     setVerification({
-      outcome: isVerified(node.verificationStatus) ? node.verificationStatus : null,
+      outcome: isVerified(node.verificationStatus) ? node.verificationStatus : 'VERIFIED',
       notes: node.verificationNotes ?? '',
     });
   }, [node?.id]);
@@ -238,6 +245,9 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
             tab={tab}
             onRequestDelete={onRequestDelete}
             version={version}
+            side={side}
+            actionsContainer={detailsActionsInFooter ? actionsEl : null}
+            onClose={onClose}
           />
         )}
       </Box>
@@ -251,11 +261,14 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
           backgroundColor: tokens.tileRaised,
         }}
       >
-        {/* Verification is the one tab whose primary action sits down here rather than in the
-            body: it is a decision about the owner as a whole, not a save of the fields above it,
-            and the two buttons the design asks for are Close and Verify. Every other tab keeps
-            its own save inline and leaves this footer as the single way out. */}
-        {tab === 'verification' && !readOnly ? (
+        {/* The footer stays put while the body scrolls, so a tab's actions belong down here
+            rather than at the end of a form someone has to scroll through to reach them.
+            Verification draws its own Close and Verify. Details lends this slot to
+            NodeEditorPane, which holds the form, for Remove, Close and Update. Every other tab
+            has nothing to save and keeps the single way out. */}
+        {detailsActionsInFooter ? (
+          <Box ref={setActionsEl} />
+        ) : tab === 'verification' && !readOnly ? (
           <Stack direction="row" spacing={1.5}>
             <Button fullWidth variant="outlined" onClick={onClose}>Close</Button>
             <Button

@@ -162,7 +162,8 @@ class DealNotificationEnqueuerTest {
         // The actor id is passed down so the database can leave them out, rather than every
         // recipient being fetched and then filtered here.
         verify(preferences).findRecipientCandidates(
-                eq(BRANCH), eq(DealNotificationEvent.DEAL_CREATED.name()), eq(BROKER), eq(ACTOR));
+                eq(BRANCH), eq(42L), eq(DealNotificationEvent.DEAL_CREATED.name()),
+                eq(BROKER), eq(ACTOR));
     }
 
     /* ---------- status changes ---------- */
@@ -174,7 +175,8 @@ class DealNotificationEnqueuerTest {
 
         enqueuer.enqueueStatusChanged(d, principal(), DealStatus.REVIEW);
 
-        verify(preferences, never()).findRecipientCandidates(anyLong(), anyString(), anyLong(), anyLong());
+        verify(preferences, never()).findRecipientCandidates(
+                anyLong(), anyLong(), anyString(), anyLong(), anyLong());
         verify(notifications, never()).saveAll(any());
     }
 
@@ -206,7 +208,7 @@ class DealNotificationEnqueuerTest {
         assertThat(payload).contains("\"branchName\":\"Ponsonby\"");
         assertThat(payload).contains("\"actorName\":\"Ada Officer\"");
         // Trailing slash on the configured base URL must not double up.
-        assertThat(payload).contains("\"dealUrl\":\"http://localhost:5173/deals/42\"");
+        assertThat(payload).contains("\"dealUrl\":\"http://localhost:5173/deals/k7m2x9qa4tbe\"");
     }
 
     /* ---------- degenerate cases ---------- */
@@ -238,7 +240,7 @@ class DealNotificationEnqueuerTest {
     /* ---------- helpers ---------- */
 
     private void givenCandidates(DealNotificationPreferenceRepository.RecipientCandidate... cs) {
-        when(preferences.findRecipientCandidates(anyLong(), anyString(), any(), anyLong()))
+        when(preferences.findRecipientCandidates(anyLong(), anyLong(), anyString(), any(), anyLong()))
                 .thenReturn(List.of(cs));
     }
 
@@ -258,6 +260,7 @@ class DealNotificationEnqueuerTest {
         Deal d = new Deal();
         setId(d, 42L);
         d.setReference("DEAL-2026-0042");
+        d.setPublicId("k7m2x9qa4tbe");
         d.setFirmBranchId(BRANCH);
         d.setCreatedByUserId(BROKER);
         d.setStatus(DealStatus.NEW);

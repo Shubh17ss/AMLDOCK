@@ -1,7 +1,10 @@
 package nz.amldock.deal;
 
 import nz.amldock.deal.dto.RiskAssessmentDto;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.mock.mockito.SpyBean;
+import nz.amldock.deal.DealRefResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -43,6 +46,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("dev")
 class RiskEndpointsWebTest {
 
+    // Deals are named by public id on the wire; this one stands for deal 1.
+    @SpyBean DealRefResolver dealRefs;
+
+    @BeforeEach
+    void namesDealOne() {
+        org.mockito.Mockito.doReturn(1L).when(dealRefs).resolve("abcdefghjkmn");
+    }
+
     @Autowired MockMvc mvc;
     @MockBean DealService deals;
 
@@ -66,7 +77,7 @@ class RiskEndpointsWebTest {
     void theWorkingsAreReadableAndSeriliseUnderTheNamesTheUiReads() throws Exception {
         when(deals.risk(1L)).thenReturn(ASSESSMENT);
 
-        mvc.perform(get("/api/deals/1/risk"))
+        mvc.perform(get("/api/deals/abcdefghjkmn/risk"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.riskValue").value(8))
                 .andExpect(jsonPath("$.calculatedRating").value("HIGH"))
@@ -103,7 +114,7 @@ class RiskEndpointsWebTest {
 
     @Test
     void anAnonymousCallerGetsNothing() throws Exception {
-        mvc.perform(get("/api/deals/1/risk")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/deals/abcdefghjkmn/risk")).andExpect(status().isUnauthorized());
     }
 
     /* ---------- approving ---------- */
@@ -113,7 +124,7 @@ class RiskEndpointsWebTest {
     void complianceMayApprove() throws Exception {
         when(deals.approveRisk(1L)).thenReturn(ASSESSMENT);
 
-        mvc.perform(post("/api/deals/1/risk/approve").with(csrf()))
+        mvc.perform(post("/api/deals/abcdefghjkmn/risk/approve").with(csrf()))
                 .andExpect(status().isOk());
     }
 
@@ -122,14 +133,14 @@ class RiskEndpointsWebTest {
     void aSeniorManagerMayApprove() throws Exception {
         when(deals.approveRisk(1L)).thenReturn(ASSESSMENT);
 
-        mvc.perform(post("/api/deals/1/risk/approve").with(csrf()))
+        mvc.perform(post("/api/deals/abcdefghjkmn/risk/approve").with(csrf()))
                 .andExpect(status().isOk());
     }
 
     @Test
     @WithMockUser(roles = "AGENT")
     void anAgentMayNotApprove() throws Exception {
-        mvc.perform(post("/api/deals/1/risk/approve").with(csrf()))
+        mvc.perform(post("/api/deals/abcdefghjkmn/risk/approve").with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
@@ -140,7 +151,7 @@ class RiskEndpointsWebTest {
     void complianceMayOverride() throws Exception {
         when(deals.overrideRisk(eq(1L), any(), anyString())).thenReturn(ASSESSMENT);
 
-        mvc.perform(post("/api/deals/1/risk/override").with(csrf())
+        mvc.perform(post("/api/deals/abcdefghjkmn/risk/override").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"rating\":\"HIGH\",\"comment\":\"Known to the firm\"}"))
                 .andExpect(status().isOk());
@@ -151,7 +162,7 @@ class RiskEndpointsWebTest {
     void anOverrideWithoutAReasonIsRefusedByValidationRatherThanStored() throws Exception {
         // The dialog will not submit one, but the endpoint is what has to hold the line: a
         // rating that disagrees with its own workings is only defensible with a reason on it.
-        mvc.perform(post("/api/deals/1/risk/override").with(csrf())
+        mvc.perform(post("/api/deals/abcdefghjkmn/risk/override").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"rating\":\"HIGH\",\"comment\":\"  \"}"))
                 .andExpect(status().isBadRequest());
@@ -160,7 +171,7 @@ class RiskEndpointsWebTest {
     @Test
     @WithMockUser(roles = "AML_COMPLIANCE_OFFICER")
     void anOverrideWithoutARatingIsRefused() throws Exception {
-        mvc.perform(post("/api/deals/1/risk/override").with(csrf())
+        mvc.perform(post("/api/deals/abcdefghjkmn/risk/override").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"comment\":\"Known to the firm\"}"))
                 .andExpect(status().isBadRequest());
@@ -169,7 +180,7 @@ class RiskEndpointsWebTest {
     @Test
     @WithMockUser(roles = "AGENT")
     void anAgentMayNotOverride() throws Exception {
-        mvc.perform(post("/api/deals/1/risk/override").with(csrf())
+        mvc.perform(post("/api/deals/abcdefghjkmn/risk/override").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"rating\":\"HIGH\",\"comment\":\"Known to the firm\"}"))
                 .andExpect(status().isForbidden());

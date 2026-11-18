@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Alert, Box, Button, Divider, Stack, TextField, Typography,
 } from '@mui/material';
@@ -17,11 +18,13 @@ import { isVerified } from './verificationDisplay.js';
  *   - inspect the incoming edge and edit its percentage / role
  *   - delete the node (with cascade confirm if it has edges)
  * Documents is a placeholder for M8. Verification has its own component - the drawer renders
- * NodeVerificationTab instead of this pane on that tab, because its action lives in the
- * drawer footer rather than inline like every save here.
+ * NodeVerificationTab instead of this pane on that tab. The Details actions are portalled into
+ * the drawer footer (see `actionsContainer`) so they stay in view while the form scrolls.
  */
 export function NodeEditorPane({
   tree, selectedNodeId, useTree, onRequestDelete, dealId,
+  /** Whose structure the owner is on. A purchaser's evidence stays on the purchaser's side. */
+  side = 'VENDOR',
   /** Which panel to show. Owned by NodeDrawer, which draws the tab strip. */
   tab = 'details',
   /**
@@ -42,6 +45,14 @@ export function NodeEditorPane({
    * off. Null on the live deal.
    */
   version = null,
+  /**
+   * The drawer footer's slot for the Details actions. Remove and Update are drawn there rather
+   * than under the form, so a long form never has to be scrolled to its end to save it. Null
+   * leaves them out, as on every tab but an editable Details.
+   */
+  actionsContainer = null,
+  /** Closes the drawer. Shown beside Update, because the footer it replaces held the only Close. */
+  onClose,
 }) {
   const [form, setForm] = useState(null);
   const [edgeForm, setEdgeForm] = useState({ percentage: '' });
@@ -200,30 +211,34 @@ export function NodeEditorPane({
                 sx={{ width: 180 }} />
             </>
           )}
-
-          {!readOnly && (
-            <>
-              <Divider />
-              {/* Type and the shareholding % don't count — they say where the owner sits, not
-                  who they are — hence "details" rather than "anything". */}
-              {isVerified(selected.verificationStatus) && (
-                <Typography variant="caption" sx={{ color: 'var(--cl-warn-text)', mb: -1.5 }}>
-                  Saving changes to this owner&apos;s details will clear their verification.
-                </Typography>
-              )}
-              <Stack direction="row" justifyContent="space-between">
-                <Button variant="outlined" color="error" startIcon={<DeleteOutlineIcon />}
-                  onClick={handleDelete} sx={{ width: '45%' }}>
-                  Remove from structure
-                </Button>
-                <Button variant="contained" onClick={saveDetails}
-                  disabled={saving} sx={{ width: '45%' }}>
-                  {saving ? 'Saving…' : 'Update'}
-                </Button>
-              </Stack>
-            </>
-          )}
         </Stack>
+      )}
+
+      {tab === 'details' && !readOnly && actionsContainer && createPortal(
+        <>
+          {/* Type and the shareholding % don't count — they say where the owner sits, not
+              who they are — hence "details" rather than "anything". */}
+          {isVerified(selected.verificationStatus) && (
+            <Typography variant="caption" component="p" sx={{ color: 'var(--cl-warn-text)', mb: 1 }}>
+              Saving changes to this owner&apos;s details will clear their verification.
+            </Typography>
+          )}
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Button variant="outlined" color="error" startIcon={<DeleteOutlineIcon />}
+              onClick={handleDelete} sx={{ flex: { xs: 1, sm: 'none' } }}>
+              Remove from structure
+            </Button>
+            <Box sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }} />
+            <Button variant="outlined" onClick={onClose} sx={{ flex: { xs: 1, sm: 'none' } }}>
+              Close
+            </Button>
+            <Button variant="contained" onClick={saveDetails}
+              disabled={saving} sx={{ flex: { xs: 1, sm: 'none' }, minWidth: 110 }}>
+              {saving ? 'Saving…' : 'Update'}
+            </Button>
+          </Stack>
+        </>,
+        actionsContainer,
       )}
 
       {tab === 'documents' && (
@@ -237,16 +252,16 @@ export function NodeEditorPane({
             dealId={dealId}
             ownershipNodeId={selected.id}
             allowedTypes={ACCEPTED_DOCUMENT_TYPES[selected.nodeType]}
-            compact
             canUpload={canUpload ?? !readOnly}
             frozenDocuments={versionNodeDocs}
-            title={`Documents on ${selected.displayName}`}
             onViewDocument={setViewingDoc}
             // Every other owner on this deal; the uploader narrows it to those whose type takes
             // the document. Not on a version, which already turns off every write.
             moveTargets={versionNodeDocs ? null
               : (tree?.nodes ?? []).filter((n) => n.id !== selected.id)}
-            canMoveToProperty={!versionNodeDocs}
+            // The property's documents are the vendor's side of the file; the server refuses a
+            // move across, so it is not offered from a purchaser.
+            canMoveToProperty={!versionNodeDocs && side !== 'PURCHASER'}
           />
         </Stack>
       )}

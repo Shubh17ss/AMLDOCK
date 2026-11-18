@@ -74,7 +74,7 @@ class VerificationReadinessServiceTest {
 
         OwnershipStructure structure = new OwnershipStructure();
         ReflectionTestUtils.setField(structure, "id", STRUCTURE_ID);
-        lenient().when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
         nodes = new ArrayList<>(List.of(node(10L, "Jane Doe", NodeVerificationStatus.VERIFIED)));
         lenient().when(nodeRepo.findAllByOwnershipStructureIdOrderByIdAsc(STRUCTURE_ID)).thenReturn(nodes);
     }
@@ -165,7 +165,7 @@ class VerificationReadinessServiceTest {
 
     @Test
     void aDealWithNoOwnersIsReady() {
-        lenient().when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.empty());
+        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.empty());
 
         assertThat(service.assess(deal).ready()).isTrue();
     }

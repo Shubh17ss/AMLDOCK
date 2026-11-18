@@ -6,15 +6,13 @@ import {
 import { OtpCodeField, isCompleteOtp } from '../components/OtpCodeField.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../components/ToastProvider.jsx';
-import logoSrc from '../../assets/logos/image.png';
+import { AuthShell } from '../site/AuthShell.jsx';
 
-import { tokens, shadows } from '../theme/theme.js';
+import { tokens, fonts } from '../theme/theme.js';
 
-const NEU_BASE   = tokens.canvas;
 const NEU_FG     = tokens.ink;
 const NEU_MUTED  = tokens.muted;
 const NEU_ACCENT = tokens.blue;
-const EXT        = shadows.md;
 
 /**
  * Hardened sign-in for the platform administrator (ROOT): password first, then an
@@ -69,26 +67,13 @@ export function AdminLoginPage() {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: NEU_BASE, display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', px: { xs: 3, sm: 5 }, py: 2.5 }}>
-        <Box component={RouterLink} to="/" sx={{ display: 'inline-flex', textDecoration: 'none' }}>
-          <img src={logoSrc} alt="AMLDOCK" className="h-24 w-auto object-contain" />
-        </Box>
-      </Box>
-
-      <Box sx={{
-        flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        px: 2, py: { xs: 3, sm: 6 },
-      }}>
-        <Box sx={{
-          width: '100%', maxWidth: 480,
-          backgroundColor: tokens.tile, border: `1px solid ${tokens.hairline}`, borderRadius: 4, boxShadow: EXT,
-          p: { xs: 4, sm: 5 },
-        }}>
+    <AuthShell footer={<>© {new Date().getFullYear()} AMLDOCK</>}>
+        <Box sx={{ width: '100%', maxWidth: 400 }}>
           <Stack spacing={0.5} sx={{ mb: 4 }}>
             <Typography variant="h4" sx={{
               fontWeight: 800, color: NEU_FG,
-              fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+              fontFamily: fonts.display, letterSpacing: '-0.03em',
+              fontSize: { xs: '1.7rem', sm: '2.125rem' },
             }}>
               Administrator sign-in
             </Typography>
@@ -145,7 +130,6 @@ export function AdminLoginPage() {
             </Link>
           </Box>
         </Box>
-      </Box>
-    </Box>
+    </AuthShell>
   );
 }

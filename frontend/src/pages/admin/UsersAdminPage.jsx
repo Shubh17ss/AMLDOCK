@@ -10,6 +10,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { deleteUser, listUsers, resetUserPassword, updateUser } from '../../api/users.js';
 import { listBranches, listFirms } from '../../api/firms.js';
+import { useFirmRef } from '../../hooks/useFirmRef.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
 import { creatableRoles, isFirmLevel, roleLabel } from '../../auth/roles.js';
@@ -57,7 +58,7 @@ export function UsersAdminPage() {
     : isFirmLevel(currentUser?.role) && !isFirmLevel(u.role));
 
   const updateMut = useMutation({
-    mutationFn: ({ id, payload }) => updateUser(id, payload),
+    mutationFn: ({ id, payload, firmId }) => updateUser(id, payload, firmId),
   });
 
   /**
@@ -67,9 +68,9 @@ export function UsersAdminPage() {
    * position the moment this settles — returning before the list has refetched would hand the
    * switch back a value it is about to replace, and the thumb would flick twice.
    */
-  const toggleActive = async (id, active) => {
+  const toggleActive = async (u, active) => {
     try {
-      await updateMut.mutateAsync({ id, payload: { active } });
+      await updateMut.mutateAsync({ id: u.id, payload: { active }, firmId: u.realEstateFirmId });
       await qc.invalidateQueries({ queryKey: ['users'] });
     } catch (err) {
       // Matching the delete handler on this page. The switch returns to the server's value on its
@@ -79,7 +80,7 @@ export function UsersAdminPage() {
     }
   };
   const deleteMut = useMutation({
-    mutationFn: (id) => deleteUser(id),
+    mutationFn: (u) => deleteUser(u.id, u.realEstateFirmId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
     onError: (err) => window.alert(err.response?.data?.message || 'Failed to delete user'),
   });
@@ -134,10 +135,11 @@ export function UsersAdminPage() {
                 firmName={u.realEstateFirmId
                   ? (firmsById.get(u.realEstateFirmId)?.name ?? `#${u.realEstateFirmId}`)
                   : null}
-                onToggleActive={(v) => toggleActive(u.id, v)}
+                firmActive={firmsById.get(u.realEstateFirmId)?.active !== false}
+                onToggleActive={(v) => toggleActive(u, v)}
                 onResetPassword={() => setResetTarget(u)}
                 onDelete={() => {
-                  if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
+                  if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u);
                 }}
               />
             ))}
@@ -160,16 +162,22 @@ export function UsersAdminPage() {
 }
 
 /** Single row, lazily fetches the user's branch name when they have one. */
-function UserRow({ user, firmName, canResetPassword, canDelete, canToggleActive,
+function UserRow({ user, firmName, firmActive, canResetPassword, canDelete, canToggleActive,
                    onToggleActive, onResetPassword, onDelete }) {
   // Only brokers carry a branch; lazy-load just for those rows.
+  const firmRef = useFirmRef(user.firmBranchId ? user.realEstateFirmId : null);
   const branchesQ = useQuery({
-    queryKey: ['firms', user.realEstateFirmId, 'branches'],
-    queryFn: () => listBranches(user.realEstateFirmId),
-    enabled: Boolean(user.firmBranchId && user.realEstateFirmId),
+    queryKey: ['firms', firmRef, 'branches'],
+    queryFn: () => listBranches(firmRef),
+    enabled: Boolean(user.firmBranchId && firmRef),
   });
-  const branchName = user.firmBranchId
-    ? (branchesQ.data?.find((b) => b.id === user.firmBranchId)?.name ?? `#${user.firmBranchId}`)
+  const branch = user.firmBranchId ? branchesQ.data?.find((b) => b.id === user.firmBranchId) : null;
+  const branchName = user.firmBranchId ? (branch?.name ?? `#${user.firmBranchId}`) : null;
+  // Mirrors UserService.assertScopeActive: nobody is switched back on inside a deactivated entity
+  // or branch. Switching off is still offered, since the cascade normally does it already.
+  const scopeClosed = !user.active && (!firmActive || branch?.active === false)
+    ? (firmActive ? 'Branch is deactivated — reactivate the branch first'
+      : 'Reporting entity is deactivated — reactivate it first')
     : null;
 
   return (
@@ -183,7 +191,13 @@ function UserRow({ user, firmName, canResetPassword, canDelete, canToggleActive,
       <TableCell>
         {/* Read-only rather than silently inert for anyone the API would refuse — and it does
             still refuse: this only decides whether to offer the control. */}
-        <InstantSwitch checked={user.active} disabled={!canToggleActive} onToggle={onToggleActive} />
+        {scopeClosed && canToggleActive ? (
+          <Tooltip title={scopeClosed}>
+            <span><InstantSwitch checked={user.active} disabled onToggle={onToggleActive} /></span>
+          </Tooltip>
+        ) : (
+          <InstantSwitch checked={user.active} disabled={!canToggleActive} onToggle={onToggleActive} />
+        )}
       </TableCell>
       <TableCell align="right">
         {canResetPassword && (

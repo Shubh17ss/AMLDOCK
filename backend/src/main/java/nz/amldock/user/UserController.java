@@ -61,21 +61,32 @@ public class UserController {
         return users.findVisible(principal, firmId, branchId).stream().map(UserDto::from).toList();
     }
 
+    /** {@code firmId} picks the entity ROOT and AUDIT see the user in; ignored for everyone else. */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER','AUDIT')")
-    public UserDto get(@AuthenticationPrincipal UserPrincipal principal, @PathVariable Long id) {
-        return UserDto.from(users.findVisibleById(principal, id));
+    public UserDto get(@AuthenticationPrincipal UserPrincipal principal, @PathVariable Long id,
+                       @RequestParam(required = false) Long firmId) {
+        return UserDto.from(users.findVisibleById(principal, id, firmId));
     }
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")
     public UserDto create(@AuthenticationPrincipal UserPrincipal principal,
                           @Valid @RequestBody CreateUserRequest req) {
-        User u = users.create(principal, req);
-        audit.record(AuditAction.USER_CREATED, "User", u.getId(),
-                "Created user " + u.getEmail() + " with role " + u.getRole());
-        onboarding.sendWelcome(u);
-        return UserDto.from(u);
+        UserService.Created created = users.create(principal, req);
+        UserService.Member m = created.member();
+        User u = m.user();
+        if (created.existingAccount()) {
+            audit.record(AuditAction.USER_ADDED_TO_ENTITY, "User", u.getId(),
+                    "Added existing user " + u.getEmail() + " to reporting entity " + m.firmId()
+                            + " as " + m.role());
+            onboarding.sendAddedToEntity(u, m.firmId(), m.role());
+        } else {
+            audit.record(AuditAction.USER_CREATED, "User", u.getId(),
+                    "Created user " + u.getEmail() + " with role " + m.role());
+            onboarding.sendWelcome(u);
+        }
+        return UserDto.from(m, created.existingAccount());
     }
 
     /** At most {@link UserService#MAX_BULK_ROWS} rows per call; who may import is checked first. */
@@ -83,43 +94,48 @@ public class UserController {
     @PreAuthorize("isAuthenticated()")
     public List<UserDto> createBulk(@AuthenticationPrincipal UserPrincipal principal,
                                     @RequestBody BulkCreateUsersRequest req) {
-        List<User> created = users.createBulk(principal, req);
+        List<UserService.Member> created = users.createBulk(principal, req);
         audit.record(AuditAction.USER_CREATED, "User", null,
                 "Imported " + created.size() + " users");
         // Imported users get no welcome email by design.
         return created.stream().map(UserDto::from).toList();
     }
 
+    /** {@code firmId} picks the entity ROOT edits the user in; see UserService.update. */
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
     public UserDto update(@AuthenticationPrincipal UserPrincipal principal,
-                          @PathVariable Long id, @RequestBody UpdateUserRequest req,
+                          @PathVariable Long id, @RequestParam(required = false) Long firmId,
+                          @RequestBody UpdateUserRequest req,
                           HttpServletResponse response) {
-        // Read before the update, because the service mutates the managed entity in place — after
-        // the call these would both report the new values and every comparison below would be false.
-        User existing = users.findById(id);
-        Role before = existing.getRole();
-        boolean wasActive = existing.isActive();
-        String previousEmail = existing.getEmail();
-        int tokenVersionBefore = existing.getTokenVersion();
+        // Read before the update, because the service mutates the managed entities in place —
+        // after the call these would report the new values and every comparison below would be false.
+        UserService.Member existing = users.findVisibleById(principal, id,
+                req.realEstateFirmId() != null ? req.realEstateFirmId() : firmId);
+        Role before = existing.role();
+        boolean wasActive = existing.active();
+        String previousEmail = existing.user().getEmail();
+        int tokenVersionBefore = existing.user().getTokenVersion();
 
-        User u = users.update(principal, id, req);
-        // The edit ended the user's sessions (role, firm or branch changed). If that user is the
-        // caller, which only ROOT editing themselves can reach, give this browser a fresh session
-        // rather than signing them out.
+        UserService.Member m = users.update(principal, id, firmId, req);
+        User u = m.user();
+        // The edit ended the user's sessions (role or branch changed). If that user is the caller,
+        // which only ROOT editing themselves can reach, give this browser a fresh session rather
+        // than signing them out.
         if (u.getTokenVersion() != tokenVersionBefore && id.equals(principal.id())) {
-            auth.reissueSession(u, response);
+            auth.reissueSession(u, principal, response);
         }
         audit.record(AuditAction.USER_UPDATED, "User", u.getId(),
                 "Updated user " + u.getEmail());
         if (req.role() != null && req.role() != before) {
             audit.record(AuditAction.ROLE_CHANGED, "User", u.getId(),
-                    "Role changed from " + before + " to " + u.getRole());
+                    "Role changed from " + before + " to " + m.role());
         }
-        if (u.isActive() != wasActive) {
-            audit.record(u.isActive() ? AuditAction.USER_ACTIVATED : AuditAction.USER_DEACTIVATED,
+        if (m.active() != wasActive) {
+            String where = m.firmId() == null ? "" : " in reporting entity " + m.firmId();
+            audit.record(m.active() ? AuditAction.USER_ACTIVATED : AuditAction.USER_DEACTIVATED,
                     "User", u.getId(),
-                    (u.isActive() ? "Activated " : "Deactivated ") + u.getEmail());
+                    (m.active() ? "Activated " : "Deactivated ") + u.getEmail() + where);
         }
         // An administrative email change skips the verification a self-service one goes through,
         // so it is named differently in the trail — the two are not the same act and should not
@@ -129,15 +145,17 @@ public class UserController {
                     "Email changed from " + previousEmail + " to " + u.getEmail() + " without verification");
             emailChangeNotice.notifyPreviousAddress(previousEmail, u.getFullName(), u.getEmail());
         }
-        return UserDto.from(u);
+        return UserDto.from(m);
     }
 
+    /** Off-boarding, like suspending: root, compliance officers and senior managers only. */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER','SALES_MANAGER')")
+    @PreAuthorize("hasAnyRole('ROOT','AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal UserPrincipal principal,
-                                       @PathVariable Long id) {
+                                       @PathVariable Long id,
+                                       @RequestParam(required = false) Long firmId) {
         User u = users.findById(id);
-        users.delete(principal, id);
+        users.delete(principal, id, firmId);
         audit.record(AuditAction.USER_DELETED, "User", id, "Deleted user " + u.getEmail());
         return ResponseEntity.noContent().build();
     }
@@ -153,7 +171,7 @@ public class UserController {
         audit.record(AuditAction.USER_PASSWORD_RESET, "User", id, "Password reset by admin");
         if (id.equals(principal.id())) {
             // Resetting your own account: keep this browser signed in on a fresh session.
-            auth.reissueSession(users.findById(id), response);
+            auth.reissueSession(users.findById(id), principal, response);
         }
         return ResponseEntity.noContent().build();
     }
@@ -167,7 +185,7 @@ public class UserController {
         audit.record(AuditAction.USER_PASSWORD_CHANGED, "User", principal.id(), "Password changed");
         // ...then issues this browser a fresh session. Must come after the revoke, or it would be
         // revoked with the rest.
-        auth.reissueSession(users.findById(principal.id()), response);
+        auth.reissueSession(users.findById(principal.id()), principal, response);
         return ResponseEntity.noContent().build();
     }
 
@@ -190,7 +208,7 @@ public class UserController {
                                         @Valid @RequestBody UpdateProfileRequest req,
                                         HttpServletResponse response) {
         User u = profile.updateOwnName(principal.id(), req.fullName());
-        return auth.reissueSession(u, response);
+        return auth.reissueSession(u, principal, response);
     }
 
     /**
@@ -217,6 +235,6 @@ public class UserController {
                                           @Valid @RequestBody EmailChangeVerifyRequest req,
                                           HttpServletResponse response) {
         User u = profile.verifyEmailChange(principal.id(), req.code());
-        return auth.reissueSession(u, response);
+        return auth.reissueSession(u, principal, response);
     }
 }

@@ -11,6 +11,7 @@ import { deleteUser, listUsers, updateUser } from '../../api/users.js';
 import { roleLabel } from '../../auth/roles.js';
 import { CreateUserDialog } from '../../components/CreateUserDialog.jsx';
 import { tokens } from '../../theme/theme.js';
+import { emailFieldProps, isBadEmail } from '../../utils/email.js';
 
 // Firm-level peers can't be edited or deleted from a firm view (matches the backend rule).
 const PROTECTED_ROLES = new Set(['SENIOR_MANAGER', 'AML_COMPLIANCE_OFFICER']);
@@ -38,7 +39,7 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
   };
 
   const deleteMut = useMutation({
-    mutationFn: (id) => deleteUser(id),
+    mutationFn: (id) => deleteUser(id, firmId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
     onError: (err) => window.alert(err.response?.data?.message || 'Failed to delete user'),
   });
@@ -82,14 +83,17 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Delete user">
-                            <IconButton size="small" color="error"
-                              onClick={() => {
-                                if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
-                              }}>
-                              <DeleteOutlineIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          {/* Off-boarding is for root, compliance officers and senior managers. */}
+                          {currentUser?.role !== 'SALES_MANAGER' && (
+                            <Tooltip title="Delete user">
+                              <IconButton size="small" color="error"
+                                onClick={() => {
+                                  if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) deleteMut.mutate(u.id);
+                                }}>
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </>
                       )}
                     </TableCell>
@@ -114,12 +118,12 @@ export function FirmUsersCard({ firmId, currentUser, title = 'Firm users' }) {
         currentUser={currentUser}
         lockedFirmId={firmId}
       />
-      <EditUserDialog target={editTarget} onClose={() => setEditTarget(null)} />
+      <EditUserDialog target={editTarget} firmId={firmId} onClose={() => setEditTarget(null)} />
     </Card>
   );
 }
 
-function EditUserDialog({ target, onClose }) {
+function EditUserDialog({ target, firmId, onClose }) {
   const qc = useQueryClient();
   const open = Boolean(target);
   const [form, setForm] = useState({ fullName: '', email: '' });
@@ -130,7 +134,7 @@ function EditUserDialog({ target, onClose }) {
   }, [target?.id]);
 
   const mut = useMutation({
-    mutationFn: () => updateUser(target.id, { fullName: form.fullName, email: form.email }),
+    mutationFn: () => updateUser(target.id, { fullName: form.fullName, email: form.email }, firmId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); setError(null); onClose(); },
     onError: (err) => setError(err.response?.data?.message || 'Failed to update user'),
   });
@@ -146,15 +150,15 @@ function EditUserDialog({ target, onClose }) {
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField label="Full name" value={form.fullName} onChange={ch('fullName')} required />
             <TextField label="Email" type="email" value={form.email} onChange={ch('email')} required
-                       helperText={'Applied immediately, without a code sent to the new address — '
+                       {...emailFieldProps(form.email, 'Applied immediately, without a code sent to the new address — '
                          + 'this is the way to repair a mistyped email, since that person cannot '
-                         + 'receive one. Their current address is notified of the change.'} />
+                         + 'receive one. Their current address is notified of the change.')} />
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="contained" disabled={mut.isPending || !form.fullName || !form.email}>
+          <Button type="submit" variant="contained" disabled={mut.isPending || !form.fullName || !form.email || isBadEmail(form.email)}>
             {mut.isPending ? 'Saving…' : 'Save'}
           </Button>
         </DialogActions>

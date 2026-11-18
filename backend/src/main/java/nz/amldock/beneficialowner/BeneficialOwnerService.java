@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The people identified from a deal's scanned IDs.
@@ -259,7 +260,11 @@ public class BeneficialOwnerService {
                 .orElseThrow(() -> new NotFoundException("Deal " + dealId + " not found"));
         lifecycle.assertCanRead(deal, currentPrincipal(), firmIdForDeal(dealId));
 
+        // The vendor's people: a purchaser is recorded on its own side of the structure, after the
+        // sign-off this list sits beside.
+        Set<Long> purchasers = ownership.purchaserPersonIds(dealId);
         return links.findAllByDealIdOrderByCreatedAtAsc(dealId).stream()
+                .filter(link -> !purchasers.contains(link.getBeneficialOwnerId()))
                 .map(link -> owners.findById(link.getBeneficialOwnerId()).orElse(null))
                 .filter(Objects::nonNull)
                 .map(this::toDto)

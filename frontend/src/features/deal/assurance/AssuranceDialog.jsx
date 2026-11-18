@@ -11,6 +11,7 @@ import { OptionPill } from '../../../components/OptionPill.jsx';
 import { useToast } from '../../../components/ToastProvider.jsx';
 import { tokens, fonts } from '../../../theme/theme.js';
 import { formatDateTimeNumeric } from '../../../utils/formatters.js';
+import { dealName } from '../../../utils/dealName.js';
 
 /*
  * Compliance's assurance verdict on a signed-off deal version: the dialog that records it, the
@@ -21,10 +22,13 @@ import { formatDateTimeNumeric } from '../../../utils/formatters.js';
 /** A well background: a light grey in light mode, a lifted shade in dark. Used by the issues dialog. */
 const VERSIONS_BG = `color-mix(in srgb, ${tokens.muted} 8%, ${tokens.tile})`;
 
-/** How each verdict reads, and in what colour. Null is "not reviewed". */
-const ASSURANCE_META = {
-  ASSURED:         { label: 'Assured',         color: 'success' },
-  ACTION_REQUIRED: { label: 'Action required', color: 'error' },
+/**
+ * How each verdict reads, and in what colour. Null is "not reviewed". Exported for the deal page's
+ * Update Assurance button, which wears the current verdict's colours.
+ */
+export const ASSURANCE_META = {
+  ASSURED:         { label: 'Passed',          color: 'success', wash: 'var(--cl-ok-wash)',  ink: tokens.approved },
+  ACTION_REQUIRED: { label: 'Action required', color: 'error',   wash: 'var(--cl-err-wash)', ink: tokens.rejected },
 };
 
 /**
@@ -63,8 +67,8 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
       qc.invalidateQueries({ queryKey: ['dealVersions', deal.id] });
       showToast({
         severity: 'success',
-        message: `v${v.versionNo} of ${deal.reference} marked `
-          + (result === 'ASSURED' ? 'assured' : 'action required'),
+        message: `v${v.versionNo} of ${dealName(deal.propertyAddress)} marked `
+          + (result === 'ASSURED' ? 'passed' : 'action required'),
       });
       onClose();
     },
@@ -87,10 +91,11 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
         <Stack direction="row" spacing={1} alignItems="center">
           <Box component="span">Update assurance</Box>
           <VersionChip no={v.versionNo} />
+          {/* Where the version stands now — the saved verdict, not the pill being picked below. */}
+          {v.assuranceStatus && <AssuranceChip status={v.assuranceStatus} />}
         </Stack>
         <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>
-          {deal.propertyAddress ?? deal.reference}
-          {deal.propertyAddress ? ` · ${deal.reference}` : ''}
+          {dealName(deal.propertyAddress)}
         </Typography>
       </DialogTitle>
 
@@ -121,7 +126,7 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
         {result === 'ASSURED' && (
           <Typography variant="body2" sx={{ color: tokens.muted, mt: 2.5 }}>
             {v.issues?.length
-              ? 'Marking it assured removes the issues recorded against this version.'
+              ? 'Marking it passed removes the issues recorded against this version.'
               : 'This signed-off version holds up on review. No note is needed.'}
           </Typography>
         )}
@@ -172,7 +177,6 @@ export function AssuranceDialog({ open, deal, version: v, onClose }) {
         <Button onClick={onClose} disabled={mut.isPending}>Cancel</Button>
         <Button
           variant="contained"
-          color={result === 'ACTION_REQUIRED' ? 'error' : 'primary'}
           disabled={!ready || mut.isPending}
           onClick={() => mut.mutate()}
         >
@@ -194,8 +198,7 @@ export function IssuesDialog({ open, deal, version: v, onClose }) {
           <AssuranceChip status={v.assuranceStatus} />
         </Stack>
         <Typography sx={{ fontSize: '0.85rem', color: tokens.muted, mt: 0.5 }}>
-          {deal.propertyAddress ?? deal.reference}
-          {deal.propertyAddress ? ` · ${deal.reference}` : ''}
+          {dealName(deal.propertyAddress)}
         </Typography>
       </DialogTitle>
       <DialogContent>
@@ -290,9 +293,24 @@ export function VersionChip({ no, onClick }) {
   return onClick ? <Tooltip title={`Open v${no}`}>{chip}</Tooltip> : chip;
 }
 
-export function AssuranceChip({ status }) {
+/** The verdict as a chip. With `onClick` it becomes a button — the register opens the issues. */
+export function AssuranceChip({ status, onClick, title }) {
   const meta = ASSURANCE_META[status];
-  return meta
-    ? <Chip size="small" label={meta.label} color={meta.color} />
-    : <Chip size="small" label="Not reviewed" variant="outlined" sx={{ color: tokens.muted }} />;
+  if (!meta) return <Chip size="small" label="Not reviewed" variant="outlined" sx={{ color: tokens.muted }} />;
+  // Clickable, MUI floods the chip with the dark palette shade on hover. A slightly deeper wash is
+  // enough to say "this opens something" without the chip changing colour.
+  const hover = `color-mix(in srgb, ${meta.wash} 88%, ${meta.ink})`;
+  const chip = (
+    <Chip
+      size="small"
+      label={meta.label}
+      color={meta.color}
+      onClick={onClick}
+      sx={onClick ? {
+        '&:hover, &.Mui-focusVisible': { backgroundColor: hover },
+        '&:active': { boxShadow: 'none' },
+      } : undefined}
+    />
+  );
+  return onClick && title ? <Tooltip title={title}>{chip}</Tooltip> : chip;
 }

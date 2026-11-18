@@ -189,13 +189,27 @@ export const NOMINEE_OPTIONS = [
 // name the same thing, so they must not drift into two lists.
 export const ID_DOCUMENT_TYPES = CATALOGUE_ID_TYPES;
 
-export async function getTree(dealId) {
-  const { data } = await apiClient.get(`/deals/${dealId}/ownership`);
+/**
+ * Which party a structure describes. The vendor's is the deal's compliance subject; the purchaser's
+ * is recorded once the deal has closed as sold, and feeds none of risk, readiness or versions.
+ *
+ * Keep in sync with `nz.amldock.ownership.StructureSide`.
+ */
+export const STRUCTURE_SIDES = { VENDOR: 'VENDOR', PURCHASER: 'PURCHASER' };
+
+/**
+ * The endpoints that name a structure rather than a node take its side as a query param; the
+ * server reads an absent one as the vendor's. Node and edge endpoints take the side from the node.
+ */
+const sideParams = (side) => ({ params: { side: side ?? STRUCTURE_SIDES.VENDOR } });
+
+export async function getTree(dealId, side) {
+  const { data } = await apiClient.get(`/deals/${dealId}/ownership`, sideParams(side));
   return data;
 }
 
-export async function createNode(dealId, payload) {
-  const { data } = await apiClient.post(`/deals/${dealId}/ownership/nodes`, payload);
+export async function createNode(dealId, payload, side) {
+  const { data } = await apiClient.post(`/deals/${dealId}/ownership/nodes`, payload, sideParams(side));
   return data;
 }
 
@@ -248,10 +262,10 @@ export async function deleteEdge(dealId, edgeId) {
  * position. `childNodeIds` must name the whole sibling group in its new order — the server
  * writes a dense 0..n-1 over all of them and refuses a partial list. Returns the whole tree.
  */
-export async function reorder(dealId, { parentNodeId = null, childNodeIds }) {
+export async function reorder(dealId, { parentNodeId = null, childNodeIds }, side) {
   const { data } = await apiClient.post(`/deals/${dealId}/ownership/order`, {
     parentNodeId, childNodeIds,
-  });
+  }, sideParams(side));
   return data;
 }
 

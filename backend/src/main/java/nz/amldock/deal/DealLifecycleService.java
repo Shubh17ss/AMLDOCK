@@ -3,6 +3,7 @@ package nz.amldock.deal;
 import nz.amldock.common.exception.BadRequestException;
 import nz.amldock.common.exception.ForbiddenException;
 import nz.amldock.deal.access.DealUserRepository;
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.user.Role;
 import nz.amldock.user.UserPrincipal;
 import org.springframework.stereotype.Service;
@@ -36,8 +37,12 @@ public class DealLifecycleService {
      */
     private final DealUserRepository dealUsers;
 
-    public DealLifecycleService(DealUserRepository dealUsers) {
+    /** A deactivated branch's deals are read-only to everyone; see {@link #assertBranchWritable}. */
+    private final ScopeStatusGuard scope;
+
+    public DealLifecycleService(DealUserRepository dealUsers, ScopeStatusGuard scope) {
         this.dealUsers = dealUsers;
+        this.scope = scope;
     }
 
     /** Who a rule admits. Both are additionally scoped to the deal's own firm. */
@@ -183,6 +188,32 @@ public class DealLifecycleService {
     }
 
     /**
+     * Whether the purchaser's structure may be changed on a deal in this state.
+     *
+     * <p>Only once the deal has closed as sold, and only while it stays there. The purchaser is not
+     * part of the compliance sign-off — it never feeds risk or readiness — so CLOSED, which locks
+     * the vendor's side, is exactly when this one opens. A deal closed as unsold has no purchaser
+     * to record, and one taken back to VERIFIED keeps what was recorded but cannot change it until
+     * it is closed as sold again.
+     */
+    public static boolean canEditPurchaser(DealStatus status, Boolean propertySold) {
+        return status == DealStatus.CLOSED && Boolean.TRUE.equals(propertySold);
+    }
+
+    /**
+     * The write gate for the purchaser's structure and its documents: the same people as
+     * {@link #assertEditable}, with {@link #canEditPurchaser} in place of the content-status rule.
+     */
+    public void assertPurchaserEditable(Deal deal, UserPrincipal actor, Long dealFirmId) {
+        assertActor(deal, actor, dealFirmId, Who.EDITOR);
+        if (!canEditPurchaser(deal.getStatus(), deal.getPropertySold())) {
+            throw new BadRequestException("The purchaser can only be recorded on a deal closed as sold"
+                    + " — this one is " + deal.getStatus()
+                    + (deal.getStatus() == DealStatus.CLOSED ? " as not sold" : "") + ".");
+        }
+    }
+
+    /**
      * Whether this role may add documents to a deal in this status.
      *
      * <p>Wider than {@link #canEditContent} on purpose. The broker (author or granted agent) adds
@@ -212,6 +243,7 @@ public class DealLifecycleService {
         if (actor.role() == Role.ROOT || actor.role() == Role.AUDIT) {
             throw new ForbiddenException("Only staff of the deal's firm may add documents");
         }
+        assertBranchWritable(deal);
         if (!canUploadDocuments(deal.getStatus(), actor.role())) {
             String allowed = actor.role() == Role.AGENT || actor.role() == Role.AGENT_PA
                     ? "[" + EDITABLE_STATUS + "]"
@@ -236,6 +268,7 @@ public class DealLifecycleService {
             throw new ForbiddenException("Only senior managers may override a deal's status");
         }
         assertSameFirm(actor, dealFirmId);
+        assertBranchWritable(deal);
         if (target == null) {
             throw new BadRequestException("Target status is required");
         }
@@ -265,6 +298,15 @@ public class DealLifecycleService {
      */
     public void assertReviewer(Deal deal, UserPrincipal actor, Long dealFirmId) {
         assertActor(deal, actor, dealFirmId, Who.REVIEWER);
+    }
+
+    /**
+     * Refuses any write to a deal whose branch is deactivated, whoever asks. Every gate in this
+     * class that admits a write runs it; a service whose write is gated on read scope alone (a
+     * comment, a CDD delay, a delete) calls it itself.
+     */
+    public void assertBranchWritable(Deal deal) {
+        scope.assertBranchWritable(deal.getFirmBranchId());
     }
 
     /* ---------- read scope — unchanged ---------- */
@@ -343,6 +385,7 @@ public class DealLifecycleService {
     private void assertActor(Deal deal, UserPrincipal actor, Long dealFirmId, Who who) {
         if (isDecider(actor.role())) {
             assertSameFirm(actor, dealFirmId);
+            assertBranchWritable(deal);
             return;
         }
         if (who == Who.EDITOR && isDealAuthor(actor.role())) {
@@ -354,6 +397,7 @@ public class DealLifecycleService {
             }
             // Same firm binding as assertCanRead (NV-07).
             assertSameFirm(actor, dealFirmId);
+            assertBranchWritable(deal);
             return;
         }
         throw new ForbiddenException(who == Who.EDITOR

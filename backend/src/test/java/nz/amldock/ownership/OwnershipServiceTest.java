@@ -108,7 +108,8 @@ class OwnershipServiceTest {
 
         lenient().when(deals.findById(DEAL_ID)).thenReturn(Optional.of(deal));
         lenient().when(branches.findById(BRANCH_ID)).thenReturn(Optional.of(branch));
-        lenient().when(structures.findByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        lenient().when(structures.findByDealIdAndSide(DEAL_ID, StructureSide.VENDOR)).thenReturn(Optional.of(structure));
         lenient().when(structures.findById(STRUCTURE_ID)).thenReturn(Optional.of(structure));
         lenient().when(nodes.save(any())).thenAnswer(i -> {
             OwnershipNode n = i.getArgument(0);
@@ -961,6 +962,104 @@ class OwnershipServiceTest {
         verify(lifecycle, never()).assertEditable(any(), any(), any());
         verify(lifecycle).assertCanRead(any(), any(), any());
         verify(risk).recomputeFor(DEAL_ID);
+    }
+
+    /* ---------- the purchaser's side ---------- */
+
+    static final Long PURCHASER_STRUCTURE_ID = 21L;
+
+    /** The purchaser's structure, already on the deal. */
+    private OwnershipStructure stubPurchaserStructure() {
+        OwnershipStructure p = new OwnershipStructure();
+        ReflectionTestUtils.setField(p, "id", PURCHASER_STRUCTURE_ID);
+        p.setDealId(DEAL_ID);
+        p.setSide(StructureSide.PURCHASER);
+        lenient().when(structures.findByDealIdAndSide(DEAL_ID, StructureSide.PURCHASER)).thenReturn(Optional.of(p));
+        lenient().when(structures.findById(PURCHASER_STRUCTURE_ID)).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    private void closeDeal(DealStatus status, Boolean sold) {
+        // The real rules, not the mock's silence. Lenient: not every case reaches both.
+        lenient().doCallRealMethod().when(lifecycle).assertEditable(any(), any(), any());
+        lenient().doCallRealMethod().when(lifecycle).assertPurchaserEditable(any(), any(), any());
+        deal.setStatus(status);
+        deal.setPropertySold(sold);
+    }
+
+    @Test
+    void thePurchaserIsRecordedOnADealClosedAsSold() {
+        closeDeal(DealStatus.CLOSED, true);
+        when(structures.findByDealIdAndSide(DEAL_ID, StructureSide.PURCHASER)).thenReturn(Optional.empty());
+        when(structures.save(any())).thenAnswer(i -> {
+            OwnershipStructure s = i.getArgument(0);
+            ReflectionTestUtils.setField(s, "id", PURCHASER_STRUCTURE_ID);
+            return s;
+        });
+
+        NodeDto created = service.createNode(DEAL_ID, StructureSide.PURCHASER,
+                createRequest(NodeType.PRIVATE_COMPANY, "Buyer Holdings"));
+
+        ArgumentCaptor<OwnershipStructure> made = ArgumentCaptor.forClass(OwnershipStructure.class);
+        verify(structures).save(made.capture());
+        assertThat(made.getValue().getSide()).isEqualTo(StructureSide.PURCHASER);
+        assertThat(created.ownershipStructureId()).isEqualTo(PURCHASER_STRUCTURE_ID);
+        // The purchaser never feeds the deal's rating.
+        verify(risk, never()).recomputeFor(any());
+    }
+
+    @Test
+    void thePurchaserIsShutUnlessTheDealIsClosedAsSold() {
+        stubPurchaserStructure();
+        record State(DealStatus status, Boolean sold) {}
+        for (State st : List.of(new State(DealStatus.CLOSED, false), new State(DealStatus.CLOSED, null),
+                new State(DealStatus.VERIFIED, true), new State(DealStatus.REVIEW, null))) {
+            closeDeal(st.status(), st.sold());
+            assertThatThrownBy(() -> service.createNode(DEAL_ID, StructureSide.PURCHASER,
+                    createRequest(NodeType.INDIVIDUAL, "Bea Buyer")))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("closed as sold");
+        }
+        verify(nodes, never()).save(any());
+    }
+
+    @Test
+    void aPurchaserOwnerIsWorkedOnAClosedDeal() {
+        closeDeal(DealStatus.CLOSED, true);
+        stubPurchaserStructure();
+        OwnershipNode bea = node(6L, NodeType.INDIVIDUAL, "Bea Buyer");
+        bea.setOwnershipStructureId(PURCHASER_STRUCTURE_ID);
+        stubNodes(bea);
+
+        service.verifyNode(DEAL_ID, 6L, new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null));
+
+        assertThat(bea.getVerificationStatus()).isEqualTo(NodeVerificationStatus.VERIFIED);
+    }
+
+    @Test
+    void theVendorStaysLockedWhileThePurchaserIsOpen() {
+        closeDeal(DealStatus.CLOSED, true);
+        stubPurchaserStructure();
+        OwnershipNode jane = node(4L, NodeType.INDIVIDUAL, "Jane Smith");
+        stubNodes(jane);
+
+        // The deal is open on the purchaser's side, so the first gate lets the request in; the
+        // node is the vendor's, and the vendor's rule turns it away.
+        assertLocked(() -> service.verifyNode(DEAL_ID, 4L,
+                new VerifyNodeRequest(NodeVerificationStatus.VERIFIED, null)));
+        assertLocked(() -> service.createNode(DEAL_ID, createRequest(NodeType.INDIVIDUAL, "Someone")));
+        assertThat(jane.getVerificationStatus()).isNotEqualTo(NodeVerificationStatus.VERIFIED);
+    }
+
+    @Test
+    void aRequestForOneSideCannotReachTheOthersOwners() {
+        closeDeal(DealStatus.CLOSED, true);
+        stubPurchaserStructure();
+        stubNodes(node(4L, NodeType.PRIVATE_COMPANY, "Vendor Co"));
+
+        assertThatThrownBy(() -> service.setRoot(DEAL_ID, StructureSide.PURCHASER, 4L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("purchaser's structure");
     }
 
     private static void assertLocked(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {

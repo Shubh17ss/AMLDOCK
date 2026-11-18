@@ -21,8 +21,11 @@ import LeaderboardRoundedIcon from '@mui/icons-material/LeaderboardRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import HistoryIcon from '@mui/icons-material/History';
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
+import QuestionAnswerRoundedIcon from '@mui/icons-material/QuestionAnswerRounded';
+import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import {
   canAccessAllModules, FINANCE_MODULE_IDS, AUDIT_LOG_ROLES, NOTIFICATION_ADMIN_ROLES, ASSURANCE_ROLES,
+  ENTITY_ADMIN_ROLES, REPORTING_ENTITY_ROLES, QUERY_ADMIN_ROLES,
 } from '../auth/roles.js';
 
 // ── Compliance module registry ──────────────────────────────────────────────
@@ -41,6 +44,8 @@ export const BENEFICIAL_OWNERS_PATH = '/cdd/beneficial-owners';
 export const OVERSEAS_RESIDENTS_PATH = '/cdd/overseas-residents';
 export const CDD_EXCEPTIONS_PATH = '/cdd/cdd-exceptions';
 export const CDD_ASSURANCE_PATH = '/cdd/assurance';
+export const WORKSPACE_PATH = '/workspace';
+export const QUERIES_PATH = '/workspace/queries';
 export const INTL_FUND_TRANSACTIONS_PATH = '/reporting/international-fund-transaction-register';
 export const SUSPICIOUS_ACTIVITIES_PATH = '/reporting/suspicious-activities';
 export const STAFF_TRAINING_PATH = '/aml-training/staff-training';
@@ -114,7 +119,11 @@ export const MODULE_GROUPS = [
       { id: 'users',              label: 'Users',              to: '/settings/users',              icon: <PeopleIcon />,
         blurb: 'Invite staff, set roles and manage access to the workspace.' },
       { id: 'reporting-entities', label: 'Reporting Entities', to: '/settings/reporting-entities', icon: <BusinessIcon />,
-        blurb: 'Manage reporting entities, their branches and firm details.' },
+        roles: ENTITY_ADMIN_ROLES,
+        blurb: 'Manage reporting entities, their branches and reporting entity details.' },
+      { id: 'reporting-entity', label: 'Reporting Entity', to: '/reporting-entity', icon: <BusinessIcon />,
+        roles: REPORTING_ENTITY_ROLES,
+        blurb: "Your reporting entity's details and branches." },
       // `roles` narrows an item within an otherwise-visible section. The trail is the record of
       // who changed what, so it stays with the people accountable for it — not the auditor,
       // whose own reads would otherwise be the thing being audited.
@@ -124,6 +133,17 @@ export const MODULE_GROUPS = [
       { id: 'audit-log', label: 'Audit Log', to: AUDIT_LOG_PATH, icon: <HistoryIcon />,
         roles: AUDIT_LOG_ROLES,
         blurb: 'Every recorded action across the workspace, with who did it and when.' },
+    ],
+  },
+  {
+    // The AMLDOCK admin team's own work, not a compliance artefact. ROOT only: every item is
+    // role-narrowed, and visibleGroupsFor drops a section left with nothing in it.
+    group: 'Workspace', slug: 'workspace', to: WORKSPACE_PATH, title: 'Workspace',
+    icon: <ForumRoundedIcon />, reviewable: false,
+    items: [
+      { id: 'queries', label: 'Queries', to: QUERIES_PATH, icon: <QuestionAnswerRoundedIcon />,
+        roles: QUERY_ADMIN_ROLES,
+        blurb: "Change requests from reporting entities for details only you can edit." },
     ],
   },
 ];
@@ -160,7 +180,8 @@ export function visibleGroupsFor(role) {
   // Item-level `roles` narrows within a visible section; applied to every branch below.
   const allowed = (g) => ({ ...g, items: g.items.filter((i) => !i.roles || i.roles.includes(role)) });
 
-  if (canAccessAllModules(role)) return MODULE_GROUPS.map(allowed);
+  // A section whose items are all role-narrowed away is not shown as an empty heading.
+  if (canAccessAllModules(role)) return MODULE_GROUPS.map(allowed).filter((g) => g.items.length > 0);
   if (role === 'FINANCE') {
     return MODULE_GROUPS
       .filter((g) => g.slug === 'reporting')
@@ -202,6 +223,8 @@ export const IMPLEMENTED_PATHS = [
   '/reporting/annual-report',
   '/settings/users',
   '/settings/reporting-entities',
+  '/reporting-entity',
+  QUERIES_PATH,
   AUDIT_LOG_PATH,
   INTL_FUND_TRANSACTIONS_PATH,
   SUSPICIOUS_ACTIVITIES_PATH,

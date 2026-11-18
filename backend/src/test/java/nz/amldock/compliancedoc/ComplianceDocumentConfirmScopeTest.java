@@ -52,7 +52,7 @@ class ComplianceDocumentConfirmScopeTest {
 
     @BeforeEach
     void setUp() {
-        service = new ComplianceDocumentService(docs, reviews, users, branches, storage, audit,
+        service = new ComplianceDocumentService(docs, reviews, users, branches, org.mockito.Mockito.mock(nz.amldock.firm.ScopeStatusGuard.class), storage, audit,
                 26214400L, 5L, 5L);
     }
 

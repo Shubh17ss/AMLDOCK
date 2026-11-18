@@ -1,5 +1,6 @@
 package nz.amldock.deal;
 
+import nz.amldock.firm.ScopeStatusGuard;
 import nz.amldock.beneficialowner.BeneficialOwnerService;
 import nz.amldock.client.ClientRepository;
 import nz.amldock.common.exception.BadRequestException;
@@ -69,11 +70,12 @@ class DealVerifyReadinessGateTest {
     void setUp() {
         service = new DealService(deals, mock(PropertyRepository.class), mock(ClientRepository.class),
                 branches, mock(RealEstateFirmRepository.class), mock(UserRepository.class),
-                new DealLifecycleService(mock(DealUserRepository.class)), dealNotes,
+                new DealLifecycleService(mock(DealUserRepository.class), mock(ScopeStatusGuard.class)), dealNotes,
                 mock(BeneficialOwnerService.class), mock(DealRiskService.class),
                 mock(nz.amldock.ownership.OwnershipService.class), audit, notifier, versions,
                 mock(nz.amldock.deal.sale.DealSaleUnitRepository.class), readiness,
-                mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class));
+                mock(nz.amldock.deal.monitoring.TransactionMonitoringService.class),
+                mock(nz.amldock.document.storage.StoredFileReaper.class));
 
         FirmBranch branch = new FirmBranch();
         branch.setRealEstateFirmId(FIRM_ID);
@@ -172,15 +174,17 @@ class DealVerifyReadinessGateTest {
     }
 
     @Test
-    void aVerifiedOrClosedDealTakesNoMoreNotes() {
+    void aVerifiedOrClosedDealStillTakesNotes() {
+        // Notes are open in every status; a signed-off version keeps only the notes up to its
+        // sign-off, so a later note never becomes part of what was signed.
         asUser(complianceOfficer);
         for (DealStatus finished : new DealStatus[] {DealStatus.VERIFIED, DealStatus.CLOSED}) {
             deal.setStatus(finished);
 
-            assertThatThrownBy(() -> service.comment(DEAL_ID, "One more thing"))
-                    .isInstanceOf(BadRequestException.class);
+            service.comment(DEAL_ID, "One more thing");
         }
-        verify(dealNotes, never()).appendComment(any(), any(), any());
+        verify(dealNotes, org.mockito.Mockito.times(2))
+                .appendComment(deal, complianceOfficer, "One more thing");
     }
 
     private void asUser(UserPrincipal who) {

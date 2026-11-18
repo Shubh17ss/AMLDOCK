@@ -6,8 +6,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import nz.amldock.auth.dto.AuthResponse;
 import nz.amldock.auth.dto.LoginRequest;
+import nz.amldock.auth.dto.MobileAuthResponse;
+import nz.amldock.auth.dto.MobileLogoutRequest;
+import nz.amldock.auth.dto.MobileRefreshRequest;
 import nz.amldock.auth.dto.OtpRequestRequest;
 import nz.amldock.auth.dto.OtpVerifyRequest;
+import nz.amldock.auth.dto.SwitchEntityRequest;
 import nz.amldock.user.UserPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -68,9 +72,47 @@ public class AuthController {
         auth.logout(raw, userId, response);
     }
 
+    /**
+     * Moves this session into another reporting entity the caller belongs to. Re-issues the
+     * cookies, so everything after it is authorised as a member of that entity.
+     */
+    @PostMapping("/switch-entity")
+    public AuthResponse switchEntity(@AuthenticationPrincipal UserPrincipal principal,
+                                     @Valid @RequestBody SwitchEntityRequest req,
+                                     HttpServletRequest request, HttpServletResponse response) {
+        return auth.switchEntity(principal, req.membershipId(),
+                readCookie(request, AuthService.REFRESH_COOKIE), response);
+    }
+
+    /* ---------- native mobile app: tokens in the body, no cookies ---------- */
+
+    @PostMapping("/mobile/switch-entity")
+    public MobileAuthResponse switchEntityMobile(@AuthenticationPrincipal UserPrincipal principal,
+                                                 @Valid @RequestBody SwitchEntityRequest req) {
+        return auth.switchEntityMobile(principal, req.membershipId(), req.refreshToken());
+    }
+
+    @PostMapping("/mobile/otp/verify")
+    public MobileAuthResponse verifyOtpMobile(@Valid @RequestBody OtpVerifyRequest req) {
+        return auth.verifyLoginOtpMobile(req.email(), req.code());
+    }
+
+    @PostMapping("/mobile/refresh")
+    public MobileAuthResponse refreshMobile(@Valid @RequestBody MobileRefreshRequest req) {
+        return auth.refreshMobile(req.refreshToken());
+    }
+
+    @PostMapping("/mobile/logout")
+    public ResponseEntity<Void> logoutMobile(@AuthenticationPrincipal UserPrincipal principal,
+                                             @Valid @RequestBody(required = false) MobileLogoutRequest req) {
+        Long userId = principal == null ? null : principal.id();
+        auth.logoutMobile(req == null ? null : req.refreshToken(), userId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/me")
     public AuthResponse me(@AuthenticationPrincipal UserPrincipal principal) {
-        return auth.me(principal.id());
+        return auth.me(principal);
     }
 
     private String readCookie(HttpServletRequest req, String name) {

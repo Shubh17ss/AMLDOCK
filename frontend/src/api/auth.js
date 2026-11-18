@@ -24,6 +24,15 @@ export async function logout() {
   await apiClient.post('/auth/logout');
 }
 
+/**
+ * Moves this browser's session into another reporting entity the user belongs to. The server
+ * re-issues the cookies, so every request after this is authorised as a member of that entity.
+ */
+export async function switchEntity(membershipId) {
+  const { data } = await apiClient.post('/auth/switch-entity', { membershipId });
+  return data;
+}
+
 export async function fetchMe() {
   const { data } = await apiClient.get('/auth/me');
   return data;

@@ -1,12 +1,26 @@
-import { Box, MenuItem, Select, Typography } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { Box, ButtonBase, Typography } from '@mui/material';
+import BusinessRoundedIcon from '@mui/icons-material/BusinessRounded';
+import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
+import UnfoldMoreRoundedIcon from '@mui/icons-material/UnfoldMoreRounded';
+import { useAuth } from '../../auth/AuthContext.jsx';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
-import { tokens, fonts } from '../../theme/theme.js';
+import { dropEntityQueries, useScopeSwitch } from '../../dashboard/useScopeSwitch.js';
+import { ScopePickerDialog } from './ScopePickerDialog.jsx';
+import { ScopeSwitchOverlay } from './ScopeSwitchOverlay.jsx';
+import { DASHBOARD_PATH } from '../../navigation/moduleRegistry.jsx';
+import { tokens } from '../../theme/theme.js';
 
 /**
- * Firm + branch dropdowns that drive the dashboard scope. Role-aware:
- *   ROOT / AUDIT → picks any firm and branch.
- *   Firm-level   → firm pinned, picks a branch.
- *   Branch-level → firm and branch pinned to their own.
+ * The scope the app works in, as one card: an icon, what is selected, and — where there is a
+ * choice — a chevron that opens ScopePickerDialog. Role-aware:
+ *   ROOT / AUDIT → entity and branch; picks any of either.
+ *   Firm-level in several entities → entity and branch; another entity is picked by switching
+ *                  the session into it (AuthContext.switchEntity), then a branch inside it.
+ *   Firm-level   → branch only; their entity is their account's and is not shown.
+ *   Branch-level → branch only, pinned, so the card does not open anything.
  *
  * There is no "All entities" / "All branches": a single firm and a single branch are a
  * precondition for the app, not a filter on it. ScopeRequiredDialog collects them when they are
@@ -16,95 +30,110 @@ import { tokens, fonts } from '../../theme/theme.js';
  * live in DashboardScopeProvider, because the blocking dialog needs them to have run whether or
  * not this sidebar component ever mounted.
  *
- * `stacked` lays the two selects out vertically at full width for the sidebar.
- */
-export function ScopeSelector({ stacked = false }) {
-  const {
-    firm, branch, firmOptions, activeBranches, selectFirm, selectBranch,
-    isRoot, branchSelectable, currentFirmId,
-  } = useDashboardScope();
-
-  return (
-    <Box sx={{
-      display: 'flex', gap: 1.25,
-      flexDirection: stacked ? 'column' : 'row',
-      flexWrap: stacked ? 'nowrap' : 'wrap',
-    }}>
-      <ScopeSelect
-        label="Entity"
-        value={firm?.id ?? ''}
-        display={firm?.name ?? 'Select entity'}
-        unset={!firm?.id}
-        onChange={(e) => selectFirm(e.target.value)}
-        disabled={!isRoot}
-        fullWidth={stacked}
-      >
-        {firmOptions.map((f) => <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>)}
-      </ScopeSelect>
-
-      <ScopeSelect
-        label="Branch"
-        value={branch?.id ?? ''}
-        display={branch?.name ?? 'Select branch'}
-        unset={!branch?.id}
-        onChange={(e) => selectBranch(e.target.value)}
-        disabled={!branchSelectable || !currentFirmId}
-        fullWidth={stacked}
-      >
-        {activeBranches.map((b) => <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>)}
-      </ScopeSelect>
-    </Box>
-  );
-}
-
-/**
- * A frosted select with an inline ledger label. `renderValue` always paints
- * "LABEL · value" itself — no floating InputLabel, so the empty value can't
- * collide with placeholder text (the old label/placeholder overlap glitch).
+ * `stacked` makes the card full width, for the sidebar and the broker's mobile home.
  *
- * `unset` greys the value so an unchosen scope reads as an empty field rather than as a setting.
+ * A switch is confirmed with the server first (useScopeSwitch). Once applied, the app leaves for
+ * the dashboard and drops every deal-keyed query: a deal, its versions or its draft from the old
+ * branch must not stay on screen under the new one. `replace`, so Back from the dashboard does not
+ * land on the old branch's deal either — and if history still reaches it, useDealScopeGuard stops it.
  */
-function ScopeSelect({ label, value, display, unset, onChange, disabled, fullWidth, children }) {
+
+export function ScopeSelector({ stacked = false }) {
+  const { firm, branch, isRoot, branchSelectable, multiEntity, selectScope } = useDashboardScope();
+  const { switchEntity } = useAuth();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const { switching, switchTo } = useScopeSwitch({
+    onSwitched: () => {
+      navigate(DASHBOARD_PATH, { replace: true });
+      dropEntityQueries(qc);
+    },
+  });
+
+  // Moving to another entity is a server round trip, not a state change: the session is
+  // re-issued for it, and only then does the scope follow. The branch is left unchosen, so
+  // ScopeRequiredDialog asks for one in the new entity — the old entity's branches mean nothing there.
+  const [entitySwitch, setEntitySwitch] = useState(null);   // { phase, branchName, error }
+  const alive = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+  const switchToEntity = async (m) => {
+    setEntitySwitch({ phase: 'switching', branchName: m.realEstateFirmName });
+    try {
+      await switchEntity(m.id);
+      selectScope({ id: m.realEstateFirmId, name: m.realEstateFirmName, country: m.country }, null);
+      navigate(DASHBOARD_PATH, { replace: true });
+      if (alive.current) setEntitySwitch({ phase: 'done', branchName: m.realEstateFirmName });
+    } catch (e) {
+      if (alive.current) {
+        setEntitySwitch({
+          phase: 'failed',
+          branchName: m.realEstateFirmName,
+          error: e?.response?.data?.message || 'The server could not be reached. Try again.',
+        });
+      }
+    }
+    setTimeout(() => { if (alive.current) setEntitySwitch(null); }, 1200);
+  };
+
+  const showsEntity = isRoot || multiEntity;
+  const canChange = isRoot || branchSelectable;
+  const Icon = showsEntity ? BusinessRoundedIcon : StorefrontRoundedIcon;
+  const primary = showsEntity ? (firm?.name ?? 'Choose reporting entity') : (branch?.name ?? 'Choose branch');
+  const secondary = showsEntity ? (branch?.name ?? 'Choose branch') : 'Branch';
+  const unset = showsEntity ? !firm : !branch;
+  const overlay = entitySwitch ?? switching;
+
   return (
-    <Select
-      size="small"
-      value={value}
-      onChange={onChange}
-      disabled={disabled}
-      fullWidth={fullWidth}
-      displayEmpty
-      inputProps={{ 'aria-label': `${label} filter` }}
-      renderValue={() => (
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, minWidth: 0 }}>
-          <Typography component="span" sx={{
-            fontFamily: fonts.mono, fontSize: '0.6rem', fontWeight: 500,
-            letterSpacing: '0.13em', textTransform: 'uppercase',
-            color: tokens.muted, flexShrink: 0,
+    <>
+      <ButtonBase
+        onClick={canChange ? () => setOpen(true) : undefined}
+        disabled={!canChange}
+        aria-label={canChange ? `${showsEntity ? 'Reporting entity and branch' : 'Branch'}: ${primary}. Change` : undefined}
+        sx={{
+          width: stacked ? '100%' : 'auto',
+          minWidth: stacked ? 0 : 220,
+          display: 'flex', alignItems: 'center', gap: 1.25,
+          px: 1.25, py: 1,
+          textAlign: 'left',
+          borderRadius: '14px',
+          border: `1px solid ${tokens.hairline2}`,
+          backgroundColor: tokens.tile,
+          transition: 'border-color 120ms ease',
+          '&:hover': canChange ? { borderColor: tokens.ink } : {},
+          '&.Mui-focusVisible': { outline: `2px solid ${tokens.blue}`, outlineOffset: 2 },
+          '&.Mui-disabled': { cursor: 'default' },
+        }}
+      >
+        <Box sx={{
+          width: 32, height: 32, flexShrink: 0, borderRadius: '9px',
+          display: 'grid', placeItems: 'center',
+          backgroundColor: tokens.blueWash, color: tokens.blue,
+        }}>
+          <Icon sx={{ fontSize: 18 }} />
+        </Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography noWrap sx={{
+            fontSize: '0.84rem', fontWeight: 700, lineHeight: 1.25,
+            color: unset ? tokens.muted : tokens.ink,
           }}>
-            {label}
+            {primary}
           </Typography>
-          <Typography component="span" noWrap sx={{
-            fontSize: '0.83rem', fontWeight: 600,
-            color: (disabled || unset) ? tokens.muted : tokens.ink,
-          }}>
-            {display}
+          <Typography noWrap sx={{ fontSize: '0.74rem', lineHeight: 1.3, color: tokens.muted }}>
+            {secondary}
           </Typography>
         </Box>
+        {canChange && <UnfoldMoreRoundedIcon sx={{ fontSize: 18, color: tokens.muted, flexShrink: 0 }} />}
+      </ButtonBase>
+      {canChange && (
+        <ScopePickerDialog open={open} onClose={() => setOpen(false)} onPick={switchTo}
+                           onPickEntity={switchToEntity} />
       )}
-      MenuProps={{ PaperProps: { sx: { maxHeight: 320 } } }}
-      sx={{
-        minWidth: 168,
-        borderRadius: '11px',
-        backgroundColor: tokens.scopeBg,
-        backdropFilter: 'blur(10px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(10px) saturate(160%)',
-        boxShadow: '0 1px 2px rgba(16,24,40,0.05)',
-        '& .MuiOutlinedInput-notchedOutline': { borderColor: tokens.hairline },
-        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: tokens.hairline2 },
-        '&.Mui-disabled': { backgroundColor: tokens.scopeBgOff },
-      }}
-    >
-      {children}
-    </Select>
+      <ScopeSwitchOverlay phase={overlay?.phase ?? null} branchName={overlay?.branchName}
+                          error={overlay?.error} entity={Boolean(entitySwitch)} />
+    </>
   );
 }

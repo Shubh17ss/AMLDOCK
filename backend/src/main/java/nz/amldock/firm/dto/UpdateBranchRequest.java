@@ -10,6 +10,5 @@ public record UpdateBranchRequest(
         String phone,
         String email,
         String managerName,
-        String managerEmail,
-        Boolean active
+        String managerEmail
 ) {}

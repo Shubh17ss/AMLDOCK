@@ -35,7 +35,7 @@ export function AgentDashboard() {
     <Bento>
       <HeroTile
         index={0}
-        eyebrow="YOUR DESK · LIVE"
+        eyebrow="Your desk"
         value={open}
         label={open === 1 ? 'deal open' : 'deals open'}
         caption={`${verified} cleared to date · ${money.formatCompact(inFlight)} in flight`}
@@ -47,16 +47,16 @@ export function AgentDashboard() {
         }
       />
 
-      <StatTile index={1} eyebrow="WITH YOU" dot={dealStatusDot('NEW')} value={mine}
+      <StatTile index={1} eyebrow="With you" dot={dealStatusDot('NEW')} value={mine}
                 label="New or sent back" to={DEALS_PATH} />
-      <StatTile index={2} eyebrow="IN REVIEW" dot={dealStatusDot('REVIEW')} value={inReview}
+      <StatTile index={2} eyebrow="In review" dot={dealStatusDot('REVIEW')} value={inReview}
                 label="With compliance" color={inReview ? tokens.review : undefined} to={DEALS_PATH} />
-      <StatTile index={3} eyebrow={`${money.code} · IN FLIGHT`} cols={2} mono value={money.formatCompact(inFlight)}
+      <StatTile index={3} eyebrow={`In flight, ${money.code}`} cols={2} mono value={money.formatCompact(inFlight)}
                 label="Value awaiting clearance" />
 
       <ListTile
         index={4}
-        eyebrow="RECENT · UPDATED"
+        eyebrow="Recently updated"
         title="Your recent deals"
         to={DEALS_PATH}
         items={recent}
@@ -72,9 +72,9 @@ export function AgentDashboard() {
         ]}
       />
 
-      <StatTile index={6} eyebrow="VERIFIED" dot={dealStatusDot('VERIFIED')} value={verified}
+      <StatTile index={6} eyebrow="Verified" dot={dealStatusDot('VERIFIED')} value={verified}
                 label="Cleared" color={verified ? tokens.approved : undefined} to={DEALS_PATH} />
-      <StatTile index={7} eyebrow="ALL DEALS" value={summary.total} label="Total on your desk" to={DEALS_PATH} />
+      <StatTile index={7} eyebrow="All deals" value={summary.total} label="Total on your desk" to={DEALS_PATH} />
     </Bento>
   );
 }
