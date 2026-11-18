@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router-dom';
-import { Alert, Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, Box, Button, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -21,6 +21,13 @@ import { tokens } from '../theme/theme.js';
 // sentinel stripped before the request — see the params block below.
 const DEFAULT_STATUS = 'NEW';
 
+// Which side our client is on. '' is both, and is dropped from the request like ALL.
+const CLIENT_FILTERS = [
+  { value: '', label: 'All clients' },
+  { value: 'SALE', label: 'Vendor clients' },
+  { value: 'PURCHASE', label: 'Purchaser clients' },
+];
+
 /**
  * Deals — the deal list, one page at a time, filtered by status tabs and searched by property.
  *
@@ -38,17 +45,19 @@ export function DealsPage() {
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
   const [status, setStatus] = useState(DEFAULT_STATUS);
-  const paged = usePagedList({ resetOn: [status, firm?.id, branch?.id] });
+  const [transactionType, setTransactionType] = useState('');
+  const paged = usePagedList({ resetOn: [status, transactionType, firm?.id, branch?.id] });
   const query = paged.search;
 
   // The backend enforces role scope regardless; ROOT and firm-level reviewers get
   // real firm/branch filtering from these params.
   const params = {};
   if (status !== 'ALL') params.status = status;
+  if (transactionType) params.transactionType = transactionType;
   if (firm?.id) params.firmId = firm.id;
   if (branch?.id) params.branchId = branch.id;
   const dealsQ = useQuery({
-    queryKey: ['deals', 'list', status, firm?.id ?? null, branch?.id ?? null, paged.params],
+    queryKey: ['deals', 'list', status, transactionType, firm?.id ?? null, branch?.id ?? null, paged.params],
     queryFn: () => listDeals({ ...params, ...paged.params }),
     // Keep the current page on screen while the next one loads, rather than flashing skeletons.
     placeholderData: keepPreviousData,
@@ -59,7 +68,7 @@ export function DealsPage() {
   // "You have no deals" and "nothing matches this filter" are different messages and want different
   // answers — the first is a first-run screen and should invite the one action that fixes it, the
   // second should not, because creating a deal is not how you find an existing one.
-  const filtered = status !== 'ALL' || query.trim() !== '';
+  const filtered = status !== 'ALL' || transactionType !== '' || query.trim() !== '';
   const isEmpty = !dealsQ.isLoading && total === 0 && !filtered;
   const mayCreate = canCreateDeal(user?.role);
 
@@ -78,6 +87,7 @@ export function DealsPage() {
         eyebrow={[
           `${countText(dealsQ.data)} ${total === 1 ? 'deal' : 'deals'}`,
           status === 'ALL' ? 'all statuses' : dealStatusLabel(status).toLowerCase(),
+          transactionType ? CLIENT_FILTERS.find((f) => f.value === transactionType).label.toLowerCase() : null,
           query.trim() ? `matching "${query.trim()}"` : null,
           firm?.name,
           branch?.name,
@@ -121,16 +131,31 @@ export function DealsPage() {
         justifyContent="space-between"
         sx={{ flexWrap: { xs: 'nowrap', md: 'wrap' }, gap: 1.5 }}
       >
-        <SearchField
-          value={query}
-          onChange={paged.setSearch}
-          placeholder="Search by property address…"
-          sx={{
-            width: { xs: '100%', md: 'auto' },
-            maxWidth: { xs: 'none', md: 320 },
-            '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
-          }}
-        />
+        <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} sx={{ flex: { md: 1 } }}>
+          <SearchField
+            value={query}
+            onChange={paged.setSearch}
+            placeholder="Search by property address…"
+            sx={{
+              width: { xs: '100%', md: 'auto' },
+              maxWidth: { xs: 'none', md: 320 },
+              '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
+            }}
+          />
+          <TextField
+            select
+            size="small"
+            value={transactionType}
+            onChange={(e) => setTransactionType(e.target.value)}
+            inputProps={{ 'aria-label': 'Filter by client' }}
+            sx={{
+              width: { xs: '100%', sm: 180 },
+              '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
+            }}
+          >
+            {CLIENT_FILTERS.map((f) => <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>)}
+          </TextField>
+        </Stack>
         {/* Guarded, not decorative: this list is open to every role, including ones the server
             refuses to let create a deal at all — an ungated button would bounce them to /app. */}
         {mayCreate && (
@@ -186,7 +211,7 @@ export function DealsPage() {
       {/* Desktop: table */}
       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
         {dealsQ.isLoading
-          ? <SkeletonTable rows={6} columns={6} />
+          ? <SkeletonTable rows={6} columns={7} />
           : (
             <DealsTable
               deals={deals}

@@ -423,7 +423,7 @@ class DealServiceRiskAndPatchTest {
                 null, TransactionType.SALE, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null, null, null, null),
-                new ClientInput("Jane Marsh", null, null, null), null);
+                new ClientInput("Jane Marsh", null, null, null), null, null, null);
 
         service.create(req);
 
@@ -436,7 +436,7 @@ class DealServiceRiskAndPatchTest {
         CreateDealRequest req = new CreateDealRequest(
                 null, TransactionType.SALE, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                new ClientInput("Marsh Family Trust", ClientType.ENTITY, null, null), null);
+                new ClientInput("Marsh Family Trust", ClientType.ENTITY, null, null), null, null, null);
 
         service.create(req);
 
@@ -458,7 +458,7 @@ class DealServiceRiskAndPatchTest {
                 "Retiring overseas", trustInvolved, years, months, "NONE", false, true, false, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
                         null, PropertyType.RESIDENTIAL, "RETIREMENT"),
-                new ClientInput("Jane Marsh", null, null, null), null);
+                new ClientInput("Jane Marsh", null, null, null), null, null, null);
     }
 
     /** A NEW deal owned by {@link #agent}, findable at id 1, that update() can load. */
@@ -482,7 +482,7 @@ class DealServiceRiskAndPatchTest {
     }
 
     /**
-     * UpdateDealRequest is a 20-field positional record, so tests build one through a small
+     * UpdateDealRequest is a 22-field positional record, so tests build one through a small
      * builder rather than counting nulls at every call site.
      */
     private UpdateDealRequest update(java.util.function.UnaryOperator<Patch> fn) {
@@ -495,7 +495,11 @@ class DealServiceRiskAndPatchTest {
         Integer ownershipTenureYears, ownershipTenureMonths;
         Boolean ownershipTenureTbc;
         BigDecimal valuationMin, valuationMax;
+        SourceOfFunds sourceOfFunds;
+        ReasonForPurchase reasonForPurchase;
 
+        Patch sourceOfFunds(SourceOfFunds v) { this.sourceOfFunds = v; return this; }
+        Patch reasonForPurchase(ReasonForPurchase v) { this.reasonForPurchase = v; return this; }
         Patch notes(String v) { this.notes = v; return this; }
         Patch transactionPurpose(String v) { this.transactionPurpose = v; return this; }
         Patch foreignExposureCountry(String v) { this.foreignExposureCountry = v; return this; }
@@ -514,7 +518,7 @@ class DealServiceRiskAndPatchTest {
                     transactionPurpose, trustInvolved,
                     ownershipTenureYears, ownershipTenureMonths, faceToFaceIdVerified, null,
                     foreignExposureCountry, null, redFlagPresent, redFlag,
-                    valuationMin, valuationMax, ownershipTenureTbc);
+                    valuationMin, valuationMax, ownershipTenureTbc, sourceOfFunds, reasonForPurchase);
         }
     }
 

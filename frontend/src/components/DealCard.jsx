@@ -6,6 +6,7 @@ import { tokens, shadows } from '../theme/theme.js';
 import { timeAgo } from '../utils/formatters.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { dealName } from '../utils/dealName.js';
+import { clientRoleLabel } from '../data/dealStatus.js';
 
 const NEU_BASE   = tokens.tile;
 const NEU_FG     = tokens.ink;
@@ -86,7 +87,7 @@ export function DealCard({ deal, canEdit }) {
           </MetaPill>
         )}
         {deal.transactionType && (
-          <MetaPill>{deal.transactionType}</MetaPill>
+          <MetaPill>{clientRoleLabel(deal.transactionType)} client</MetaPill>
         )}
         {deal.branchName && (
           <MetaPill>{deal.branchName}</MetaPill>

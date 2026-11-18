@@ -87,7 +87,7 @@ class DealRiskServiceTest {
         structure.setDealId(DEAL_ID);
 
         lenient().when(deals.findById(DEAL_ID)).thenReturn(Optional.of(deal));
-        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.of(structure));
         lenient().when(nodes.findAllByOwnershipStructureIdOrderByIdAsc(STRUCTURE_ID))
                 .thenReturn(List.of());
         lenient().when(people.findAllById(any())).thenReturn(List.of());
@@ -120,6 +120,50 @@ class DealRiskServiceTest {
         assertThat(a.complete()).isFalse();
         assertThat(a.unanswered()).extracting(DealRiskService.RiskGap::code)
                 .containsExactlyInAnyOrder("TENURE", "FACE_TO_FACE", "FOREIGN_EXPOSURE");
+    }
+
+    /* ---------- a purchase's own answers ---------- */
+
+    @Test
+    void aPurchaseAsksFundsAndPurposeInsteadOfTenure() {
+        Deal blank = new Deal();
+        ReflectionTestUtils.setField(blank, "id", DEAL_ID);
+        blank.setTransactionType(TransactionType.PURCHASE);
+
+        RiskAssessment a = service.assess(blank);
+
+        assertThat(a.unanswered()).extracting(DealRiskService.RiskGap::code)
+                .containsExactlyInAnyOrder("SOURCE_OF_FUNDS", "REASON_FOR_PURCHASE",
+                        "FACE_TO_FACE", "FOREIGN_EXPOSURE");
+    }
+
+    @Test
+    void aPurchaseIgnoresTheVendorsTenure() {
+        // A short tenure left over on the record would score +6 on a sale; it means nothing here.
+        deal.setOwnershipTenureYears(0);
+        deal.setOwnershipTenureMonths(3);
+        deal.setTransactionType(TransactionType.PURCHASE);
+        deal.setSourceOfFunds(SourceOfFunds.MORTGAGE);
+        deal.setReasonForPurchase(ReasonForPurchase.OWNER_OCCUPIER);
+
+        RiskAssessment a = service.assess(deal);
+
+        assertThat(a.value()).isZero();
+        assertThat(a.complete()).isTrue();
+    }
+
+    @Test
+    void aPurchaseScoresItsFundsAndPurpose() {
+        deal.setTransactionType(TransactionType.PURCHASE);
+        deal.setSourceOfFunds(SourceOfFunds.CASH);
+        deal.setReasonForPurchase(ReasonForPurchase.QUICK_RESALE);
+
+        RiskAssessment a = service.assess(deal);
+
+        assertThat(a.value()).isEqualTo(SourceOfFunds.CASH.points() + ReasonForPurchase.QUICK_RESALE.points());
+        assertThat(a.rating()).isEqualTo(RiskRating.HIGH);
+        assertThat(a.factors()).extracting(DealRiskService.RiskFactor::code)
+                .containsExactlyInAnyOrder("SOURCE_OF_FUNDS", "REASON_FOR_PURCHASE");
     }
 
     @Test
@@ -585,7 +629,7 @@ class DealRiskServiceTest {
         service.apply(fresh);
 
         assertThat(fresh.getRiskRating()).isEqualTo(RiskRating.LOW);
-        verify(structures, never()).findVendorByDealId(any());
+        verify(structures, never()).findSubjectOf(any());
     }
 
     @Test

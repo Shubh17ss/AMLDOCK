@@ -206,7 +206,7 @@ class DealCreateAuthorizationTest {
                 null, null, null, null, null, null, null, null, null, null, null,
                 new PropertyInput("12 Queen St", null, null, null, null, null, null, null,
                         null, PropertyType.RESIDENTIAL, "RETIREMENT"),
-                new ClientInput("Jane Marsh", null, null, null), null);
+                new ClientInput("Jane Marsh", null, null, null), null, null, null);
     }
 
     private static void setId(Object entity, Long id) {

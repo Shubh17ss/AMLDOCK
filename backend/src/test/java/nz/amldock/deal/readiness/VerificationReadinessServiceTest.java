@@ -24,6 +24,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 
 /**
@@ -74,7 +75,7 @@ class VerificationReadinessServiceTest {
 
         OwnershipStructure structure = new OwnershipStructure();
         ReflectionTestUtils.setField(structure, "id", STRUCTURE_ID);
-        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.of(structure));
         nodes = new ArrayList<>(List.of(node(10L, "Jane Doe", NodeVerificationStatus.VERIFIED)));
         lenient().when(nodeRepo.findAllByOwnershipStructureIdOrderByIdAsc(STRUCTURE_ID)).thenReturn(nodes);
     }
@@ -165,7 +166,7 @@ class VerificationReadinessServiceTest {
 
     @Test
     void aDealWithNoOwnersIsReady() {
-        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.empty());
+        lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.empty());
 
         assertThat(service.assess(deal).ready()).isTrue();
     }

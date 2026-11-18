@@ -59,7 +59,7 @@ export function FirmDealsPage() {
       {/* Desktop: table */}
       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
         {q.isLoading
-          ? <SkeletonTable rows={6} columns={6} />
+          ? <SkeletonTable rows={6} columns={7} />
           : <DealsTable deals={deals} emptyMessage={status === 'ALL' ? 'No deals from your firm yet.' : 'No deals match this filter.'} />
         }
         <ListPagination data={q.data} paged={paged} />

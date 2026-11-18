@@ -60,13 +60,13 @@ function applyOrderLocally(prev, { parentNodeId, childNodeIds }) {
 }
 
 /**
- * One side's structure — the vendor's unless told otherwise. Each side is its own cache entry
- * under the deal's `['ownership', dealId]` prefix, so the invalidations elsewhere that name only
- * the deal still refresh both.
+ * One side's structure — the client's unless told otherwise, which the server works out from the
+ * deal's type. Each side is its own cache entry under the deal's `['ownership', dealId]` prefix, so
+ * the invalidations elsewhere that name only the deal still refresh both.
  */
-export function useOwnershipTree(dealId, side = 'VENDOR') {
+export function useOwnershipTree(dealId, side = null) {
   const qc = useQueryClient();
-  const key = ['ownership', dealId, side];
+  const key = ['ownership', dealId, side ?? 'CLIENT'];
 
   const treeQ = useQuery({
     queryKey: key,

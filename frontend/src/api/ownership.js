@@ -190,8 +190,9 @@ export const NOMINEE_OPTIONS = [
 export const ID_DOCUMENT_TYPES = CATALOGUE_ID_TYPES;
 
 /**
- * Which party a structure describes. The vendor's is the deal's compliance subject; the purchaser's
- * is recorded once the deal has closed as sold, and feeds none of risk, readiness or versions.
+ * Which party a structure describes. The client's is the deal's compliance subject — the vendor's
+ * on a sale, the purchaser's on a purchase. The other party's is recorded once the deal has closed
+ * as completed, and feeds none of risk, readiness or versions.
  *
  * Keep in sync with `nz.amldock.ownership.StructureSide`.
  */
@@ -199,9 +200,9 @@ export const STRUCTURE_SIDES = { VENDOR: 'VENDOR', PURCHASER: 'PURCHASER' };
 
 /**
  * The endpoints that name a structure rather than a node take its side as a query param; the
- * server reads an absent one as the vendor's. Node and edge endpoints take the side from the node.
+ * server reads an absent one as the client's. Node and edge endpoints take the side from the node.
  */
-const sideParams = (side) => ({ params: { side: side ?? STRUCTURE_SIDES.VENDOR } });
+const sideParams = (side) => (side ? { params: { side } } : {});
 
 export async function getTree(dealId, side) {
   const { data } = await apiClient.get(`/deals/${dealId}/ownership`, sideParams(side));

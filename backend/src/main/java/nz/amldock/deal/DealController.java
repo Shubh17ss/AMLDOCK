@@ -72,6 +72,7 @@ public class DealController {
      * request costs the same whatever the size of the firm. Dashboards read {@link #summary}.
      *
      * @param q    contains-match on reference, client name or property address
+     * @param transactionType SALE (vendor client) or PURCHASE (purchaser client); both when absent
      * @param sort {@code createdAt} (default) or {@code updatedAt}, newest first
      */
     @GetMapping
@@ -79,11 +80,12 @@ public class DealController {
                                               @RequestParam(required = false) Long firmId,
                                               @RequestParam(required = false) Long branchId,
                                               @RequestParam(required = false) String q,
+                                              @RequestParam(required = false) TransactionType transactionType,
                                               @RequestParam(defaultValue = "createdAt") String sort,
                                               @RequestParam(required = false) Integer page,
                                               @RequestParam(required = false) Integer size) {
         DealListQuery.Sort order = "updatedAt".equals(sort) ? DealListQuery.Sort.UPDATED_AT : DealListQuery.Sort.CREATED_AT;
-        return dealList.list(status, firmId, branchId, q, order, PageRequests.of(page, size));
+        return dealList.list(status, firmId, branchId, q, transactionType, order, PageRequests.of(page, size));
     }
 
     /** Per-status counts, value sums and oldest waits for the role dashboards. */

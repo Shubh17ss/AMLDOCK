@@ -20,11 +20,9 @@ const ROLES = [
 ];
 
 /**
- * Section 1 — who the broker is acting for. This choice decides the rest of the form.
- *
- * The purchaser path isn't built yet. It is blocked here in the UI only: the backend accepts
- * PURCHASE deals exactly as it always has, so shipping that path later touches nothing but
- * this file and section 2.
+ * Section 1 — who the broker is acting for. This choice decides the rest of the form, and which
+ * side of the deal its compliance checks are about: the vendor's on a sale, the purchaser's on a
+ * purchase. The other party is recorded once the deal closes.
  */
 export function Section1ClientType({ form, setField, locked = false }) {
   return (
@@ -71,14 +69,6 @@ export function Section1ClientType({ form, setField, locked = false }) {
           );
         })}
       </Stack>
-
-      {form.clientRole === 'PURCHASER' && (
-        <Alert severity="info">
-          The purchaser flow isn't ready yet — it asks a different set of questions from the
-          vendor one. Pick <strong>Vendor</strong> to carry on, or come back for this deal once
-          the purchaser path ships.
-        </Alert>
-      )}
 
       {locked && (
         <Alert severity="info">
