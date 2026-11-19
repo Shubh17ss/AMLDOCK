@@ -478,7 +478,11 @@ export function DealReviewScreen() {
       )}
 
       {showingTransactions ? (
-        <TransactionMonitoringView dealId={dealId} onOpenVersion={openVersionFromHistory} />
+        <TransactionMonitoringView
+          dealId={dealId}
+          onOpenVersion={openVersionFromHistory}
+          canEditNotes={isDealReviewer(user?.role) && canWrite(user?.role) && !branchClosed}
+        />
       ) : (
       <>
       {versionFailed && (

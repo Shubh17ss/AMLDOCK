@@ -578,6 +578,23 @@ public class DealService {
         return monitoring.history(id);
     }
 
+    /**
+     * Adds or corrects the note on one of the deal's moves; blank clears it. Gated like a comment —
+     * a readable deal on a branch still open, and never the audit role — with the reviewer-only
+     * rule on the controller.
+     */
+    @Transactional
+    public MoveNoteEdit editMoveNote(Long id, Long moveId, String note) {
+        Deal d = deals.findById(id).orElseThrow(() -> new NotFoundException("Deal " + id + " not found"));
+        UserPrincipal actor = currentPrincipal();
+        if (actor.role().isReadOnly()) {
+            throw new ForbiddenException("The audit role has read-only access");
+        }
+        lifecycle.assertCanRead(d, actor, firmIdOf(d));
+        lifecycle.assertBranchWritable(d);
+        return new MoveNoteEdit(d, monitoring.editNote(id, moveId, actor.id(), note));
+    }
+
     /** Whether the deal could be verified now, and what is still missing if not. */
     @Transactional(readOnly = true)
     public Readiness verificationReadiness(Long id) {
@@ -790,6 +807,8 @@ public class DealService {
     public record TransitionResult(Deal deal, DealStatus previousStatus) {}
 
     public record OverrideResult(Deal deal, DealStatus previousStatus) {}
+
+    public record MoveNoteEdit(Deal deal, String previousNote) {}
 
     /* ---------- helpers ---------- */
 

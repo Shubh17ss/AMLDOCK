@@ -79,12 +79,19 @@ export async function holdDeal(id, note) {
 }
 
 /**
- * Every move between Verified and Closed, newest first: `[{ kind, fromStatus, toStatus, fromAt,
+ * Every move between Verified and Closed, newest first: `[{ id, kind, fromStatus, toStatus, fromAt,
  * occurredAt, versionNo, valuationMin, valuationMax, propertySold, saleTotal, variance, note,
- * actorName }]`. `variance` is 'WITHIN', 'BEYOND' or null.
+ * actorName, noteEditedAt, noteEditorName }]`. `variance` is 'WITHIN', 'BEYOND' or null;
+ * `noteEditedAt` is set once a reviewer has changed the note the move was made with.
  */
 export async function getTransactionMonitoring(id) {
   const { data } = await apiClient.get(`/deals/${id}/transaction-monitoring`);
+  return data;
+}
+
+/** Adds or corrects the note on one move; blank clears it. Reviewers only. Returns the history. */
+export async function editTransactionNote(dealId, moveId, note) {
+  const { data } = await apiClient.patch(`/deals/${dealId}/transaction-monitoring/${moveId}/note`, { note });
   return data;
 }
 

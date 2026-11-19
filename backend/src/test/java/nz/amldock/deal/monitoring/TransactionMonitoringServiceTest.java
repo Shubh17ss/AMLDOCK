@@ -1,5 +1,6 @@
 package nz.amldock.deal.monitoring;
 
+import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.monitoring.DealStatusMove.Kind;
@@ -7,6 +8,7 @@ import nz.amldock.deal.monitoring.dto.StatusMoveDto;
 import nz.amldock.deal.monitoring.dto.StatusMoveDto.Variance;
 import nz.amldock.deal.version.DealVersion;
 import nz.amldock.deal.version.DealVersionRepository;
+import nz.amldock.user.User;
 import nz.amldock.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -132,6 +135,69 @@ class TransactionMonitoringServiceTest {
         assertThat(out.get(1).fromStatus()).isEqualTo(DealStatus.VERIFIED);
         assertThat(out.get(1).toStatus()).isEqualTo(DealStatus.CLOSED);
         assertThat(out.get(1).variance()).isEqualTo(Variance.BEYOND);
+    }
+
+    @Test
+    void theHistoryCarriesEachMoveIdAndWhoLastEditedItsNote() {
+        DealStatusMove close = new DealStatusMove(DEAL_ID, Kind.CLOSE, VERIFIED_AT,
+                Instant.parse("2026-09-15T01:00:00Z"), 5L, 2, null, null, null, null, null);
+        ReflectionTestUtils.setField(close, "id", 40L);
+        Instant editedAt = Instant.parse("2026-09-18T01:00:00Z");
+        close.editNote("Override: settlement confirmed by phone", 7L, editedAt);
+        User editor = new User();
+        ReflectionTestUtils.setField(editor, "id", 7L);
+        ReflectionTestUtils.setField(editor, "fullName", "Ana Reviewer");
+        when(moves.findAllByDealIdOrderByOccurredAtDescIdDesc(DEAL_ID)).thenReturn(List.of(close));
+        when(users.findAllById(any())).thenReturn(List.of(editor));
+
+        StatusMoveDto out = service.history(DEAL_ID).get(0);
+
+        assertThat(out.id()).isEqualTo(40L);
+        assertThat(out.note()).isEqualTo("Override: settlement confirmed by phone");
+        assertThat(out.noteEditedAt()).isEqualTo(editedAt);
+        assertThat(out.noteEditorName()).isEqualTo("Ana Reviewer");
+    }
+
+    /* ---------- editing a note ---------- */
+
+    @Test
+    void editingANoteReplacesItAndRecordsTheEditor() {
+        DealStatusMove close = new DealStatusMove(DEAL_ID, Kind.CLOSE, VERIFIED_AT, Instant.now(), 5L, 2,
+                null, null, true, new BigDecimal("950000"), "Settled");
+        when(moves.findById(40L)).thenReturn(Optional.of(close));
+
+        String previous = service.editNote(DEAL_ID, 40L, 7L, "  Settled early  ");
+
+        assertThat(previous).isEqualTo("Settled");
+        DealStatusMove m = saved();
+        assertThat(m.getNote()).isEqualTo("Settled early");
+        assertThat(m.getNoteEditedBy()).isEqualTo(7L);
+        assertThat(m.getNoteEditedAt()).isNotNull();
+        // Everything but the note stays as the move was made.
+        assertThat(m.getSaleTotal()).isEqualByComparingTo("950000");
+        assertThat(m.getActorUserId()).isEqualTo(5L);
+    }
+
+    @Test
+    void aBlankNoteClearsIt() {
+        DealStatusMove close = new DealStatusMove(DEAL_ID, Kind.CLOSE, VERIFIED_AT, Instant.now(), 5L, 2,
+                null, null, null, null, "Settled");
+        when(moves.findById(40L)).thenReturn(Optional.of(close));
+
+        service.editNote(DEAL_ID, 40L, 7L, "   ");
+
+        assertThat(saved().getNote()).isNull();
+    }
+
+    @Test
+    void aMoveFromAnotherDealIsNotFound() {
+        DealStatusMove other = new DealStatusMove(99L, Kind.CLOSE, VERIFIED_AT, Instant.now(), 5L, 2,
+                null, null, null, null, "Theirs");
+        when(moves.findById(40L)).thenReturn(Optional.of(other));
+
+        assertThatThrownBy(() -> service.editNote(DEAL_ID, 40L, 7L, "Mine"))
+                .isInstanceOf(NotFoundException.class);
+        assertThat(other.getNote()).isEqualTo("Theirs");
     }
 
     /* ---------- the variance rule ---------- */
