@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { isBroker, isDealAuthor } from '../auth/roles.js';
 import { SidebarNav } from './SidebarNav.jsx';
 import { UserMenu } from './UserMenu.jsx';
+import { ClientTypeChip } from './ClientTypeChip.jsx';
 import { ScopeSelector } from './dashboard/ScopeSelector.jsx';
 import { BottomNav, BOTTOM_NAV_CLEARANCE, BROKER_NAV_CLEARANCE } from './BottomNav.jsx';
 import { greeting, stamp } from '../pages/dashboard/greeting.js';
@@ -86,6 +87,8 @@ export function AppShell() {
     retry: false,
   });
   const dealAddress = formatPropertyAddressShort(dealQ.data?.property);
+  // The review screen, not the broker's edit form — that one keeps its "Edit deal" title.
+  const dealReview = dealId != null && !/\/edit\/?$/.test(pathname);
 
   // A broker's phone home swaps the page-title bar for a greeting — but only there. Everywhere else
   // a title is what the screen owes you, and on a deep page like /deals/123 a greeting would be
@@ -206,13 +209,21 @@ export function AppShell() {
               <ShieldCheckIcon color="#fff" />
             </Box>
 
+            {/* On a deal's review screen the client's side stands in for the role caption and the
+                "Deal" title — the address in the centre already says which deal this is. */}
             <Stack spacing={0} sx={{ flexGrow: 1, minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: tokens.muted, display: { xs: 'none', sm: 'block' } }}>
-                {user ? roleDisplay(user.role) : ''}
-              </Typography>
-              <Typography variant="h6" noWrap sx={{ color: tokens.ink, fontWeight: 700 }}>
-                {pageTitle}
-              </Typography>
+              {dealReview ? (
+                dealQ.data && <ClientTypeChip uppercase transactionType={dealQ.data.transactionType} />
+              ) : (
+                <>
+                  <Typography variant="caption" sx={{ color: tokens.muted, display: { xs: 'none', sm: 'block' } }}>
+                    {user ? roleDisplay(user.role) : ''}
+                  </Typography>
+                  <Typography variant="h6" noWrap sx={{ color: tokens.ink, fontWeight: 700 }}>
+                    {pageTitle}
+                  </Typography>
+                </>
+              )}
             </Stack>
             {/*
               * The property, while a deal is open.

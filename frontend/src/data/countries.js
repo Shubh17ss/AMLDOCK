@@ -285,3 +285,13 @@ export function flagClass(code) {
  * rejects anything else, so keep the three in step.
  */
 export const FIRM_COUNTRIES = ['NZ', 'AU'].map(countryByCode);
+
+/**
+ * Picker order: New Zealand and Australia first (our home markets), then the rest A–Z.
+ * COUNTRIES itself stays alphabetical; the pinned entries are moved, not duplicated.
+ */
+const PINNED = ['NZ', 'AU'];
+export const COUNTRY_OPTIONS = [
+  ...PINNED.map(countryByCode),
+  ...COUNTRIES.filter((c) => !PINNED.includes(c.code)),
+];

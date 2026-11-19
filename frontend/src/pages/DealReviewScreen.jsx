@@ -39,6 +39,7 @@ import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import { dealsListHref } from './DealsPage.jsx';
 import {
   canEditContent, canUploadDocuments, dealStatusLabel, isEditable, isCounterpartyOpen, clientSideOf, counterpartySideOf, transitionsFrom,
 } from '../data/dealStatus.js';
@@ -90,7 +91,8 @@ export function DealReviewScreen() {
 
   // This screen answers to two addresses. Sending a firm-level viewer back to the CDD register
   // would drop them into a list they did not come from.
-  const listPath = pathname.startsWith('/firm/') ? '/firm/deals' : '/cdd/deals';
+  // The CDD register comes back on the tab and client filter it was left on.
+  const listPath = pathname.startsWith('/firm/') ? '/firm/deals' : dealsListHref();
   const money = useCurrency();
 
   // The tab lives in the URL so a reload keeps your place and a link can point at one. An

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { Alert, Box, Button, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
@@ -16,6 +16,7 @@ import { usePagedList } from '../hooks/usePagedList.js';
 import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, opensDealForm } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
+import { DEALS_PATH } from '../navigation/moduleRegistry.jsx';
 
 // New, not All: the list opens on the deals still being worked. ALL remains a client-side
 // sentinel stripped before the request — see the params block below.
@@ -27,6 +28,17 @@ const CLIENT_FILTERS = [
   { value: 'SALE', label: 'Vendor clients' },
   { value: 'PURCHASE', label: 'Purchaser clients' },
 ];
+
+// The list's last query string, so the deal page's "Listing Register" button can return to the
+// same tab and filter. Session storage can be absent or refuse writes; that just means defaults.
+const LIST_SEARCH_KEY = 'amldock.dealsListSearch';
+
+/** Where "back to the register" should go: /cdd/deals with the filters it was last left on. */
+export function dealsListHref() {
+  let search = '';
+  try { search = sessionStorage.getItem(LIST_SEARCH_KEY) ?? ''; } catch { /* defaults */ }
+  return `${DEALS_PATH}${search}`;
+}
 
 /**
  * Deals — the deal list, one page at a time, filtered by status tabs and searched by property.
@@ -44,8 +56,27 @@ const CLIENT_FILTERS = [
 export function DealsPage() {
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
-  const [status, setStatus] = useState(DEFAULT_STATUS);
-  const [transactionType, setTransactionType] = useState('');
+  // Tab and client filter live in the URL (?status=&client=), so a reload, a shared link and the
+  // way back from a deal all land on the same list. Defaults are left out to keep /cdd/deals bare;
+  // replace, not push, so flicking through tabs doesn't fill the back button's history.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedStatus = searchParams.get('status');
+  const status = STATUSES.includes(requestedStatus) ? requestedStatus : DEFAULT_STATUS;
+  const requestedClient = searchParams.get('client');
+  const transactionType = CLIENT_FILTERS.some((f) => f.value && f.value === requestedClient)
+    ? requestedClient : '';
+  const setParam = (key, value, fallback) => setSearchParams((prev) => {
+    const next = new URLSearchParams(prev);
+    if (value === fallback) next.delete(key); else next.set(key, value);
+    return next;
+  }, { replace: true });
+  const setStatus = (v) => setParam('status', v, DEFAULT_STATUS);
+  const setTransactionType = (v) => setParam('client', v, '');
+
+  const listSearch = searchParams.toString();
+  useEffect(() => {
+    try { sessionStorage.setItem(LIST_SEARCH_KEY, listSearch ? `?${listSearch}` : ''); } catch { /* best effort */ }
+  }, [listSearch]);
   const paged = usePagedList({ resetOn: [status, transactionType, firm?.id, branch?.id] });
   const query = paged.search;
 
@@ -137,19 +168,27 @@ export function DealsPage() {
             onChange={paged.setSearch}
             placeholder="Search by property address…"
             sx={{
-              width: { xs: '100%', md: 'auto' },
-              maxWidth: { xs: 'none', md: 320 },
+              // Wide enough for the whole placeholder; fixed so the row's flex can't squeeze it.
+              width: { xs: '100%', md: 340 },
+              flexShrink: 0,
               '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
             }}
           />
+          {/* '' shows a placeholder rather than "All clients": nothing chosen reads as a prompt. */}
           <TextField
             select
             size="small"
             value={transactionType}
             onChange={(e) => setTransactionType(e.target.value)}
-            inputProps={{ 'aria-label': 'Filter by client' }}
+            inputProps={{ 'aria-label': 'Filter by client type' }}
+            SelectProps={{
+              displayEmpty: true,
+              renderValue: (v) => (v
+                ? CLIENT_FILTERS.find((f) => f.value === v).label
+                : <Box component="span" sx={{ color: tokens.muted }}>Filter by client type</Box>),
+            }}
             sx={{
-              width: { xs: '100%', sm: 180 },
+              width: { xs: '100%', sm: 200 },
               '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
             }}
           >

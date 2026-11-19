@@ -9,7 +9,8 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { DealStatusChip } from './DealStatusChip.jsx';
-import { clientRoleLabel, clientSideOf, opensDealForm, transitionsFrom } from '../data/dealStatus.js';
+import { ClientTypeChip } from './ClientTypeChip.jsx';
+import { opensDealForm, transitionsFrom } from '../data/dealStatus.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canDeleteDeal, canOverride, canWrite, isDealReviewer } from '../auth/roles.js';
 import { DealStatusDialog } from '../features/deal/DealStatusDialog.jsx';
@@ -203,14 +204,7 @@ export function DealsTable({ deals = [], emptyMessage = 'No deals yet.', emptySt
               {/* Which side our client is on. Purchaser deals take the accent so the rarer of the
                   two stands out in a list of mostly sales. */}
               <TableCell>
-                <Box component="span" sx={{
-                  display: 'inline-flex', borderRadius: 999, px: 1.25, py: 0.25,
-                  fontSize: '0.75rem', fontWeight: 600,
-                  color: clientSideOf(d.transactionType) === 'PURCHASER' ? tokens.blue : tokens.muted,
-                  backgroundColor: clientSideOf(d.transactionType) === 'PURCHASER' ? tokens.blueWash : tokens.hover,
-                }}>
-                  {clientRoleLabel(d.transactionType)}
-                </Box>
+                <ClientTypeChip transactionType={d.transactionType} />
               </TableCell>
               {/* Who filed it. The name, falling back to the email for a user row since removed. */}
               <TableCell>{d.createdByName ?? d.createdByEmail ?? '—'}</TableCell>
