@@ -52,6 +52,8 @@ class PurchaserDealFlowDbTest {
     @Autowired DealListService dealList;
     @Autowired DealRiskService risk;
     @Autowired OwnershipService ownership;
+    @Autowired nz.amldock.deal.readiness.VerificationReadinessService readiness;
+    @Autowired DealRepository dealRepo;
     @Autowired NamedParameterJdbcTemplate jdbc;
     @MockBean FileStorageService storage;
     @MockBean EmailService email;
@@ -101,17 +103,22 @@ class PurchaserDealFlowDbTest {
         assertThat(column(id, "transaction_type")).isEqualTo("PURCHASE");
 
         // 2. Section 3's answers. The purchase pair lands in the V73 columns, and tenure is not asked.
-        deals.update(id, answers(SourceOfFunds.CASH, ReasonForPurchase.QUICK_RESALE));
+        deals.update(id, answers(SourceOfFunds.CASH, ReasonForPurchase.ON_BEHALF_OF_ANOTHER));
         assertThat(column(id, "source_of_funds")).isEqualTo("CASH");
-        assertThat(column(id, "reason_for_purchase")).isEqualTo("QUICK_RESALE");
+        assertThat(column(id, "reason_for_purchase")).isEqualTo("ON_BEHALF_OF_ANOTHER");
 
         DealRiskService.RiskAssessment assessed = risk.assess(id);
         assertThat(assessed.unanswered()).isEmpty();
         assertThat(assessed.factors()).extracting(DealRiskService.RiskFactor::code)
                 .containsExactlyInAnyOrder("SOURCE_OF_FUNDS", "REASON_FOR_PURCHASE");
-        assertThat(assessed.value()).isEqualTo(9);
+        assertThat(assessed.value()).isEqualTo(10);
         assertThat(assessed.rating()).isEqualTo(RiskRating.HIGH);
         assertThat(column(id, "risk_rating")).isEqualTo("HIGH");
+
+        // Verifying asks for the purchase's own details, never the vendor's.
+        List<String> missing = readiness.assess(dealRepo.findById(id).orElseThrow()).missing();
+        assertThat(missing).doesNotContain("Reason for selling", "Ownership tenure",
+                "Reason for purchase", "Source of funds");
 
         // 3. The client's structure, asked for without naming a side, is the purchaser's.
         jdbc.update("UPDATE deal SET status = 'REVIEW' WHERE id = :d", Map.of("d", id));
@@ -133,7 +140,7 @@ class PurchaserDealFlowDbTest {
         jdbc.update("UPDATE deal SET status = 'CLOSED', property_sold = true WHERE id = :d", Map.of("d", id));
         ownership.createNode(id, StructureSide.VENDOR, node(NodeType.INDIVIDUAL, "Val Vendor"));
         assertThat(sidesOf(id)).containsExactlyInAnyOrder("PURCHASER", "VENDOR");
-        assertThat(risk.assess(id).value()).isEqualTo(9);
+        assertThat(risk.assess(id).value()).isEqualTo(10);
     }
 
     @Test

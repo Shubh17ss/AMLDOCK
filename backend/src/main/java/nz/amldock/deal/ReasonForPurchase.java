@@ -19,7 +19,6 @@ public enum ReasonForPurchase {
     BUSINESS_PREMISES("Business premises", 0),
     DEVELOPMENT("Development / subdivision", 1),
     LAND_BANKING("Land banking", 2),
-    QUICK_RESALE("Quick resale", 3),
     ON_BEHALF_OF_ANOTHER("Buying on behalf of another party", 4),
     OTHER("Other", 1);
 

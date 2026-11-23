@@ -26,7 +26,6 @@ export const REASONS_FOR_PURCHASE = [
   { value: 'BUSINESS_PREMISES', label: 'Business premises' },
   { value: 'DEVELOPMENT', label: 'Development / subdivision' },
   { value: 'LAND_BANKING', label: 'Land banking' },
-  { value: 'QUICK_RESALE', label: 'Quick resale' },
   { value: 'ON_BEHALF_OF_ANOTHER', label: 'Buying on behalf of another party' },
   { value: 'OTHER', label: 'Other' },
 ];

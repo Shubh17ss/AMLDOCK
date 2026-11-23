@@ -108,6 +108,32 @@ class VerificationReadinessServiceTest {
                 "Minimum appraised value", "Maximum appraised value");
     }
 
+    /* ---------- a purchase asks its own pair ---------- */
+
+    @Test
+    void aPurchaseAsksForItsOwnAnswersNotTheVendors() {
+        // Nothing a sale asks for, and nothing a purchase asks for either.
+        deal.setTransactionType(nz.amldock.deal.TransactionType.PURCHASE);
+        property.setReasonForSelling(null);
+        deal.setOwnershipTenureYears(null);
+
+        assertThat(service.assess(deal).missing()).containsExactly(
+                "Reason for purchase", "Source of funds");
+    }
+
+    @Test
+    void anAnsweredPurchaseIsReady() {
+        deal.setTransactionType(nz.amldock.deal.TransactionType.PURCHASE);
+        property.setReasonForSelling(null);
+        deal.setOwnershipTenureYears(null);
+        deal.setReasonForPurchase(nz.amldock.deal.ReasonForPurchase.OWNER_OCCUPIER);
+        deal.setSourceOfFunds(nz.amldock.deal.SourceOfFunds.MORTGAGE);
+
+        Readiness r = service.assess(deal);
+        assertThat(r.ready()).isTrue();
+        assertThat(r.missing()).isEmpty();
+    }
+
     @Test
     void transactionPurposeAndKeyContactAreNotRequired() {
         deal.setTransactionPurpose(null);

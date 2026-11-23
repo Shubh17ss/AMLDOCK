@@ -156,14 +156,26 @@ class DealRiskServiceTest {
     void aPurchaseScoresItsFundsAndPurpose() {
         deal.setTransactionType(TransactionType.PURCHASE);
         deal.setSourceOfFunds(SourceOfFunds.CASH);
-        deal.setReasonForPurchase(ReasonForPurchase.QUICK_RESALE);
+        deal.setReasonForPurchase(ReasonForPurchase.ON_BEHALF_OF_ANOTHER);
 
         RiskAssessment a = service.assess(deal);
 
-        assertThat(a.value()).isEqualTo(SourceOfFunds.CASH.points() + ReasonForPurchase.QUICK_RESALE.points());
+        assertThat(a.value()).isEqualTo(SourceOfFunds.CASH.points() + ReasonForPurchase.ON_BEHALF_OF_ANOTHER.points());
         assertThat(a.rating()).isEqualTo(RiskRating.HIGH);
         assertThat(a.factors()).extracting(DealRiskService.RiskFactor::code)
                 .containsExactlyInAnyOrder("SOURCE_OF_FUNDS", "REASON_FOR_PURCHASE");
+    }
+
+    @Test
+    void cashOverseasFundsAndAGiftAreHighOnTheirOwn() {
+        deal.setTransactionType(TransactionType.PURCHASE);
+        deal.setReasonForPurchase(ReasonForPurchase.OWNER_OCCUPIER);
+        for (SourceOfFunds funds : List.of(SourceOfFunds.CASH, SourceOfFunds.OVERSEAS, SourceOfFunds.GIFT)) {
+            deal.setSourceOfFunds(funds);
+            RiskAssessment a = service.assess(deal);
+            assertThat(a.value()).as(funds.name()).isEqualTo(6);
+            assertThat(a.rating()).as(funds.name()).isEqualTo(RiskRating.HIGH);
+        }
     }
 
     @Test

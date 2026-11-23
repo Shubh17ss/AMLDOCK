@@ -1,6 +1,7 @@
 package nz.amldock.deal.readiness;
 
 import nz.amldock.deal.Deal;
+import nz.amldock.deal.TransactionType;
 import nz.amldock.property.Property;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,10 @@ import java.util.List;
  * its fields are deliberately not required: the transaction purpose, which is the client's own
  * words and may honestly be "not given", and the key contact, which is a convenience rather than
  * evidence.
+ *
+ * <p>A purchase asks its own pair in place of the vendor's: the reason for purchase instead of the
+ * reason for selling, and the source of funds instead of the ownership tenure - the same split as
+ * {@code DealRiskService.scoreDeal}. Neither side is asked the other's.
  */
 @Component
 @Order(10)
@@ -29,13 +34,20 @@ public class DealDetailsCheck implements VerificationCheck {
 
         if (p == null || isBlank(p.getAddressLine1())) out.add("Property address");
         if (p == null || p.getPropertyType() == null) out.add("Property type");
-        if (p == null || isBlank(p.getReasonForSelling())) out.add("Reason for selling");
+        boolean purchase = d.getTransactionType() == TransactionType.PURCHASE;
+        if (purchase) {
+            if (d.getReasonForPurchase() == null) out.add("Reason for purchase");
+        } else if (p == null || isBlank(p.getReasonForSelling())) {
+            out.add("Reason for selling");
+        }
 
         if (d.getTrustInvolved() == null) out.add("Whether a trust is involved");
-        // Either box is enough, as on the form: "3 years" and "7 months" are both whole answers.
-        // "To be confirmed" is an answer too.
-        if (!d.isOwnershipTenureTbc()
+        if (purchase) {
+            if (d.getSourceOfFunds() == null) out.add("Source of funds");
+        } else if (!d.isOwnershipTenureTbc()
                 && d.getOwnershipTenureYears() == null && d.getOwnershipTenureMonths() == null) {
+            // Either box is enough, as on the form: "3 years" and "7 months" are both whole
+            // answers. "To be confirmed" is an answer too.
             out.add("Ownership tenure");
         }
         if (d.getFaceToFaceIdVerified() == null) out.add("Face-to-face ID check");

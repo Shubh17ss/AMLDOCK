@@ -4,7 +4,9 @@ package nz.amldock.deal;
  * Where a purchaser's money for the deal comes from - asked on a PURCHASE in place of the
  * vendor's ownership tenure, and scored by {@link DealRiskService}.
  *
- * <p>The points are the scale: change them here and every deal rescores on its next write. Codes
+ * <p>The points are the scale: change them here and every deal rescores on its next write. Cash,
+ * overseas funds and a gift score 6 on their own - enough to make the deal HIGH whatever else it
+ * says (RiskRating.forValue). Codes
  * are stored as strings with no CHECK constraint (V73), so adding one needs no migration; renaming
  * one strands the deals that hold it.
  *
@@ -17,8 +19,8 @@ public enum SourceOfFunds {
     PROPERTY_SALE("Sale of another property", 0),
     INHERITANCE("Inheritance", 1),
     BUSINESS_INCOME("Business income", 2),
-    GIFT("Gift from family or a third party", 3),
-    OVERSEAS("Overseas funds", 3),
+    GIFT("Gift from family or a third party", 6),
+    OVERSEAS("Overseas funds", 6),
     TBC("To be confirmed", 3),
     CASH("Cash", 6),
     OTHER("Other", 2);
