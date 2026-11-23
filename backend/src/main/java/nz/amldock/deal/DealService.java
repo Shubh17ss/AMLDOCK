@@ -207,6 +207,8 @@ public class DealService {
         applyTenure(d, req.ownershipTenureTbc(), req.ownershipTenureYears(), req.ownershipTenureMonths());
         d.setFaceToFaceIdVerified(req.faceToFaceIdVerified());
         d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
+        d.setSourceOfFunds(req.sourceOfFunds());
+        d.setReasonForPurchase(req.reasonForPurchase());
         d.setClientRemote(req.clientRemote());
         d.setRedFlagPresent(req.redFlagPresent());
         d.setRedFlag(redFlagFor(req.redFlagPresent(), req.redFlag()));
@@ -257,6 +259,8 @@ public class DealService {
         if (req.foreignExposureCountry() != null) {
             d.setForeignExposureCountry(blankToNull(req.foreignExposureCountry()));
         }
+        if (req.sourceOfFunds() != null) d.setSourceOfFunds(req.sourceOfFunds());
+        if (req.reasonForPurchase() != null) d.setReasonForPurchase(req.reasonForPurchase());
         if (req.clientRemote() != null) d.setClientRemote(req.clientRemote());
         if (req.redFlagPresent() != null) d.setRedFlagPresent(req.redFlagPresent());
         if (req.redFlag() != null) d.setRedFlag(blankToNull(req.redFlag()));

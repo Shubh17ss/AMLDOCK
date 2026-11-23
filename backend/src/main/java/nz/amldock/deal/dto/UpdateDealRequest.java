@@ -3,6 +3,8 @@ package nz.amldock.deal.dto;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
+import nz.amldock.deal.ReasonForPurchase;
+import nz.amldock.deal.SourceOfFunds;
 import nz.amldock.deal.TransactionType;
 
 import java.math.BigDecimal;
@@ -48,5 +50,8 @@ public record UpdateDealRequest(
          * Tenure asked and not known yet. True clears years and months; false with no figures
          * leaves them as they are. A figure sent without this turns TBC off.
          */
-        Boolean ownershipTenureTbc
+        Boolean ownershipTenureTbc,
+        /** A purchase's answers. Null leaves the stored value; there is no "clear" for these. */
+        SourceOfFunds sourceOfFunds,
+        ReasonForPurchase reasonForPurchase
 ) {}

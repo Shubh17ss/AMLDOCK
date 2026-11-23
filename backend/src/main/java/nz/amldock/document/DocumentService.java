@@ -394,7 +394,8 @@ public class DocumentService {
         }
         // Each side's evidence stays on that side. The write gate above was decided by where the
         // document is now, so a move across would carry it past the other side's rule.
-        if (isPurchaserNode(d.getOwnershipNodeId()) != isPurchaserNode(targetNodeId)) {
+        Deal owningDeal = d.getDealId() == null ? null : deals.findById(d.getDealId()).orElse(null);
+        if (isCounterpartyNode(owningDeal, d.getOwnershipNodeId()) != isCounterpartyNode(owningDeal, targetNodeId)) {
             throw new BadRequestException(
                     "A document cannot move between the vendor's and the purchaser's records");
         }
@@ -459,10 +460,10 @@ public class DocumentService {
                     .orElseThrow(() -> new NotFoundException("Deal " + d.getDealId() + " not found"));
             Long firmId = branches.findById(deal.getFirmBranchId())
                     .map(FirmBranch::getRealEstateFirmId).orElse(null);
-            if (isPurchaserNode(d.getOwnershipNodeId())) {
-                // The purchaser's evidence answers to the purchaser's rule, for uploader and
-                // reviewer alike: open while the deal is closed as sold, shut otherwise.
-                lifecycle.assertPurchaserEditable(deal, actor, firmId);
+            if (isCounterpartyNode(deal, d.getOwnershipNodeId())) {
+                // The counterparty's evidence answers to the counterparty's rule, for uploader and
+                // reviewer alike: open while the deal is closed as completed, shut otherwise.
+                lifecycle.assertCounterpartyEditable(deal, actor, firmId);
             } else if (actor.role().isFirmLevel()) {
                 lifecycle.assertEditable(deal, actor, firmId);
             } else {
@@ -502,27 +503,31 @@ public class DocumentService {
      * <p>A real write gate: read scope plus the deal's status (see canUploadDocuments). It used to
      * be read scope alone, which let anyone who could open a deal add documents, and the
      * provisional owners a scan creates, to a VERIFIED or CLOSED one (C-07). A document filed on
-     * the purchaser answers to the purchaser's rule instead, which is open only on a CLOSED deal.
+     * the counterparty answers to the counterparty's rule instead, which is open only on a CLOSED deal.
      */
     private Deal mustLoadDealForWrite(Long dealId, Long nodeId) {
         Deal deal = deals.findById(dealId)
                 .orElseThrow(() -> new BadRequestException("Deal " + dealId + " not found"));
         Long firmId = branches.findById(deal.getFirmBranchId())
                 .map(FirmBranch::getRealEstateFirmId).orElse(null);
-        if (isPurchaserNode(nodeId)) {
-            lifecycle.assertPurchaserEditable(deal, currentPrincipal(), firmId);
+        if (isCounterpartyNode(deal, nodeId)) {
+            lifecycle.assertCounterpartyEditable(deal, currentPrincipal(), firmId);
         } else {
             lifecycle.assertCanUploadDocuments(deal, currentPrincipal(), firmId);
         }
         return deal;
     }
 
-    /** Whether a node is on a purchaser's structure. Null (the deal itself) and unknown ids are not. */
-    private boolean isPurchaserNode(Long nodeId) {
-        if (nodeId == null) return false;
+    /**
+     * Whether a node is on the counterparty's structure - the purchaser's on a sale, the vendor's
+     * on a purchase. Null (the deal itself) and unknown ids are not.
+     */
+    private boolean isCounterpartyNode(Deal deal, Long nodeId) {
+        if (nodeId == null || deal == null) return false;
+        StructureSide counterparty = StructureSide.counterpartyOf(deal.getTransactionType());
         return ownershipNodes.findById(nodeId)
                 .flatMap(n -> ownershipStructures.findById(n.getOwnershipStructureId()))
-                .map(s -> s.getSide() == StructureSide.PURCHASER)
+                .map(s -> s.getSide() == counterparty)
                 .orElse(false);
     }
 

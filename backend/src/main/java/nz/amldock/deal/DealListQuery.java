@@ -43,13 +43,22 @@ public class DealListQuery {
         this.probe = probe;
     }
 
-    public IdPage page(DealScope scope, List<DealStatus> statuses, String q, Sort sort, PageRequests paging) {
+    /**
+     * @param transactionType the client's side, or null for both. No index of its own: two values,
+     *                        tested on the rows the scope and status indexes have already narrowed.
+     */
+    public IdPage page(DealScope scope, List<DealStatus> statuses, String q, TransactionType transactionType,
+                       Sort sort, PageRequests paging) {
         MapSqlParameterSource params = new MapSqlParameterSource();
         StringBuilder where = new StringBuilder(" WHERE 1 = 1");
         scope.appendWhere(where, params, "d");
         if (statuses != null && !statuses.isEmpty()) {
             where.append(" AND d.status IN (:statuses)");
             params.addValue("statuses", statuses.stream().map(Enum::name).toList());
+        }
+        if (transactionType != null) {
+            where.append(" AND d.transaction_type = :transactionType");
+            params.addValue("transactionType", transactionType.name());
         }
         appendSearch(where, params, q, scope);
 

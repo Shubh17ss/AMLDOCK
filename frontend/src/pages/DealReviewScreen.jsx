@@ -39,8 +39,9 @@ import { DealVersionBanner } from '../features/deal/DealVersionBanner.jsx';
 import { tokens, fonts } from '../theme/theme.js';
 import { useCurrency } from '../dashboard/useCurrency.js';
 import { useDashboardScope } from '../dashboard/DashboardScope.jsx';
+import { dealsListHref } from './DealsPage.jsx';
 import {
-  canEditContent, canUploadDocuments, dealStatusLabel, isEditable, isPurchaserOpen, transitionsFrom,
+  canEditContent, canUploadDocuments, dealStatusLabel, isEditable, isCounterpartyOpen, clientSideOf, counterpartySideOf, transitionsFrom,
 } from '../data/dealStatus.js';
 
 /**
@@ -90,7 +91,8 @@ export function DealReviewScreen() {
 
   // This screen answers to two addresses. Sending a firm-level viewer back to the CDD register
   // would drop them into a list they did not come from.
-  const listPath = pathname.startsWith('/firm/') ? '/firm/deals' : '/cdd/deals';
+  // The CDD register comes back on the tab and client filter it was left on.
+  const listPath = pathname.startsWith('/firm/') ? '/firm/deals' : dealsListHref();
   const money = useCurrency();
 
   // The tab lives in the URL so a reload keeps your place and a link can point at one. An
@@ -112,9 +114,9 @@ export function DealReviewScreen() {
   const [attachNodeId, setAttachNodeId]     = useState(null);
   const [changeOwner, setChangeOwner]       = useState(null);   // { nodeId, edge }
   const [deleteNodeId, setDeleteNodeId]     = useState(null);
-  // Whose structure the Structure tab shows. Only a choice once the deal has closed as sold —
-  // see `side` below, which is what everything actually reads.
-  const [structureSide, setStructureSide]   = useState('VENDOR');
+  // Whose structure the Structure tab shows, null for the client's. Only a choice once the deal
+  // has closed as completed — see `side` below, which is what everything actually reads.
+  const [structureSide, setStructureSide]   = useState(null);
   const [statusOpen, setStatusOpen]         = useState(false);
   // Closing asks a second set of questions, so the status list hands over to its own dialog
   // rather than growing a branch for the one verb that records an outcome as well as a position.
@@ -188,16 +190,23 @@ export function DealReviewScreen() {
 
   // A deal outside the current scope is not shown under it — see useDealScopeGuard.
   const scopeGuard = useDealScopeGuard(dealQ.data);
-  // The purchaser's side opens once the deal has closed as sold, on the live deal only: a version
-  // records the vendor's structure at sign-off, and the purchaser was never part of that. Leaving
-  // that state (unclosed, re-closed as unsold) keeps what was recorded but takes the toggle away.
-  const purchaserAvailable = isPurchaserOpen(dealQ.data?.status, dealQ.data?.propertySold)
+  // Whose deal this is: the vendor's on a sale, the purchaser's on a purchase. Everything the
+  // compliance checks read is on the client's side; the other party is recorded after closing.
+  const clientSide = clientSideOf(dealQ.data?.transactionType);
+  const counterpartySide = counterpartySideOf(dealQ.data?.transactionType);
+  // The other party's side opens once the deal has closed as completed, on the live deal only: a
+  // version records the client's structure at sign-off, and the other party was never part of
+  // that. Leaving that state (unclosed, re-closed as not completed) keeps what was recorded but
+  // takes the toggle away.
+  const counterpartyAvailable = isCounterpartyOpen(dealQ.data?.status, dealQ.data?.propertySold)
     && viewingVersion == null;
-  const side = purchaserAvailable ? structureSide : 'VENDOR';
-  const vendorTree = useOwnershipTree(dealId);
+  const side = counterpartyAvailable ? (structureSide ?? clientSide) : clientSide;
+  const onCounterparty = side === counterpartySide;
+  // No side named: the server answers with the client's, whichever that is on this deal.
+  const clientTree = useOwnershipTree(dealId);
   // Not fetched at all until the side can be shown.
-  const purchaserTree = useOwnershipTree(purchaserAvailable ? dealId : null, 'PURCHASER');
-  const liveTree = side === 'PURCHASER' ? purchaserTree : vendorTree;
+  const counterpartyTree = useOwnershipTree(counterpartyAvailable ? dealId : null, counterpartySide);
+  const liveTree = onCounterparty ? counterpartyTree : clientTree;
 
   const versionsQ = useQuery({
     queryKey: ['dealVersions', dealId],
@@ -330,11 +339,11 @@ export function DealReviewScreen() {
     && !snapshot
     && !branchClosed;
 
-  // The purchaser's side answers to its own status rule — open exactly while the deal stands
-  // closed as sold, when the vendor's is shut — for the same people. Uploading on it follows the
-  // same rule as editing it (DealLifecycleService.assertPurchaserEditable).
-  const mayEditPurchaser = (isOwnerAgent || isDealReviewer(user?.role))
-    && purchaserAvailable
+  // The other party's side answers to its own status rule — open exactly while the deal stands
+  // closed as completed, when the client's is shut — for the same people. Uploading on it follows
+  // the same rule as editing it (DealLifecycleService.assertCounterpartyEditable).
+  const mayEditCounterparty = (isOwnerAgent || isDealReviewer(user?.role))
+    && counterpartyAvailable
     && canWrite(user?.role)
     && !snapshot
     && !branchClosed;
@@ -353,17 +362,17 @@ export function DealReviewScreen() {
   const showOverride = canOverride(user?.role);
 
   // What the Structure tab and its owner drawer may do, for whichever side is on screen. The deal
-  // drawer keeps the vendor's rules: the deal's own record is not the purchaser's to change.
-  const structureMayEdit = side === 'PURCHASER' ? mayEditPurchaser : mayEdit;
-  const structureMayUpload = side === 'PURCHASER' ? mayEditPurchaser : mayUpload;
+  // drawer keeps the client's rules: the deal's own record is not the other party's to change.
+  const structureMayEdit = onCounterparty ? mayEditCounterparty : mayEdit;
+  const structureMayUpload = onCounterparty ? mayEditCounterparty : mayUpload;
 
   const selectedNode = tree.tree?.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
   // The people on this deal, for the key-contact picker in the deal drawer. Read off the tree
   // already in hand rather than fetched again, so the list cannot lag a node edit.
-  // Always the vendor's: the key contact is someone on the vendor's side.
-  const vendorNodes = (snapshot ? tree.tree?.nodes : vendorTree.tree?.nodes) ?? [];
-  const individuals = vendorNodes
+  // Always the client's: the key contact is someone on our client's side.
+  const clientNodes = (snapshot ? tree.tree?.nodes : clientTree.tree?.nodes) ?? [];
+  const individuals = clientNodes
     .filter((n) => n.nodeType === 'INDIVIDUAL')
     .map((n) => ({ id: n.id, displayName: n.displayName }));
 
@@ -530,7 +539,9 @@ export function DealReviewScreen() {
         <Alert severity="info" sx={{ py: 0.5 }}>
           This deal is <strong>{dealStatusLabel(deal.status)}</strong>.
           Move it back to in review to make changes.
-          {mayEditPurchaser && ' The purchaser can still be recorded on the Purchaser side of the structure.'}
+          {mayEditCounterparty && (counterpartySide === 'PURCHASER'
+            ? ' The purchaser can still be recorded on the Purchaser side of the structure.'
+            : ' The vendor can still be recorded on the Vendor side of the structure.')}
         </Alert>
       )}
 
@@ -585,7 +596,8 @@ export function DealReviewScreen() {
             onDeleteNode={structureMayEdit ? setDeleteNodeId : undefined}
             readOnly={!structureMayEdit}
             side={side}
-            purchaserAvailable={purchaserAvailable}
+            clientSide={clientSide}
+            counterpartyAvailable={counterpartyAvailable}
             // A node id means nothing on the other side, so the drawer and any dialog close.
             onSideChange={(next) => {
               setSelectedNodeId(null);
@@ -663,9 +675,9 @@ export function DealReviewScreen() {
         // show the files this version was signed off with, not the deal's current ones.
         version={documentScope}
         individuals={individuals}
-        // The vendor's live owners, for moving a property document onto one. Never the
-        // purchaser's: evidence does not cross sides. A version turns moving off.
-        owners={vendorTree.tree?.nodes ?? []}
+        // The client's live owners, for moving a property document onto one. Never the other
+        // party's: evidence does not cross sides. A version turns moving off.
+        owners={clientTree.tree?.nodes ?? []}
       />
 
       {/* ── The selected owner ──────────────────────────────────────────── */}
@@ -680,7 +692,7 @@ export function DealReviewScreen() {
         readOnly={!structureMayEdit}
         canUpload={structureMayUpload}
         version={documentScope}
-        side={side}
+        onCounterparty={onCounterparty}
       />
 
       {/* ── Dialogs ─────────────────────────────────────────────────────── */}
@@ -736,6 +748,7 @@ export function DealReviewScreen() {
         open={closeOpen}
         dealId={dealId}
         isDevelopment={deal?.property?.propertyType === 'DEVELOPMENT'}
+        isPurchase={deal?.transactionType === 'PURCHASE'}
         onClose={() => setCloseOpen(false)}
         submitting={statusMut.isPending}
         onSubmit={(sale) => statusMut.mutateAsync({

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Autocomplete, Box, Stack, TextField, Typography } from '@mui/material';
-import { COUNTRIES, flagClass } from '../data/countries.js';
+import { COUNTRY_OPTIONS, flagClass } from '../data/countries.js';
 import { dialCode } from '../data/callingCodes.js';
 import { useFirmCountry } from '../hooks/useFirmCountry.js';
 import { tokens, fonts } from '../theme/theme.js';
@@ -32,7 +32,7 @@ export function PhoneField({
   const number = value?.number ?? '';
 
   const selected = useMemo(
-    () => COUNTRIES.find((c) => c.code === country) ?? null,
+    () => COUNTRY_OPTIONS.find((c) => c.code === country) ?? null,
     [country],
   );
 
@@ -41,7 +41,7 @@ export function PhoneField({
   return (
     <Stack direction="row" spacing={1} alignItems="flex-start">
       <Autocomplete
-        options={COUNTRIES}
+        options={COUNTRY_OPTIONS}
         value={selected}
         disabled={disabled}
         disableClearable

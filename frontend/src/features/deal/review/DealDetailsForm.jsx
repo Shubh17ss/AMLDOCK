@@ -15,6 +15,7 @@ import { useCurrency } from '../../../dashboard/useCurrency.js';
 import { useFirmCountry } from '../../../hooks/useFirmCountry.js';
 import { PROPERTY_TYPES, reasonsForPropertyType } from '../../../data/propertyTypes.js';
 import { RED_FLAGS } from '../../../data/redFlags.js';
+import { REASONS_FOR_PURCHASE, SOURCES_OF_FUNDS } from '../../../data/purchaseAnswers.js';
 import {
   buildDealDetailsPatch, buildPropertyPatch, dtoToForm,
 } from '../create/dealDraftModel.js';
@@ -186,6 +187,22 @@ export function DealDetailsForm({
                 ))}
               </Select>
             </FormControl>
+            {/* A purchase asks why they are buying instead — see Section3Details. */}
+            {form.clientRole === 'PURCHASER' ? (
+              <FormControl fullWidth required disabled={readOnly}>
+                <InputLabel id="deal-purchase-reason-label">Reason for purchase</InputLabel>
+                <Select
+                  labelId="deal-purchase-reason-label"
+                  label="Reason for purchase"
+                  value={form.reasonForPurchase}
+                  onChange={setField('reasonForPurchase')}
+                >
+                  {REASONS_FOR_PURCHASE.map((r) => (
+                    <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
             <FormControl fullWidth required disabled={readOnly || !propertyType}>
               <InputLabel id="deal-reason-label">Reason for selling</InputLabel>
               <Select
@@ -204,6 +221,7 @@ export function DealDetailsForm({
                 ))}
               </Select>
             </FormControl>
+            )}
           </Stack>
         </FieldGroup>
 
@@ -227,16 +245,32 @@ export function DealDetailsForm({
             required
             disabled={readOnly}
           />
-          <TenureField
-            years={form.ownershipTenureYears}
-            months={form.ownershipTenureMonths}
-            onYearsChange={setField('ownershipTenureYears')}
-            onMonthsChange={setField('ownershipTenureMonths')}
-            tbc={form.ownershipTenureTbc}
-            onTbcChange={setField('ownershipTenureTbc')}
-            required
-            disabled={readOnly}
-          />
+          {form.clientRole === 'PURCHASER' ? (
+            <FormControl fullWidth required disabled={readOnly}>
+              <InputLabel id="deal-source-of-funds-label">Source of funds</InputLabel>
+              <Select
+                labelId="deal-source-of-funds-label"
+                label="Source of funds"
+                value={form.sourceOfFunds}
+                onChange={setField('sourceOfFunds')}
+              >
+                {SOURCES_OF_FUNDS.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : (
+            <TenureField
+              years={form.ownershipTenureYears}
+              months={form.ownershipTenureMonths}
+              onYearsChange={setField('ownershipTenureYears')}
+              onMonthsChange={setField('ownershipTenureMonths')}
+              tbc={form.ownershipTenureTbc}
+              onTbcChange={setField('ownershipTenureTbc')}
+              required
+              disabled={readOnly}
+            />
+          )}
           <YesNoField
             label="Did you meet the client face to face and verify their original IDs?"
             help="Both halves matter — seeing someone is not the same as sighting their documents."

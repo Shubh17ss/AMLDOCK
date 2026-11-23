@@ -107,12 +107,14 @@ export function OwnershipTreeBuilder({
   dealSelected = false,
   /**
    * Which party's structure is on screen — `'VENDOR'` or `'PURCHASER'` — and the switch between
-   * them, in place of the old heading. The purchaser's side exists only once the deal has closed
-   * as sold; until then `purchaserAvailable` is false and that half of the switch is off.
+   * them, in place of the old heading. `clientSide` is the deal's own; the other party's exists
+   * only once the deal has closed as completed, and until then `counterpartyAvailable` is false
+   * and that half of the switch is off.
    */
   side = 'VENDOR',
   onSideChange,
-  purchaserAvailable = false,
+  clientSide = 'VENDOR',
+  counterpartyAvailable = false,
 }) {
   const { nodesById, childrenByParent, parentIdByChild } = useMemo(() => indexTree(tree), [tree]);
 
@@ -202,7 +204,8 @@ export function OwnershipTreeBuilder({
           <SideToggle
             side={side}
             onChange={onSideChange}
-            purchaserAvailable={purchaserAvailable}
+            clientSide={clientSide}
+            counterpartyAvailable={counterpartyAvailable}
           />
           {/* <Typography variant="caption" sx={{ color: tokens.muted }}>
             {dragEnabled
@@ -243,8 +246,9 @@ export function OwnershipTreeBuilder({
  * only change colour over it, so the switch reads as one thing travelling rather than two buttons
  * swapping a fill.
  *
- * <p>The purchaser half is disabled, with the reason on hover, until the deal has closed as sold.
- * A disabled button swallows pointer events, so the tooltip hangs off a wrapper around it.
+ * <p>The other party's half is disabled, with the reason on hover, until the deal has closed as
+ * completed. A disabled button swallows pointer events, so the tooltip hangs off a wrapper around
+ * it. Vendor stays on the left either way, so the switch reads the same on every deal.
  */
 // Sized to sit level with the small buttons on this screen ("Add owner" beside it), and set in the
 // tab strip's own type, so the Structure tab's header reads as part of the same row of controls.
@@ -259,7 +263,7 @@ const SIDE_PILL_RADIUS = SIDE_RADIUS - SIDE_INSET;
 // under white text would leave the active side unreadable.
 const SIDE_ACTIVE = '#262525';
 
-function SideToggle({ side, onChange, purchaserAvailable }) {
+function SideToggle({ side, onChange, clientSide, counterpartyAvailable }) {
   const onPurchaser = side === 'PURCHASER';
   const choose = (next) => { if (next !== side && onChange) onChange(next); };
 
@@ -324,15 +328,21 @@ function SideToggle({ side, onChange, purchaserAvailable }) {
           transition: `transform ${motion.enter} ${motion.ease}`,
         })}
       />
-      {half('VENDOR', 'Vendor')}
-      <Tooltip
-        title={purchaserAvailable ? '' : 'Available once the deal is closed as sold'}
-        placement="top"
-      >
-        <Box component="span" sx={{ display: 'inline-flex' }}>
-          {half('PURCHASER', 'Purchaser', !purchaserAvailable)}
-        </Box>
-      </Tooltip>
+      {[['VENDOR', 'Vendor'], ['PURCHASER', 'Purchaser']].map(([value, label]) => (
+        value === clientSide
+          ? <Box key={value} component="span" sx={{ display: 'inline-flex' }}>{half(value, label)}</Box>
+          : (
+            <Tooltip
+              key={value}
+              title={counterpartyAvailable ? '' : `Available once the deal is closed as ${clientSide === 'PURCHASER' ? 'purchased' : 'sold'}`}
+              placement="top"
+            >
+              <Box component="span" sx={{ display: 'inline-flex' }}>
+                {half(value, label, !counterpartyAvailable)}
+              </Box>
+            </Tooltip>
+          )
+      ))}
     </Box>
   );
 }

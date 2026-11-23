@@ -93,7 +93,9 @@ export function Section5Risk({
           value={form.notes}
           onChange={setField('notes')}
           minRows={4}
-          placeholder="e.g. Vendor's solicitor will send the trust deed amendment by Friday."
+          placeholder={form.clientRole === 'PURCHASER'
+            ? "e.g. Purchaser's bank will confirm the loan approval by Friday."
+            : "e.g. Vendor's solicitor will send the trust deed amendment by Friday."}
         />
         <VoiceRecorderField
           value={voiceBlob}

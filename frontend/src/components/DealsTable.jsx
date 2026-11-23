@@ -9,6 +9,7 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { DealStatusChip } from './DealStatusChip.jsx';
+import { ClientTypeChip } from './ClientTypeChip.jsx';
 import { opensDealForm, transitionsFrom } from '../data/dealStatus.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { canDeleteDeal, canOverride, canWrite, isDealReviewer } from '../auth/roles.js';
@@ -124,6 +125,7 @@ function DealRowMenu({ deal, openPath, user }) {
         // Straight off the row: DealListItemDto carries the property type so the register can
         // ask a development for a price per unit without fetching the whole deal first.
         isDevelopment={deal.propertyType === 'DEVELOPMENT'}
+        isPurchase={deal.transactionType === 'PURCHASE'}
         onClose={() => setCloseOpen(false)}
         submitting={statusMut.isPending}
         onSubmit={(sale) => statusMut.mutateAsync({
@@ -171,6 +173,7 @@ export function DealsTable({ deals = [], emptyMessage = 'No deals yet.', emptySt
         <TableHead>
           <TableRow>
             <TableCell>Property Transaction</TableCell>
+            <TableCell>Client</TableCell>
             <TableCell>Users</TableCell>
             <TableCell>Created</TableCell>
             <TableCell>Updated</TableCell>
@@ -197,6 +200,11 @@ export function DealsTable({ deals = [], emptyMessage = 'No deals yet.', emptySt
                 >
                   {propertyLabel(d)}
                 </Box>
+              </TableCell>
+              {/* Which side our client is on. Purchaser deals take the accent so the rarer of the
+                  two stands out in a list of mostly sales. */}
+              <TableCell>
+                <ClientTypeChip transactionType={d.transactionType} />
               </TableCell>
               {/* Who filed it. The name, falling back to the email for a user row since removed. */}
               <TableCell>{d.createdByName ?? d.createdByEmail ?? '—'}</TableCell>

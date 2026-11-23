@@ -242,7 +242,7 @@ function StatusStamp({ status, at, versionNo, onOpen }) {
 function ClosingValue({ row, format }) {
   if (row.kind !== 'CLOSE') return <Typography component="span" sx={{ color: tokens.muted }}>—</Typography>;
   if (row.propertySold === false) {
-    return <Typography component="span" sx={{ color: tokens.muted }}>Not sold</Typography>;
+    return <Typography component="span" sx={{ color: tokens.muted }}>Not completed</Typography>;
   }
   // A close forced by override records no outcome at all.
   if (row.saleTotal == null) return <Typography component="span" sx={{ color: tokens.muted }}>—</Typography>;

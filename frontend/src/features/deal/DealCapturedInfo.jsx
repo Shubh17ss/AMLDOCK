@@ -6,6 +6,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { tokens, fonts } from '../../theme/theme.js';
 import { useCurrency } from '../../dashboard/useCurrency.js';
 import { propertyTypeLabel, reasonForSellingLabel } from '../../data/propertyTypes.js';
+import { reasonForPurchaseLabel, sourceOfFundsLabel } from '../../data/purchaseAnswers.js';
 import { countryName } from '../../data/countries.js';
 import { IndividualsFromIds } from './IndividualsFromIds.jsx';
 import { formatPropertyAddress, formatPropertyAddressShort } from '../../data/addressFinderMeta.js';
@@ -98,7 +99,9 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
 
             <Group title="Property">
               <Row label="Type"        value={p.propertyType ? propertyTypeLabel(p.propertyType) : null} />
-              <Row label="Reason"      value={p.reasonForSelling ? reasonForSellingLabel(p.propertyType, p.reasonForSelling) : null} />
+              <Row label="Reason"      value={deal.transactionType === 'PURCHASE'
+                ? (deal.reasonForPurchase ? reasonForPurchaseLabel(deal.reasonForPurchase) : null)
+                : (p.reasonForSelling ? reasonForSellingLabel(p.propertyType, p.reasonForSelling) : null)} />
               {/* One address, as it was captured. Country is separate because it is a
                   firm-derived compliance fact, not part of what the broker typed. */}
               <Row label="Address"     value={formatPropertyAddress(p)} />
@@ -131,7 +134,9 @@ export function DealCapturedInfo({ deal, defaultOpen = true, embedded = false })
               <Row label="Red flag"    value={yesNo(deal.redFlagPresent)} />
               <Row label="Purpose"     value={deal.transactionPurpose} />
               <Row label="Trust in ownership" value={yesNo(deal.trustInvolved)} />
-              <Row label="Ownership tenure"   value={tenureLabel(deal)} />
+              {deal.transactionType === 'PURCHASE'
+                ? <Row label="Source of funds" value={deal.sourceOfFunds ? sourceOfFundsLabel(deal.sourceOfFunds) : null} />
+                : <Row label="Ownership tenure" value={tenureLabel(deal)} />}
               <Row label="Met face to face, IDs verified" value={yesNo(deal.faceToFaceIdVerified)} />
               <Row label="Foreign exposure"   value={foreignExposureLabel(deal.foreignExposureCountry)} />
               <Row label="Min value"   value={deal.valuationMin != null ? money.formatWithCode(deal.valuationMin) : null} />

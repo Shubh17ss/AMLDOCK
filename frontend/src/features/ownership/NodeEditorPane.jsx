@@ -23,8 +23,8 @@ import { isVerified } from './verificationDisplay.js';
  */
 export function NodeEditorPane({
   tree, selectedNodeId, useTree, onRequestDelete, dealId,
-  /** Whose structure the owner is on. A purchaser's evidence stays on the purchaser's side. */
-  side = 'VENDOR',
+  /** Whether the owner is on the other party's structure. Its evidence stays on that side. */
+  onCounterparty = false,
   /** Which panel to show. Owned by NodeDrawer, which draws the tab strip. */
   tab = 'details',
   /**
@@ -259,9 +259,9 @@ export function NodeEditorPane({
             // the document. Not on a version, which already turns off every write.
             moveTargets={versionNodeDocs ? null
               : (tree?.nodes ?? []).filter((n) => n.id !== selected.id)}
-            // The property's documents are the vendor's side of the file; the server refuses a
-            // move across, so it is not offered from a purchaser.
-            canMoveToProperty={!versionNodeDocs && side !== 'PURCHASER'}
+            // The property's documents are the client's side of the file; the server refuses a
+            // move across, so it is not offered from the other party.
+            canMoveToProperty={!versionNodeDocs && !onCounterparty}
           />
         </Stack>
       )}

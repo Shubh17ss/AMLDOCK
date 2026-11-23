@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Autocomplete, Box, TextField, Typography } from '@mui/material';
 import PublicOffIcon from '@mui/icons-material/PublicOff';
-import { COUNTRIES, flagClass } from '../data/countries.js';
+import { COUNTRY_OPTIONS, flagClass } from '../data/countries.js';
 import { tokens, fonts } from '../theme/theme.js';
 
 /** Sentinel for "asked, and there is none" — see the deal's foreign-exposure question. */
@@ -29,7 +29,7 @@ export function CountrySelect({
   noneLabel = 'None — no foreign exposure',
 }) {
   const options = useMemo(
-    () => (noneOption ? [{ code: NO_COUNTRY, name: noneLabel }, ...COUNTRIES] : COUNTRIES),
+    () => (noneOption ? [{ code: NO_COUNTRY, name: noneLabel }, ...COUNTRY_OPTIONS] : COUNTRY_OPTIONS),
     [noneOption, noneLabel],
   );
   // Resolved against `options` rather than countryByCode(), which has no knowledge of the

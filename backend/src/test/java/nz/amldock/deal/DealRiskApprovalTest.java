@@ -36,6 +36,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -113,7 +114,7 @@ class DealRiskApprovalTest {
         deal.setRiskRating(RiskRating.LOW);
         lenient().when(deals.findById(DEAL_ID)).thenReturn(Optional.of(deal));
 
-        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.empty());
+        lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.empty());
         lenient().when(people.findAllById(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
 
         asUser(complianceOfficer);

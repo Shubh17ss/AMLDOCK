@@ -130,6 +130,16 @@ public abstract class DealFields extends BaseEntity {
     @Column(name = "foreign_exposure_country", length = 4)
     private String foreignExposureCountry;
 
+    /** A purchase's answer in place of the vendor's tenure (V73). Null on a sale, and until asked. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_of_funds", length = 32)
+    private SourceOfFunds sourceOfFunds;
+
+    /** A purchase's answer in place of the vendor's reason for selling (V73). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason_for_purchase", length = 32)
+    private ReasonForPurchase reasonForPurchase;
+
     @Column(name = "red_flag_present")
     private Boolean redFlagPresent;
 
@@ -306,6 +316,10 @@ public abstract class DealFields extends BaseEntity {
     public void setKeyContactNodeId(Long v) { this.keyContactNodeId = v; }
     public String getForeignExposureCountry() { return foreignExposureCountry; }
     public void setForeignExposureCountry(String v) { this.foreignExposureCountry = v; }
+    public SourceOfFunds getSourceOfFunds() { return sourceOfFunds; }
+    public void setSourceOfFunds(SourceOfFunds v) { this.sourceOfFunds = v; }
+    public ReasonForPurchase getReasonForPurchase() { return reasonForPurchase; }
+    public void setReasonForPurchase(ReasonForPurchase v) { this.reasonForPurchase = v; }
     public Boolean getRedFlagPresent() { return redFlagPresent; }
     public void setRedFlagPresent(Boolean v) { this.redFlagPresent = v; }
 

@@ -49,7 +49,7 @@ public class ReadinessContext {
     /** Every node on the deal's ownership structure, detached ones included. Empty with no structure. */
     public List<OwnershipNode> nodes() {
         if (nodeList == null) {
-            nodeList = structures.findVendorByDealId(deal.getId())
+            nodeList = structures.findSubjectOf(deal)
                     .map(s -> nodes.findAllByOwnershipStructureIdOrderByIdAsc(s.getId()))
                     .orElse(List.of());
         }

@@ -24,6 +24,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 
 /**
@@ -74,7 +75,7 @@ class VerificationReadinessServiceTest {
 
         OwnershipStructure structure = new OwnershipStructure();
         ReflectionTestUtils.setField(structure, "id", STRUCTURE_ID);
-        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.of(structure));
         nodes = new ArrayList<>(List.of(node(10L, "Jane Doe", NodeVerificationStatus.VERIFIED)));
         lenient().when(nodeRepo.findAllByOwnershipStructureIdOrderByIdAsc(STRUCTURE_ID)).thenReturn(nodes);
     }
@@ -105,6 +106,32 @@ class VerificationReadinessServiceTest {
                 "Whether a trust is involved", "Ownership tenure", "Face-to-face ID check",
                 "Foreign exposure", "Whether there is a red flag",
                 "Minimum appraised value", "Maximum appraised value");
+    }
+
+    /* ---------- a purchase asks its own pair ---------- */
+
+    @Test
+    void aPurchaseAsksForItsOwnAnswersNotTheVendors() {
+        // Nothing a sale asks for, and nothing a purchase asks for either.
+        deal.setTransactionType(nz.amldock.deal.TransactionType.PURCHASE);
+        property.setReasonForSelling(null);
+        deal.setOwnershipTenureYears(null);
+
+        assertThat(service.assess(deal).missing()).containsExactly(
+                "Reason for purchase", "Source of funds");
+    }
+
+    @Test
+    void anAnsweredPurchaseIsReady() {
+        deal.setTransactionType(nz.amldock.deal.TransactionType.PURCHASE);
+        property.setReasonForSelling(null);
+        deal.setOwnershipTenureYears(null);
+        deal.setReasonForPurchase(nz.amldock.deal.ReasonForPurchase.OWNER_OCCUPIER);
+        deal.setSourceOfFunds(nz.amldock.deal.SourceOfFunds.MORTGAGE);
+
+        Readiness r = service.assess(deal);
+        assertThat(r.ready()).isTrue();
+        assertThat(r.missing()).isEmpty();
     }
 
     @Test
@@ -165,7 +192,7 @@ class VerificationReadinessServiceTest {
 
     @Test
     void aDealWithNoOwnersIsReady() {
-        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.empty());
+        lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.empty());
 
         assertThat(service.assess(deal).ready()).isTrue();
     }

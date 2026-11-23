@@ -67,9 +67,10 @@ public class DealListService {
 
     @Transactional(readOnly = true)
     public PageResponse<DealListItemDto> list(DealStatus status, Long firmId, Long branchId, String q,
+                                              TransactionType transactionType,
                                               DealListQuery.Sort sort, PageRequests paging) {
         DealScope scope = scopeForCurrentUser(firmId, branchId);
-        IdPage ids = query.page(scope, status == null ? List.of() : List.of(status), q,
+        IdPage ids = query.page(scope, status == null ? List.of() : List.of(status), q, transactionType,
                 sort == null ? DealListQuery.Sort.CREATED_AT : sort, paging);
         return PageResponse.of(toListItems(loadInOrder(ids.ids())), paging, ids.total(), ids.exact());
     }
