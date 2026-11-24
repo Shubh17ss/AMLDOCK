@@ -93,8 +93,7 @@ export function NewDealPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const gaps = sectionGaps(section + 1, form);
-  const purchaserBlocked = form.clientRole === 'PURCHASER';
-  const canAdvance = gaps.length === 0 && !purchaserBlocked;
+  const canAdvance = gaps.length === 0;
 
   // Each section change returns the broker to the top — the page scrolls via the window in
   // AppShell, so a new section would otherwise open halfway down.
@@ -427,7 +426,7 @@ export function NewDealPage() {
             onClick={isLast ? handleSubmit : isCreateStep ? handleCreate : goNext}
             // Not disabled on incomplete input — clicking says what's missing, which beats a
             // dead button the broker has to reverse-engineer.
-            disabled={busy || purchaserBlocked}
+            disabled={busy}
           >
             {busy ? 'Saving…' : isLast ? 'Submit for review' : isCreateStep ? 'Create' : 'Next'}
           </Button>

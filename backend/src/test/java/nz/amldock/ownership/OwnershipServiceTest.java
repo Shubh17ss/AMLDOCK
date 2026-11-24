@@ -108,7 +108,7 @@ class OwnershipServiceTest {
 
         lenient().when(deals.findById(DEAL_ID)).thenReturn(Optional.of(deal));
         lenient().when(branches.findById(BRANCH_ID)).thenReturn(Optional.of(branch));
-        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.of(structure));
         lenient().when(structures.findByDealIdAndSide(DEAL_ID, StructureSide.VENDOR)).thenReturn(Optional.of(structure));
         lenient().when(structures.findById(STRUCTURE_ID)).thenReturn(Optional.of(structure));
         lenient().when(nodes.save(any())).thenAnswer(i -> {
@@ -982,7 +982,7 @@ class OwnershipServiceTest {
     private void closeDeal(DealStatus status, Boolean sold) {
         // The real rules, not the mock's silence. Lenient: not every case reaches both.
         lenient().doCallRealMethod().when(lifecycle).assertEditable(any(), any(), any());
-        lenient().doCallRealMethod().when(lifecycle).assertPurchaserEditable(any(), any(), any());
+        lenient().doCallRealMethod().when(lifecycle).assertCounterpartyEditable(any(), any(), any());
         deal.setStatus(status);
         deal.setPropertySold(sold);
     }
@@ -1060,6 +1060,40 @@ class OwnershipServiceTest {
         assertThatThrownBy(() -> service.setRoot(DEAL_ID, StructureSide.PURCHASER, 4L))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("purchaser's structure");
+    }
+
+    /* ---------- a purchase: the purchaser is the client ---------- */
+
+    @Test
+    void onAPurchaseTheClientsOwnersGoOnThePurchasersStructure() {
+        deal.setTransactionType(nz.amldock.deal.TransactionType.PURCHASE);
+        when(structures.findByDealIdAndSide(DEAL_ID, StructureSide.PURCHASER)).thenReturn(Optional.empty());
+        when(structures.save(any())).thenAnswer(i -> {
+            OwnershipStructure s = i.getArgument(0);
+            ReflectionTestUtils.setField(s, "id", PURCHASER_STRUCTURE_ID);
+            return s;
+        });
+
+        // No side named: the client's, which on a purchase is the purchaser's.
+        service.createNode(DEAL_ID, null, createRequest(NodeType.PRIVATE_COMPANY, "Buyer Holdings"));
+
+        ArgumentCaptor<OwnershipStructure> made = ArgumentCaptor.forClass(OwnershipStructure.class);
+        verify(structures).save(made.capture());
+        assertThat(made.getValue().getSide()).isEqualTo(StructureSide.PURCHASER);
+        // The client's owners feed the deal's rating.
+        verify(risk).recomputeFor(DEAL_ID);
+    }
+
+    @Test
+    void onAPurchaseTheVendorIsShutUntilTheDealIsClosedAsPurchased() {
+        deal.setTransactionType(nz.amldock.deal.TransactionType.PURCHASE);
+        closeDeal(DealStatus.REVIEW, null);
+
+        assertThatThrownBy(() -> service.createNode(DEAL_ID, StructureSide.VENDOR,
+                createRequest(NodeType.INDIVIDUAL, "Val Vendor")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("The vendor can only be recorded on a deal closed as purchased");
+        verify(nodes, never()).save(any());
     }
 
     private static void assertLocked(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {

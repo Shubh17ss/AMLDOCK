@@ -35,7 +35,7 @@ const TABS = [
  * nothing — each tab saves its own work with its own button.
  */
 export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onRequestDelete,
-                            readOnly = false, canUpload, version = null, side = 'VENDOR' }) {
+                            readOnly = false, canUpload, version = null, onCounterparty = false }) {
   const [tab, setTab] = useState('details');
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -245,7 +245,7 @@ export function NodeDrawer({ open, node, tree, useTree, dealId, onClose, onReque
             tab={tab}
             onRequestDelete={onRequestDelete}
             version={version}
-            side={side}
+            onCounterparty={onCounterparty}
             actionsContainer={detailsActionsInFooter ? actionsEl : null}
             onClose={onClose}
           />

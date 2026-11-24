@@ -3,17 +3,22 @@ import { FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography
 import { CountrySelect } from '../../../components/CountrySelect.jsx';
 import { VoiceRecorderField } from '../../../components/VoiceRecorderField.jsx';
 import { PROPERTY_TYPES, reasonsForPropertyType } from '../../../data/propertyTypes.js';
+import { REASONS_FOR_PURCHASE, SOURCES_OF_FUNDS } from '../../../data/purchaseAnswers.js';
 import { SectionCard, FieldGroup } from './SectionShell.jsx';
 import { TenureField } from './TenureField.jsx';
 import { YesNoField } from './YesNoField.jsx';
 import { tokens } from '../../../theme/theme.js';
 
 /**
- * Section 3 — what the property is, and why it's being sold.
+ * Section 3 — what the property is, and why it's being sold or bought.
  *
  * This is where the AML signal actually lives: the reason for selling, whether a trust sits in
  * the beneficial ownership, how long the client has held the property, whether they were met in
  * person with their original IDs, and any foreign exposure.
+ *
+ * When the client is the purchaser, the two vendor-only questions swap out: the reason for
+ * selling becomes the reason for purchase, and tenure becomes the source of funds. Both are
+ * scored server-side (DealRiskService).
  *
  * <p>There is no running risk preview here any more. The rating is a score drawn from the whole
  * ownership structure as well as these answers, and the structure does not exist yet at this
@@ -26,6 +31,7 @@ import { tokens } from '../../../theme/theme.js';
 export function Section3Details({ form, setNested, setField, voiceBlob, onVoiceChange }) {
   const propertyType = form.property.propertyType;
   const reasons = reasonsForPropertyType(propertyType);
+  const purchase = form.clientRole === 'PURCHASER';
 
   // Reasons are keyed off the property type, so a reason that no longer belongs to the chosen
   // type must go. '' rather than null — the API reads an empty string as "clear this" and
@@ -40,7 +46,7 @@ export function Section3Details({ form, setNested, setField, voiceBlob, onVoiceC
   return (
     <SectionCard
       title="Property details"
-      subtitle="What it is, and why your client is selling."
+      subtitle={purchase ? 'What it is, and why your client is buying.' : 'What it is, and why your client is selling.'}
     >
       <FieldGroup title="Classification">
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -58,21 +64,37 @@ export function Section3Details({ form, setNested, setField, voiceBlob, onVoiceC
             </Select>
           </FormControl>
 
-          <FormControl fullWidth required disabled={!propertyType}>
-            <InputLabel id="reason-label">Reason for selling</InputLabel>
-            <Select
-              labelId="reason-label"
-              label="Reason for selling"
-              value={form.property.reasonForSelling}
-              onChange={setNested('property', 'reasonForSelling')}
-            >
-              {reasons.map((r) => (
-                <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {purchase ? (
+            <FormControl fullWidth required>
+              <InputLabel id="purchase-reason-label">Reason for purchase</InputLabel>
+              <Select
+                labelId="purchase-reason-label"
+                label="Reason for purchase"
+                value={form.reasonForPurchase}
+                onChange={setField('reasonForPurchase')}
+              >
+                {REASONS_FOR_PURCHASE.map((r) => (
+                  <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : (
+            <FormControl fullWidth required disabled={!propertyType}>
+              <InputLabel id="reason-label">Reason for selling</InputLabel>
+              <Select
+                labelId="reason-label"
+                label="Reason for selling"
+                value={form.property.reasonForSelling}
+                onChange={setNested('property', 'reasonForSelling')}
+              >
+                {reasons.map((r) => (
+                  <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
         </Stack>
-        {!propertyType && (
+        {!propertyType && !purchase && (
           <Typography variant="caption" sx={{ color: tokens.muted }}>
             Pick a property type first — the reasons offered depend on it.
           </Typography>
@@ -106,15 +128,31 @@ export function Section3Details({ form, setNested, setField, voiceBlob, onVoiceC
           required
         />
 
-        <TenureField
-          years={form.ownershipTenureYears}
-          months={form.ownershipTenureMonths}
-          onYearsChange={setField('ownershipTenureYears')}
-          onMonthsChange={setField('ownershipTenureMonths')}
-          tbc={form.ownershipTenureTbc}
-          onTbcChange={setField('ownershipTenureTbc')}
-          required
-        />
+        {purchase ? (
+          <FormControl fullWidth required>
+            <InputLabel id="source-of-funds-label">Source of funds</InputLabel>
+            <Select
+              labelId="source-of-funds-label"
+              label="Source of funds"
+              value={form.sourceOfFunds}
+              onChange={setField('sourceOfFunds')}
+            >
+              {SOURCES_OF_FUNDS.map((o) => (
+                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        ) : (
+          <TenureField
+            years={form.ownershipTenureYears}
+            months={form.ownershipTenureMonths}
+            onYearsChange={setField('ownershipTenureYears')}
+            onMonthsChange={setField('ownershipTenureMonths')}
+            tbc={form.ownershipTenureTbc}
+            onTbcChange={setField('ownershipTenureTbc')}
+            required
+          />
+        )}
 
         <YesNoField
           label="Did you meet the client face to face and verify their original IDs?"

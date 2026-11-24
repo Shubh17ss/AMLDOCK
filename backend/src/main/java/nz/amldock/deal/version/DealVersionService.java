@@ -17,7 +17,6 @@ import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipNodeRepository;
 import nz.amldock.ownership.OwnershipStructure;
 import nz.amldock.ownership.OwnershipStructureRepository;
-import nz.amldock.ownership.StructureSide;
 import nz.amldock.property.PropertyRepository;
 import nz.amldock.user.UserPrincipal;
 import org.springframework.stereotype.Service;
@@ -147,7 +146,7 @@ public class DealVersionService {
 
         DealVersion version = DealVersion.copyOf(deal, versionNo, actor.id(), note);
 
-        OwnershipStructure structure = structures.findVendorByDealId(deal.getId()).orElse(null);
+        OwnershipStructure structure = structures.findSubjectOf(deal).orElse(null);
         if (structure != null) {
             version.setRootNodeId(structure.getRootNodeId());
             version.setStructureNotes(structure.getNotes());
@@ -164,21 +163,21 @@ public class DealVersionService {
         clients.findById(deal.getClientId())
                 .ifPresent(c -> versionClients.save(DealVersionClient.copyOf(c, vid)));
 
-        // The vendor's side only. The purchaser is recorded after the sign-off a version captures,
-        // and is shown live rather than as of any one moment - so its owners, their documents and
-        // the people behind them stay out of the copy.
-        List<OwnershipNode> purchaserNodes = structures.findByDealIdAndSide(deal.getId(), StructureSide.PURCHASER)
+        // The client's side only. The counterparty is recorded after the sign-off a version
+        // captures, and is shown live rather than as of any one moment - so its owners, their
+        // documents and the people behind them stay out of the copy.
+        List<OwnershipNode> counterpartyNodes = structures.findCounterpartyOf(deal)
                 .map(s -> nodes.findAllByOwnershipStructureIdOrderByIdAsc(s.getId()))
                 .orElse(List.of());
-        Set<Long> purchaserNodeIds = purchaserNodes.stream()
+        Set<Long> counterpartyNodeIds = counterpartyNodes.stream()
                 .map(OwnershipNode::getId).collect(Collectors.toSet());
-        Set<Long> purchaserPersonIds = purchaserNodes.stream()
+        Set<Long> counterpartyPersonIds = counterpartyNodes.stream()
                 .map(OwnershipNode::getBeneficialOwnerId).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         copyStructure(structure, vid);
-        copyDocuments(deal, vid, purchaserNodeIds);
-        copyPeople(deal, vid, purchaserPersonIds);
+        copyDocuments(deal, vid, counterpartyNodeIds);
+        copyPeople(deal, vid, counterpartyPersonIds);
     }
 
     private void copyStructure(OwnershipStructure structure, Long vid) {
@@ -200,11 +199,11 @@ public class DealVersionService {
      * what the reviewer actually had in front of them. A document already deleted before this
      * verification was not part of what was signed off.
      */
-    private void copyDocuments(Deal deal, Long vid, Set<Long> purchaserNodeIds) {
+    private void copyDocuments(Deal deal, Long vid, Set<Long> counterpartyNodeIds) {
         List<Document> docs = documents.findAllByDealIdAndStatusOrderByCreatedAtDesc(
                 deal.getId(), DocumentStatus.ACTIVE);
         versionDocuments.saveAll(docs.stream()
-                .filter(d -> !purchaserNodeIds.contains(d.getOwnershipNodeId()))
+                .filter(d -> !counterpartyNodeIds.contains(d.getOwnershipNodeId()))
                 .map(d -> DealVersionDocument.copyOf(d, vid)).toList());
     }
 
@@ -215,9 +214,9 @@ public class DealVersionService {
      * version was checked against can be edited later by work on an entirely unrelated deal. The
      * link row carries which document introduced them, which is worth keeping alongside.
      */
-    private void copyPeople(Deal deal, Long vid, Set<Long> purchaserPersonIds) {
+    private void copyPeople(Deal deal, Long vid, Set<Long> counterpartyPersonIds) {
         List<DealBeneficialOwner> links = dealOwners.findAllByDealIdOrderByCreatedAtAsc(deal.getId()).stream()
-                .filter(l -> !purchaserPersonIds.contains(l.getBeneficialOwnerId()))
+                .filter(l -> !counterpartyPersonIds.contains(l.getBeneficialOwnerId()))
                 .toList();
         if (links.isEmpty()) return;
 

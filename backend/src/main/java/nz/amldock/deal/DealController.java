@@ -72,6 +72,7 @@ public class DealController {
      * request costs the same whatever the size of the firm. Dashboards read {@link #summary}.
      *
      * @param q    contains-match on reference, client name or property address
+     * @param transactionType SALE (vendor client) or PURCHASE (purchaser client); both when absent
      * @param sort {@code createdAt} (default) or {@code updatedAt}, newest first
      */
     @GetMapping
@@ -79,11 +80,12 @@ public class DealController {
                                               @RequestParam(required = false) Long firmId,
                                               @RequestParam(required = false) Long branchId,
                                               @RequestParam(required = false) String q,
+                                              @RequestParam(required = false) TransactionType transactionType,
                                               @RequestParam(defaultValue = "createdAt") String sort,
                                               @RequestParam(required = false) Integer page,
                                               @RequestParam(required = false) Integer size) {
         DealListQuery.Sort order = "updatedAt".equals(sort) ? DealListQuery.Sort.UPDATED_AT : DealListQuery.Sort.CREATED_AT;
-        return dealList.list(status, firmId, branchId, q, order, PageRequests.of(page, size));
+        return dealList.list(status, firmId, branchId, q, transactionType, order, PageRequests.of(page, size));
     }
 
     /** Per-status counts, value sums and oldest waits for the role dashboards. */
@@ -347,6 +349,22 @@ public class DealController {
      */
     @GetMapping("/{id}/transaction-monitoring")
     public List<StatusMoveDto> transactionMonitoring(@DealRef("id") Long id) {
+        return deals.transactionMonitoring(id);
+    }
+
+    /**
+     * Adds or corrects the note on one move; a blank note clears it. Reviewers only, as for the
+     * close and unclose that write the note in the first place. Returns the refreshed history.
+     */
+    @PatchMapping("/{id}/transaction-monitoring/{moveId}/note")
+    @PreAuthorize(REVIEWER_ROLES)
+    public List<StatusMoveDto> editMoveNote(@DealRef("id") Long id, @PathVariable Long moveId,
+                                            @Valid @RequestBody OptionalNoteRequest req) {
+        var r = deals.editMoveNote(id, moveId, req.note());
+        audit.record(AuditAction.DEAL_MOVE_NOTE_EDITED, "Deal", r.deal().getId(),
+                "Transaction note on deal " + r.deal().getReference() + " changed from \""
+                        + (r.previousNote() == null ? "" : r.previousNote()) + "\" to \""
+                        + (req.note() == null ? "" : req.note().trim()) + "\"");
         return deals.transactionMonitoring(id);
     }
 

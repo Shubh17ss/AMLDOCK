@@ -1,5 +1,6 @@
 package nz.amldock.deal.monitoring;
 
+import nz.amldock.common.exception.NotFoundException;
 import nz.amldock.deal.Deal;
 import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.monitoring.DealStatusMove.Kind;
@@ -19,6 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The deal's moves between VERIFIED and CLOSED, recorded as they happen and read back as a history.
@@ -85,13 +87,16 @@ public class TransactionMonitoringService {
     public List<StatusMoveDto> history(Long dealId) {
         List<DealStatusMove> rows = moves.findAllByDealIdOrderByOccurredAtDescIdDesc(dealId);
         if (rows.isEmpty()) return List.of();
-        Map<Long, User> people = users.findAllById(rows.stream().map(DealStatusMove::getActorUserId)
+        Map<Long, User> people = users.findAllById(rows.stream()
+                        .flatMap(m -> Stream.of(m.getActorUserId(), m.getNoteEditedBy()))
                         .filter(Objects::nonNull).distinct().toList())
                 .stream().collect(Collectors.toMap(User::getId, Function.identity()));
         return rows.stream().map(m -> {
             boolean close = m.getKind() == Kind.CLOSE;
             User actor = m.getActorUserId() == null ? null : people.get(m.getActorUserId());
+            User editor = m.getNoteEditedBy() == null ? null : people.get(m.getNoteEditedBy());
             return new StatusMoveDto(
+                    m.getId(),
                     m.getKind(),
                     close ? DealStatus.VERIFIED : DealStatus.CLOSED,
                     close ? DealStatus.CLOSED : DealStatus.VERIFIED,
@@ -102,8 +107,27 @@ public class TransactionMonitoringService {
                             ? variance(m.getValuationMin(), m.getValuationMax(), m.getSaleTotal())
                             : null,
                     m.getNote(),
-                    actor == null ? null : actor.getFullName());
+                    actor == null ? null : actor.getFullName(),
+                    m.getNoteEditedAt(),
+                    editor == null ? null : editor.getFullName());
         }).toList();
+    }
+
+    /**
+     * Adds or corrects a move's note; blank clears it. The move must belong to the deal named, so a
+     * move id from another deal reads as not found. Permission is the caller's job, as for
+     * {@link #history}.
+     *
+     * @return the note it replaced, for the audit entry
+     */
+    public String editNote(Long dealId, Long moveId, Long actorId, String note) {
+        DealStatusMove m = moves.findById(moveId)
+                .filter(x -> x.getDealId().equals(dealId))
+                .orElseThrow(() -> new NotFoundException("Transaction " + moveId + " not found"));
+        String previous = m.getNote();
+        m.editNote(blankToNull(note), actorId, Instant.now());
+        moves.save(m);
+        return previous;
     }
 
     /**

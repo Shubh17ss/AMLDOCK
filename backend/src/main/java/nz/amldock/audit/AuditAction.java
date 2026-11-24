@@ -45,6 +45,8 @@ public enum AuditAction {
     /** A closed deal was taken back to verified so its sale detail could be corrected. */
     DEAL_UNCLOSED,
     DEAL_NOTE_ADDED,
+    /** A reviewer added or corrected the note on a move in the deal's transaction monitoring. */
+    DEAL_MOVE_NOTE_EDITED,
     DEAL_OVERRIDDEN,
     /**
      * An agent was let onto, or taken off, a deal they did not create. Recorded against the deal

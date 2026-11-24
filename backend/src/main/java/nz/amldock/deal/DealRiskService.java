@@ -41,6 +41,9 @@ import java.util.stream.Collectors;
  * <pre>
  * THE DEAL
  *   ownership tenure     0-18 months +6, 19-35 +2, 36 and over nothing, to be confirmed +3
+ *                        (a sale only: the vendor's hold)
+ *   source of funds      the scale on SourceOfFunds          (a purchase only, in place of tenure)
+ *   reason for purchase  the scale on ReasonForPurchase      (a purchase only; placeholder points)
  *   met face to face and sighted original IDs?   No +2
  *   foreign exposure     the country scale (CountryRisk)
  *
@@ -273,7 +276,7 @@ public class DealRiskService {
 
         scoreDeal(deal, factors, gaps);
 
-        List<OwnershipNode> all = nodesOf(deal.getId());
+        List<OwnershipNode> all = nodesOf(deal);
         Map<Long, String> residence = countriesOfResidence(all);
         Set<Long> held = heldByAnotherEntity(all);
         for (OwnershipNode node : all) {
@@ -295,19 +298,16 @@ public class DealRiskService {
     private static final String TENURE = "Ownership tenure";
     private static final String FACE_TO_FACE = "Met face to face, original IDs verified";
     private static final String FOREIGN_EXPOSURE = "Foreign exposure";
+    private static final String SOURCE_OF_FUNDS = "Source of funds";
+    private static final String REASON_FOR_PURCHASE = "Reason for purchase";
 
     private static void scoreDeal(Deal deal, List<RiskFactor> factors, List<RiskGap> gaps) {
-        Integer months = tenureMonths(deal);
-        if (deal.isOwnershipTenureTbc()) {
-            // Answered, just not known: priced in rather than held up as a gap, so a deal can
-            // still be approved and verified while the broker chases the figure.
-            factors.add(RiskFactor.deal("TENURE", TENURE, "To be confirmed", 3));
-        } else if (months == null) {
-            gaps.add(RiskGap.deal("TENURE", TENURE));
-        } else if (months <= 18) {
-            factors.add(RiskFactor.deal("TENURE", TENURE, months + " months", 6));
-        } else if (months < 36) {
-            factors.add(RiskFactor.deal("TENURE", TENURE, months + " months", 2));
+        // What the client's own hold of the money or the property says: the vendor's tenure on a
+        // sale, the purchaser's funds and purpose on a purchase. The rest is asked of both.
+        if (deal.getTransactionType() == TransactionType.PURCHASE) {
+            scorePurchase(deal, factors, gaps);
+        } else {
+            scoreTenure(deal, factors, gaps);
         }
 
         Boolean verified = deal.getFaceToFaceIdVerified();
@@ -327,6 +327,43 @@ public class DealRiskService {
                 factors.add(new RiskFactor("FOREIGN_EXPOSURE", FOREIGN_EXPOSURE, null, points,
                         null, null, null, exposure));
             }
+        }
+    }
+
+    /**
+     * A purchase's two answers. Each is a factor only when it scores - a mortgage-funded owner
+     * occupier adds nothing, the same way a long tenure adds nothing on a sale - and a gap until
+     * it is answered.
+     */
+    private static void scorePurchase(Deal deal, List<RiskFactor> factors, List<RiskGap> gaps) {
+        SourceOfFunds funds = deal.getSourceOfFunds();
+        if (funds == null) {
+            gaps.add(RiskGap.deal("SOURCE_OF_FUNDS", SOURCE_OF_FUNDS));
+        } else if (funds.points() > 0) {
+            factors.add(RiskFactor.deal("SOURCE_OF_FUNDS", SOURCE_OF_FUNDS, funds.label(), funds.points()));
+        }
+
+        ReasonForPurchase reason = deal.getReasonForPurchase();
+        if (reason == null) {
+            gaps.add(RiskGap.deal("REASON_FOR_PURCHASE", REASON_FOR_PURCHASE));
+        } else if (reason.points() > 0) {
+            factors.add(RiskFactor.deal("REASON_FOR_PURCHASE", REASON_FOR_PURCHASE, reason.label(), reason.points()));
+        }
+    }
+
+    /** The vendor's hold of the property, on a sale. */
+    private static void scoreTenure(Deal deal, List<RiskFactor> factors, List<RiskGap> gaps) {
+        Integer months = tenureMonths(deal);
+        if (deal.isOwnershipTenureTbc()) {
+            // Answered, just not known: priced in rather than held up as a gap, so a deal can
+            // still be approved and verified while the broker chases the figure.
+            factors.add(RiskFactor.deal("TENURE", TENURE, "To be confirmed", 3));
+        } else if (months == null) {
+            gaps.add(RiskGap.deal("TENURE", TENURE));
+        } else if (months <= 18) {
+            factors.add(RiskFactor.deal("TENURE", TENURE, months + " months", 6));
+        } else if (months < 36) {
+            factors.add(RiskFactor.deal("TENURE", TENURE, months + " months", 2));
         }
     }
 
@@ -491,9 +528,9 @@ public class DealRiskService {
                 .collect(Collectors.toSet());
     }
 
-    private List<OwnershipNode> nodesOf(Long dealId) {
-        if (dealId == null) return List.of();   // a deal being created has no structure yet
-        OwnershipStructure structure = structures.findVendorByDealId(dealId).orElse(null);
+    private List<OwnershipNode> nodesOf(Deal deal) {
+        if (deal.getId() == null) return List.of();   // a deal being created has no structure yet
+        OwnershipStructure structure = structures.findSubjectOf(deal).orElse(null);
         if (structure == null) return List.of();
         return nodes.findAllByOwnershipStructureIdOrderByIdAsc(structure.getId());
     }

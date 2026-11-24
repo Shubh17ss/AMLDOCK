@@ -43,6 +43,9 @@ export const EMPTY_FORM = {
   ownershipTenureMonths: '',
   // Asked, and not known yet. Excludes a figure — TenureField keeps the two apart.
   ownershipTenureTbc: false,
+  // A purchase asks these instead of tenure and reason for selling. Codes from purchaseAnswers.js.
+  sourceOfFunds: '',
+  reasonForPurchase: '',
   faceToFaceIdVerified: null,
   foreignExposureCountry: '', // '' = unanswered, 'NONE' = asked and there is none
   // Which individual on the ownership structure is the point of contact. Only the review
@@ -74,6 +77,9 @@ export function buildDealPatch(form) {
     ownershipTenureYears: num(form.ownershipTenureYears),
     ownershipTenureMonths: num(form.ownershipTenureMonths),
     ownershipTenureTbc: Boolean(form.ownershipTenureTbc),
+    // null rather than '': an enum, which the API cannot read a blank as. Nothing clears them.
+    sourceOfFunds: form.sourceOfFunds || null,
+    reasonForPurchase: form.reasonForPurchase || null,
     faceToFaceIdVerified: form.faceToFaceIdVerified,
     foreignExposureCountry: form.foreignExposureCountry,
     clientRemote: form.clientRemote,
@@ -118,6 +124,9 @@ export function buildDealDetailsPatch(form) {
     ownershipTenureYears: num(form.ownershipTenureYears),
     ownershipTenureMonths: num(form.ownershipTenureMonths),
     ownershipTenureTbc: Boolean(form.ownershipTenureTbc),
+    // null rather than '': an enum, which the API cannot read a blank as. Nothing clears them.
+    sourceOfFunds: form.sourceOfFunds || null,
+    reasonForPurchase: form.reasonForPurchase || null,
     faceToFaceIdVerified: form.faceToFaceIdVerified,
     // '' means "nobody chosen" and the API reads null as "leave alone", so clearing the
     // nomination is deliberately not expressible — removing the owner is what clears it, and
@@ -212,6 +221,8 @@ export function dtoToForm(dto) {
     ownershipTenureYears: dto.ownershipTenureYears == null ? '' : String(dto.ownershipTenureYears),
     ownershipTenureMonths: dto.ownershipTenureMonths == null ? '' : String(dto.ownershipTenureMonths),
     ownershipTenureTbc: Boolean(dto.ownershipTenureTbc),
+    sourceOfFunds: dto.sourceOfFunds ?? '',
+    reasonForPurchase: dto.reasonForPurchase ?? '',
     faceToFaceIdVerified: dto.faceToFaceIdVerified ?? null,
     keyContactNodeId: dto.keyContactNodeId == null ? '' : String(dto.keyContactNodeId),
     foreignExposureCountry: dto.foreignExposureCountry ?? '',
@@ -248,18 +259,29 @@ export function sectionGaps(section, form) {
   }
   if (section === 3) {
     const p = form.property;
+    const purchase = form.clientRole === 'PURCHASER';
     if (!p.propertyType) gaps.push('Property type');
-    if (!p.reasonForSelling) gaps.push('Reason for selling');
-    if (form.trustInvolved == null) gaps.push('Whether a trust is involved in beneficial ownership');
-    // One box is enough: four years is answered by leaving months blank, and demanding a zero
-    // there would hold up a save over a complete answer.
-    // "To be confirmed" is an answer too.
-    if (!form.ownershipTenureTbc
-        && form.ownershipTenureYears === '' && form.ownershipTenureMonths === '') {
-      gaps.push('How long the client has owned the property');
+    // A purchase asks why they are buying and where the money is from; a sale asks why they are
+    // selling and how long they have held it. Neither is asked of the other.
+    if (purchase) {
+      if (!form.reasonForPurchase) gaps.push('Reason for purchase');
+    } else if (!p.reasonForSelling) {
+      gaps.push('Reason for selling');
     }
-    if (form.ownershipTenureMonths !== '' && Number(form.ownershipTenureMonths) > 11) {
-      gaps.push('Months must be 0-11 — put whole years in the Years box');
+    if (form.trustInvolved == null) gaps.push('Whether a trust is involved in beneficial ownership');
+    if (purchase) {
+      if (!form.sourceOfFunds) gaps.push('Source of funds');
+    } else {
+      // One box is enough: four years is answered by leaving months blank, and demanding a zero
+      // there would hold up a save over a complete answer.
+      // "To be confirmed" is an answer too.
+      if (!form.ownershipTenureTbc
+          && form.ownershipTenureYears === '' && form.ownershipTenureMonths === '') {
+        gaps.push('How long the client has owned the property');
+      }
+      if (form.ownershipTenureMonths !== '' && Number(form.ownershipTenureMonths) > 11) {
+        gaps.push('Months must be 0-11 — put whole years in the Years box');
+      }
     }
     if (form.faceToFaceIdVerified == null) {
       gaps.push('Whether you met the client face to face and verified their original IDs');

@@ -30,10 +30,14 @@ const amount = (digits) => (digits === '' || digits == null ? null : Number(digi
  * two shapes it will accept from the deal's own property type, so this dialog cannot make a deal
  * answer the wrong question by being wrong about it.
  *
+ * <p>On a purchase the same answers are asked from the buyer's side — did it complete, and for
+ * how much. The stored flag is the same `propertySold` either way: closing as completed is what
+ * opens the other party's side of the structure, whichever party that is.
+ *
  * <p>Pre-filled from whatever the last close recorded, because reopening a closed deal exists so
  * these answers can be corrected — starting from blank would make a correction a re-entry.
  */
-export function CloseDealDialog({ open, dealId, isDevelopment, onClose, onSubmit, submitting }) {
+export function CloseDealDialog({ open, dealId, isDevelopment, isPurchase = false, onClose, onSubmit, submitting }) {
   const money = useCurrency();
   const [sold, setSold] = useState(null);
   const [salePrice, setSalePrice] = useState('');
@@ -118,7 +122,7 @@ export function CloseDealDialog({ open, dealId, isDevelopment, onClose, onSubmit
             )}
 
             <SegmentedField
-              label="Is the property sold?"
+              label={isPurchase ? 'Did the purchase complete?' : 'Is the property sold?'}
               value={sold}
               onChange={setSold}
               nullable
@@ -139,7 +143,7 @@ export function CloseDealDialog({ open, dealId, isDevelopment, onClose, onSubmit
             {sold === true && isDevelopment && (
               <Box>
                 <Typography sx={{ fontSize: '0.8rem', color: tokens.ink, mb: 0.25 }}>
-                  What each unit sold for
+                  {isPurchase ? 'What each unit was bought for' : 'What each unit sold for'}
                 </Typography>
                 {/* A development is sold as flats or lots, so one figure would not describe it. */}
                 <Typography variant="caption" sx={{ color: tokens.muted, display: 'block', mb: 1.5 }}>

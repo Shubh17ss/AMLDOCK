@@ -5,6 +5,8 @@ import nz.amldock.deal.DealFields;
 import nz.amldock.deal.DealStatus;
 import nz.amldock.deal.RiskRating;
 import nz.amldock.deal.RiskRatingSource;
+import nz.amldock.deal.ReasonForPurchase;
+import nz.amldock.deal.SourceOfFunds;
 import nz.amldock.deal.TransactionType;
 import nz.amldock.property.dto.PropertyDto;
 
@@ -66,7 +68,10 @@ public record DealDto(
         boolean branchActive,
         // V49 — what the deal closed as; null until it has been closed. A CLOSED deal with true
         // here is the one that takes a purchaser.
-        Boolean propertySold
+        Boolean propertySold,
+        // V73 — a purchase's answers in place of tenure and reason for selling.
+        SourceOfFunds sourceOfFunds,
+        ReasonForPurchase reasonForPurchase
 ) {
     public static DealDto from(DealFields d, String publicId, Long firmId, String firmName, String branchName,
                                boolean branchActive, PropertyDto property, ClientDto client,
@@ -89,6 +94,7 @@ public record DealDto(
                 d.getRiskValue(), d.isRiskApproved(), d.getRiskOverrideComment(),
                 d.isOwnershipTenureTbc(),
                 d.isCddDelayed(), d.getCddDelayedAt(),
-                branchActive, d.getPropertySold());
+                branchActive, d.getPropertySold(),
+                d.getSourceOfFunds(), d.getReasonForPurchase());
     }
 }

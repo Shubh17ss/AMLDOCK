@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Link as RouterLink } from 'react-router-dom';
-import { Alert, Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
+import { Alert, Box, Button, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import { listDeals } from '../api/deals.js';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -16,10 +16,29 @@ import { usePagedList } from '../hooks/usePagedList.js';
 import { DEAL_STATUS_FILTERS as STATUSES, dealStatusLabel, opensDealForm } from '../data/dealStatus.js';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { tokens } from '../theme/theme.js';
+import { DEALS_PATH } from '../navigation/moduleRegistry.jsx';
 
 // New, not All: the list opens on the deals still being worked. ALL remains a client-side
 // sentinel stripped before the request — see the params block below.
 const DEFAULT_STATUS = 'NEW';
+
+// Which side our client is on. '' is both, and is dropped from the request like ALL.
+const CLIENT_FILTERS = [
+  { value: '', label: 'All clients' },
+  { value: 'SALE', label: 'Vendor clients' },
+  { value: 'PURCHASE', label: 'Purchaser clients' },
+];
+
+// The list's last query string, so the deal page's "Listing Register" button can return to the
+// same tab and filter. Session storage can be absent or refuse writes; that just means defaults.
+const LIST_SEARCH_KEY = 'amldock.dealsListSearch';
+
+/** Where "back to the register" should go: /cdd/deals with the filters it was last left on. */
+export function dealsListHref() {
+  let search = '';
+  try { search = sessionStorage.getItem(LIST_SEARCH_KEY) ?? ''; } catch { /* defaults */ }
+  return `${DEALS_PATH}${search}`;
+}
 
 /**
  * Deals — the deal list, one page at a time, filtered by status tabs and searched by property.
@@ -37,18 +56,39 @@ const DEFAULT_STATUS = 'NEW';
 export function DealsPage() {
   const { user } = useAuth();
   const { firm, branch } = useDashboardScope();
-  const [status, setStatus] = useState(DEFAULT_STATUS);
-  const paged = usePagedList({ resetOn: [status, firm?.id, branch?.id] });
+  // Tab and client filter live in the URL (?status=&client=), so a reload, a shared link and the
+  // way back from a deal all land on the same list. Defaults are left out to keep /cdd/deals bare;
+  // replace, not push, so flicking through tabs doesn't fill the back button's history.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedStatus = searchParams.get('status');
+  const status = STATUSES.includes(requestedStatus) ? requestedStatus : DEFAULT_STATUS;
+  const requestedClient = searchParams.get('client');
+  const transactionType = CLIENT_FILTERS.some((f) => f.value && f.value === requestedClient)
+    ? requestedClient : '';
+  const setParam = (key, value, fallback) => setSearchParams((prev) => {
+    const next = new URLSearchParams(prev);
+    if (value === fallback) next.delete(key); else next.set(key, value);
+    return next;
+  }, { replace: true });
+  const setStatus = (v) => setParam('status', v, DEFAULT_STATUS);
+  const setTransactionType = (v) => setParam('client', v, '');
+
+  const listSearch = searchParams.toString();
+  useEffect(() => {
+    try { sessionStorage.setItem(LIST_SEARCH_KEY, listSearch ? `?${listSearch}` : ''); } catch { /* best effort */ }
+  }, [listSearch]);
+  const paged = usePagedList({ resetOn: [status, transactionType, firm?.id, branch?.id] });
   const query = paged.search;
 
   // The backend enforces role scope regardless; ROOT and firm-level reviewers get
   // real firm/branch filtering from these params.
   const params = {};
   if (status !== 'ALL') params.status = status;
+  if (transactionType) params.transactionType = transactionType;
   if (firm?.id) params.firmId = firm.id;
   if (branch?.id) params.branchId = branch.id;
   const dealsQ = useQuery({
-    queryKey: ['deals', 'list', status, firm?.id ?? null, branch?.id ?? null, paged.params],
+    queryKey: ['deals', 'list', status, transactionType, firm?.id ?? null, branch?.id ?? null, paged.params],
     queryFn: () => listDeals({ ...params, ...paged.params }),
     // Keep the current page on screen while the next one loads, rather than flashing skeletons.
     placeholderData: keepPreviousData,
@@ -59,7 +99,7 @@ export function DealsPage() {
   // "You have no deals" and "nothing matches this filter" are different messages and want different
   // answers — the first is a first-run screen and should invite the one action that fixes it, the
   // second should not, because creating a deal is not how you find an existing one.
-  const filtered = status !== 'ALL' || query.trim() !== '';
+  const filtered = status !== 'ALL' || transactionType !== '' || query.trim() !== '';
   const isEmpty = !dealsQ.isLoading && total === 0 && !filtered;
   const mayCreate = canCreateDeal(user?.role);
 
@@ -78,6 +118,7 @@ export function DealsPage() {
         eyebrow={[
           `${countText(dealsQ.data)} ${total === 1 ? 'deal' : 'deals'}`,
           status === 'ALL' ? 'all statuses' : dealStatusLabel(status).toLowerCase(),
+          transactionType ? CLIENT_FILTERS.find((f) => f.value === transactionType).label.toLowerCase() : null,
           query.trim() ? `matching "${query.trim()}"` : null,
           firm?.name,
           branch?.name,
@@ -121,16 +162,39 @@ export function DealsPage() {
         justifyContent="space-between"
         sx={{ flexWrap: { xs: 'nowrap', md: 'wrap' }, gap: 1.5 }}
       >
-        <SearchField
-          value={query}
-          onChange={paged.setSearch}
-          placeholder="Search by property address…"
-          sx={{
-            width: { xs: '100%', md: 'auto' },
-            maxWidth: { xs: 'none', md: 320 },
-            '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
-          }}
-        />
+        <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} sx={{ flex: { md: 1 } }}>
+          <SearchField
+            value={query}
+            onChange={paged.setSearch}
+            placeholder="Search by property address…"
+            sx={{
+              // Wide enough for the whole placeholder; fixed so the row's flex can't squeeze it.
+              width: { xs: '100%', md: 340 },
+              flexShrink: 0,
+              '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
+            }}
+          />
+          {/* '' shows a placeholder rather than "All clients": nothing chosen reads as a prompt. */}
+          <TextField
+            select
+            size="small"
+            value={transactionType}
+            onChange={(e) => setTransactionType(e.target.value)}
+            inputProps={{ 'aria-label': 'Filter by client type' }}
+            SelectProps={{
+              displayEmpty: true,
+              renderValue: (v) => (v
+                ? CLIENT_FILTERS.find((f) => f.value === v).label
+                : <Box component="span" sx={{ color: tokens.muted }}>Filter by client type</Box>),
+            }}
+            sx={{
+              width: { xs: '100%', sm: 200 },
+              '& .MuiOutlinedInput-root': { minHeight: { xs: 52, md: 0 } },
+            }}
+          >
+            {CLIENT_FILTERS.map((f) => <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>)}
+          </TextField>
+        </Stack>
         {/* Guarded, not decorative: this list is open to every role, including ones the server
             refuses to let create a deal at all — an ungated button would bounce them to /app. */}
         {mayCreate && (
@@ -186,7 +250,7 @@ export function DealsPage() {
       {/* Desktop: table */}
       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
         {dealsQ.isLoading
-          ? <SkeletonTable rows={6} columns={6} />
+          ? <SkeletonTable rows={6} columns={7} />
           : (
             <DealsTable
               deals={deals}

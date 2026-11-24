@@ -11,6 +11,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
@@ -50,6 +52,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiError.of(403, "Forbidden", "Access denied"));
+    }
+
+    /**
+     * A path nothing serves. Without this the catch-all below turns it into a 500 and an ERROR log
+     * line, e.g. {@code /actuator/health} on 8080 when actuator lives on the management port.
+     */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<ApiError> handleNotFound(Exception ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiError.of(404, "Not Found", "No such endpoint"));
     }
 
     @ExceptionHandler(Exception.class)

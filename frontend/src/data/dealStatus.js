@@ -92,13 +92,30 @@ export const canUploadDocuments = (status, role) => {
 };
 
 /**
- * Whether the purchaser's side of the structure is open on a deal in this state: only once it has
- * closed as sold, and only while it stays there. Who may write is the same as for the vendor's
- * side; this is the status half alone.
+ * The client's side of a deal — the one its compliance checks are about: the vendor's on a sale,
+ * the purchaser's on a purchase. A deal with no type predates purchasers and is a sale.
  *
- * Mirrors `DealLifecycleService.canEditPurchaser`.
+ * Mirrors `StructureSide.subjectOf`.
  */
-export const isPurchaserOpen = (status, propertySold) =>
+export const clientSideOf = (transactionType) =>
+  (transactionType === 'PURCHASE' ? 'PURCHASER' : 'VENDOR');
+
+/** Who the client is, for a list: 'Vendor' on a sale, 'Purchaser' on a purchase. */
+export const clientRoleLabel = (transactionType) =>
+  (clientSideOf(transactionType) === 'PURCHASER' ? 'Purchaser' : 'Vendor');
+
+/** The other party's side: the purchaser's on a sale, the vendor's on a purchase. */
+export const counterpartySideOf = (transactionType) =>
+  (clientSideOf(transactionType) === 'VENDOR' ? 'PURCHASER' : 'VENDOR');
+
+/**
+ * Whether the counterparty's side of the structure is open on a deal in this state: only once it
+ * has closed as completed, and only while it stays there. Who may write is the same as for the
+ * client's side; this is the status half alone.
+ *
+ * Mirrors `DealLifecycleService.canEditCounterparty`.
+ */
+export const isCounterpartyOpen = (status, propertySold) =>
   status === 'CLOSED' && propertySold === true;
 
 /**

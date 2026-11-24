@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import nz.amldock.client.dto.ClientInput;
+import nz.amldock.deal.ReasonForPurchase;
+import nz.amldock.deal.SourceOfFunds;
 import nz.amldock.deal.TransactionType;
 import nz.amldock.property.dto.PropertyInput;
 
@@ -65,5 +67,10 @@ public record CreateDealRequest(
         @Valid ClientInput client,
 
         /** Tenure asked and not known yet. True clears any years/months sent beside it. */
-        Boolean ownershipTenureTbc
+        Boolean ownershipTenureTbc,
+
+        /* ---------- a purchase's answers, in place of tenure and reason for selling ---------- */
+
+        SourceOfFunds sourceOfFunds,
+        ReasonForPurchase reasonForPurchase
 ) {}

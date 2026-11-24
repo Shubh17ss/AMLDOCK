@@ -216,7 +216,7 @@ class DealVersionServiceTest {
         structure.setDealId(DEAL_ID);
         structure.setRootNodeId(100L);
         structure.setNotes("Two-tier trust");
-        when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.of(structure));
+        when(structures.findSubjectOf(any())).thenReturn(Optional.of(structure));
         when(versions.findTopByDealIdOrderByVersionNoDesc(DEAL_ID)).thenReturn(Optional.empty());
         when(versions.save(any())).thenAnswer(inv -> withId(inv.getArgument(0), 500L));
 
@@ -267,7 +267,7 @@ class DealVersionServiceTest {
         ReflectionTestUtils.setField(purchaser, "id", 21L);
         purchaser.setDealId(DEAL_ID);
         purchaser.setSide(StructureSide.PURCHASER);
-        when(structures.findByDealIdAndSide(DEAL_ID, StructureSide.PURCHASER)).thenReturn(Optional.of(purchaser));
+        when(structures.findCounterpartyOf(any())).thenReturn(Optional.of(purchaser));
         OwnershipNode buyer = node(150L);
         buyer.setOwnershipStructureId(21L);
         buyer.setBeneficialOwnerId(301L);
@@ -342,7 +342,7 @@ class DealVersionServiceTest {
 
     /** A deal with no structure, documents or people — the shape most of these tests need. */
     private void stubEmptyGraph() {
-        lenient().when(structures.findVendorByDealId(DEAL_ID)).thenReturn(Optional.empty());
+        lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.empty());
         lenient().when(properties.findById(PROPERTY_ID)).thenReturn(Optional.empty());
         lenient().when(clients.findById(CLIENT_ID)).thenReturn(Optional.empty());
         lenient().when(documents.findAllByDealIdAndStatusOrderByCreatedAtDesc(DEAL_ID, DocumentStatus.ACTIVE))
