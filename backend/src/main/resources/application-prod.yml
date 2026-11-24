@@ -1,0 +1,104 @@
+# Deployed profile. Self-contained on purpose: application.yml is gitignored, so the CI-built jar
+# does not contain it. Every value comes from the environment (/etc/amldock/env on the instance,
+# filled from SSM Parameter Store at deploy). No secret has a default: a missing one fails boot.
+spring:
+  application:
+    name: AMLDOCK
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      # db.t4g.micro allows ~80 connections; one instance at 10 is plenty for test traffic.
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      connection-timeout: ${DB_POOL_TIMEOUT_MS:5000}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+server:
+  port: 8080
+  shutdown: graceful
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# Caddy runs on the same box and proxies over loopback, so only loopback may set X-Forwarded-For /
+# X-Forwarded-Proto. Read by TrustedProxyConfig (a Java regex); deliberately not
+# server.forward-headers-strategy, which would add a second, broader RemoteIpValve.
+# A TRUSTED_PROXIES env var still overrides this (env outranks profile files).
+TRUSTED_PROXIES: '127\.0\.0\.1|0:0:0:0:0:0:0:1'
+
+# Health on a separate port that the security group never exposes; deploy.sh polls it locally.
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+amldock:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-ttl-minutes: 15
+    refresh-ttl-days: 7
+  cors:
+    allowed-origins: ${CORS_ORIGINS}
+  seed:
+    admin-email: ${SEED_ADMIN_EMAIL}
+    admin-password: ${SEED_ADMIN_PASSWORD}
+    admin-name: ${SEED_ADMIN_NAME:AMLDOCK Admin}
+  s3:
+    bucket: ${S3_BUCKET}
+    region: ${AWS_REGION:ap-southeast-2}
+    endpoint: ""
+    upload-ttl-minutes: 5
+    download-ttl-minutes: 5
+    max-bytes: 26214400
+  ocr:
+    enabled: ${OCR_ENABLED:true}
+    poll-ms: 5000
+    batch-size: 4
+    lease-minutes: 10
+  notifications:
+    enabled: ${NOTIFICATIONS_ENABLED:true}
+    transport: ${NOTIFICATIONS_TRANSPORT:ses}
+    poll-ms: 10000
+    batch-size: 50
+    lease-minutes: 5
+    retain-days: 90
+    provision-templates: true
+    configuration-set: ${SES_CONFIGURATION_SET:}
+  # Blank on purpose: StorageConfig then uses the default chain, i.e. the EC2 instance role.
+  aws:
+    access-key-id: ""
+    secret-access-key: ""
+  mail:
+    enabled: ${MAIL_ENABLED:true}
+    from: ${MAIL_FROM}
+    from-name: ${MAIL_FROM_NAME:AMLDOCK}
+    reply-to: ${MAIL_REPLY_TO:}
+    app-base-url: ${APP_BASE_URL}
+
+logging:
+  level:
+    root: INFO
+    nz.amldock: INFO
+    org.hibernate.SQL: WARN
