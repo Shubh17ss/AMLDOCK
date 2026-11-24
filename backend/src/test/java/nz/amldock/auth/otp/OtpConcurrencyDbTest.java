@@ -87,12 +87,17 @@ class OtpConcurrencyDbTest {
 
         List<String> outcomes = race(20, () -> verifyOutcome(wrong));
 
-        long evaluated = outcomes.stream().filter("Invalid or expired code"::equals).count();
-        assertThat(evaluated).as("guesses that reached the hash check").isEqualTo(MAX_ATTEMPTS);
         assertThat(outcomes).doesNotContain("OK");
+        // The outcome messages can't count hash checks: a guess that arrives after the code is
+        // burned also gets "Invalid or expired code" (from the lookup), and how many do depends on
+        // thread timing. The attempts column can: a guess reaches the hash check only after a
+        // successful reservation, and each reservation adds exactly one.
+        long refusedAtCap = outcomes.stream().filter(o -> o.startsWith("Too many attempts")).count();
+        assertThat(refusedAtCap).as("at least one guess hit the cap").isPositive();
 
         OtpCode row = latestCode();
-        assertThat(row.getAttempts()).as("no lost updates and no overshoot").isEqualTo(MAX_ATTEMPTS);
+        assertThat(row.getAttempts()).as("guesses that reached the hash check: no lost updates, no overshoot")
+                .isEqualTo(MAX_ATTEMPTS);
         assertThat(row.getConsumedAt()).as("burned once the cap was hit").isNotNull();
     }
 
