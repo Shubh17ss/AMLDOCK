@@ -1,24 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import SearchIcon from '@mui/icons-material/Search';
 import { useAddressFinder, ADDRESSFINDER_KEY } from '../hooks/useAddressFinder.js';
 import { mapAddressFinderResult, formatPropertyAddress } from '../data/addressFinderMeta.js';
 import { tokens } from '../theme/theme.js';
 
 /**
- * The property address: one input, backed by AddressFinder.
+ * The property address: a search backed by AddressFinder, with manual entry always reachable.
  *
- * <p>Two modes, one box. When the lookup is available the box is a *search* — deliberately
- * uncontrolled, because the widget writes into `input.value` directly and bypasses React's value
- * tracker, which desyncs a controlled input on the first keystroke. Picking a result fills the
- * structured fields underneath, which are what actually get saved.
+ * <p>Search mode: the box is deliberately uncontrolled, because the widget writes into
+ * `input.value` directly and bypasses React's value tracker, which desyncs a controlled input on
+ * the first keystroke. Picking a result fills the structured fields, which are what get saved.
  *
- * <p>When the lookup can't run — no key configured, script blocked, offline, or the firm's
- * country not resolved yet — the same box becomes a plain controlled text field writing to
- * `addressLine1`. The broker is never blocked on a third party being reachable.
+ * <p>Manual mode: a controlled set of structured fields writing straight to the address. It is
+ * used when the lookup can't run at all (no key, script blocked, offline, country unknown), and
+ * whenever the user chooses it, e.g. the address isn't in the database or the API is failing
+ * after the script loaded. The user is never blocked on a third party being reachable.
  *
- * <p>The country only decides which database is searched. The server sets the property's country
- * from the deal's reporting entity regardless of anything sent from here.
+ * <p>The country only decides which database is searched (and labels Region vs State). The server
+ * sets the property's country from the deal's reporting entity regardless of anything sent here.
  *
  * Props:
  *   value:    { addressLine1, addressLine2, suburb, district, region, postcode }
@@ -32,20 +34,22 @@ export function AddressFinderField({ value, onChange, country }) {
   const wrapperRef = useRef(null);
   const { status, error } = useAddressFinder();
   const [picked, setPicked] = useState(null);
+  const [manual, setManual] = useState(false);
+  // Set when the lookup comes back empty or errors, so the way out is offered, not hidden.
+  const [lookupTrouble, setLookupTrouble] = useState(null);
 
-  // The widget is built once per (status, country) and its callback outlives every render in
-  // between, so both the handler and the current address are read through refs. Listing them as
-  // effect deps would tear the widget down on every keystroke; closing over them directly would
-  // hand the callback whatever they were when it was created.
+  // The widget is built once per (status, country, mode) and its callback outlives every render
+  // in between, so both the handler and the current address are read through refs.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const valueRef = useRef(value);
   valueRef.current = value;
 
   const lookupUsable = status === 'ready' && Boolean(country);
+  const showManual = manual || !lookupUsable;
 
   useEffect(() => {
-    if (!lookupUsable || !inputRef.current || !wrapperRef.current) return undefined;
+    if (showManual || !inputRef.current || !wrapperRef.current) return undefined;
 
     const widget = new window.AddressFinder.Widget(
       inputRef.current,
@@ -53,57 +57,94 @@ export function AddressFinderField({ value, onChange, country }) {
       country,
       {
         show_locations: false,
-        empty_content: 'No matches — keep typing, or type the address in full.',
+        empty_content: 'No matches — keep typing, or enter the address manually below.',
         // Milliseconds of stillness before a lookup fires. The widget's own default is 50,
-        // which bills a call per keystroke — a 15-character address costs ~15 lookups. At 300
-        // a burst of typing collapses into ~3, and the list still appears as the broker stops.
+        // which bills a call per keystroke. At 300 a burst of typing collapses into ~3.
         timeout: 300,
-        // Our own classes alongside the widget's, so styles/addressfinder.css can pin the list
-        // to the field without touching anything else the widget renders.
         list_class: 'af_list amldock-af-list',
         item_class: 'af_item amldock-af-item',
         hover_class: 'af_hover amldock-af-hover',
         empty_class: 'af_empty amldock-af-empty',
-        // Positioned against the wrapper below rather than <body>, so `left: 0` in the
-        // stylesheet means the left edge of the field.
         container: wrapperRef.current,
       },
     );
 
     widget.on('result:select', (fullAddress, meta) => {
       setPicked(fullAddress);
+      setLookupTrouble(null);
       onChangeRef.current({
         ...valueRef.current,
         ...mapAddressFinderResult(meta, fullAddress, country),
       });
     });
+    widget.on('results:update', () => setLookupTrouble(null));
+    widget.on('results:empty', () => setLookupTrouble('empty'));
+    // Not every widget version emits these; subscribing to an unknown event is harmless.
+    widget.on('results:error', () => setLookupTrouble('error'));
+    widget.on('error', () => setLookupTrouble('error'));
 
     return () => widget.destroy?.();
-  }, [lookupUsable, country]);
+  }, [showManual, country]);
 
-  /* ---------- fallback: the same box, typed by hand ---------- */
+  const enterManually = () => {
+    const typed = inputRef.current?.value?.trim();
+    if (typed && !value.addressLine1) onChange({ ...value, addressLine1: typed });
+    setLookupTrouble(null);
+    setManual(true);
+  };
 
-  if (!lookupUsable) {
+  /* ---------- manual entry: structured fields, typed by hand ---------- */
+
+  if (showManual) {
+    const set = (key) => (e) => onChange({ ...value, [key]: e.target.value });
+    const field = (key, label, props = {}) => (
+      <TextField label={label} value={value[key] || ''} onChange={set(key)} fullWidth {...props} />
+    );
+
     return (
-      <Stack spacing={1}>
-        <TextField
-          label="Property address"
-          placeholder="Street, suburb, city, postcode"
-          value={value.addressLine1 || ''}
-          onChange={(e) => onChange({ ...value, addressLine1: e.target.value })}
-          fullWidth
-          required
-          multiline
-          minRows={2}
-        />
-        <Typography variant="caption" sx={{ color: tokens.muted }}>
-          {status === 'error'
-            ? `Address lookup is unavailable (${error}). Type the full address.`
-            : 'Address lookup is unavailable — type the full address.'}
-        </Typography>
+      <Stack spacing={1.5}>
+        {field('addressLine1', 'Street address', {
+          required: true,
+          placeholder: 'e.g. 12 Example Street',
+          autoComplete: 'address-line1',
+        })}
+        {field('addressLine2', 'Address line 2', {
+          placeholder: 'Unit, level, building (optional)',
+          autoComplete: 'address-line2',
+        })}
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+          {field('suburb', 'Suburb')}
+          {field('district', 'Town / City', { autoComplete: 'address-level2' })}
+        </Stack>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+          {field('region', country === 'AU' ? 'State' : 'Region', { autoComplete: 'address-level1' })}
+          {field('postcode', 'Postcode', { autoComplete: 'postal-code', inputProps: { inputMode: 'numeric' } })}
+        </Stack>
+
+        {lookupUsable ? (
+          <Box>
+            <Button
+              size="small"
+              variant="text"
+              startIcon={<SearchIcon fontSize="small" />}
+              onClick={() => setManual(false)}
+              sx={{ px: 0.5 }}
+            >
+              Search for the address instead
+            </Button>
+          </Box>
+        ) : (
+          <Typography variant="caption" sx={{ color: tokens.muted }}>
+            {status === 'error'
+              ? `Address lookup is unavailable (${error}). Enter the address manually.`
+              : 'Address lookup is unavailable — enter the address manually.'}
+          </Typography>
+        )}
       </Stack>
     );
   }
+
+  /* ---------- search ---------- */
 
   const summary = formatPropertyAddress(value);
 
@@ -112,17 +153,17 @@ export function AddressFinderField({ value, onChange, country }) {
       {/* position: relative makes this the offset parent the widget's absolutely-positioned
           list resolves against. */}
       <Box ref={wrapperRef} sx={{ position: 'relative' }}>
-      <TextField
-        // inputRef, not ref: the widget binds to the native <input>, and `ref` would hand it
-        // MUI's wrapper div, which it cannot attach to.
-        inputRef={inputRef}
-        label="Property address"
-        placeholder="Start typing a street address…"
-        defaultValue={summary}
-        fullWidth
-        required
-        autoComplete="off"
-      />
+        <TextField
+          // inputRef, not ref: the widget binds to the native <input>, and `ref` would hand it
+          // MUI's wrapper div, which it cannot attach to.
+          inputRef={inputRef}
+          label="Property address"
+          placeholder="Start typing a street address…"
+          defaultValue={summary}
+          fullWidth
+          required
+          autoComplete="off"
+        />
       </Box>
 
       {picked ? (
@@ -140,13 +181,41 @@ export function AddressFinderField({ value, onChange, country }) {
         </Typography>
       )}
 
-      {/* A typed-but-unpicked address would leave nothing saved, so say so rather than let the
-          broker discover it at submission. */}
-      {!summary && (
-        <Alert severity="info" sx={{ py: 0 }}>
-          Choose an address from the suggestions — typing alone doesn’t save it.
+      {lookupTrouble && (
+        <Alert
+          severity="warning"
+          sx={{ py: 0 }}
+          action={(
+            <Button color="inherit" size="small" onClick={enterManually}>
+              Enter manually
+            </Button>
+          )}
+        >
+          {lookupTrouble === 'error'
+            ? 'The address lookup isn’t responding.'
+            : 'No matching address found.'}
         </Alert>
       )}
+
+      {/* A typed-but-unpicked address would leave nothing saved, so say so rather than let the
+          user discover it at submission. */}
+      {!summary && !lookupTrouble && (
+        <Alert severity="info" sx={{ py: 0 }}>
+          Choose an address from the suggestions, or enter it manually — typing alone doesn’t save it.
+        </Alert>
+      )}
+
+      <Box>
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<EditOutlinedIcon fontSize="small" />}
+          onClick={enterManually}
+          sx={{ px: 0.5 }}
+        >
+          {summary ? 'Edit the address manually' : 'Can’t find the address? Enter it manually'}
+        </Button>
+      </Box>
     </Stack>
   );
 }
