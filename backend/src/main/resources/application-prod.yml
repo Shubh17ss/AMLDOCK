@@ -28,6 +28,11 @@ spring:
 server:
   port: 8080
   shutdown: graceful
+  tomcat:
+    # Must outlive Caddy's upstream keepalive (30s in the Caddyfile) so Caddy never reuses a
+    # socket Tomcat already closed (shows up as random dropped requests / 502s).
+    keep-alive-timeout: 75s
+    connection-timeout: 20s
   error:
     include-message: always
     include-binding-errors: always
