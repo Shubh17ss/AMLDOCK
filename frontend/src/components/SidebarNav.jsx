@@ -57,7 +57,8 @@ export function SidebarNav() {
               onClick={() => setOpen(group.group)}
               sx={{
                 display: 'flex', alignItems: 'center', gap: 1.5,
-                pl: 1.75, pr: 1, py: 0.9, borderRadius: 999, textDecoration: 'none',
+                // 12px, the corners every button has (Update Transaction), so the hover wash matches.
+                pl: 1.75, pr: 1, py: 0.9, borderRadius: '12px', textDecoration: 'none',
                 fontSize: '0.88rem', fontWeight: 600, lineHeight: 1.3,
                 // A plain label, not a chip: the section that owns the current page is ink, the
                 // rest are muted, and nothing is drawn around either.
@@ -127,7 +128,8 @@ function NavList({ items, pathname, sx }) {
               sx={{
                 py: 0.6,
                 pl: 1.75,
-                borderRadius: 999,
+                // Same 12px corners as the buttons, on hover and on the selected (active) item.
+                borderRadius: '12px',
                 color: active ? tokens.ink : tokens.muted,
                 // Ink on the blue wash: the wash says where you are, the icon carries the blue.
                 '&.Mui-selected': { backgroundColor: tokens.blueWash, color: tokens.ink },
