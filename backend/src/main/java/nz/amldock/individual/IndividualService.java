@@ -19,6 +19,7 @@ import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipNodeRepository;
 import nz.amldock.ownership.OwnershipStructure;
 import nz.amldock.ownership.OwnershipStructureRepository;
+import nz.amldock.ownership.OwnershipSubtree;
 import nz.amldock.ownership.dto.PersonDto;
 import nz.amldock.property.Property;
 import nz.amldock.property.PropertyRepository;
@@ -58,6 +59,7 @@ public class IndividualService {
     private final BeneficialOwnerRepository owners;
     private final PropertyRepository properties;
     private final DocumentService documentService;
+    private final OwnershipSubtree subtree;
 
     public IndividualService(DealService dealService,
                              DealListService dealList,
@@ -67,7 +69,8 @@ public class IndividualService {
                              OwnershipNodeRepository nodes,
                              BeneficialOwnerRepository owners,
                              PropertyRepository properties,
-                             DocumentService documentService) {
+                             DocumentService documentService,
+                             OwnershipSubtree subtree) {
         this.dealService = dealService;
         this.dealList = dealList;
         this.query = query;
@@ -77,6 +80,7 @@ public class IndividualService {
         this.owners = owners;
         this.properties = properties;
         this.documentService = documentService;
+        this.subtree = subtree;
     }
 
     /**
@@ -190,12 +194,7 @@ public class IndividualService {
     @Transactional(readOnly = true)
     public IndividualDetailDto detail(Long nodeId) {
         OwnershipNode node = nodes.findById(nodeId)
-                .orElseThrow(() -> new NotFoundException("Individual " + nodeId + " not found"));
-        // Not a 403: which nodes are individuals is not a secret, and a caller who asks about a
-        // company here has asked the wrong question, not one they were forbidden to ask.
-        if (node.getNodeType() != NodeType.INDIVIDUAL) {
-            throw new NotFoundException("Node " + nodeId + " is not an individual");
-        }
+                .orElseThrow(() -> new NotFoundException("Owner " + nodeId + " not found"));
         OwnershipStructure structure = structures.findById(node.getOwnershipStructureId())
                 .orElseThrow(() -> new NotFoundException("Structure for node " + nodeId + " not found"));
 
@@ -209,6 +208,18 @@ public class IndividualService {
         // ON DELETE SET NULL, and the node is still a real answer to "who is on this deal".
         BeneficialOwner person = node.getBeneficialOwnerId() == null ? null
                 : owners.findById(node.getBeneficialOwnerId()).orElse(null);
+
+        // An entity is copied with everyone beneath it, so the picker is told who that is. Read
+        // with the deal check above already passed: the owners beneath sit on the same deal.
+        boolean entity = node.getNodeType() != NodeType.INDIVIDUAL;
+        List<OwnershipSubtree.Line> beneath = List.of();
+        int documentsBeneath = 0;
+        if (entity) {
+            beneath = subtree.outline(subtree.below(node));
+            for (OwnershipSubtree.Line line : beneath) {
+                documentsBeneath += documentService.listForNode(line.nodeId()).size();
+            }
+        }
 
         return new IndividualDetailDto(
                 node.getId(),
@@ -227,7 +238,14 @@ public class IndividualService {
                 // Through DocumentService rather than the repositories, so this list and the node
                 // Documents tab can never disagree about what is on the file. It unions the node
                 // documents with the person scans, which is the set the copy takes.
-                documentService.listForNode(nodeId).stream().map(IndividualService::summarise).toList());
+                documentService.listForNode(nodeId).stream().map(IndividualService::summarise).toList(),
+                node.getNodeType(),
+                entity ? new IndividualDetailDto.EntityFacts(
+                        node.getCompanyNumber(), node.getBusinessNumber(), node.getJurisdictionCountry(),
+                        node.getIncorporationDate(), node.getRegisteredOffice(), node.getTrustName(),
+                        node.getTrustType(), node.getSettlorName()) : null,
+                beneath,
+                documentsBeneath);
     }
 
     private static IndividualDetailDto.DocumentSummary summarise(DocumentDto d) {

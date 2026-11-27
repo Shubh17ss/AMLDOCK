@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  createEdge, createNode, deleteEdge, deleteNode,
+  copyOwner, createEdge, createNode, deleteEdge, deleteNode,
   getTree, reorder, updateEdge, updateNode, verifyNode,
 } from '../../api/ownership.js';
 
@@ -91,6 +91,7 @@ export function useOwnershipTree(dealId, side = null) {
   };
 
   const createNodeMut = useMutation({ mutationFn: (payload) => createNode(dealId, payload, side), onSuccess: invalidate });
+  const copyOwnerMut = useMutation({ mutationFn: (sourceNodeId) => copyOwner(dealId, sourceNodeId, side), onSuccess: invalidate });
   const updateNodeMut = useMutation({
     mutationFn: ({ nodeId, payload }) => updateNode(dealId, nodeId, payload),
     onSuccess: invalidate,
@@ -186,6 +187,7 @@ export function useOwnershipTree(dealId, side = null) {
     error: treeQ.error,
     refetch: treeQ.refetch,
     createNode: createNodeMut,
+    copyOwner: copyOwnerMut,
     updateNode: updateNodeMut,
     deleteNode: deleteNodeMut,
     verifyNode: verifyNodeMut,

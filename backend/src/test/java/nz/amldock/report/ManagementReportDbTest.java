@@ -69,6 +69,9 @@ class ManagementReportDbTest {
     Long officer;
     Long agent;
     String officerEmail;
+    final UUID trustKey = UUID.randomUUID();
+    Long d6;
+    Long d8;
 
     @BeforeEach
     void seed() {
@@ -111,12 +114,12 @@ class ManagementReportDbTest {
         // d5: 23:30 on 30 June 2025 in Auckland - the previous AML year, though 1 July is not far off.
         Long d5 = deal(branchA, "RESIDENTIAL", "REVIEW", "LOW", "2025-06-30T23:30:00+12:00", null, null, null, null);
         // d6: 23:30 on the window's last day, and no property type.
-        Long d6 = deal(branchA, null, "ON_HOLD", null, "2026-06-30T23:30:00+12:00", null, null, null, null);
+        d6 = deal(branchA, null, "ON_HOLD", null, "2026-06-30T23:30:00+12:00", null, null, null, null);
         // d7: created long before the window but verified inside it.
         deal(branchA, "RESIDENTIAL", "VERIFIED", "LOW", "2024-01-01T10:00:00+13:00",
                 "2025-12-01T10:00:00+13:00", null, null, null);
         // d8: closed in the window without a sale.
-        deal(branchA, "LIFESTYLE", "CLOSED", "LOW", "2026-02-01T10:00:00+13:00",
+        d8 = deal(branchA, "LIFESTYLE", "CLOSED", "LOW", "2026-02-01T10:00:00+13:00",
                 "2026-02-10T10:00:00+13:00", "2026-03-01T10:00:00+13:00", false, null);
         // d9: created in the AML year before, verified and since reopened: still listed then.
         Long d9 = deal(branchA, "RESIDENTIAL", "REVIEW", "LOW", "2024-09-01T10:00:00+12:00", null, null, null, null);
@@ -136,7 +139,7 @@ class ManagementReportDbTest {
         Long s1 = structure(d1);
         node(s1, "INDIVIDUAL", "Ann", ann, "VERIFIED", null);
         // Registered in Australia, so overseas for an NZ firm, and cleared with an exception.
-        node(s1, "TRUST", "Ann Family Trust", UUID.randomUUID(), "VERIFIED_WITH_EXCEPTION", "AU");
+        node(s1, "TRUST", "Ann Family Trust", trustKey, "VERIFIED_WITH_EXCEPTION", "AU");
         Long s2 = structure(d2);
         node(s2, "INDIVIDUAL", "Ann", ann, "VERIFIED", null);                 // Ann, re-used
         node(s2, "PRIVATE_COMPANY", "Acme Ltd", UUID.randomUUID(), "IN_PROGRESS", "NZ");
@@ -298,19 +301,34 @@ class ManagementReportDbTest {
     }
 
     @Test
-    void ownersAreCountedLikeTheRegistersWithReuseAcrossTheFirm() {
+    void eachOwnerCountsOnceHoweverManyDealsItIsOn() {
         OwnerTypeReportDto o = reports.owners(window(null, null));
         Map<String, OwnerTypeReportDto.Row> rows = byKey(o.rows(), OwnerTypeReportDto.Row::ownerType);
 
         assertThat(o.rows()).hasSize(12);
-        // Ann twice (d1, d2) and Bob once (d3); both are on another deal of the firm's, Bob's being
-        // outside the window.
-        assertThat(rows.get("INDIVIDUAL")).isEqualTo(new OwnerTypeReportDto.Row("INDIVIDUAL", 3, 0, 2, 0));
-        assertThat(rows.get("TRUST")).isEqualTo(new OwnerTypeReportDto.Row("TRUST", 1, 1, 0, 1));
-        assertThat(rows.get("PRIVATE_COMPANY")).isEqualTo(new OwnerTypeReportDto.Row("PRIVATE_COMPANY", 1, 0, 0, 0));
+        // Ann is on d1 and d2 as one identity, so she counts once; Bob (d3) once.
+        assertThat(rows.get("INDIVIDUAL")).isEqualTo(new OwnerTypeReportDto.Row("INDIVIDUAL", 2, 0));
+        assertThat(rows.get("TRUST")).isEqualTo(new OwnerTypeReportDto.Row("TRUST", 1, 1));
+        assertThat(rows.get("PRIVATE_COMPANY")).isEqualTo(new OwnerTypeReportDto.Row("PRIVATE_COMPANY", 1, 0));
         assertThat(rows.get("CHARITY").owners()).isZero();
-        // The other firm's overseas trust with an exception is nowhere.
-        assertThat(o.total()).isEqualTo(new OwnerTypeReportDto.Row(null, 5, 1, 2, 1));
+        // The other firm's overseas trust is nowhere.
+        assertThat(o.total()).isEqualTo(new OwnerTypeReportDto.Row(null, 4, 1));
+    }
+
+    @Test
+    void anOwnersLatestAppearanceDecidesWhetherItIsOverseas() {
+        // The trust was registered in Australia on d1. A later copy on d6 says New Zealand.
+        node(structure(d6), "TRUST", "Ann Family Trust", trustKey, "IN_PROGRESS", "NZ");
+        OwnerTypeReportDto later = reports.owners(window(null, null));
+        assertThat(byKey(later.rows(), OwnerTypeReportDto.Row::ownerType).get("TRUST"))
+                .isEqualTo(new OwnerTypeReportDto.Row("TRUST", 1, 0));
+
+        // And a later copy still, on d8, back to Australia.
+        node(structure(d8), "TRUST", "Ann Family Trust", trustKey, "IN_PROGRESS", "AU");
+        OwnerTypeReportDto latest = reports.owners(window(null, null));
+        assertThat(byKey(latest.rows(), OwnerTypeReportDto.Row::ownerType).get("TRUST"))
+                .isEqualTo(new OwnerTypeReportDto.Row("TRUST", 1, 1));
+        assertThat(latest.total()).isEqualTo(new OwnerTypeReportDto.Row(null, 4, 1));
     }
 
     @Test

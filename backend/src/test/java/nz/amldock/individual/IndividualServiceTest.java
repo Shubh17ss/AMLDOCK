@@ -16,6 +16,8 @@ import nz.amldock.document.IdSide;
 import nz.amldock.document.OcrStatus;
 import nz.amldock.document.dto.DocumentDto;
 import nz.amldock.ownership.NodeType;
+import nz.amldock.ownership.OwnershipSubtree;
+import nz.amldock.ownership.EdgeRole;
 import nz.amldock.ownership.NodeVerificationStatus;
 import nz.amldock.ownership.OwnershipNode;
 import nz.amldock.ownership.OwnershipNodeRepository;
@@ -69,13 +71,14 @@ class IndividualServiceTest {
     @Mock BeneficialOwnerRepository owners;
     @Mock PropertyRepository properties;
     @Mock DocumentService documentService;
+    @Mock OwnershipSubtree subtree;
 
     IndividualService service;
 
     @BeforeEach
     void setUp() {
         service = new IndividualService(dealService, dealList, query, deals, structures, nodes, owners, properties,
-                documentService);
+                documentService, subtree);
     }
 
     /* ---------- the register page ---------- */
@@ -162,13 +165,28 @@ class IndividualServiceTest {
     }
 
     @Test
-    void aNodeThatIsNotAnIndividualIsNotFoundHere() {
+    void anEntityComesWithItsFactsAndTheOwnersBeneathIt() {
         OwnershipNode company = individualNode();
         company.setNodeType(NodeType.PRIVATE_COMPANY);
+        company.setBeneficialOwnerId(null);
+        company.setCompanyNumber("1234567");
+        company.setJurisdictionCountry("NZ");
         when(nodes.findById(NODE_ID)).thenReturn(Optional.of(company));
+        when(structures.findById(STRUCTURE_ID)).thenReturn(Optional.of(structure()));
+        when(dealService.get(DEAL_ID)).thenReturn(dealDto("D-2291"));
+        when(properties.findById(PROPERTY_ID)).thenReturn(Optional.of(property()));
+        OwnershipSubtree.Walk walk = new OwnershipSubtree.Walk(company, List.of(company), List.of());
+        when(subtree.below(company)).thenReturn(walk);
+        when(subtree.outline(walk)).thenReturn(List.of(new OwnershipSubtree.Line(
+                99L, "Jane Marsh", NodeType.INDIVIDUAL, 1, new java.math.BigDecimal("60"), EdgeRole.SHAREHOLDER)));
+        when(documentService.listForNode(99L)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.detail(NODE_ID))
-                .isInstanceOf(NotFoundException.class);
+        IndividualDetailDto detail = service.detail(NODE_ID);
+
+        assertThat(detail.nodeType()).isEqualTo(NodeType.PRIVATE_COMPANY);
+        assertThat(detail.entity().companyNumber()).isEqualTo("1234567");
+        assertThat(detail.beneath()).extracting(OwnershipSubtree.Line::displayName).containsExactly("Jane Marsh");
+        assertThat(detail.person()).isNull();
     }
 
     @Test

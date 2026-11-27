@@ -214,6 +214,16 @@ export async function createNode(dealId, payload, side) {
   return data;
 }
 
+/**
+ * Copies an owner from another of the firm's deals onto this one, with everyone beneath it: their
+ * details, verification, documents and how they hold one another. Returns the new owner at the top.
+ * Only the source id is sent; the server reads every value off the source itself.
+ */
+export async function copyOwner(dealId, sourceNodeId, side) {
+  const { data } = await apiClient.post(`/deals/${dealId}/ownership/nodes/copy`, { sourceNodeId }, sideParams(side));
+  return data;
+}
+
 export async function updateNode(dealId, nodeId, payload) {
   const { data } = await apiClient.patch(`/deals/${dealId}/ownership/nodes/${nodeId}`, payload);
   return data;

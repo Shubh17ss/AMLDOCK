@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import nz.amldock.audit.AuditAction;
 import nz.amldock.audit.AuditService;
 import nz.amldock.ownership.dto.CreateEdgeRequest;
+import nz.amldock.ownership.dto.CopyOwnerRequest;
 import nz.amldock.ownership.dto.CreateNodeRequest;
 import nz.amldock.ownership.dto.EdgeDto;
 import nz.amldock.ownership.dto.NodeDto;
@@ -65,6 +66,24 @@ public class OwnershipController {
         audit.record(AuditAction.NODE_CREATED, "OwnershipNode", node.id(),
                 "Created " + node.nodeType() + " node \"" + node.displayName() + "\" on deal " + dealId
                         + (side == StructureSide.PURCHASER ? " (purchaser)" : ""));
+        return node;
+    }
+
+    /**
+     * Copies an owner from another of the firm's deals onto this one, with everyone beneath it.
+     * Same roles as adding an owner by hand: it is one, many times over.
+     */
+    @PostMapping("/nodes/copy")
+    @PreAuthorize("hasAnyRole('AML_COMPLIANCE_OFFICER','SENIOR_MANAGER')")
+    public NodeDto copyOwner(@DealRef Long dealId,
+                             @RequestParam(required = false) StructureSide side,
+                             @Valid @RequestBody CopyOwnerRequest req) {
+        OwnershipService.CopiedOwner copied = ownership.copyOwner(dealId, side, req.sourceNodeId());
+        NodeDto node = copied.node();
+        audit.record(AuditAction.NODE_CREATED, "OwnershipNode", node.id(),
+                "Copied " + node.nodeType() + " node \"" + node.displayName() + "\" with "
+                        + copied.ownersBeneath() + " owner(s) beneath it from deal " + copied.sourceDealId()
+                        + " onto deal " + dealId + (side == StructureSide.PURCHASER ? " (purchaser)" : ""));
         return node;
     }
 

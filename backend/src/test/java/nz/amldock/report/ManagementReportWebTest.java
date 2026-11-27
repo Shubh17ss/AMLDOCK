@@ -83,8 +83,8 @@ class ManagementReportWebTest {
                 new BigDecimal("1000000.00"), new BigDecimal("1000000.00"));
         when(reports.propertyTypes(any())).thenReturn(new PropertyTypeReportDto(List.of(rural), total));
         when(reports.owners(any())).thenReturn(new OwnerTypeReportDto(
-                List.of(new OwnerTypeReportDto.Row("TRUST", 2, 1, 1, 1)),
-                new OwnerTypeReportDto.Row(null, 2, 1, 1, 1)));
+                List.of(new OwnerTypeReportDto.Row("TRUST", 2, 1)),
+                new OwnerTypeReportDto.Row(null, 2, 1)));
         when(reports.training(any())).thenReturn(new TrainingReportDto(
                 new TrainingReportDto.Summary(1, 2, 1, 1, 1, 1, 1, 1, 60),
                 List.of(new TrainingReportDto.Person(5L, "Aaron Agent", "AGENT", "Ponsonby", 2, 1, 1, 1, 1, 60,
@@ -99,8 +99,9 @@ class ManagementReportWebTest {
         mvc.perform(get(BASE + "/owners"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rows[0].ownerType").value("TRUST"))
-                .andExpect(jsonPath("$.total.reused").value(1))
-                .andExpect(jsonPath("$.total.exceptions").value(1));
+                .andExpect(jsonPath("$.total.owners").value(2))
+                .andExpect(jsonPath("$.total.overseas").value(1))
+                .andExpect(jsonPath("$.total.reused").doesNotExist());
         mvc.perform(get(BASE + "/training"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.summary.minutesAttended").value(60))
@@ -112,7 +113,7 @@ class ManagementReportWebTest {
     @WithMockUser(roles = "AUDIT")
     void auditReads() throws Exception {
         when(reports.owners(any())).thenReturn(new OwnerTypeReportDto(List.of(),
-                new OwnerTypeReportDto.Row(null, 0, 0, 0, 0)));
+                new OwnerTypeReportDto.Row(null, 0, 0)));
         mvc.perform(get(BASE + "/owners").param("firmId", "7")).andExpect(status().isOk());
     }
 

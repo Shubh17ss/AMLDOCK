@@ -27,8 +27,6 @@ export function OwnerTypeTable({ data }) {
               <TableCell>Owner type</TableCell>
               <TableCell align="right">Owners</TableCell>
               <TableCell align="right">Overseas residents</TableCell>
-              <TableCell align="right">Re-used on other deals</TableCell>
-              <TableCell align="right">Exceptions granted</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -37,25 +35,21 @@ export function OwnerTypeTable({ data }) {
                 <TableCell component="th" scope="row">{ownerTypeLabel(r.ownerType)}</TableCell>
                 <TableCell align="right">{n(r.owners)}</TableCell>
                 <TableCell align="right">{n(r.overseas)}</TableCell>
-                <TableCell align="right">{n(r.reused)}</TableCell>
-                <TableCell align="right">{n(r.exceptions)}</TableCell>
               </TableRow>
             ))}
             <TableRow className="total">
               <TableCell component="th" scope="row">Total</TableCell>
               <TableCell align="right">{n(data.total.owners)}</TableCell>
               <TableCell align="right">{n(data.total.overseas)}</TableCell>
-              <TableCell align="right">{n(data.total.reused)}</TableCell>
-              <TableCell align="right">{n(data.total.exceptions)}</TableCell>
             </TableRow>
           </TableBody>
         </Table>
       </TableContainer>
       <Footnote>
-        Every owner on both sides of a deal is counted, companies and trusts included, as on the CDD
-        registers. Overseas residents and exceptions match the Overseas Residents Register and CDD
-        Exceptions. Re-used counts owners who also appear on another of the firm's deals; only owners
-        added with the owner picker are linked, so the true figure may be higher.
+        Each owner is counted once, however many deals it is on. Owners added from another deal with
+        the owner picker are recognised as the same owner; owners typed in separately are not.
+        Companies and trusts are counted as well as people, on both sides of a deal. Whether an owner
+        is an overseas resident follows the most recent deal it appears on.
       </Footnote>
     </>
   );

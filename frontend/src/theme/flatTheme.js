@@ -7,7 +7,8 @@ const T = tokens;
  * The flat variant of the workspace theme — the public site's language applied to MUI.
  *
  * Same palette, tokens and fonts as `theme`; what changes is the treatment. Surfaces sit on a
- * hairline with no shadow, headings drop to medium weight, buttons and chips are fully rounded,
+ * hairline with no shadow, headings drop to medium weight, chips are fully rounded (buttons keep
+ * the workspace's 12px corners),
  * and table headings are sentence case rather than letterspaced capitals. Elevation is left only
  * on what actually floats: dialogs, menus and popovers keep theirs.
  *
@@ -57,9 +58,11 @@ export const flatTheme = createTheme(theme, {
       },
     },
 
+    // The same 12px corners as the workspace theme's buttons (Update Transaction on the deal
+    // screen), so a button looks the same on every screen. Icon buttons below stay round.
     MuiButton: {
       styleOverrides: {
-        root: { borderRadius: 999, paddingInline: 18 },
+        root: { borderRadius: 12, paddingInline: 18 },
         containedPrimary: {
           boxShadow: 'none',
           '&:hover': { backgroundColor: T.blueDark, boxShadow: 'none' },
@@ -67,8 +70,8 @@ export const flatTheme = createTheme(theme, {
         outlinedPrimary: {
           '&:hover': { borderColor: T.ink, backgroundColor: T.tile },
         },
-        sizeSmall: { borderRadius: 999, paddingInline: 14 },
-        sizeLarge: { borderRadius: 999 },
+        sizeSmall: { borderRadius: 12, paddingInline: 14 },
+        sizeLarge: { borderRadius: 12 },
       },
     },
     MuiIconButton: {

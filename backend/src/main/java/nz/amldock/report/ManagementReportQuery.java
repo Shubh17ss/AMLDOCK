@@ -212,43 +212,38 @@ class ManagementReportQuery {
         scope.deals().appendWhere(scoped, params, "d");
 
         String sql = "WITH scoped AS (" + scoped + "),"
-                // Every node on those deals, both sides, every type: what the registers list.
-                + " owners AS ("
-                + "   SELECT n.node_type, n.is_overseas, n.verification_status, n.identity_key"
+                // Each owner once: the same person or entity on several deals shares one
+                // identity_key (owner-picker copies inherit their source's, V62). Owners typed in
+                // separately keep their own keys, so they still count apart; nothing matches names.
+                + " identities AS ("
+                + "   SELECT DISTINCT n.identity_key"
                 + "     FROM ownership_node n"
                 + "     JOIN ownership_structure s ON s.id = n.ownership_structure_id"
                 + "    WHERE n.real_estate_firm_id = :firm"
                 + "      AND s.deal_id IN (SELECT id FROM scoped)"
                 + " ),"
-                // An owner is re-used when the same identity sits on two or more deals anywhere in
-                // the firm, the window notwithstanding: being on an earlier deal is the point.
-                // identity_key is shared only by owner-picker copies (V62), so this is a floor.
-                + " reused AS ("
-                + "   SELECT n2.identity_key"
-                + "     FROM ownership_node n2"
-                + "     JOIN ownership_structure s2 ON s2.id = n2.ownership_structure_id"
-                + "    WHERE n2.real_estate_firm_id = :firm"
-                + "      AND n2.identity_key IN (SELECT o.identity_key FROM owners o)"
-                + "    GROUP BY n2.identity_key"
-                + "   HAVING count(DISTINCT s2.deal_id) > 1"
+                // What an owner is now: its most recent appearance anywhere in the firm, whatever the
+                // window. That copy's type places the owner, and its overseas flag (the Overseas
+                // Residents Register's own test, kept by trigger) decides whether it lives abroad.
+                + " latest AS ("
+                + "   SELECT DISTINCT ON (n.identity_key) n.node_type, n.is_overseas"
+                + "     FROM ownership_node n"
+                + "    WHERE n.real_estate_firm_id = :firm"
+                + "      AND n.identity_key IN (SELECT identity_key FROM identities)"
+                + "    ORDER BY n.identity_key, n.created_at DESC, n.id DESC"
                 + " )"
-                + " SELECT o.node_type AS type, GROUPING(o.node_type) AS is_total,"
+                + " SELECT l.node_type AS type, GROUPING(l.node_type) AS is_total,"
                 + "        count(*) AS owners,"
-                // The Overseas Residents Register's own test (IndividualQuery).
-                + "        count(*) FILTER (WHERE o.is_overseas) AS overseas,"
-                + "        count(DISTINCT o.identity_key) FILTER (WHERE r.identity_key IS NOT NULL) AS reused,"
-                // The CDD Exceptions register's own test.
-                + "        count(*) FILTER (WHERE o.verification_status = 'VERIFIED_WITH_EXCEPTION') AS exceptions"
-                + "   FROM owners o"
-                + "   LEFT JOIN reused r ON r.identity_key = o.identity_key"
-                + "  GROUP BY GROUPING SETS ((o.node_type), ())";
+                + "        count(*) FILTER (WHERE l.is_overseas) AS overseas"
+                + "   FROM latest l"
+                + "  GROUP BY GROUPING SETS ((l.node_type), ())";
 
         Map<String, OwnerTypeReportDto.Row> byType = new LinkedHashMap<>();
         OwnerTypeReportDto.Row[] total = new OwnerTypeReportDto.Row[1];
         jdbc.query(sql, params, (RowCallbackHandler) rs -> {
             boolean isTotal = rs.getInt("is_total") == 1;
             OwnerTypeReportDto.Row row = new OwnerTypeReportDto.Row(isTotal ? null : rs.getString("type"),
-                    rs.getLong("owners"), rs.getLong("overseas"), rs.getLong("reused"), rs.getLong("exceptions"));
+                    rs.getLong("owners"), rs.getLong("overseas"));
             if (isTotal) total[0] = row;
             else byType.put(row.ownerType(), row);
         });
@@ -256,11 +251,11 @@ class ManagementReportQuery {
         List<OwnerTypeReportDto.Row> rows = new ArrayList<>();
         for (NodeType t : NodeType.values()) {
             OwnerTypeReportDto.Row r = byType.remove(t.name());
-            rows.add(r != null ? r : new OwnerTypeReportDto.Row(t.name(), 0, 0, 0, 0));
+            rows.add(r != null ? r : new OwnerTypeReportDto.Row(t.name(), 0, 0));
         }
         rows.addAll(new TreeMap<>(byType).values());
         return new OwnerTypeReportDto(rows,
-                total[0] != null ? total[0] : new OwnerTypeReportDto.Row(null, 0, 0, 0, 0));
+                total[0] != null ? total[0] : new OwnerTypeReportDto.Row(null, 0, 0));
     }
 
     // ── Staff training ──────────────────────────────────────────────────────

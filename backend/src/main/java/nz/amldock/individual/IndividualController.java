@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletResponse;
 import nz.amldock.common.web.PageRequests;
 import nz.amldock.common.web.PageResponse;
+import nz.amldock.ownership.NodeType;
 import nz.amldock.ownership.NodeVerificationStatus;
 
 import java.io.IOException;
@@ -40,6 +41,9 @@ public class IndividualController {
      * endpoint to offer an existing person to copy onto a new INDIVIDUAL node; widening it for
      * everyone would put trusts and companies in that list, where copying one means nothing.
      * The CDD registers ask for the wider set; the picker does not.
+     *
+     * <p>{@code nodeType} narrows to one type of owner and outranks {@code allTypes}: the picker
+     * asks for trusts when a trust is being added, companies for a company.
      */
     @GetMapping
     public PageResponse<IndividualRowDto> list(@RequestParam(required = false) Long firmId,
@@ -48,9 +52,12 @@ public class IndividualController {
                                                @RequestParam(required = false) String q,
                                                @RequestParam(required = false) IndividualQuery.Residence residence,
                                                @RequestParam(required = false) NodeVerificationStatus verification,
+                                               @RequestParam(required = false) NodeType nodeType,
                                                @RequestParam(required = false) Integer page,
                                                @RequestParam(required = false) Integer size) {
-        return individuals.list(filter(firmId, branchId, allTypes, q, residence, verification),
+        IndividualQuery.Filter f = filter(firmId, branchId, allTypes, q, residence, verification);
+        return individuals.list(new IndividualQuery.Filter(f.firmId(), f.branchId(), f.allTypes(), f.q(),
+                        f.residence(), f.verification(), nodeType),
                 PageRequests.of(page, size));
     }
 
@@ -79,9 +86,10 @@ public class IndividualController {
     }
 
     /**
-     * One individual in full, addressed by node id because that is what a row of the register is.
+     * One owner in full, of any type, addressed by node id because that is what a row of the
+     * register is. An entity comes with the owners beneath it, which a copy takes along.
      *
-     * <p>Feeds the owner picker, which copies an existing person onto a new deal. No
+     * <p>Feeds the owner picker, which copies an existing owner onto a new deal. No
      * {@code @PreAuthorize} here for the same reason as {@link #list}: the rule is whether the
      * caller can read the deal this person stands on, and it lives in the service.
      */

@@ -93,7 +93,7 @@ class OwnershipServiceTest {
     void setUp() {
         service = new OwnershipService(structures, nodes, edges, deals, branches, lifecycle,
                 owners, ownerLinks, risk, documents, storage, audit, users, versionDocuments,
-                new VerificationReset(nodes, audit));
+                new VerificationReset(nodes, audit), new OwnershipSubtree(nodes, edges));
 
         deal = new Deal();
         ReflectionTestUtils.setField(deal, "id", DEAL_ID);
@@ -111,6 +111,8 @@ class OwnershipServiceTest {
         lenient().when(structures.findSubjectOf(any())).thenReturn(Optional.of(structure));
         lenient().when(structures.findByDealIdAndSide(DEAL_ID, StructureSide.VENDOR)).thenReturn(Optional.of(structure));
         lenient().when(structures.findById(STRUCTURE_ID)).thenReturn(Optional.of(structure));
+        // Like the real repository, save hands back what it saved: the copy reads the new id off it.
+        lenient().when(documents.save(any())).thenAnswer(i -> i.getArgument(0));
         lenient().when(nodes.save(any())).thenAnswer(i -> {
             OwnershipNode n = i.getArgument(0);
             if (n.getId() == null) ReflectionTestUtils.setField(n, "id", nextNodeId.incrementAndGet());

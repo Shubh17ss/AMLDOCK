@@ -83,6 +83,7 @@ public class OwnershipService {
     // cascade delete removes it (C-09). A repository, so no constructor cycle.
     private final nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments;
     private final VerificationReset verificationReset;
+    private final OwnershipSubtree subtree;
 
     public OwnershipService(OwnershipStructureRepository structures,
                             OwnershipNodeRepository nodes,
@@ -98,7 +99,8 @@ public class OwnershipService {
                             AuditService audit,
                             UserRepository users,
                             nz.amldock.deal.version.DealVersionDocumentRepository versionDocuments,
-                            VerificationReset verificationReset) {
+                            VerificationReset verificationReset,
+                            OwnershipSubtree subtree) {
         this.structures = structures;
         this.nodes = nodes;
         this.edges = edges;
@@ -114,6 +116,7 @@ public class OwnershipService {
         this.users = users;
         this.versionDocuments = versionDocuments;
         this.verificationReset = verificationReset;
+        this.subtree = subtree;
     }
 
     /* ---------- queries ---------- */
@@ -218,6 +221,133 @@ public class OwnershipService {
         NodeDto created = NodeDto.from(savedNode, person == null ? null : PersonDto.from(person));
         recomputeRiskFor(deal, side);
         return created;
+    }
+
+    /**
+     * What a copy made: the new owner at the top, how many came with it, and where from.
+     *
+     * @param ownersBeneath the owners copied beneath it
+     * @param sourceDealId  the deal they were copied from, for the audit trail
+     */
+    public record CopiedOwner(NodeDto node, int ownersBeneath, Long sourceDealId) {}
+
+    /**
+     * Copies an owner from another of the firm's deals onto this one, with everyone beneath it: a
+     * company with its shareholders, a trust with its trustees, and theirs in turn.
+     *
+     * <p><strong>A copy, never a link.</strong> Every owner gets a new node, an individual a new
+     * person record, and every document a new object in the bucket, so nothing done on this deal
+     * can reach back into the other. What links them is {@code identity_key}, which each copy takes
+     * from its source: that is how the firm can still tell it is the same company.
+     *
+     * <p>What travels is who the owners are: their details, their roles, their verification status
+     * and the evidence behind it, and how they hold one another (each share and role). What stays
+     * behind is where the owner stood on the other deal: its share of that property, its notes and
+     * reference. The verification byline stays too, as it does when an individual is copied: the
+     * status says what was concluded, and the documents travel so it can be checked again here.
+     *
+     * <p>Within one reporting entity only. Owner records never cross entities.
+     */
+    @Transactional
+    public CopiedOwner copyOwner(Long dealId, StructureSide requestedSide, Long sourceNodeId) {
+        Deal deal = assertWritable(dealId, requestedSide);
+        StructureSide side = sideOrSubject(deal, requestedSide);
+        OwnershipNode sourceRoot = nodes.findById(sourceNodeId)
+                .orElseThrow(() -> new NotFoundException("Owner " + sourceNodeId + " not found"));
+        OwnershipStructure sourceStructure = structures.findById(sourceRoot.getOwnershipStructureId())
+                .orElseThrow(() -> new NotFoundException("Structure for node " + sourceNodeId + " not found"));
+        // Refuses a deal this caller cannot read, so ids from elsewhere cannot be fished for.
+        Deal sourceDeal = assertReadable(sourceStructure.getDealId());
+        if (!Objects.equals(firmIdFor(sourceDeal), firmIdFor(deal))) {
+            throw new BadRequestException("Owners can only be copied from deals of the same reporting entity");
+        }
+        OwnershipStructure structure = structures.findByDealIdAndSide(deal.getId(), side)
+                .orElseGet(() -> createEmptyStructure(deal.getId(), side));
+
+        OwnershipSubtree.Walk walk = subtree.below(sourceRoot);
+
+        // Owners first, so every edge has both of its ends to point at.
+        Map<Long, OwnershipNode> copies = new LinkedHashMap<>();
+        BeneficialOwner rootPerson = null;
+        for (OwnershipNode src : walk.nodes()) {
+            OwnershipNode n = new OwnershipNode();
+            n.setOwnershipStructureId(structure.getId());
+            copyDetails(src, n);
+            n.setIdentityKey(src.getIdentityKey());
+            if (src.getNodeType() == NodeType.INDIVIDUAL) {
+                BeneficialOwner person = createPersonFor(deal, src.getDisplayName());
+                copyPerson(personFor(src), person);
+                n.setBeneficialOwnerId(person.getId());
+                if (src == sourceRoot) rootPerson = person;
+            }
+            copies.put(src.getId(), nodes.save(n));
+        }
+        for (OwnershipEdge e : walk.edges()) {
+            OwnershipEdge c = new OwnershipEdge();
+            c.setParentNodeId(copies.get(e.getParentNodeId()).getId());
+            c.setChildNodeId(copies.get(e.getChildNodeId()).getId());
+            c.setPercentage(e.getPercentage());
+            c.setRole(e.getRole());
+            c.setSortOrder(e.getSortOrder());
+            edges.save(c);
+        }
+        // Then the evidence. A trust's deed is one of its own documents; the copy points at its own
+        // copy of the deed, never at the file on the other deal.
+        for (OwnershipNode src : walk.nodes()) {
+            OwnershipNode copy = copies.get(src.getId());
+            Map<Long, Long> copiedDocuments = copyDocumentsOnto(deal, copy, src.getId());
+            if (src.getTrustDeedDocumentId() != null) {
+                copy.setTrustDeedDocumentId(copiedDocuments.get(src.getTrustDeedDocumentId()));
+            }
+        }
+
+        recomputeRiskFor(deal, side);
+        OwnershipNode root = copies.get(sourceRoot.getId());
+        return new CopiedOwner(NodeDto.from(root, rootPerson == null ? null : PersonDto.from(rootPerson)),
+                copies.size() - 1, sourceDeal.getId());
+    }
+
+    /** Who the owner is, read straight off the source. Not where it sat: share, notes, reference. */
+    private static void copyDetails(OwnershipNode src, OwnershipNode n) {
+        n.setNodeType(src.getNodeType());
+        n.setDisplayName(src.getDisplayName());
+        n.setPersonRoles(src.getPersonRoles() == null ? java.util.Set.of() : java.util.Set.copyOf(src.getPersonRoles()));
+        n.setVerificationStatus(src.getVerificationStatus());
+        n.setDateOfBirth(src.getDateOfBirth());
+        n.setIdDocumentType(src.getIdDocumentType());
+        n.setIdDocumentNumber(src.getIdDocumentNumber());
+        n.setIdDocumentCountry(src.getIdDocumentCountry());
+        n.setBusinessNumber(src.getBusinessNumber());
+        n.setCompanyNumber(src.getCompanyNumber());
+        n.setIncorporationDate(src.getIncorporationDate());
+        n.setRegisteredOffice(src.getRegisteredOffice());
+        n.setTrustName(src.getTrustName());
+        n.setSettlorName(src.getSettlorName());
+        n.setExtraJson(src.getExtraJson());
+        n.setJurisdictionCountry(src.getJurisdictionCountry());
+        n.setCompanyHasConstitution(src.getCompanyHasConstitution());
+        n.setNomineeStatus(src.getNomineeStatus());
+        n.setCompanyComplexOwnership(src.getCompanyComplexOwnership());
+        n.setCompanyPersonalAssets(src.getCompanyPersonalAssets());
+        n.setCompanyNewDeveloper(src.getCompanyNewDeveloper());
+        n.setTrustType(src.getTrustType());
+        n.setTrustDiscretionary(src.getTrustDiscretionary());
+        n.setTrustHoldingComplexity(src.getTrustHoldingComplexity());
+        n.setSourceOfFunds(src.getSourceOfFunds());
+    }
+
+    /** The contact and background fields of a person record, onto a new one. */
+    private static void copyPerson(BeneficialOwner from, BeneficialOwner to) {
+        if (from == null) return;
+        to.setFullName(from.getFullName());
+        to.setDateOfBirth(from.getDateOfBirth());
+        to.setEmail(from.getEmail());
+        to.setPhoneCountry(from.getPhoneCountry());
+        to.setPhoneNumber(from.getPhoneNumber());
+        to.setOccupation(from.getOccupation());
+        to.setSourceOfFunds(from.getSourceOfFunds());
+        to.setCountryOfResidence(from.getCountryOfResidence());
+        to.setPhysicalAddress(from.getPhysicalAddress());
     }
 
     @Transactional
@@ -1036,7 +1166,8 @@ public class OwnershipService {
      * {@code BeneficialOwnerService}, which reaches this one — the same constructor cycle that put
      * {@link #stripDocuments} in this class.
      */
-    private void copyDocumentsOnto(Deal deal, OwnershipNode target, Long sourceNodeId) {
+    /** @return each source document's id against its copy's, so a reference to one can follow */
+    private Map<Long, Long> copyDocumentsOnto(Deal deal, OwnershipNode target, Long sourceNodeId) {
         OwnershipNode source = nodes.findById(sourceNodeId)
                 .orElseThrow(() -> new NotFoundException("Node " + sourceNodeId + " not found"));
         OwnershipStructure sourceStructure = structures.findById(source.getOwnershipStructureId())
@@ -1046,7 +1177,8 @@ public class OwnershipService {
         Deal sourceDeal = assertReadable(sourceStructure.getDealId());
 
         List<Document> sources = documentsOn(source);
-        if (sources.isEmpty()) return;
+        Map<Long, Long> copied = new HashMap<>();
+        if (sources.isEmpty()) return copied;
 
         // Keys already written, for the sweep below. The transaction can undo the rows; only this
         // can undo the objects.
@@ -1058,7 +1190,7 @@ public class OwnershipService {
                 // row never promises bytes that are not there.
                 storage.copy(src.getS3Key(), key);
                 written.add(key);
-                documents.save(copyOf(src, deal, target, key));
+                copied.put(src.getId(), documents.save(copyOf(src, deal, target, key)).getId());
                 audit.record(AuditAction.DOCUMENT_UPLOADED, "Document", src.getId(),
                         "Copied " + src.getOriginalFilename() + " from deal " + sourceDeal.getId()
                                 + " onto node " + target.getId());
@@ -1069,6 +1201,7 @@ public class OwnershipService {
             for (String key : written) storage.delete(key);
             throw e;
         }
+        return copied;
     }
 
     /**

@@ -39,7 +39,7 @@ public class ManagementReportController {
         return reports.propertyTypes(params);
     }
 
-    /** Owners on the window's deals by owner type: overseas, re-used and exceptions. */
+    /** Owners on the window's deals by owner type, each counted once, and how many live overseas. */
     @GetMapping("/owners")
     public OwnerTypeReportDto owners(@ModelAttribute ReportParams params) {
         return reports.owners(params);

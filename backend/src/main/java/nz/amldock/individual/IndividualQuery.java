@@ -4,6 +4,7 @@ import nz.amldock.common.web.IdPage;
 import nz.amldock.common.web.PageRequests;
 import nz.amldock.common.web.SearchProbe;
 import nz.amldock.deal.DealScope;
+import nz.amldock.ownership.NodeType;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -30,9 +31,18 @@ public class IndividualQuery {
      * @param allTypes     every kind of owner, not only natural persons
      * @param q            contains-match on the owner's name (3+ characters)
      * @param verification only owners with this verification outcome, e.g. VERIFIED_WITH_EXCEPTION
+     * @param nodeType     only owners of this one type; outranks {@code allTypes}. The owner picker
+     *                     uses it: adding a trust offers the firm's trusts, nothing else
      */
     public record Filter(Long firmId, Long branchId, boolean allTypes, String q,
-                         Residence residence, String verification) {}
+                         Residence residence, String verification, NodeType nodeType) {
+
+        /** The registers' form, which never narrows to one type. */
+        public Filter(Long firmId, Long branchId, boolean allTypes, String q,
+                      Residence residence, String verification) {
+            this(firmId, branchId, allTypes, q, residence, verification, null);
+        }
+    }
 
     private static final String NAME_MATCH = " ILIKE :q" + PageRequests.LIKE_ESCAPE;
 
@@ -66,7 +76,12 @@ public class IndividualQuery {
             where.append(" AND n.real_estate_firm_id = :ownerFirm");
             params.addValue("ownerFirm", scope.firmId());
         }
-        if (!f.allTypes()) where.append(" AND n.node_type = 'INDIVIDUAL'");
+        if (f.nodeType() != null) {
+            // Inlined like the verification status below; safe for the same reason (an enum name).
+            where.append(" AND n.node_type = '").append(f.nodeType().name()).append("'");
+        } else if (!f.allTypes()) {
+            where.append(" AND n.node_type = 'INDIVIDUAL'");
+        }
         // Sparse states are read off the owner row (V57: residence_country / is_overseas kept by
         // triggers) and each has a partial index, so a filter that matches few owners costs those
         // few, not every owner in the firm (1.1-1.4 s at 25k deals per firm before).

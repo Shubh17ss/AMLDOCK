@@ -3,12 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Chip, CircularProgress, Divider, Stack, TextField, Typography,
 } from '@mui/material';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { getIndividual, listIndividuals } from '../../api/individuals.js';
 import { useDashboardScope } from '../../dashboard/DashboardScope.jsx';
-import { personRolesLabel } from '../../api/ownership.js';
+import { nameLabelFor, nodeTypeLabel, personRolesLabel } from '../../api/ownership.js';
+import { visualFor, tintOf } from './nodeTypeVisual.js';
 import { countryName } from '../../data/countries.js';
 import { formatBytes, formatDate } from '../../utils/formatters.js';
 import { verificationDisplay } from './verificationDisplay.js';
@@ -23,7 +23,14 @@ const MAX_ROWS = 8;
 const MIN_SEARCH = 3;
 
 /**
- * Names an individual, either by finding one the firm has met before or by typing a new one.
+ * Names an owner of one type, either by finding one the firm has met before or by typing a new one.
+ *
+ * <p>Every type is searched, each only among its own kind: adding a trust offers the firm's trusts.
+ * An entity, once picked, is copied with everyone beneath it — its shareholders, trustees and so on —
+ * by the server ({@code POST /ownership/nodes/copy}); this panel says who that is before anyone
+ * commits. An individual is copied as it always was, by the dialog, from the record shown here.
+ *
+ * <p>The rest of this note was written for individuals and holds for every type.
  *
  * <p>The single text field is both the filter and the new-person input, because those are the same
  * act: you type who you mean, and either they are already on file or they are not.
@@ -44,7 +51,9 @@ const MIN_SEARCH = 3;
  *   onClear()           — back to searching
  *   active              — this panel is on screen; gates the fetch so picking "Trust" costs nothing
  */
-export function IndividualPicker({ name, onNameChange, selected, onSelect, onClear, active }) {
+export function OwnerPicker({ nodeType, name, onNameChange, selected, onSelect, onClear, active }) {
+  const individual = nodeType === 'INDIVIDUAL';
+  const typeLabel = (nodeTypeLabel(nodeType) ?? 'owner').toLowerCase();
   const { firm } = useDashboardScope();
   const [openNodeId, setOpenNodeId] = useState(null);
   const inputRef = useRef(null);
@@ -70,8 +79,8 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
   // person the firm has ever onboarded would be a list to scroll, not an answer to a question.
   const searching = Boolean(active) && debounced.length >= MIN_SEARCH;
   const listQ = useQuery({
-    queryKey: ['individuals', 'picker', firm?.id ?? null, debounced],
-    queryFn: () => listIndividuals({ firmId: firm?.id, q: debounced, size: MAX_ROWS }),
+    queryKey: ['individuals', 'picker', nodeType, firm?.id ?? null, debounced],
+    queryFn: () => listIndividuals({ firmId: firm?.id, nodeType, q: debounced, size: MAX_ROWS }),
     enabled: searching,
   });
 
@@ -81,7 +90,7 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
   const pending = query.length >= MIN_SEARCH && (query !== debounced || listQ.isLoading);
 
   if (selected) {
-    return <ChosenPerson person={selected} onClear={onClear} />;
+    return <Chosen owner={selected} onClear={onClear} />;
   }
 
   return (
@@ -89,16 +98,18 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
       <TextField
         fullWidth
         inputRef={inputRef}
-        label="Name"
+        label={nameLabelFor(nodeType)}
         value={name}
         onChange={(e) => { onNameChange(e.target.value); setOpenNodeId(null); }}
-        placeholder="Start typing to search individuals on your firm's deals"
-        helperText="Pick someone already on file, or keep typing to add a new individual."
+        placeholder={`Start typing to search the ${individual ? 'individuals' : `${typeLabel} owners`} on your firm's deals`}
+        helperText={individual
+          ? 'Pick someone already on file, or keep typing to add a new individual.'
+          : `Pick one already on file, or keep typing to add a new ${typeLabel}.`}
       />
 
       {listQ.isError && (
         <Alert severity="warning">
-          Could not load your firm's individuals. You can still add a new one by name.
+          Could not search your firm's owners. You can still add a new one by name.
         </Alert>
       )}
 
@@ -117,7 +128,7 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
               : 'Already on file'}
           </SectionLabel>
           {shown.map((row) => (
-            <PersonRow
+            <OwnerRow
               key={row.nodeId}
               row={row}
               open={openNodeId === row.nodeId}
@@ -137,7 +148,7 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
         <Stack direction="row" spacing={1.25} alignItems="center" sx={{ px: 0.5 }}>
           <PersonAddAltIcon sx={{ fontSize: 18, color: tokens.muted }} />
           <Typography variant="body2" sx={{ color: tokens.muted }}>
-            Nobody on file by that name. <strong>{query}</strong> will be added as a new individual.
+            {individual ? 'Nobody' : 'Nothing'} on file by that name. <strong>{query}</strong> will be added as a new {typeLabel}.
           </Typography>
         </Stack>
       )}
@@ -146,7 +157,13 @@ export function IndividualPicker({ name, onNameChange, selected, onSelect, onCle
 }
 
 /** One match. Collapsed it is a name and where it came from; open it is the whole record. */
-function PersonRow({ row, open, onToggle, onUse }) {
+function OwnerRow({ row, open, onToggle, onUse }) {
+  const individual = row.nodeType === 'INDIVIDUAL';
+  const { hue, Icon } = visualFor(row.nodeType);
+  // What tells two owners of one name apart: a person's birthday, an entity's country.
+  const distinguishing = individual
+    ? formatDate(row.dateOfBirth)
+    : (row.countryOfResidence ? (countryName(row.countryOfResidence) ?? row.countryOfResidence) : 'Country not recorded');
   // Fetched only for the row someone actually opened — the register list carries no contact
   // details, and widening it would grow two register pages and a CSV export to serve this.
   const detailQ = useQuery({
@@ -182,10 +199,10 @@ function PersonRow({ row, open, onToggle, onUse }) {
           sx={{
             width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
             display: 'grid', placeItems: 'center',
-            backgroundColor: tokens.blueWash, color: tokens.blue,
+            backgroundColor: tintOf(hue), color: hue,
           }}
         >
-          <PersonOutlineIcon sx={{ fontSize: 19 }} />
+          <Icon sx={{ fontSize: 19 }} />
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ color: tokens.ink, fontSize: '0.9rem', lineHeight: 1.3 }}>
@@ -198,7 +215,7 @@ function PersonRow({ row, open, onToggle, onUse }) {
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}
           >
-            {formatDate(row.dateOfBirth)} · {dealName(row.propertyAddress)}
+            {distinguishing} · {dealName(row.propertyAddress)}
           </Typography>
         </Box>
       </Box>
@@ -217,9 +234,9 @@ function PersonRow({ row, open, onToggle, onUse }) {
           )}
           {detailQ.data && (
             <Stack spacing={1.5}>
-              <PersonFacts person={detailQ.data} />
+              {individual ? <PersonFacts person={detailQ.data} /> : <EntityFacts owner={detailQ.data} />}
               <Button variant="contained" size="small" onClick={() => onUse(detailQ.data)}>
-                Use this person
+                {individual ? 'Use this person' : `Use this ${(nodeTypeLabel(row.nodeType) ?? 'owner').toLowerCase()}`}
               </Button>
             </Stack>
           )}
@@ -229,8 +246,12 @@ function PersonRow({ row, open, onToggle, onUse }) {
   );
 }
 
-/** The person the dialog will copy, with the way back out. */
-function ChosenPerson({ person, onClear }) {
+/** The owner the dialog will copy, with the way back out. */
+function Chosen({ owner, onClear }) {
+  const individual = owner.nodeType === 'INDIVIDUAL';
+  const { hue, Icon } = visualFor(owner.nodeType);
+  const beneath = owner.beneath?.length ?? 0;
+  const from = dealName(owner.propertyAddress);
   return (
     <Stack spacing={2}>
       <Box
@@ -246,23 +267,92 @@ function ChosenPerson({ person, onClear }) {
             sx={{
               width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
               display: 'grid', placeItems: 'center',
-              backgroundColor: tokens.tile, color: tokens.blue,
+              backgroundColor: tokens.tile, color: hue,
             }}
           >
-            <PersonOutlineIcon sx={{ fontSize: 19 }} />
+            <Icon sx={{ fontSize: 19 }} />
           </Box>
-          <Typography sx={{ color: tokens.ink, fontSize: '1rem' }}>{person.displayName}</Typography>
+          <Typography sx={{ color: tokens.ink, fontSize: '1rem' }}>{owner.displayName}</Typography>
         </Stack>
-        <PersonFacts person={person} />
+        {individual ? <PersonFacts person={owner} /> : <EntityFacts owner={owner} />}
       </Box>
 
       <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
         <Typography variant="caption" sx={{ color: tokens.muted }}>
-          These details are copied onto this deal. Changing them here leaves
-          {' '}the record on {dealName(person.propertyAddress)} untouched.
+          {individual || beneath === 0
+            ? <>These details are copied onto this deal. Changing them here leaves the record on {from} untouched.</>
+            : <>{owner.displayName} and the {beneath === 1 ? 'owner' : `${beneath} owners`} beneath it are copied
+              {' '}onto this deal. Changing them here leaves the records on {from} untouched.</>}
         </Typography>
-        <Button size="small" onClick={onClear} sx={{ flexShrink: 0 }}>Choose someone else</Button>
+        <Button size="small" onClick={onClear} sx={{ flexShrink: 0 }}>
+          {individual ? 'Choose someone else' : 'Choose another'}
+        </Button>
       </Stack>
+    </Stack>
+  );
+}
+
+/**
+ * An entity, laid out the same whether it is being considered or has been chosen: its own facts,
+ * then everyone beneath it, since the copy takes them all, then the evidence that travels.
+ */
+function EntityFacts({ owner }) {
+  const e = owner.entity ?? {};
+  const country = e.jurisdictionCountry ? (countryName(e.jurisdictionCountry) ?? e.jurisdictionCountry) : null;
+  const beneath = owner.beneath ?? [];
+  const docsBeneath = owner.documentsBeneath ?? 0;
+  return (
+    <Stack spacing={0.75}>
+      <Fact label="Type" value={nodeTypeLabel(owner.nodeType)} />
+      <Fact label="Country" value={country} />
+      <Fact label="Company no." value={e.companyNumber} />
+      <Fact label="NZBN / ABN" value={e.businessNumber} />
+      <Fact label="Incorporated" value={e.incorporationDate ? formatDate(e.incorporationDate) : null} />
+      <Fact label="Registered office" value={e.registeredOffice} />
+      <Fact label="Trust name" value={e.trustName !== owner.displayName ? e.trustName : null} />
+      <Fact label="Settlor" value={e.settlorName} />
+      <Fact label="From" value={dealName(owner.propertyAddress)} />
+
+      <Stack direction="row" spacing={1} alignItems="baseline" sx={{ pt: 0.25 }}>
+        <FactLabel>Owners beneath</FactLabel>
+        <Typography sx={{ fontSize: '0.82rem', color: beneath.length ? tokens.ink : tokens.muted }}>
+          {beneath.length === 0
+            ? 'None recorded — only this owner is copied.'
+            : `${beneath.length} ${beneath.length === 1 ? 'owner is' : 'owners are'} copied with it`}
+        </Typography>
+      </Stack>
+      {beneath.length > 0 && (
+        <Stack spacing={0.4} sx={{ pl: '116px' }}>
+          {beneath.map((b) => {
+            const { hue, Icon } = visualFor(b.nodeType);
+            const share = [b.percentage != null ? `${Number(b.percentage)}%` : null,
+              b.role ? b.role.charAt(0) + b.role.slice(1).toLowerCase() : null].filter(Boolean).join(' · ');
+            return (
+              <Stack key={b.nodeId} direction="row" spacing={0.75} alignItems="center"
+                     sx={{ pl: `${(b.depth - 1) * 14}px`, minWidth: 0 }}>
+                <Icon sx={{ fontSize: 14, color: hue, flexShrink: 0 }} />
+                <Typography sx={{ fontSize: '0.8rem', color: tokens.ink, whiteSpace: 'nowrap',
+                  overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {b.displayName}
+                </Typography>
+                {share && (
+                  <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', color: tokens.muted, flexShrink: 0 }}>
+                    {share}
+                  </Typography>
+                )}
+              </Stack>
+            );
+          })}
+        </Stack>
+      )}
+
+      <CopiedDocuments documents={owner.documents ?? []} />
+      {docsBeneath > 0 && (
+        <Typography sx={{ fontSize: '0.78rem', color: tokens.muted, pl: '116px' }}>
+          …and {docsBeneath === 1 ? '1 document' : `${docsBeneath} documents`} held by the owners beneath it.
+        </Typography>
+      )}
+      <VerificationFact status={owner.verificationStatus} />
     </Stack>
   );
 }
@@ -293,31 +383,37 @@ function PersonFacts({ person }) {
       <CopiedDocuments documents={person.documents ?? []} />
       {/* Carried across with the rest, and said out loud: a status reached on another file is
           worth knowing about on this one. */}
-      {person.verificationStatus && (() => {
-        // The same three states, and the same colours, as the tree row this person will become.
-        // A plain grey chip here saying "verified" next to a green one there is the same fact
-        // told two ways, which is how a reviewer ends up trusting neither.
-        const v = verificationDisplay(person.verificationStatus);
-        return (
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ pt: 0.25 }}>
-            <FactLabel>Verification</FactLabel>
-            <Chip
-              size="small"
-              icon={v.exception
-                ? <ErrorOutlineIcon sx={{ fontSize: '0.8rem !important' }} />
-                : undefined}
-              label={v.label}
-              sx={{
-                height: 20, fontSize: '0.68rem',
-                color: v.text,
-                backgroundColor: v.wash,
-                border: `1px solid ${v.border}`,
-                '& .MuiChip-icon': { color: 'var(--cl-warn-text)', ml: 0.5, mr: -0.25 },
-              }}
-            />
-          </Stack>
-        );
-      })()}
+      <VerificationFact status={person.verificationStatus} />
+    </Stack>
+  );
+}
+
+/**
+ * A status reached on another file, said out loud: worth knowing about on this one. The same
+ * three states, and the same colours, as the tree row this owner will become. A plain grey chip
+ * here saying "verified" next to a green one there is the same fact told two ways, which is how a
+ * reviewer ends up trusting neither.
+ */
+function VerificationFact({ status }) {
+  if (!status) return null;
+  const v = verificationDisplay(status);
+  return (
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ pt: 0.25 }}>
+      <FactLabel>Verification</FactLabel>
+      <Chip
+        size="small"
+        icon={v.exception
+          ? <ErrorOutlineIcon sx={{ fontSize: '0.8rem !important' }} />
+          : undefined}
+        label={v.label}
+        sx={{
+          height: 20, fontSize: '0.68rem',
+          color: v.text,
+          backgroundColor: v.wash,
+          border: `1px solid ${v.border}`,
+          '& .MuiChip-icon': { color: 'var(--cl-warn-text)', ml: 0.5, mr: -0.25 },
+        }}
+      />
     </Stack>
   );
 }

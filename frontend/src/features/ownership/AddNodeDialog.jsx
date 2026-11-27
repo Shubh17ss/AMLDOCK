@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert, Box, Button, Dialog, DialogActions, DialogContent, Slide, Stack, TextField, Typography,
+  Alert, Box, Button, Dialog, DialogActions, DialogContent, Slide, Stack, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBackIosNew';
-import { NODE_TYPES, nameLabelFor } from '../../api/ownership.js';
-import { IndividualPicker } from './IndividualPicker.jsx';
+import { NODE_TYPES, nodeTypeLabel } from '../../api/ownership.js';
+import { OwnerPicker } from './OwnerPicker.jsx';
 import { visualFor, tintOf } from './nodeTypeVisual.js';
 import { tokens, fonts, motion } from '../../theme/theme.js';
 
@@ -24,22 +24,22 @@ const panelSx = (active) => (active
   : { position: 'absolute', top: 0, left: 0, right: 0 });
 
 /**
- * Adds an owner: pick a type, name it, done.
+ * Adds an owner: pick a type, then find it on the firm's other deals or name a new one.
  *
- * <p>Two steps, but only for one type. Every entity is named by typing its name, because there is
- * nothing to look up — a company on another deal is a different company on this one. An
- * individual is the exception: the firm has very likely met this person before, and asking a
- * reviewer to re-key a date of birth the file already holds is asking them to introduce a typo.
- * So INDIVIDUAL slides to a search over the firm's own people; the other eleven types keep the
- * name field revealed inline under the grid, exactly as before.
+ * <p>Every type slides to a search over the firm's own owners of that type. The firm has very
+ * likely met this person, company or trust before, and asking a reviewer to re-key what the file
+ * already holds is asking them to introduce a typo. Typing a name nobody has on file adds a new,
+ * blank owner, exactly as before.
  *
- * <p><strong>Choosing an existing individual copies them, it does not link to them.</strong> The
- * payload carries field values only — never a person id — so {@code OwnershipService.createNode}
- * mints a fresh person record as it always has. That is what keeps a correction made here off the
- * deal the details were copied from.
+ * <p><strong>Choosing an existing owner copies it, it never links to it.</strong> A correction made
+ * here stays off the deal it was copied from:
+ *   - an individual is copied by this dialog, from field values only — never a person id — so
+ *     {@code OwnershipService.createNode} mints a fresh person record;
+ *   - an entity is copied by the server with everyone beneath it — shareholders, trustees, and
+ *     theirs — their documents and how they hold one another ({@code OwnershipService.copyOwner}).
  *
  * <p>On submit:
- *   1) POST /ownership/nodes — the type, the name, and for a copied individual their details
+ *   1) POST /ownership/nodes (new, or a copied individual) or /ownership/nodes/copy (an entity)
  *   2) (if parentNodeId) POST /ownership/edges — no percentage; the drawer sets that
  *
  * Props:
@@ -55,7 +55,7 @@ export function AddNodeDialog({
   const [step, setStep] = useState('type');       // 'type' | 'person'
   const [nodeType, setNodeType] = useState(null);
   const [displayName, setDisplayName] = useState('');
-  const [person, setPerson] = useState(null);     // a copied individual's full record, or null
+  const [person, setPerson] = useState(null);     // the chosen existing owner's full record, or null
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const slideRef = useRef(null);
@@ -73,10 +73,10 @@ export function AddNodeDialog({
   const isIndividual = nodeType === 'INDIVIDUAL';
 
   const pickType = (value) => {
+    // An owner chosen as one type means nothing once the type changes, so it goes.
+    if (value !== nodeType) setPerson(null);
     setNodeType(value);
-    // A person copied from another deal means nothing once the type is a company, so it goes.
-    if (value !== 'INDIVIDUAL') setPerson(null);
-    else setStep('person');
+    setStep('person');
   };
 
   const choosePerson = (detail) => {
@@ -125,7 +125,10 @@ export function AddNodeDialog({
     setError(null);
     setSubmitting(true);
     try {
-      const created = await useTree.createNode.mutateAsync(buildPayload());
+      // An entity is copied whole on the server; an individual and a new owner go through create.
+      const created = person && !isIndividual
+        ? await useTree.copyOwner.mutateAsync(person.nodeId)
+        : await useTree.createNode.mutateAsync(buildPayload());
       if (parentNodeId != null) {
         await useTree.createEdge.mutateAsync({
           parentNodeId,
@@ -143,9 +146,10 @@ export function AddNodeDialog({
   };
 
   const onPerson = step === 'person';
-  // Reachable only by stepping back: the type is already Individual, so the button carries on
-  // rather than pretending the name can be given here.
-  const continueToPerson = !onPerson && isIndividual;
+  // Reachable only by stepping back: a type is already chosen, so the button carries on to the
+  // search rather than pretending the name can be given here.
+  const continueToPerson = !onPerson && Boolean(nodeType);
+  const typeLabel = (nodeTypeLabel(nodeType) ?? 'owner').toLowerCase();
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -153,11 +157,13 @@ export function AddNodeDialog({
         <DialogContent sx={{ pt: 4, pb: 2, overflowX: 'hidden' }}>
           <Stack spacing={1} sx={{ textAlign: 'center', mb: 3 }}>
             <Typography sx={{ fontFamily: fonts.display, fontSize: '1.3rem', color: tokens.ink }}>
-              {onPerson ? 'Who is this?' : 'Add owner'}
+              {onPerson ? (isIndividual ? 'Who is this?' : `Which ${typeLabel}?`) : 'Add owner'}
             </Typography>
             <Typography variant="body2" sx={{ color: tokens.muted }}>
               {onPerson
-                ? 'Search the people on your firm’s deals, or type a name to add someone new.'
+                ? (isIndividual
+                  ? 'Search the people on your firm’s deals, or type a name to add someone new.'
+                  : `Search the ${typeLabel} owners on your firm’s deals, or type a name to add a new one.`)
                 : (parentNodeId != null
                   ? <>What sits under <strong>{parentLabel}</strong>?</>
                   : 'What type of owner do you want to add?')}
@@ -165,7 +171,7 @@ export function AddNodeDialog({
           </Stack>
 
           <Box ref={slideRef} sx={{ position: 'relative' }}>
-            {/* Step one slides back in from the left; the individual search comes from the right. */}
+            {/* Step one slides back in from the left; the search comes from the right. */}
             <Slide direction="right" in={!onPerson} appear={false} container={slideRef.current}>
               <Box sx={panelSx(!onPerson)}>
                 <Box
@@ -186,35 +192,13 @@ export function AddNodeDialog({
                     />
                   ))}
                 </Box>
-
-                {/* The one thing the drawer cannot supply, because an owner has to exist before it
-                    can be edited and the name is the only field the database insists on. An
-                    individual is named on the next step instead, against the firm's own records. */}
-                {nodeType && !isIndividual && (
-                  <Box sx={motion.respectful({
-                    mt: 3,
-                    animation: `nameIn ${motion.swift} ${motion.ease} both`,
-                    '@keyframes nameIn': {
-                      from: { opacity: 0, transform: 'translateY(-4px)' },
-                      to: { opacity: 1, transform: 'none' },
-                    },
-                  })}>
-                    <TextField
-                      fullWidth
-                      autoFocus
-                      label={nameLabelFor(nodeType)}
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      helperText="Everything else is filled in on the owner's own panel."
-                    />
-                  </Box>
-                )}
               </Box>
             </Slide>
 
             <Slide direction="left" in={onPerson} appear={false} container={slideRef.current}>
               <Box sx={panelSx(onPerson)}>
-                <IndividualPicker
+                <OwnerPicker
+                  nodeType={nodeType}
                   name={displayName}
                   onNameChange={setDisplayName}
                   selected={person}

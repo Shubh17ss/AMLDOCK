@@ -214,21 +214,19 @@ function PropertyTable({ s, data, country, windowShort, n }) {
 }
 
 function OwnerTable({ s, data, n }) {
-  const widths = ['32%', '17%', '17%', '17%', '17%'];
+  const widths = ['50%', '25%', '25%'];
   const rows = data.rows.filter((r) => r.owners > 0);
   if (rows.length === 0) return <Text style={s.empty}>No owners have been recorded on deals created in this window yet.</Text>;
   return (
     <View style={s.table}>
-      <Row s={s} head widths={widths} cells={['Owner type', 'Owners', 'Overseas residents', 'Re-used', 'Exceptions granted']} />
+      <Row s={s} head widths={widths} cells={['Owner type', 'Owners', 'Overseas residents']} />
       {rows.map((r) => (
-        <Row key={r.ownerType} s={s} widths={widths}
-             cells={[ownerTypeLabel(r.ownerType), n(r.owners), n(r.overseas), n(r.reused), n(r.exceptions)]} />
+        <Row key={r.ownerType} s={s} widths={widths} cells={[ownerTypeLabel(r.ownerType), n(r.owners), n(r.overseas)]} />
       ))}
-      <Row s={s} total widths={widths}
-           cells={['Total', n(data.total.owners), n(data.total.overseas), n(data.total.reused), n(data.total.exceptions)]} />
+      <Row s={s} total widths={widths} cells={['Total', n(data.total.owners), n(data.total.overseas)]} />
       <Text style={s.note}>
-        Every owner on both sides of a deal is counted, companies and trusts included. Re-used counts owners who also
-        appear on another of the firm's deals, where they were added with the owner picker.
+        Each owner is counted once, however many deals it is on; owners added with the owner picker are recognised as
+        the same owner. Overseas residence follows the most recent deal an owner appears on.
       </Text>
     </View>
   );
