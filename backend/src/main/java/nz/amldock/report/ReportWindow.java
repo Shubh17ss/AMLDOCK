@@ -33,6 +33,15 @@ record ReportWindow(LocalDate from, LocalDate to, ZoneId zone, LocalDate today) 
     }
 
     /**
+     * The same days a year earlier, for a year-on-year comparison; null for an open-ended window,
+     * which has no earlier counterpart. 29 February falls back to the 28th.
+     */
+    ReportWindow previousYear() {
+        if (from == null) return null;
+        return new ReportWindow(from.minusYears(1), to.minusYears(1), zone, today);
+    }
+
+    /**
      * @param tz       an IANA zone id such as {@code Pacific/Auckland}; blank falls back to
      *                 {@code fallback}
      * @param to       blank means today

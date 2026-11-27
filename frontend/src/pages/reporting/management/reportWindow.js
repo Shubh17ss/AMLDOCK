@@ -64,6 +64,18 @@ export function describeWindow(win) {
   return win.from ? `${long(win.from)} to ${long(win.to)}` : `All time, up to ${long(win.to)}`;
 }
 
+/**
+ * Months only, short enough to sit under a bar: "Jul 26 – Jun 27", "Nov 26" for a window inside
+ * one month, "All time" for an open start.
+ */
+export function describeWindowMonths(win) {
+  if (!win) return '';
+  if (!win.from) return 'All time';
+  const a = dayjs(win.from).format('MMM YY');
+  const b = dayjs(win.to).format('MMM YY');
+  return a === b ? a : `${a} – ${b}`;
+}
+
 /** A sentence for the PDF's header, e.g. "Deals created 1 July 2025 to 30 June 2026." */
 export function describeWindowSentence(win) {
   if (!win) return '';

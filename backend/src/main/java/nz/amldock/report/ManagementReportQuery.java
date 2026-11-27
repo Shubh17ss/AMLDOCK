@@ -1,7 +1,5 @@
 package nz.amldock.report;
 
-import nz.amldock.deal.DealStatus;
-import nz.amldock.deal.RiskRating;
 import nz.amldock.deal.assurance.AssuranceStatus;
 import nz.amldock.ownership.NodeType;
 import nz.amldock.property.PropertyType;
@@ -21,7 +19,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +39,6 @@ import java.util.TreeMap;
 @Repository
 class ManagementReportQuery {
 
-    static final String NOT_ASSESSED = "NOT_ASSESSED";
     static final String AWAITING = "AWAITING";
     static final String NOT_SET = "NOT_SET";
 
@@ -66,44 +62,71 @@ class ManagementReportQuery {
 
     // ── Overview ────────────────────────────────────────────────────────────
 
+    /**
+     * A deal is listed once it has been verified, whatever has happened to it since. Every move into
+     * VERIFIED writes a version (DealVersionService.snapshotIfVerified), so a version is the record of
+     * it; the status test covers deals signed off before versions existed.
+     */
+    private static final String LISTED = "(d.latest_version_id IS NOT NULL OR d.status IN ('VERIFIED', 'CLOSED'))";
+
     ReportOverviewDto overview(ReportScope scope) {
         ReportWindow w = scope.window();
         MapSqlParameterSource params = new MapSqlParameterSource();
         bindWindow(params, w);
-        // One small cube (at most 5 statuses x 4 ratings x 4 verdicts) folded into the three maps
-        // below, instead of three passes over the same deals.
+        // Same rule as the assurance register: only a signed-off deal has a version to assure, and the
+        // latest_* projections outlive a reopen, so the status is tested too.
+        String signedOff = "d.status IN ('VERIFIED', 'CLOSED') AND d.latest_version_id IS NOT NULL";
         StringBuilder sql = new StringBuilder()
-                .append("SELECT d.status AS status, d.risk_rating AS risk,")
-                // Same rule as the assurance register: only a signed-off deal has a version to
-                // assure, and the latest_* projections outlive a reopen, so the status is tested too.
-                .append(" CASE WHEN d.status IN ('VERIFIED', 'CLOSED') AND d.latest_version_id IS NOT NULL")
-                .append(" THEN coalesce(d.latest_assurance_status, '").append(AWAITING).append("') END AS assurance,")
-                .append(" count(*) AS n")
+                .append("SELECT count(*) AS created,")
+                .append(" count(*) FILTER (WHERE d.status IN ('NEW', 'REVIEW', 'ON_HOLD')) AS open,")
+                .append(" count(*) FILTER (WHERE d.status = 'VERIFIED') AS verified,")
+                .append(" count(*) FILTER (WHERE d.status = 'CLOSED' AND d.property_sold IS TRUE) AS sold,")
+                // A close from before the sale outcome was recorded (V49) never said; it is not a sale.
+                .append(" count(*) FILTER (WHERE d.status = 'CLOSED' AND d.property_sold IS NOT TRUE) AS closed_not_sold,")
+                .append(" count(*) FILTER (WHERE ").append(LISTED).append(") AS listed,")
+                // The midpoint of the broker's range; one bound alone stands for itself, and a deal
+                // from before the range existed has only its single estimate.
+                .append(" coalesce(sum(coalesce((d.valuation_min + d.valuation_max) / 2, d.valuation_min,")
+                .append(" d.valuation_max, d.transaction_value)), 0) AS appraised,")
+                // A development keeps no single sale_price; its units are summed, and only for the
+                // closed deals, inside the CASE.
+                .append(" coalesce(sum(CASE WHEN d.status = 'CLOSED' THEN coalesce(d.sale_price,")
+                .append(" (SELECT sum(u.sale_price) FROM deal_sale_unit u WHERE u.deal_id = d.id)) END), 0) AS closing,")
+                .append(" count(*) FILTER (WHERE ").append(signedOff).append(" AND d.latest_assurance_status = 'ASSURED') AS assured,")
+                .append(" count(*) FILTER (WHERE ").append(signedOff).append(" AND d.latest_assurance_status = 'ACTION_REQUIRED') AS action_required,")
+                .append(" count(*) FILTER (WHERE ").append(signedOff).append(" AND d.latest_assurance_status IS NULL) AS awaiting")
                 .append(" FROM deal d")
                 .append(" WHERE ").append(within("d.created_at", w));
         scope.deals().appendWhere(sql, params, "d");
-        sql.append(" GROUP BY 1, 2, 3");
 
-        Map<String, Long> byStatus = zeros(names(DealStatus.values()));
-        Map<String, Long> byRisk = zeros(append(names(RiskRating.values()), NOT_ASSESSED));
-        Map<String, Long> byAssurance = zeros(append(names(AssuranceStatus.values()), AWAITING));
-        jdbc.query(sql.toString(), params, (RowCallbackHandler) rs -> {
-            long n = rs.getLong("n");
-            String risk = rs.getString("risk");
-            String assurance = rs.getString("assurance");
-            byStatus.merge(rs.getString("status"), n, Long::sum);
-            byRisk.merge(risk == null ? NOT_ASSESSED : risk, n, Long::sum);
-            if (assurance != null) byAssurance.merge(assurance, n, Long::sum);
+        ReportWindow before = w.previousYear();
+        Long previousListed = before == null ? null : listedCount(scope, before);
+
+        return jdbc.queryForObject(sql.toString(), params, (rs, i) -> {
+            Map<String, Long> byAssurance = new LinkedHashMap<>();
+            byAssurance.put(AssuranceStatus.ASSURED.name(), rs.getLong("assured"));
+            byAssurance.put(AssuranceStatus.ACTION_REQUIRED.name(), rs.getLong("action_required"));
+            byAssurance.put(AWAITING, rs.getLong("awaiting"));
+            return new ReportOverviewDto(
+                    rs.getLong("created"), rs.getLong("open"), rs.getLong("verified"),
+                    rs.getLong("sold"), rs.getLong("closed_not_sold"), rs.getLong("listed"),
+                    previousListed,
+                    before == null ? null : before.from().toString(),
+                    before == null ? null : before.to().toString(),
+                    rs.getBigDecimal("appraised"), rs.getBigDecimal("closing"),
+                    byAssurance);
         });
+    }
 
-        long created = byStatus.values().stream().mapToLong(Long::longValue).sum();
-        long open = byStatus.get(DealStatus.NEW.name()) + byStatus.get(DealStatus.REVIEW.name())
-                + byStatus.get(DealStatus.ON_HOLD.name());
-        long signedOff = byStatus.get(DealStatus.VERIFIED.name()) + byStatus.get(DealStatus.CLOSED.name());
-        return new ReportOverviewDto(created, open, signedOff,
-                byRisk.get(RiskRating.HIGH.name()),
-                byAssurance.get(AssuranceStatus.ACTION_REQUIRED.name()),
-                byStatus, byRisk, byAssurance);
+    /** Deals created in {@code w} that have been listed: the year-on-year comparison bar. */
+    private long listedCount(ReportScope scope, ReportWindow w) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        bindWindow(params, w);
+        StringBuilder sql = new StringBuilder("SELECT count(*) FROM deal d WHERE ")
+                .append(within("d.created_at", w)).append(" AND ").append(LISTED);
+        scope.deals().appendWhere(sql, params, "d");
+        Long n = jdbc.queryForObject(sql.toString(), params, Long.class);
+        return n == null ? 0 : n;
     }
 
     // ── Deals by property type ──────────────────────────────────────────────
@@ -353,21 +376,5 @@ class ManagementReportQuery {
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         Timestamp ts = rs.getTimestamp(column);
         return ts == null ? null : ts.toInstant();
-    }
-
-    private static String[] names(Enum<?>[] values) {
-        return Arrays.stream(values).map(Enum::name).toArray(String[]::new);
-    }
-
-    private static String[] append(String[] names, String extra) {
-        String[] out = Arrays.copyOf(names, names.length + 1);
-        out[names.length] = extra;
-        return out;
-    }
-
-    private static Map<String, Long> zeros(String[] keys) {
-        Map<String, Long> m = new LinkedHashMap<>();
-        for (String k : keys) m.put(k, 0L);
-        return m;
     }
 }

@@ -2,24 +2,18 @@ import { Box, Skeleton, Typography } from '@mui/material';
 import { fonts, tokens } from '../../../theme/theme.js';
 import { errorText, riseSx, tileSx } from './ReportSection.jsx';
 
-const share = (part, whole) => (whole ? `${Math.round((part / whole) * 100)}% of deals created` : 'No deals created');
-
 /**
- * The band that opens the report: how many deals the window holds, and four cuts of them the
- * charts below do not already draw. One tile split by hairlines rather than five cards, so it
- * reads as one statement with its parts.
+ * The band that opens the report: how many deals the window holds, then where each of them stands
+ * now. The four parts add up to the whole, so every deal is in exactly one. One tile split by
+ * hairlines rather than five cards, so it reads as one statement with its parts.
  */
 export function ReportFigures({ query, colours, windowText }) {
   const o = query.data;
   const figures = o ? [
     { label: 'Open', value: o.open, note: 'New, in review or on hold', swatch: colours.status.REVIEW },
-    { label: 'Signed off', value: o.signedOff, note: 'Verified or closed', swatch: colours.status.VERIFIED },
-    { label: 'High risk', value: o.highRisk, note: share(o.highRisk, o.created), swatch: colours.risk.HIGH },
-    {
-      label: 'Assurance action required', value: o.actionRequired,
-      note: o.signedOff ? `Of ${o.signedOff.toLocaleString('en-NZ')} signed off` : 'Nothing signed off yet',
-      swatch: colours.assurance.ACTION_REQUIRED,
-    },
+    { label: 'Verified', value: o.verified, swatch: colours.status.VERIFIED },
+    { label: 'Sold', value: o.sold, swatch: colours.status.CLOSED },
+    { label: 'Closed, not sold', value: o.closedNotSold, swatch: colours.status.NEW },
   ] : [];
 
   return (
@@ -80,7 +74,9 @@ export function ReportFigures({ query, colours, windowText }) {
                   }}>
                     {f.value.toLocaleString('en-NZ')}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: tokens.muted, display: 'block', mt: 0.5 }}>{f.note}</Typography>
+                  {f.note && (
+                    <Typography variant="caption" sx={{ color: tokens.muted, display: 'block', mt: 0.5 }}>{f.note}</Typography>
+                  )}
                 </>
               ) : (
                 <>

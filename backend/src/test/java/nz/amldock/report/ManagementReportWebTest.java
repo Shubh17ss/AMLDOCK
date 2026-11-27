@@ -47,20 +47,25 @@ class ManagementReportWebTest {
     @Test
     @WithMockUser(roles = "AML_COMPLIANCE_OFFICER")
     void theQueryStringBindsAndTheOverviewSerialisesUnderTheNamesThePageReads() throws Exception {
-        Map<String, Long> byStatus = new LinkedHashMap<>();
-        byStatus.put("NEW", 2L);
-        byStatus.put("CLOSED", 1L);
-        when(reports.overview(any())).thenReturn(new ReportOverviewDto(3, 2, 1, 1, 0,
-                byStatus, Map.of("HIGH", 1L), Map.of("AWAITING", 1L)));
+        Map<String, Long> byAssurance = new LinkedHashMap<>();
+        byAssurance.put("ASSURED", 1L);
+        byAssurance.put("AWAITING", 1L);
+        when(reports.overview(any())).thenReturn(new ReportOverviewDto(6, 2, 1, 2, 1, 4, 3L,
+                "2024-07-01", "2025-06-30", new BigDecimal("3300000.00"), new BigDecimal("1500000.00"), byAssurance));
 
         mvc.perform(get(BASE + "/overview")
                         .param("firmId", "7").param("branchId", "9")
                         .param("from", "2025-07-01").param("to", "2026-06-30").param("tz", "Pacific/Auckland"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.created").value(3))
-                .andExpect(jsonPath("$.signedOff").value(1))
-                .andExpect(jsonPath("$.byStatus.NEW").value(2))
-                .andExpect(jsonPath("$.byRisk.HIGH").value(1))
+                .andExpect(jsonPath("$.created").value(6))
+                .andExpect(jsonPath("$.verified").value(1))
+                .andExpect(jsonPath("$.sold").value(2))
+                .andExpect(jsonPath("$.closedNotSold").value(1))
+                .andExpect(jsonPath("$.listed").value(4))
+                .andExpect(jsonPath("$.previousListed").value(3))
+                .andExpect(jsonPath("$.previousFrom").value("2024-07-01"))
+                .andExpect(jsonPath("$.appraisedValue").value(3300000.00))
+                .andExpect(jsonPath("$.closingValue").value(1500000.00))
                 .andExpect(jsonPath("$.byAssurance.AWAITING").value(1));
 
         ArgumentCaptor<ReportParams> params = ArgumentCaptor.forClass(ReportParams.class);

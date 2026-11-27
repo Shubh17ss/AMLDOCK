@@ -1,9 +1,8 @@
-import { DEAL_STATUS_META } from '../../../data/dealStatus.js';
 import { PROPERTY_TYPES } from '../../../data/propertyTypes.js';
 import { nodeTypeLabel } from '../../../api/ownership.js';
 
 /**
- * Colours and labels for the report's three breakdowns, in the order the server sends them.
+ * Colours and labels for the report's figures and charts.
  *
  * Colours are read from the theme's CSS variables as literal hex: the chart library derives
  * hover shades from them, and the PDF renderer cannot resolve `var(--…)` at all. Each has the
@@ -27,10 +26,8 @@ export function reportColours() {
   const deepRed = cssVar('--cl-err-text', '#9B1C1C');
   const green = cssVar('--cl-approved', '#15803D');
   const blue = cssVar('--cl-blue', '#1B5FE3');
-  const unknown = cssVar('--cl-switch-track', '#C7D0DE');
   return {
     status: { NEW: slate, REVIEW: amber, ON_HOLD: red, VERIFIED: green, CLOSED: blue },
-    risk: { LOW: green, MEDIUM: amber, HIGH: red, NOT_ASSESSED: unknown },
     assurance: { ASSURED: green, ACTION_REQUIRED: deepRed, AWAITING: amber },
     ink: cssVar('--cl-ink', '#242C3C'),
     muted: cssVar('--cl-muted', '#5A6576'),
@@ -41,14 +38,7 @@ export function reportColours() {
   };
 }
 
-export const STATUS_KEYS = ['NEW', 'REVIEW', 'ON_HOLD', 'VERIFIED', 'CLOSED'];
-export const RISK_KEYS = ['LOW', 'MEDIUM', 'HIGH', 'NOT_ASSESSED'];
 export const ASSURANCE_KEYS = ['ASSURED', 'ACTION_REQUIRED', 'AWAITING'];
-
-export const statusLabel = (k) => DEAL_STATUS_META[k]?.label ?? k;
-
-const RISK_LABELS = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High', NOT_ASSESSED: 'Not assessed' };
-export const riskLabel = (k) => RISK_LABELS[k] ?? k;
 
 const ASSURANCE_LABELS = { ASSURED: 'Assured', ACTION_REQUIRED: 'Action required', AWAITING: 'Awaiting assurance' };
 export const assuranceLabel = (k) => ASSURANCE_LABELS[k] ?? k;

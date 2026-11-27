@@ -2,8 +2,7 @@ import { Document, Font, Page, Path, StyleSheet, Svg, Text, View } from '@react-
 import { roleLabel } from '../../../auth/roles.js';
 import { formatDate, formatMoney } from '../../../utils/formatters.js';
 import {
-  ASSURANCE_KEYS, RISK_KEYS, STATUS_KEYS, assuranceLabel, hours, ownerTypeLabel, percent,
-  propertyTypeLabel, riskLabel, statusLabel,
+  ASSURANCE_KEYS, assuranceLabel, hours, ownerTypeLabel, percent, propertyTypeLabel,
 } from './reportPalette.js';
 
 // The renderer hyphenates by default, which breaks short labels mid-word ("Medi-um"). Words in this
@@ -44,9 +43,9 @@ export function ReportPdfDocument({ meta, overview, propertyTypes, owners, train
           </View>
           {[
             ['Open', overview.open, colours.status.REVIEW],
-            ['Signed off', overview.signedOff, colours.status.VERIFIED],
-            ['High risk', overview.highRisk, colours.risk.HIGH],
-            ['Assurance action required', overview.actionRequired, colours.assurance.ACTION_REQUIRED],
+            ['Verified', overview.verified, colours.status.VERIFIED],
+            ['Sold', overview.sold, colours.status.CLOSED],
+            ['Closed, not sold', overview.closedNotSold, colours.status.NEW],
           ].map(([label, value, swatch]) => (
             <View key={label} style={s.figure}>
               <View style={s.swatchRow}>
@@ -59,24 +58,31 @@ export function ReportPdfDocument({ meta, overview, propertyTypes, owners, train
         </View>
 
         {/* ── charts ── */}
-        <View wrap={false}>
-          <Text style={s.h2}>Deals created, by status</Text>
-          <Bars s={s} overview={overview} colours={colours} />
+        <View style={s.donuts} wrap={false}>
+          <View style={s.donutCell}>
+            <Text style={s.h2}>Deals listed</Text>
+            <Bars s={s} items={meta.listedBars} />
+            {meta.listedBars.length === 1 && (
+              <Text style={s.note}>An all-time window has no year before it to compare with.</Text>
+            )}
+          </View>
+          <View style={s.donutCell}>
+            <Text style={s.h2}>Appraised and closing value ({meta.currency})</Text>
+            <Bars s={s} format={(v) => formatMoney(v, meta.country)} items={[
+              { label: 'Appraised value', value: Number(overview.appraisedValue ?? 0), colour: colours.status.REVIEW },
+              { label: 'Closing value', value: Number(overview.closingValue ?? 0), colour: colours.status.CLOSED },
+            ]} />
+          </View>
         </View>
 
         <View style={s.donuts} wrap={false}>
-          <View style={s.donutCell}>
-            <Text style={s.h2}>Risk rating</Text>
-            <Donut s={s} unit="deals" slices={RISK_KEYS.map((k) => ({
-              key: k, label: riskLabel(k), value: overview.byRisk?.[k] ?? 0, colour: colours.risk[k],
-            }))} track={colours.track} />
-          </View>
           <View style={s.donutCell}>
             <Text style={s.h2}>Assurance, signed-off deals</Text>
             <Donut s={s} unit="deals" slices={ASSURANCE_KEYS.map((k) => ({
               key: k, label: assuranceLabel(k), value: overview.byAssurance?.[k] ?? 0, colour: colours.assurance[k],
             }))} track={colours.track} />
           </View>
+          <View style={s.donutCell} />
         </View>
 
         {/* ── property types ── */}
@@ -97,24 +103,24 @@ export function ReportPdfDocument({ meta, overview, propertyTypes, owners, train
 
 /* ---------- charts ---------- */
 
-function Bars({ s, overview, colours }) {
-  const values = STATUS_KEYS.map((k) => overview.byStatus?.[k] ?? 0);
-  const max = Math.max(1, ...values);
+/** Bars side by side, each figure above its bar and its name below. items: [{ label, value, colour }] */
+function Bars({ s, items, format = (v) => v.toLocaleString('en-NZ') }) {
+  const max = Math.max(1, ...items.map((x) => x.value));
   return (
     <View>
       <View style={s.barArea}>
-        {STATUS_KEYS.map((k, i) => (
-          <View key={k} style={s.barCol}>
-            <Text style={s.barValue}>{values[i].toLocaleString('en-NZ')}</Text>
+        {items.map((x) => (
+          <View key={x.label} style={s.barCol}>
+            <Text style={s.barValue}>{format(x.value)}</Text>
             <View style={[s.bar, {
-              height: values[i] ? Math.max(2, (values[i] / max) * 96) : 0,
-              backgroundColor: colours.status[k],
+              height: x.value ? Math.max(2, (x.value / max) * 96) : 0,
+              backgroundColor: x.colour,
             }]} />
           </View>
         ))}
       </View>
       <View style={s.barLabels}>
-        {STATUS_KEYS.map((k) => <Text key={k} style={s.barLabel}>{statusLabel(k)}</Text>)}
+        {items.map((x) => <Text key={x.label} style={s.barLabel}>{x.label}</Text>)}
       </View>
     </View>
   );

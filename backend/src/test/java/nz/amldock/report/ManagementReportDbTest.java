@@ -115,6 +115,17 @@ class ManagementReportDbTest {
         // d7: created long before the window but verified inside it.
         deal(branchA, "RESIDENTIAL", "VERIFIED", "LOW", "2024-01-01T10:00:00+13:00",
                 "2025-12-01T10:00:00+13:00", null, null, null);
+        // d8: closed in the window without a sale.
+        deal(branchA, "LIFESTYLE", "CLOSED", "LOW", "2026-02-01T10:00:00+13:00",
+                "2026-02-10T10:00:00+13:00", "2026-03-01T10:00:00+13:00", false, null);
+        // d9: created in the AML year before, verified and since reopened: still listed then.
+        Long d9 = deal(branchA, "RESIDENTIAL", "REVIEW", "LOW", "2024-09-01T10:00:00+12:00", null, null, null, null);
+        assurance(d9, null);
+        // Appraised ranges: a full range, one bound only, and a deal from before ranges (single estimate).
+        valuation(d1, "800000", "1000000", null);     // 900k
+        valuation(d2, "1000000", null, null);         // 1.0M
+        valuation(d3, "900000", "1100000", null);     // 1.0M
+        valuation(d4, null, null, "400000");          // 400k
         // The other firm's deal sits inside the window and must not be counted.
         Long dx = deal(otherBranch, "RESIDENTIAL", "NEW", "HIGH", "2025-08-01T10:00:00+12:00", null, null, null, null,
                 otherAgent);
@@ -196,22 +207,43 @@ class ManagementReportDbTest {
     /* ---------- the sections ---------- */
 
     @Test
-    void theOverviewCountsTheWindowsDealsByStatusRiskAndAssurance() {
+    void theOverviewSplitsTheWindowsDealsByWhereTheyStand() {
         ReportOverviewDto o = reports.overview(window(null, null));
 
-        // d1, d2, d3, d4 and d6: d5 was created in the previous AML year, d7 long before.
-        assertThat(o.created()).isEqualTo(5);
-        assertThat(o.byStatus()).containsExactly(
-                Map.entry("NEW", 1L), Map.entry("REVIEW", 0L), Map.entry("ON_HOLD", 1L),
-                Map.entry("VERIFIED", 1L), Map.entry("CLOSED", 2L));
-        assertThat(o.open()).isEqualTo(2);
-        assertThat(o.signedOff()).isEqualTo(3);
-        assertThat(o.byRisk()).containsExactly(
-                Map.entry("LOW", 1L), Map.entry("MEDIUM", 1L), Map.entry("HIGH", 1L), Map.entry("NOT_ASSESSED", 2L));
-        assertThat(o.highRisk()).isEqualTo(1);
+        // d1, d2, d3, d4, d6 and d8: d5 and d9 were created the AML year before, d7 long before.
+        assertThat(o.created()).isEqualTo(6);
+        assertThat(o.open()).isEqualTo(2);                // d1, d6
+        assertThat(o.verified()).isEqualTo(1);            // d2
+        assertThat(o.sold()).isEqualTo(2);                // d3, d4
+        assertThat(o.closedNotSold()).isEqualTo(1);       // d8
+        assertThat(o.open() + o.verified() + o.sold() + o.closedNotSold()).isEqualTo(o.created());
         assertThat(o.byAssurance()).containsExactly(
                 Map.entry("ASSURED", 1L), Map.entry("ACTION_REQUIRED", 1L), Map.entry("AWAITING", 1L));
-        assertThat(o.actionRequired()).isEqualTo(1);
+    }
+
+    @Test
+    void listedCountsEverVerifiedDealsAgainstTheSameDaysAYearEarlier() {
+        ReportOverviewDto o = reports.overview(window(null, null));
+
+        assertThat(o.listed()).isEqualTo(4);              // d2, d3, d4, and d8 closed unsold
+        // d9 was verified then reopened, and still counts; d5 never reached verification.
+        assertThat(o.previousListed()).isEqualTo(1);
+        assertThat(o.previousFrom()).isEqualTo("2024-07-01");
+        assertThat(o.previousTo()).isEqualTo("2025-06-30");
+
+        ReportOverviewDto allTime = reports.overview(new ReportParams(null, null, null, TO, TZ));
+        assertThat(allTime.previousListed()).isNull();
+        assertThat(allTime.previousFrom()).isNull();
+    }
+
+    @Test
+    void appraisedValueIsEachRangesMidpointAndClosingValueTheClosedDealsPrices() {
+        ReportOverviewDto o = reports.overview(window(null, null));
+
+        // 900k + 1.0M (one bound) + 1.0M + 400k (single estimate); d6 and d8 have no valuation.
+        assertThat(o.appraisedValue()).isEqualByComparingTo("3300000");
+        // d3's sale price, d4's units, and nothing for d8, closed unsold.
+        assertThat(o.closingValue()).isEqualByComparingTo("1500000");
     }
 
     @Test
@@ -236,10 +268,10 @@ class ManagementReportDbTest {
 
         PropertyTypeReportDto.Row residential = rows.get("RESIDENTIAL");
         assertThat(residential.created()).isEqualTo(2);                 // d1, d2
-        assertThat(residential.createdPercent()).isEqualTo(40.0);
+        assertThat(residential.createdPercent()).isEqualTo(33.3);
         assertThat(residential.verified()).isEqualTo(2);                // d2, and d7 created long before
         assertThat(residential.verifiedAllTime()).isEqualTo(2);
-        assertThat(residential.unverifiedAllTime()).isEqualTo(2);       // d1, and d5 from the year before
+        assertThat(residential.unverifiedAllTime()).isEqualTo(3);       // d1, and d5 and d9 from the year before
         assertThat(residential.sold()).isZero();
         assertThat(residential.averageSalePrice()).isNull();
 
@@ -247,16 +279,19 @@ class ManagementReportDbTest {
         // A development's price is the sum of its units.
         assertThat(rows.get("DEVELOPMENT").maxSalePrice()).isEqualByComparingTo("500000");
         assertThat(rows.get("NOT_SET").created()).isEqualTo(1);         // d6, on the window's last day
-        assertThat(rows.get("LIFESTYLE").created()).isZero();
+        assertThat(rows.get("BUSINESS").created()).isZero();
+        // d8 closed in the window without a sale: closed, but no price.
+        assertThat(rows.get("LIFESTYLE").closed()).isEqualTo(1);
+        assertThat(rows.get("LIFESTYLE").sold()).isZero();
 
         PropertyTypeReportDto.Row total = t.total();
         assertThat(total.propertyType()).isNull();
-        assertThat(total.created()).isEqualTo(5);
+        assertThat(total.created()).isEqualTo(6);
         assertThat(total.createdPercent()).isEqualTo(100.0);
-        assertThat(total.verified()).isEqualTo(4);
-        assertThat(total.closed()).isEqualTo(2);
-        assertThat(total.verifiedAllTime()).isEqualTo(4);
-        assertThat(total.unverifiedAllTime()).isEqualTo(3);
+        assertThat(total.verified()).isEqualTo(5);
+        assertThat(total.closed()).isEqualTo(3);
+        assertThat(total.verifiedAllTime()).isEqualTo(5);
+        assertThat(total.unverifiedAllTime()).isEqualTo(4);
         assertThat(total.sold()).isEqualTo(2);
         assertThat(total.averageSalePrice()).isEqualByComparingTo("750000");
         assertThat(total.maxSalePrice()).isEqualByComparingTo("1000000");
@@ -310,13 +345,13 @@ class ManagementReportDbTest {
     @Test
     void allTimeTakesInEverythingUpToTheEndDay() {
         ReportOverviewDto o = reports.overview(new ReportParams(null, null, null, TO, TZ));
-        assertThat(o.created()).isEqualTo(7);                           // d5 and d7 join in
+        assertThat(o.created()).isEqualTo(9);                           // d5, d7 and d9 join in
     }
 
     @Test
     void anOfficerIsPinnedToTheirOwnFirmWhateverTheyAskFor() {
         ReportOverviewDto o = reports.overview(new ReportParams(otherFirm, null, FROM, TO, TZ));
-        assertThat(o.created()).isEqualTo(5);
+        assertThat(o.created()).isEqualTo(6);
     }
 
     @Test
@@ -436,6 +471,16 @@ class ManagementReportDbTest {
         p.put("v", verdict);
         jdbc.update("UPDATE deal SET latest_version_id = :d, latest_version_no = 1,"
                 + " latest_assurance_status = :v WHERE id = :d", p);
+    }
+
+    private void valuation(Long dealId, String min, String max, String single) {
+        Map<String, Object> p = new HashMap<>();
+        p.put("d", dealId);
+        p.put("min", min == null ? null : new BigDecimal(min));
+        p.put("max", max == null ? null : new BigDecimal(max));
+        p.put("single", single == null ? null : new BigDecimal(single));
+        jdbc.update("UPDATE deal SET valuation_min = :min, valuation_max = :max, transaction_value = :single"
+                + " WHERE id = :d", p);
     }
 
     private Long structure(Long dealId) {

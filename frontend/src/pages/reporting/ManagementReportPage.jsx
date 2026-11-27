@@ -13,21 +13,35 @@ import {
   getReportOverview, getReportOwners, getReportPropertyTypes, getReportTraining,
 } from '../../api/reports.js';
 import {
-  DEFAULT_PRESET, browserTimeZone, describeWindow, describeWindowSentence, describeWindowShort, resolveWindow,
+  DEFAULT_PRESET, browserTimeZone, describeWindow, describeWindowMonths, describeWindowSentence,
+  describeWindowShort, resolveWindow,
 } from './management/reportWindow.js';
 import {
-  ASSURANCE_KEYS, RISK_KEYS, assuranceLabel, reportColours, riskLabel,
+  ASSURANCE_KEYS, assuranceLabel, reportColours,
 } from './management/reportPalette.js';
 import { ALL_BRANCHES, ReportToolbar } from './management/ReportToolbar.jsx';
 import { ReportFigures } from './management/ReportFigures.jsx';
 import { ReportSection } from './management/ReportSection.jsx';
-import { StatusBarChart } from './management/StatusBarChart.jsx';
+import { ComparisonBarChart } from './management/ComparisonBarChart.jsx';
 import { BreakdownDonut } from './management/BreakdownDonut.jsx';
 import { PropertyTypeTable } from './management/PropertyTypeTable.jsx';
 import { OwnerTypeTable } from './management/OwnerTypeTable.jsx';
 import { TrainingSection } from './management/TrainingSection.jsx';
 
 const FIVE_MINUTES = 5 * 60 * 1000;
+
+/** This window's listed deals, then the same days a year earlier when there is such a window. */
+function listedBars(o, win, colours) {
+  const bars = [{ label: describeWindowMonths(win), value: o.listed, colour: colours.blue }];
+  if (o.previousListed != null) {
+    bars.push({
+      label: describeWindowMonths({ from: o.previousFrom, to: o.previousTo }),
+      value: o.previousListed,
+      colour: colours.status.NEW,
+    });
+  }
+  return bars;
+}
 
 const slug = (s) => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -96,6 +110,8 @@ export function ManagementReportPage() {
           windowSentence: describeWindowSentence(win),
           windowShort,
           country: firm?.country,
+          currency: money.code,
+          listedBars: listedBars(overviewQ.data, win, reportColours()),
           generatedBy: user?.fullName ?? user?.email ?? '',
           generatedAt: formatDateTime(new Date().toISOString()),
         },
@@ -155,29 +171,35 @@ export function ManagementReportPage() {
 
         <Box sx={{
           display: 'grid', gap: 2.5,
-          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', lg: '1.5fr 1fr 1fr' },
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', lg: '1fr 1fr 1fr' },
         }}>
           <ReportSection
-            id="report-status" index={1} query={overviewQ}
-            title="Deals created, by status"
-            description="Where each deal created in the window stands now."
-            sx={{ gridColumn: { md: '1 / -1', lg: 'auto' } }}
-          >
-            {(o) => <StatusBarChart overview={o} colours={colours} />}
-          </ReportSection>
-          <ReportSection
-            id="report-risk" index={2} query={overviewQ}
-            title="Risk rating"
-            description="The current rating of each deal created in the window."
+            id="report-listed" index={1} query={overviewQ}
+            title="Deals listed"
+            description="Deals created in the window that have been verified, whatever they stand at now, against the same days a year earlier."
           >
             {(o) => (
-              <BreakdownDonut
-                ariaTitle="Deals created by risk rating"
-                unit={['deal', 'deals']}
-                track={colours.track}
-                slices={RISK_KEYS.map((k) => ({
-                  key: k, label: riskLabel(k), value: o.byRisk?.[k] ?? 0, colour: colours.risk[k],
-                }))}
+              <ComparisonBarChart
+                ariaTitle="Deals listed"
+                bars={listedBars(o, win, colours)}
+                note={o.previousListed == null ? 'An all-time window has no year before it to compare with.' : null}
+              />
+            )}
+          </ReportSection>
+          <ReportSection
+            id="report-value" index={2} query={overviewQ}
+            title="Appraised and closing value"
+            description={`Deals created in the window: the midpoint of each appraised range, against the sale prices of those now closed (${money.code}).`}
+          >
+            {(o) => (
+              <ComparisonBarChart
+                ariaTitle="Appraised and closing value"
+                format={(v) => money.format(v)}
+                axisFormat={(v) => money.formatCompact(v)}
+                bars={[
+                  { label: 'Appraised value', value: Number(o.appraisedValue ?? 0), colour: colours.status.REVIEW },
+                  { label: 'Closing value', value: Number(o.closingValue ?? 0), colour: colours.status.CLOSED },
+                ]}
               />
             )}
           </ReportSection>
@@ -185,6 +207,7 @@ export function ManagementReportPage() {
             id="report-assurance" index={3} query={overviewQ}
             title="Assurance"
             description="Deals from the window that have been signed off, by compliance's second look."
+            sx={{ gridColumn: { md: '1 / -1', lg: 'auto' } }}
           >
             {(o) => (
               <BreakdownDonut
