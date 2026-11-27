@@ -72,10 +72,14 @@ public class SecurityConfig {
                                 "/api/document-reviews", "/api/document-reviews/**")
                         .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER", "AUDIT")
                         // Reporting > International Fund Transaction Register — the one section
-                        // FINANCE works in, alongside the (unbuilt) Management Reports module.
+                        // FINANCE works in.
                         .requestMatchers("/api/international-fund-transactions",
                                 "/api/international-fund-transactions/**")
                         .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER", "AUDIT", "FINANCE")
+                        // Reporting > Management Reports — firm-level reading of deals, owners and
+                        // training, so no FINANCE and no branch staff.
+                        .requestMatchers("/api/reports", "/api/reports/**")
+                        .hasAnyRole("ROOT", "AML_COMPLIANCE_OFFICER", "SENIOR_MANAGER", "AUDIT")
                         // Reporting > Suspicious Activity Register — deliberately no FINANCE.
                         .requestMatchers("/api/suspicious-activities",
                                 "/api/suspicious-activities/**")

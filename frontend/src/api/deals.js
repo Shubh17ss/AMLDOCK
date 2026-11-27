@@ -12,16 +12,6 @@ export async function listDeals(params = {}) {
   return data;
 }
 
-/**
- * Dashboard figures computed on the server over every deal in scope:
- * `{ total, byStatus: { [status]: { count, valueSum, oldestCreatedAt, updatedLast30Days } },
- * firmsAwaitingReview }`. Statuses with no deals are absent from `byStatus`.
- */
-export async function getDealSummary({ firmId, branchId } = {}) {
-  const { data } = await apiClient.get('/deals/summary', { params: compact({ firmId, branchId }) });
-  return data;
-}
-
 /** Drops empty params so they are not sent as `?q=`. */
 export function compact(params) {
   return Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''));

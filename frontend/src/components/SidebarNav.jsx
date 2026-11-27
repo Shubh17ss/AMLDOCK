@@ -15,7 +15,7 @@ const inGroup = (group, pathname) =>
 
 /**
  * Grouped compliance navigation, accordion-style: clicking a group header opens its
- * section (and navigates to the group landing — CDD opens the CDD Register). The
+ * section (and navigates to the group landing — CDD opens the deal list). The
  * chevron toggles the dropdown without navigating. One group open at a time; the
  * group owning the active route opens automatically.
  */

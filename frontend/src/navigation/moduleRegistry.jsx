@@ -34,7 +34,7 @@ import {
 // they can never drift.
 //
 // Each GROUP has a clickable landing route (`to`) that shows a section view; the
-// CDD group's landing is the role-aware stats dashboard (CDD_REGISTER_PATH).
+// CDD group's landing (CDD_REGISTER_PATH) redirects to the deal list.
 // Each ITEM is a module — all placeholders we fill in later.
 
 export const DASHBOARD_PATH = '/dashboard';
@@ -46,6 +46,7 @@ export const CDD_EXCEPTIONS_PATH = '/cdd/cdd-exceptions';
 export const CDD_ASSURANCE_PATH = '/cdd/assurance';
 export const WORKSPACE_PATH = '/workspace';
 export const QUERIES_PATH = '/workspace/queries';
+export const MANAGEMENT_REPORTS_PATH = '/reporting/reports';
 export const INTL_FUND_TRANSACTIONS_PATH = '/reporting/international-fund-transaction-register';
 export const SUSPICIOUS_ACTIVITIES_PATH = '/reporting/suspicious-activities';
 export const STAFF_TRAINING_PATH = '/aml-training/staff-training';
@@ -66,7 +67,9 @@ export const MODULE_GROUPS = [
     ],
   },
   {
-    // The CDD header opens the CDD Register — the role-aware stats dashboard. `title` is the
+    // The CDD header opens /cdd, which redirects to the deal list (the stats that used to live
+    // there are in Management Reports). `to` stays /cdd rather than the deal list itself, so the
+    // deal list keeps its own title and no section landing is registered over it. `title` is the
     // heading the dashboard rail and the app bar both show; `group` stays the short sidebar label.
     group: 'CDD', slug: 'cdd', to: CDD_REGISTER_PATH, title: 'Client due diligence',
     icon: <VerifiedUserRoundedIcon />,
@@ -98,8 +101,8 @@ export const MODULE_GROUPS = [
     group: 'Reporting', slug: 'reporting', to: '/reporting', title: 'Reporting',
     icon: <LeaderboardRoundedIcon />,
     items: [
-      { id: 'management-reports',    label: 'Management Reports',                    to: '/reporting/reports',                             icon: <InsightsIcon />,
-        blurb: 'Board-level AML reporting on obligations, breaches and remediation.' },
+      { id: 'management-reports',    label: 'Management Reports',                    to: MANAGEMENT_REPORTS_PATH,                          icon: <InsightsIcon />,
+        blurb: 'Deals, owners and staff training for any period, firm-wide or by branch, as a PDF.' },
       // The annual report is a periodic filing rather than a living policy document, so it sits
       // here with the other things you file — not beside the risk assessment and the compliance
       // programme, which are documents you keep current.
@@ -173,7 +176,7 @@ export const CDD_GROUP = MODULE_GROUPS.find((g) => g.slug === 'cdd');
  *
  *   ROOT / AML CO / Senior Manager → the whole workspace
  *   AUDIT                          → the whole workspace, read-only (canAccessAllModules)
- *   FINANCE                        → Reporting, narrowed to its two modules
+ *   FINANCE                        → Reporting, narrowed to its one module
  *   everyone else                  → the CDD section
  */
 export function visibleGroupsFor(role) {
@@ -190,7 +193,7 @@ export function visibleGroupsFor(role) {
   return MODULE_GROUPS.filter((g) => g.slug === 'cdd').map(allowed);
 }
 
-/** The routes FINANCE may open: the Reporting landing plus its two modules. */
+/** The routes FINANCE may open: the Reporting landing plus its module. */
 export const FINANCE_PATHS = [
   MODULE_GROUPS.find((g) => g.slug === 'reporting').to,
   ...MODULE_GROUPS.find((g) => g.slug === 'reporting').items
@@ -206,12 +209,14 @@ export const CDD_SECTION_PATHS = new Set([CDD_GROUP.to, ...CDD_GROUP.items.map((
 
 /**
  * Groups whose landing route renders the generic section page (a card per module). Every
- * group except CDD, whose landing is the purpose-built stats dashboard (CDD_REGISTER_PATH).
+ * group except CDD, whose landing (CDD_REGISTER_PATH) redirects to the deal list. Keep the
+ * exclusion: without it a section page would be registered at /cdd too.
  */
 export const SECTION_LANDING_GROUPS = MODULE_GROUPS.filter((g) => g.to !== CDD_REGISTER_PATH);
 
 /** Module paths that render real pages — everything else gets a placeholder. */
 export const IMPLEMENTED_PATHS = [
+  // A redirect, not a page, but listed so no placeholder is registered at the same address.
   CDD_REGISTER_PATH,
   DEALS_PATH,
   BENEFICIAL_OWNERS_PATH,
@@ -226,6 +231,7 @@ export const IMPLEMENTED_PATHS = [
   '/reporting-entity',
   QUERIES_PATH,
   AUDIT_LOG_PATH,
+  MANAGEMENT_REPORTS_PATH,
   INTL_FUND_TRANSACTIONS_PATH,
   SUSPICIOUS_ACTIVITIES_PATH,
   STAFF_TRAINING_PATH,

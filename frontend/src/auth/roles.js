@@ -79,8 +79,12 @@ export const canWrite = (role) => Boolean(role) && !isReadOnly(role);
 /** Sees every reporting entity rather than one — a visibility question, not a write grant. */
 export const seesAllFirms = (role) => role === 'ROOT' || role === 'AUDIT';
 
-/** FINANCE sees these two Reporting modules and nothing else in the workspace. */
-export const FINANCE_MODULE_IDS = ['management-reports', 'intl-fund-transfers'];
+/**
+ * FINANCE sees this Reporting module and nothing else in the workspace. Management Reports was
+ * once meant to be theirs too, but it reports on deals, owners and training — firm-level CDD
+ * reading that finance does not do — so the server refuses it to them (SecurityConfig).
+ */
+export const FINANCE_MODULE_IDS = ['intl-fund-transfers'];
 
 // Privilege groups used by route guards / page checks.
 export const DEAL_AUTHOR_ROLES = ['AGENT', 'AGENT_PA', 'ADMIN'];
@@ -159,7 +163,7 @@ export const DEAL_NOTIFICATION_EVENTS = [
 export const FULL_WORKSPACE_ROLES = ['ROOT', 'AML_COMPLIANCE_OFFICER', 'SENIOR_MANAGER'];
 
 // Who may reach a section at all. AUDIT sees every section (read-only); FINANCE is narrowed to
-// two Reporting modules by visibleGroupsFor, not by this list.
+// its one Reporting module by visibleGroupsFor, not by this list.
 export const SECTION_READ_ROLES = [...FULL_WORKSPACE_ROLES, 'AUDIT'];
 export const canAccessAllModules = (role) => SECTION_READ_ROLES.includes(role);
 /** Route guard for FINANCE_MODULE_IDS and the Reporting landing they sit under. */
@@ -222,7 +226,7 @@ export const canDeleteDeal = (user, deal) => {
 // ADMIN shares their permissions and their nav profile but works at a desk, so it keeps the full
 // mobile nav. Deliberately narrower than DEAL_AUTHOR_ROLES: this is about the shape of someone's
 // day, not about what they may write. Kept separate from navProfileFor for the same reason — that
-// function also picks the CDD bento in CddRegisterPage, which this must not disturb.
+// function shapes the mobile nav for every role, which this must not disturb.
 export const BROKER_ROLES = ['AGENT', 'AGENT_PA'];
 export const isBroker = (role) => BROKER_ROLES.includes(role);
 

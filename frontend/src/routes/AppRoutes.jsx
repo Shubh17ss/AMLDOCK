@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { LinearProgress } from '@mui/material';
 import { AppShell } from '../components/AppShell.jsx';
 import { ProtectedRoute } from '../auth/ProtectedRoute.jsx';
 import { LandingPage } from '../pages/LandingPage.jsx';
@@ -23,10 +25,10 @@ import {
 } from '../auth/roles.js';
 import { HomeRedirect } from '../pages/HomeRedirect.jsx';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
-import { CddRegisterPage } from '../pages/CddRegisterPage.jsx';
 import { PlaceholderPage } from '../pages/PlaceholderPage.jsx';
 import {
   placeholderRoutes, CDD_REGISTER_PATH, DEALS_PATH, CDD_SECTION_PATHS, INTL_FUND_TRANSACTIONS_PATH,
+  MANAGEMENT_REPORTS_PATH,
   BENEFICIAL_OWNERS_PATH, OVERSEAS_RESIDENTS_PATH, CDD_EXCEPTIONS_PATH, CDD_ASSURANCE_PATH,
   SUSPICIOUS_ACTIVITIES_PATH, STAFF_TRAINING_PATH, MY_TRAINING_PATH, SECTION_LANDING_GROUPS,
   FINANCE_PATHS, AUDIT_LOG_PATH, WORKSPACE_PATH, QUERIES_PATH,
@@ -35,6 +37,11 @@ import { DocumentModulePage, DOCUMENT_MODULES } from '../pages/documents/Documen
 import { SectionLandingPage } from '../pages/SectionLandingPage.jsx';
 import { InternationalFundTransactionRegisterPage } from '../pages/reporting/InternationalFundTransactionRegisterPage.jsx';
 import { SuspiciousActivityRegisterPage } from '../pages/reporting/SuspiciousActivityRegisterPage.jsx';
+
+// Loaded on first visit: its chart library is only for the four roles that read the report, and
+// would otherwise sit in the bundle every agent's phone downloads.
+const ManagementReportPage = lazy(() => import('../pages/reporting/ManagementReportPage.jsx')
+  .then((m) => ({ default: m.ManagementReportPage })));
 import { StaffTrainingPage } from '../pages/training/StaffTrainingPage.jsx';
 import { MyTrainingPage } from '../pages/training/MyTrainingPage.jsx';
 import { UsersAdminPage } from '../pages/admin/UsersAdminPage.jsx';
@@ -86,8 +93,9 @@ export function AppRoutes() {
         <Route path="/dashboard" element={flat(<DashboardPage />)} />
         <Route path="/profile" element={flat(<ProfilePage />)} />
 
-        {/* CDD Register — the role-aware stats dashboard (the CDD group landing) */}
-        <Route path={CDD_REGISTER_PATH} element={flat(<CddRegisterPage />)} />
+        {/* The CDD group's own address. It used to be a stats dashboard; the figures now live in
+            Reporting › Management Reports, so the header goes straight to the deal list. */}
+        <Route path={CDD_REGISTER_PATH} element={<Navigate to={DEALS_PATH} replace />} />
 
         {/* Deals — the full deal list with filters (formerly the /queue compliance queue) */}
         <Route path={DEALS_PATH} element={flat(<DealsPage />)} />
@@ -106,7 +114,7 @@ export function AppRoutes() {
         } />
 
         {/* Section landings — clicking a menu section header shows a card per module in it,
-            each with its review status. The CDD landing is the stats dashboard instead, so
+            each with its review status. The CDD header redirects to the deal list instead, so
             it isn't in SECTION_LANDING_GROUPS. Only CDD is open to everyone. */}
         {SECTION_LANDING_GROUPS.map((g) => {
           const page = flat(<SectionLandingPage group={g} />);
@@ -135,6 +143,18 @@ export function AppRoutes() {
             }
           />
         ))}
+
+        {/* Reporting › Management Reports — the firm's deals, owners and training over a window.
+            Firm-level reading: no FINANCE and no branch staff, as on the server. */}
+        <Route path={MANAGEMENT_REPORTS_PATH} element={
+          <ProtectedRoute roles={SECTION_READ_ROLES}>
+            {flat(
+              <Suspense fallback={<LinearProgress sx={{ maxWidth: 240, height: 3, borderRadius: 2 }} />}>
+                <ManagementReportPage />
+              </Suspense>,
+            )}
+          </ProtectedRoute>
+        } />
 
         {/* Reporting › International Fund Transaction Register. Outside the CDD section, so
             restricted to the full-workspace roles like the document registers. */}

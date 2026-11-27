@@ -33,7 +33,7 @@ export function SectionLandingPage({ group }) {
 
   // The router hands this page the registry group unfiltered, so the role narrowing that the
   // sidebar and the dashboard already apply has to be repeated here — otherwise FINANCE, who may
-  // open this landing for its two modules, sees a card per module in the whole section.
+  // open this landing for its one module, sees a card per module in the whole section.
   const items = visibleGroupsFor(user?.role).find((g) => g.to === group.to)?.items ?? group.items;
 
   const sectionHasReviews = items.some((i) => isReviewableModule(i.id));

@@ -19,8 +19,9 @@ import java.util.stream.Collectors;
  *
  * Two specialist roles sit outside that line of management. Neither may create users:
  *   AUDIT (2, platform)  → reads every section of every reporting entity and writes nothing.
- *   FINANCE (2, firm)    → the International Fund Transaction Register and Management Reports,
- *                          and nothing else.
+ *   FINANCE (2, firm)    → the International Fund Transaction Register and nothing else. (It was
+ *                          once meant to have Management Reports too; the report turned out to be
+ *                          firm-level CDD reading, which finance does not do.)
  *
  * Firm/branch linkage per tier:
  *   ROOT, AUDIT                                      → no firm, no branch

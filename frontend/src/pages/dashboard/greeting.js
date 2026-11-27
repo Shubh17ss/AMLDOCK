@@ -1,4 +1,4 @@
-// Shared header helpers for the dashboard hub and the CDD Register stats page.
+// Shared header helpers for the dashboard hub and the app shell.
 
 export function greeting() {
   const h = new Date().getHours();

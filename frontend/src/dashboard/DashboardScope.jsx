@@ -7,7 +7,7 @@ import { readSavedScope, writeSavedScope } from './scopeStorage.js';
 
 // ── Dashboard scope ─────────────────────────────────────────────────────────
 // A firm + branch selection shared across the whole app shell (sidebar selector,
-// dashboard hub, CDD Register stats). `branch` is `{ id, name } | null` and `firm` is
+// dashboard hub, the CDD registers). `branch` is `{ id, name } | null` and `firm` is
 // `{ id, name, country } | null`. The firm's country is carried because it decides the currency
 // amounts are shown in — see useCurrency.
 //
@@ -258,4 +258,4 @@ export function useDashboardScope() {
 }
 
 // Deal lists are scoped on the server: pass the scope's firm/branch ids as request params
-// (see dashboard/dealSummary.js). Re-filtering in the browser is wrong for a paged list.
+// (see pages/DealsPage.jsx). Re-filtering in the browser is wrong for a paged list.
